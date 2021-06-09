@@ -256,8 +256,8 @@ function CollectionList(props) {
             <button className="button" onClick={async () => handleSort(SortType.DATE)}>Newest</button>
             <div className="spacer" />
             <Switch 
-                id='chkOpenNewWindow' 
-                textOn={<span>Tabs will open in a  <strong>new window</strong></span>} 
+                id="chkOpenNewWindow"
+                textOn={<span>Tabs will open in a <strong>new window</strong></span>} 
                 textOff={<span>Tabs will be added to <strong>this window</strong></span>} />
         </div>
         <div className="settings_body">
