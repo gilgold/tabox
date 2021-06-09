@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: cimg/base:2021.04
+      - image: circleci/node:latest
     environment:
       - APP_ID: bdbliblipiempfdkkkjohnecmeknnpoa
     steps:
