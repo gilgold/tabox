@@ -30,10 +30,13 @@ jobs:
             yarn prod
       - run:
           name: "Run Tests"
-          command: echo "Run any tests here."
+          command: yarn test
       - run:
           name: "Package Extension"
-          command: git archive -o tabox.zip HEAD
+          command: |
+            cd build
+            zip -r ../tabox.zip *
+            cd ..
       - run:
           name: "Upload & Publish Extension to the Google Chrome Store"
           command: |
