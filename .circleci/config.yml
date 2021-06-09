@@ -15,8 +15,8 @@ jobs:
           name: Install Dependencies
           command: |
             yarn install --immutable
-            apt-get update
-            apt-get -y install curl jq
+            sudo apt-get update
+            sudo apt-get -y install curl jq
       - save_cache:
           name: Save Yarn Package Cache
           key: yarn-packages-{{ checksum "yarn.lock" }}
