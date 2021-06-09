@@ -1,0 +1,46 @@
+{
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_icon": "icons/icon128.png",
+    "default_popup": "index.html",
+    "default_title": "Save and share your tabs!"
+  },
+  "description": "Save your open tabs into groups and reopen them whenever you want in a single click!",
+  "icons": {
+    "128": "icons/icon128.png",
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png"
+  },
+  "manifest_version": 3,
+  "name": "Tabox React",
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+  "permissions": [
+   "tabs",
+   "tabGroups",
+   "storage",
+   "sessions",
+   "identity"
+  ],
+  "host_permissions": [
+    "https://www.googleapis.com/",
+    "https://oauth2.googleapis.com/"
+  ],
+  "web_accessible_resources": [{
+    "resources": ["api-keys.json"],
+    "matches": [],
+    "extension_ids": []
+  }],
+  "oauth2": {
+    "client_id": "701423091804-t6v1r6mkl4jdptge49gb7sfstj4holfr.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/drive.appdata",
+      "https://www.googleapis.com/auth/drive.file"
+    ]
+  },
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAgbFz4tW1ZT+Vmf+jMh5GJOLfHVI2UNoEDaqJKn0ZMC+9+9nePws++SBA9/lkQFjTc9symjYrgkr389ZBsPAtLsGC1D099eVrPeADts3pWYn0KopJjXIMBxcqRmffC7VwpYYCxJ1olACQuE1WHRvjNX4J84xWwCLf7lV1dCjB+viNnRLp2VJ7xKDj6/axdco2x9NVK8/0qRlH1eGe3i956hV+u8DkhF9fgH0sKKQACgJRSUE1fF1Y+FvDZFw7EdYSFTAxSxOCblE+8dw5Kwr0edPd3hWRehTV0bawTW4CYyRVhiICW9UogmDpTCkAgXbhzc8sDjHDF96ChdPPQE8KkwIDAQAB",
+  "version": "3.4"
+}

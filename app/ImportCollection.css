@@ -1,0 +1,27 @@
+.image-upload {
+	display: inline-block;
+	margin-top: 5px;
+	margin-right: 11px;
+	height: 30px;
+    line-height: 16px;
+}
+.image-upload > input {
+	visibility:hidden;
+	width:0;
+	height:0
+}
+.image-upload > label {
+	cursor: pointer;
+}
+.image-upload > label > img {
+	float:left;
+	width: 25px;
+	height: 25px;
+}
+.image-upload > label > span {
+	font-size:.75em;
+	font-weight: 400;
+	color: var(--text-color);
+	display: inline-block;
+	padding: 6px 0 0 5px;
+}

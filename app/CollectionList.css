@@ -1,0 +1,320 @@
+.settings_body {
+	height: 225px;
+	width: 100%;
+	overflow: auto;
+	padding: 5px 0;
+	z-index: 90;
+	font-size: 16px;
+}
+.sortable_ghost {
+	opacity: 0;
+}
+.setting_row {
+	padding: 0 5px;
+    background-color: transparent;
+    margin: 4px 0;
+    border: 1px solid var(--setting-row-border-color);
+    border-radius: 5px;
+    transition: background-color .2s ease-in !important;
+    display: flex;
+    justify-content: space-between;
+    width: 99%;
+}
+@keyframes highlightRow {        
+	0% {
+		opacity : 0;
+		background-color: var(--bg-color);
+	}
+	50% {
+		opacity : 1;
+		background-color: var(--highlight-row-color);
+	}
+	100% {
+		opacity : 1;
+		background-color: var(--bg-color);
+	}
+}
+.new_row {
+	transition: all 1s ease-in;
+	animation: highlightRow .5s ease-in-out;
+}
+@keyframes highlightUpdatedRow {        
+	0% {
+		background-color: var(--bg-color);
+	}
+	50% {
+		background-color: var(--highlight-row-color);
+	}
+	100% {
+		background-color: var(--bg-color);
+	}
+}
+.update_row {
+	transition: all 1s ease-in;
+	animation: highlightUpdatedRow 1s ease-in-out;
+}
+.setting_row:hover {
+	background-color: var(--setting-row-hover-bg-color);
+}
+.setting_row:hover span.update_btn{
+	opacity: 1;
+}
+.truncate_box {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.settings_div {
+	line-height: 26px;
+	padding-left: 5px;
+	height: 26px;
+	font-size: .7em;
+	color: var(--settings-row-text-color);
+	font-weight: 500;
+	flex: 0 0 180px !important;
+	cursor: pointer;
+	min-width: 0;
+}
+.sortable_ghost {
+	opacity: 0;
+}
+.total_tabs {
+	vertical-align: middle;
+	margin: 4px 6px;
+	padding: 3px 10px 3px 0;
+	position: relative;
+	color: var(--settings-row-text-color);
+	line-height: 14px;
+	font-size: .7em;
+	font-weight: 500;
+}
+.handle {
+	cursor: grab;
+	display: inline-block;
+	font-family: "Times", "Times New Roman", "serif", "sans-serif", "EmojiSymbols", "apple color emoji";
+    color: var(--settings-row-text-color);
+    font-weight: bolder;
+    font-size: 1.3em;
+    letter-spacing: -4px;
+    width: 14px;
+    margin-left: -2px;
+    vertical-align: middle;
+    line-height: 27px;
+	flex: 0 0 14px !important;
+}
+.update_btn {
+	cursor: pointer;
+    float: right;
+    right: 74px;
+    margin: 3px 8px 3px 0;
+    background-color: var(--update-btn-bg-color);
+    color: var(--update-btn-main-color);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    padding: 2px 10px;
+    vertical-align: middle;
+    line-height: 15px;
+    border-radius: 5px;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: .4px;
+    height: 20px;
+}
+.del {
+	cursor: pointer;
+	margin-left: 5px;
+	overflow: hidden;
+	display: inline-block;
+	background-image: url("../static/images/delete.png");
+	background-repeat: no-repeat;
+	background-size: 18px 18px;
+	background-position: center center;
+	height: 28px;
+	width: 18px;
+}
+.export {
+	cursor: pointer;
+	overflow: hidden;
+	display: flex;
+    height: 28px;
+    width: 18px;
+    cursor: pointer;
+    vertical-align: middle;
+    justify-content: center;
+    align-items: center;
+}
+.right_items {
+    height: 26px;
+    vertical-align: middle;
+	padding-right: 4px;
+    margin-left: 15px;
+	text-align: right;
+	flex: 0 0 50px !important;
+	flex-direction: row !important;
+	justify-content: flex-end;
+}
+.export img {
+	padding-bottom: 2px;
+	height: 23px;
+	width: 23px;
+}
+.updatingLabel {
+	transition: opacity 0.5s ease;
+	font-size: .7rem;
+}
+.show {
+	opacity: 1;
+}
+.hide {
+	opacity: 0;
+}
+#nothing_message {
+	margin: 30px auto;
+	text-align: center;
+	color: var(--text-color);
+	font-size: .75em;
+	animation: fadeIn ease-in .2s;
+}
+
+@keyframes fadeIn {
+	0% {opacity:0;}
+	100% {opacity:1;}
+}
+
+.no_contant_image {
+	height: 130px;
+	margin: 0;
+}
+
+.colorPicker {
+	padding: 0;
+	border-radius: 10px;
+	display: flex;
+	border: 1px solid transparent;
+	cursor: pointer;
+	transition: none;
+	margin-left: 2px;
+}
+
+.currentColor {
+	width: 12px;
+	height: 12px;
+	background: var(--bg-color);
+	transition: none;
+	border-radius: 10px;
+}
+.popover {
+	position: relative;
+	background-color: var(--picker-bg-color);
+	border-radius: 5px;
+	left: 2px;
+	padding: 4px;
+	display: flex;
+	flex-direction: row;
+	align-content: center;
+    align-items: center;
+	justify-content: space-evenly;
+    flex: 0 0 100%;
+	flex-wrap: wrap;
+	width: 200px;
+	z-index: 99;
+}
+.colorOption {
+	width: 18px;
+	height: 18px;
+	cursor: pointer;
+	border-radius: 8px;
+	margin: 2px;
+	box-shadow: 0 0 1px #000;
+}
+.colorOptionSelected {
+	box-shadow: 0 0 3px #000;
+}
+.selectedInnerCircle {
+	position: relative;
+    top: calc(50% - 3px);
+    left: calc(50% - 3px);
+    width: 6px;
+    opacity: 0;
+    height: 6px;
+    border-radius: 6px;
+    background-color: var(--picker-bg-color);
+}
+.selected {
+	opacity: 1;
+    transform: scale(2.4);
+    transition: all .2s ease;
+}
+/* .colorOption:first-of-type:after {
+	content: '';
+    width: 18px;
+    height: 36px;
+    border-bottom: 2px solid #de4927;
+    transform: 
+		translateY(-17px) 
+		translateX(12px) 
+		rotate(42deg);
+    position: absolute;
+    top: 0;
+} */
+.popover:after {
+	content:'';
+	width: 0; 
+	height: 0; 
+	right: 100%;
+	top: calc(50% - 5px);
+    position: absolute;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    border-right: 5px solid var(--picker-bg-color);
+  }
+.break {
+	flex-basis: 100%;
+	height: 0;
+}
+.sortLabel {
+	color: var(--text-color);
+	font-weight: 700;
+	font-size: .7rem;
+}
+.button {
+	background-color: transparent;
+	border: none;
+	border-radius: 5px;
+	color: var(--settings-row-text-color);
+	font-weight: 400;
+	padding: 2px 12px;
+    margin: 5px 5px;
+    cursor: pointer;
+    line-height: 16px;
+	font-size: .7rem;
+	transition: background-color .2s ease-in !important;
+}
+.button:hover {
+	background-color: var(--setting-row-hover-bg-color);
+}
+.sort-icon:before {
+	content: '';
+	width: 9px;
+	border-top: 1px solid var(--text-color);
+	position: absolute;
+	top: 2px;
+	height: 1px;
+  }
+  .sort-icon {
+	position: relative;
+	display: inline-block;
+	width: 12px;
+	height: 7px;
+    margin: 0 5px;
+	border-top: 1px solid var(--text-color);
+  }
+  .sort-icon:after {
+	content: '';
+	position: absolute;
+	top: 5px;
+	left: 0;
+	width: 6px;
+	height: 1px;
+	border-top: 1px solid var(--text-color);
+  }

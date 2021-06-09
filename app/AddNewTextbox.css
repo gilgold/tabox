@@ -1,0 +1,120 @@
+input[type="text"] {
+    font-size:.85em;
+    background-color: var(--input-bg-color);
+    color: var(--text-color);
+    padding:4px 10px 7px 5px;
+    float:left;
+    width:290px;
+    border:none;
+    border-bottom:1px solid var(--primary-color);
+}
+input[type="text"]:focus { outline:none; }
+
+label.textbox_label {
+    color:var(--text-color);
+    font-size:.85em;
+    font-weight:normal;
+    position:absolute;
+    pointer-events:none;
+    left:5px;
+    top:6px;
+    transition: 0.3s ease-in-out all;
+}
+
+input[type="text"]:focus ~ label.textbox_label , input[type="text"]:not(:placeholder-shown) ~ label.textbox_label{
+    top:-20px;
+    font-size:.75em;
+    color:var(--text-color);
+  }
+  .bar 	{ float:left;position:relative; display:block; width:290px; }
+  .bar:before, .bar:after 	{
+    content:'';
+    height:2px;
+    width:0;
+    bottom:1px;
+    position:absolute;
+    background:var(--primary-color);
+    transition:0.3s ease all;
+    -moz-transition:0.3s ease all;
+    -webkit-transition:0.3s ease all;
+  }
+  .bar:before {
+    left:50%;
+  }
+  .bar:after {
+    right:50%;
+  }
+  
+  /* active state */
+  input[type="text"]:focus ~ .bar:before, input[type="text"]:focus ~ .bar:after {
+    width:50%;
+  }
+  
+  /* buttons */
+  
+  .btn {
+    position: relative;
+      margin-left: 5px;
+    display: inline-block;
+    padding: 0;
+    overflow: hidden;
+    border-width: 0;
+    outline: none;
+    border-radius: 2px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .6);
+    background-color: var(--primary-color);
+    color: #ecf0f1;
+    transition: background-color .3s;
+  }
+  
+  .btn:hover, .btn:focus {
+    background-color: #21a77e;
+      cursor: pointer;
+  }
+  
+  .btn > * {
+    position: relative;
+  }
+  
+  .btn span {
+    display: inline-block;
+    padding: 6px 18px;
+      font-size: 1em;
+      font-weight: 600;
+  }
+  
+  .btn:before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    display: block;
+    width: 0;
+    padding-top: 0;
+    border-radius: 100%;
+    background-color: rgba(236, 240, 241, .3);
+    transform: translate(-50%, -50%);
+  }
+  
+  .btn:active:before {
+    width: 120%;
+    padding-top: 120%;
+  
+    transition: width .2s ease-out, padding-top .2s ease-out;
+  }
+
+  .highlighted_note {
+    font-size: .65em;
+    top: 3px;
+    right: 7.2rem;
+    color: var(--text-color);
+    display: none;
+    word-break: break-word;
+    white-space: normal;
+    width: 110px;
+    vertical-align: middle;
+    margin-left: 5px;
+  }
+  .highlighter {
+    font-weight: bolder;
+  }

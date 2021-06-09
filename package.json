@@ -1,0 +1,58 @@
+{
+  "name": "tabox-react",
+  "version": "1.0.0",
+  "description": "Tabox React",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "INLINE_RUNTIME_CHUNK=false NODE_ENV=development webpack --mode development --config webpack.js --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/gilgold/tabox-react.git"
+  },
+  "keywords": [
+    "tabox",
+    "tab",
+    "groups"
+  ],
+  "author": "Gil Goldstein",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/gilgold/tabox-react/issues"
+  },
+  "homepage": "https://github.com/gilgold/tabox-react#readme",
+  "dependencies": {
+    "@babel/runtime": "^7.14.0",
+    "babel-plugin-transform-runtime": "^6.23.0",
+    "chrome-extension-async": "^3.4.1",
+    "react": "^17.0.2",
+    "react-dom": "^17.0.2",
+    "react-popover": "^0.5.10",
+    "react-simple-animate": "^3.3.12",
+    "react-simple-snackbar": "^1.1.11",
+    "react-sortablejs": "^6.0.0",
+    "react-time-ago": "^6.2.2",
+    "react-tooltip": "^4.2.21",
+    "recoil": "^0.3.1",
+    "sortablejs": "^1.13.0",
+    "url-loader": "^4.1.1"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.14.2",
+    "@babel/plugin-transform-runtime": "^7.14.3",
+    "@babel/preset-env": "^7.14.2",
+    "@babel/preset-react": "^7.13.13",
+    "@types/sortablejs": "^1.10.6",
+    "babel-loader": "^8.2.2",
+    "copy-webpack-plugin": "^8.1.1",
+    "css-loader": "^5.2.4",
+    "file-loader": "^6.2.0",
+    "html-webpack-plugin": "^5.3.1",
+    "style-loader": "^2.0.0",
+    "webextension-polyfill": "^0.8.0",
+    "webpack": "^5.37.0",
+    "webpack-cli": "^4.7.0",
+    "webpack-extension-manifest-plugin": "^0.7.0"
+  }
+}
