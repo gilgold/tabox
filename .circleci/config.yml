@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: circleci/node:latest
+      - image: cimg/node:16.3.0
     environment:
       - APP_ID: bdbliblipiempfdkkkjohnecmeknnpoa
     steps:
@@ -14,8 +14,6 @@ jobs:
       - run:
           name: Install Dependencies
           command: |
-            curl -o- -L https://yarnpkg.com/install.sh | bash
-            yarn set version berry
             yarn install --immutable
             apt-get update
             apt-get -y install curl jq
