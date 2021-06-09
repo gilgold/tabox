@@ -15,6 +15,7 @@ jobs:
           name: Install Dependencies
           command: |
             curl -o- -L https://yarnpkg.com/install.sh | bash
+            yarn set version berry
             yarn install --immutable
             apt-get update
             apt-get -y install curl jq
