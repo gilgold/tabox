@@ -7,13 +7,27 @@ jobs:
       - APP_ID: bdbliblipiempfdkkkjohnecmeknnpoa
     steps:
       - checkout
+      - restore_cache:
+          name: Restore Yarn Package Cache
+          keys:
+            - yarn-packages-{{ checksum "yarn.lock" }}
       - run:
-          name: "Install Dependencies"
+          name: Install Dependencies
           command: |
+            yarn install --immutable
             apt-get update
             apt-get -y install curl jq
             curl -o- -L https://yarnpkg.com/install.sh | bash
-            # You can also install Yarn, NPM, or anything else you need to use to build and test your extension.
+      - save_cache:
+          name: Save Yarn Package Cache
+          key: yarn-packages-{{ checksum "yarn.lock" }}
+          paths:
+            - .yarn/cache
+            - .yarn/unplugged
+      - run:
+          name: Build Project
+          command: |
+            yarn prod
       - run:
           name: "Run Tests"
           command: echo "Run any tests here."
