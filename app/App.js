@@ -64,10 +64,7 @@ function App() {
   const logout = async () => {
     browser.runtime.sendMessage({type: 'logout'}).then((response) => {
       setIsLoggedIn(false);
-    }).catch(async (err) => {
-      await _handleSyncError(err)
-    });
-
+    })
   };
 
   const applyDataFromServer = async () => {

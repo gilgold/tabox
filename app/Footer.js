@@ -13,7 +13,6 @@ function DarkModeSwitch(props) {
   const [checked, setChecked] = useState(false);
 
   useEffect(async () => {
-    console.log(themeMode);
     const {theme} = await browser.storage.local.get('theme');
     const isDark = theme === 'dark';
     setChecked(isDark);
@@ -21,7 +20,6 @@ function DarkModeSwitch(props) {
   }, [])
 
   const toggle = (event) => {
-    console.log(themeMode);
     setChecked(!checked);
     setSwitchLabelState(switchLabelState === 'over' ? 'out' : 'over')
     const newMode = themeMode === 'dark' ? 'light' : 'dark';

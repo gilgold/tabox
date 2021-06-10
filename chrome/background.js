@@ -51,6 +51,7 @@ try {
       const urlParams = url.searchParams;
       const params = Object.fromEntries(urlParams.entries());
       const token = await getTokens(params.code);
+      if (token === false) return Promise.reject('unable to get token');
       await getOrCreateSyncFile(token);
       const user = await getGoogleUser(token);
       return Promise.resolve(user);
@@ -58,18 +59,21 @@ try {
 
     if (request.type === 'updateRemote') {
       const token = await getAuthToken();
+      if (token === false) return Promise.reject('unable to get token');
       await updateRemote(token, request.newData);
       return Promise.resolve(true);
     }
 
     if (request.type === 'loadFromServer') {
       const token = await getAuthToken();
+      if (token === false) return Promise.reject('unable to get token');
       const newData = await updateLocalDataFromServer(token);
       return Promise.resolve(newData);
     }
 
     if (request.type === 'logout') {
       const token = await getAuthToken();
+      if (token === false) return Promise.reject('unable to get token');
       await removeToken(token);
       await browser.storage.local.remove(['googleUser', 'googleRefreshToken']);
       await browser.storage.sync.remove('syncFileId');
@@ -77,12 +81,9 @@ try {
 
     if (request.type === 'checkSyncStatus') {
       const token = await getAuthToken();
-      if (token === -1) return Promise.resolve(false);
+      if (token === false) return Promise.reject(false);
       await getOrCreateSyncFile(token);
-      const url = browser.runtime.getURL('api-keys.json');
-      const response = await fetch(url);
-      const { googleDrive: googleApiKey } = await response.json();
-      const user = await getGoogleUser(token, googleApiKey);
+      const user = await getGoogleUser(token);
       return Promise.resolve(user);
     }
   });

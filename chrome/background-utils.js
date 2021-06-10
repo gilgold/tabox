@@ -1,6 +1,12 @@
 
 let lastValidated = 0;
 
+async function handleRequest(url, options = null) {
+    const response = await fetch(url, options);
+    if (response.ok) return (await response.json());
+    return false;
+}
+
 function applyChromeGroupSettings(tabs, windowId, collection) {
     if (!collection.chromeGroups) {
       return;
@@ -47,26 +53,24 @@ async function getNewAccessToken() {
         body: JSON.stringify(requestBody)
     }
     console.log('getting new token using refresh token');
-    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', options);
-    if (tokenResponse.status >= 400) return -1;
-    const data = await tokenResponse.json();
-    await browser.storage.local.set({ googleToken: data.access_token });
-    return data.access_token;
+    const tokenResponse = await handleRequest('https://oauth2.googleapis.com/token', options);
+    if (tokenResponse !== false) {
+        await browser.storage.local.set({ googleToken: tokenResponse.access_token });
+        return tokenResponse.access_token;
+    }
+    return false;
 }
 
 async function getAuthToken() {
     const { googleToken } = await browser.storage.local.get('googleToken');
     if (googleToken) {
-        if (Date.now() - lastValidated < 5000) return googleToken;
+        if (Date.now() - lastValidated < 10000) return googleToken;
         console.log('validating existing token')
-        const response = await fetch(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${googleToken}`);
-        console.log(`token is: ${response.status}`);
+        const response = await handleRequest(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${googleToken}`);
         lastValidated = Date.now();
-        if (response.status < 400) return googleToken;
+        if (response) return googleToken;
     }
-    const newToken = await getNewAccessToken();
-    // if (newToken === -1) throw new Error('Refresh token no longer valid');
-    return newToken;
+    return (await getNewAccessToken());
 }
 
 async function getGoogleUser(token) {
@@ -85,22 +89,21 @@ async function getGoogleUser(token) {
         'contentType': 'json'
     };
     console.log('getting google user info from server')
-    const response = await fetch(
+    const response = await handleRequest(
         `https://www.googleapis.com/drive/v3/about?alt=json&fields=user&prettyPrint=false&key=${googleApiKey}`,
         init)
-    if (response.status >= 400) {
-        return null;
+    if (response) {
+        await browser.storage.local.set({ googleUser: response.user });
+        return response.user;
     }
-    const data = await response.json();
-    await browser.storage.local.set({ googleUser: data.user });
-    return data.user;
+    return false;
 }
 
 async function removeToken(token) {
     const _token = token === -1 ? (await browser.storage.local.get('googleToken')).googleToken : token;
     const url = 'https://accounts.google.com/o/oauth2/revoke?token=' + _token;
     await browser.storage.local.remove('googleToken');
-    if (_token) await fetch(url);
+    if (_token) await handleRequest(url);
 }
 
 async function getOrCreateSyncFile(token) {
@@ -108,7 +111,7 @@ async function getOrCreateSyncFile(token) {
     if (syncFileId) return;
     console.log('searching for sync file on server')
     const url = "https://www.googleapis.com/drive/v3/files/?corpora=user&spaces=appDataFolder&fields=files(id)&q=name='appSettings.json'&pageSize=1&orderBy=modifiedByMeTime desc";
-    const response = await fetch(url, {
+    const response = await handleRequest(url, {
         mode: 'cors',
         withCredentials: true,
         credentials: 'include',
@@ -117,15 +120,16 @@ async function getOrCreateSyncFile(token) {
             'Authorization': `Bearer ${token}`
         }
     });
-    if (response.status >= 400) {
-        return null;
+    if (response) {
+        if (response.files.length === 0) {
+            console.log('no sync file found, creating new one')
+            await _createNewSyncFile(token);
+        } else {
+            console.log('Found sync file in Google Drive')
+            await browser.storage.sync.set({ syncFileId: response.files[0].id });
+        }
     }
-    const data = await response.json();
-    if (data.files.length === 0) {
-        await _createNewSyncFile(token);
-    } else {
-        await browser.storage.sync.set({ syncFileId: data.files[0].id });
-    }
+    return false;
 }
 
 async function _createNewSyncFile(token) {
@@ -150,14 +154,13 @@ async function _createNewSyncFile(token) {
         },
         body: form
     };
-    console.log('creating new sync file')
-    const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', init);
-    if (response.status >= 400) {
-        return null;
+    console.log('creating new sync file with data from storage')
+    const response = await handleRequest('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', init);
+    if (response) {
+        await browser.storage.sync.set({ syncFileId: response.id });
+        return response.id;
     }
-    const data = await response.json();
-    await browser.storage.sync.set({ syncFileId: data.id });
-    return data.id;
+    return false;
 }
 
 async function _getServerFileTimestamp(token, fileId) {
@@ -171,12 +174,13 @@ async function _getServerFileTimestamp(token, fileId) {
         'contentType': 'json'
     };
     console.log('getting sync file timestamp from server')
-    const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=json&fields=modifiedByMeTime`, init);
-    const { modifiedByMeTime } = await response.json();
-    return Date.parse(modifiedByMeTime);
+    const response = await handleRequest(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=json&fields=modifiedByMeTime`, init)
+    return response ? Date.parse(response.modifiedByMeTime) : response;
 }
 
-async function updateRemote(token, tabsArray) {
+async function updateRemote(token, collections = null) {
+    let {tabsArray} = await browser.storage.local.get('tabsArray');
+    if (collections) tabsArray = collections;
     await getOrCreateSyncFile(token);
     const { syncFileId } = await browser.storage.sync.get('syncFileId');
     const init = {
@@ -191,7 +195,7 @@ async function updateRemote(token, tabsArray) {
     };
     console.log('updating remote sync file with new data')
     const url = `https://www.googleapis.com/upload/drive/v3/files/${syncFileId}?uploadType=media&access_token=${token}`;
-    const response = await fetch(url, init);
+    const response = await handleRequest(url, init);
     return response;
 }
 
@@ -206,13 +210,10 @@ async function _loadSettingsFile(token, fileId) {
         'contentType': 'json'
     };
     console.log('loading sync file from server')
-    const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, init);
-    const data = await response.json();
+    const data = await handleRequest(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, init);
     await browser.storage.local.set({ settings: data.settings });
-    let serverData;
-    if (data.tabsArray) {
-        serverData = data.tabsArray === null ? [] : data.tabsArray;
-    } else if (data.settings) {
+    let serverData = data.tabsArray;
+    if (data.settings) {
         await convertOldDataToNewFormat();
         const { tabsArray } = await browser.storage.local.get('tabsArray');
         serverData = tabsArray;
@@ -221,27 +222,24 @@ async function _loadSettingsFile(token, fileId) {
     return serverData;
 }
 
+async function createNewSyncFileAndBackup(token) {
+    await browser.storage.sync.remove('syncFileId');
+    await getOrCreateSyncFile(token);
+}
+
 async function updateLocalDataFromServer(token) {
     const { syncFileId } = await browser.storage.sync.get('syncFileId');
     const serverTimestamp = await _getServerFileTimestamp(token, syncFileId);
+    console.log(`server timestamp = ${serverTimestamp}`)
+    if (serverTimestamp === undefined || serverTimestamp === false) {
+        await createNewSyncFileAndBackup(token);
+        return false;
+    }
     let { localTimestamp } = await browser.storage.local.get('localTimestamp');
     localTimestamp = localTimestamp ?? 0;
     console.log(`Comparing timestamps, remote is: ${(serverTimestamp > localTimestamp) ? 'newer' : 'older'}`)
     if (serverTimestamp > localTimestamp) return await _loadSettingsFile(token, syncFileId);
     return false;
-}
-
-function _tokenArgs(code) {
-    const redirectURL = browser.identity.getRedirectURL();
-    const { oauth2 } = browser.runtime.getManifest();
-    const clientId = oauth2.client_id;
-    return {
-        code: code,
-        client_id: clientId,
-        client_secret: 'owJvtMCOPyVXXvcNStFJC2eO',
-        grant_type: 'authorization_code',
-        redirect_uri: redirectURL,
-    }
 }
 
 async function getTokens(code) {
@@ -265,10 +263,9 @@ async function getTokens(code) {
         },
         body: JSON.stringify(requestBody)
     }
-    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', options);
-    const data = await tokenResponse.json();
+    const data = await handleRequest('https://oauth2.googleapis.com/token', options);
     await browser.storage.local.set({ googleToken: data.access_token, googleRefreshToken: data.refresh_token });
-    return data.access_token;
+    return data ? data.access_token : false;
 }
 
 function createAuthEndpoint() {
