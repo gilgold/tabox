@@ -1,6 +1,5 @@
 node_modules
 build
-chrome/api-keys.json
 *.log
 .yarn/*
 !.yarn/patches
