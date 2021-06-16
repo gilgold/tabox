@@ -11,7 +11,10 @@ try {
       const collection = request.collection;
       const window = request.window;
       let updatedTabsWithNewId = [];
+      const currentUrlsInWindow = window.tabs.map((t) => t.url);
+      const {chkIgnoreDuplicates} = await browser.storage.local.get('chkIgnoreDuplicates');
       collection.tabs.forEach((tabInGrp, index) => {
+        if (chkIgnoreDuplicates && currentUrlsInWindow.includes(tabInGrp.url)) { return; }
         let tabInTaboxGrp = {...tabInGrp}; // create a copy since tabInGrp is immutable
         let tabProperties = {
             pinned: tabInTaboxGrp.pinned,

@@ -13,7 +13,9 @@
     color: var(--text-color);
   }
   .switch-label strong {
-    font-weight: 800;
+    font-weight: 900;
+    color: var(--primary-color);
+    font-size: 1.05em;
   }
   .switch-label:before, .switch-label:after {
     content: "";

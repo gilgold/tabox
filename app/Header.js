@@ -3,6 +3,7 @@ import './Header.css';
 import { 
     isLoggedInState, 
 } from './atoms/globalAppSettingsState';
+import SettingsMenu from './SettingsMenu';
 import { useRecoilState } from 'recoil';
 import { browser } from '../static/index';
 import { useSnackbar } from 'react-simple-snackbar';
@@ -35,8 +36,8 @@ function LoginSection(props) {
         }
     }
 
-    return <div className="user_image" title={`Click here to ${isLoggedIn && googleUser ? 'disable' : 'enable'} Google Drive sync`} onClick={handleClick}>
-                <div className="row">
+    return <div className="user_image">
+                <div className="row" title={`Click here to ${isLoggedIn && googleUser ? 'disable' : 'enable'} Google Drive sync`} onClick={handleClick}>
                     <div className="column">
                         <div className="row double-row">
                             <img id="avatar" className="avatar" src={ isLoggedIn && googleUser && googleUser.photoLink ? googleUser.photoLink : '/images/not_signed_in.png' } alt="user avatar" />
@@ -53,6 +54,7 @@ function LoginSection(props) {
                         </div>
                     ) : <span className="header_text">Signin with Google to enable sync</span> }
                 </div>
+                <SettingsMenu/>
             </div>;
 }
 

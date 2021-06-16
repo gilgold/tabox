@@ -58,7 +58,7 @@ function App() {
   const _handleSyncError = async (e) => {
       await logout();
       console.log(e)
-      openSnackbar('Error syncing data, please login again', 4000);
+      openSnackbar('Error syncing data, please login again', 6000);
   }
 
   const logout = async () => {
@@ -126,7 +126,7 @@ function App() {
         delayShow={200}
         type={themeMode === 'light' ? 'dark' : 'light'} />
       <Header applyDataFromServer={applyDataFromServer} logout={logout} />
-      <div id="settings_all">
+      <div className="main-content-wrapper">
         <AddNewTextbox updateRemoteData={updateRemoteData} />
         <ImportCollection updateRemoteData={updateRemoteData} />
         <Divder/>

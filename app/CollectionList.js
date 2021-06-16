@@ -158,10 +158,10 @@ function CollectionListItem(props) {
         var window;
         if (openInNewWindow) {
             window = await browser.windows.create({focused:true});
+            window.tabs = await browser.tabs.query({windowId: window.id});
         } else {
-            window = await browser.windows.getLastFocused({windowTypes:['normal']});   
+            window = await browser.windows.getCurrent({populate: true, windowTypes:['normal']});   
         }
-        window.tabs = await browser.tabs.query({windowId: window.id});
         const msg = {
             type: 'openTabs',
             collection: props.collection,

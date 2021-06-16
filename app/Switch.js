@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import './Switch.css';
 import { browser } from '../static/index';
+import { propTypes } from 'react-time-ago';
 
 const Switch = props => {
   const [isChecked, setIsChecked] = useState(false);
@@ -20,14 +21,16 @@ const Switch = props => {
     browser.storage.local.set(localStorageObj);
   });
 
-  return <span>
-                <input type="checkbox" checked={isChecked} onChange={toggle} id={props.id} name={props.id} className="switch-input" />
-                <label htmlFor={props.id} className="switch-label">
+  const {id: _id, textOn, textOff, ...otherProps} = props;
+
+  return <span {...otherProps}>
+                <input type="checkbox" checked={isChecked} onChange={toggle} id={_id} name={_id} className="switch-input" />
+                <label htmlFor={_id} className="switch-label">
                         <span className="toggle--on">
-                            {props.textOn}
+                            {textOn}
                         </span>
                         <span className="toggle--off">
-                            {props.textOff}
+                            {textOff}
                         </span>
                 </label>
             </span>;
