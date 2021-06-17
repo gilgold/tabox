@@ -7,9 +7,10 @@
 .settings-menu-bg {
     position: absolute;
     top: 30px;
-    right: -100px;
+    right: -190px;
     width: 300px;
     height: 0px;
+    pointer-events: none;
     background-color: var(--bg-color);
     z-index: 200;
     border: 1px solid var(--text-color);
@@ -23,6 +24,7 @@
     right: 0;
     height: 90px;
     opacity: .9;
+    pointer-events: all;
 }
 .settings-menu-bg:before {
     content: '\00a0';
