@@ -5,12 +5,12 @@
 ![Chrome Web Store](https://img.shields.io/chrome-web-store/users/bdbliblipiempfdkkkjohnecmeknnpoa)
 ![Chrome Web Store](https://img.shields.io/chrome-web-store/v/bdbliblipiempfdkkkjohnecmeknnpoa)
 
-
-![](https://taboxit.files.wordpress.com/2021/06/github-1.png | width=800)
-
+<img src="https://taboxit.files.wordpress.com/2021/06/screenshot-2.png" height="200">
 
 Tabox is a Chrome (and also other Chromium based browsers) extension to save open tabs and tab groups in collections that can be easily re-opened in a single click. 
 
 You can also export and import collections, allowing you the option of sharing a group of tabs with others.
 
 Tabox allows you to sync your collections so you can have them in all your devices (Using your Google Drive account)
+
+[Get Tabox on the Chrome Web Store](https://chrome.google.com/webstore/detail/tabox-save-and-share-tab/bdbliblipiempfdkkkjohnecmeknnpoa)
