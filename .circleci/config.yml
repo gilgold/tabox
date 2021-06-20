@@ -27,6 +27,9 @@ jobs:
           name: Build Project
           command: |
             yarn prod
+      - run:
+          name: Update secrets
+          command: |
             cat << EOF > build/api-keys.json
             {"googleDrive": $json_api_key, "clientSecret": $json_client_secret}
             EOF
