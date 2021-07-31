@@ -1,0 +1,24 @@
+.snackbar-wrapper {
+	display: flex;
+	align-items: center;
+	justify-content: space-evenly;
+	flex-direction: row;
+	flex-basis: 100%;
+	user-select: none;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+}
+.snackbar-column {
+	display: flex;
+	flex-direction: column;
+	padding: 0 10px;
+}
+.snackbar-text-upper {
+    font-size: 0.96em;
+    font-weight: 600;
+}
+.snackbar-text-lower {
+    font-size: 0.8em;
+    font-weight: 400;
+}

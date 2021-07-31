@@ -1,5 +1,5 @@
 import React from 'react'
-import { convertOldStringToDataArray } from './utils'
+import { applyUid, convertOldStringToDataArray } from './utils'
 import './ImportCollection.css';
 import { useRecoilValue, useSetRecoilState } from 'recoil';
 import { settingsDataState } from './atoms/settingsDataState';
@@ -37,6 +37,7 @@ function ImportCollection(props) {
                 newItem = JSON.parse(result);
                 newItem['createdOn'] = Date.now();
             }
+            if (!('uid' in newItem.tabs[0])) newItem = applyUid(newItem);
             const newData = [newItem, ...settingsData];
             props.updateRemoteData(newData).then(() => {
                 setRowToHighlight(0);

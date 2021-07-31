@@ -32,6 +32,7 @@ const useFocus = () => {
 function AddNewTextbox(props) {
 
     const [confName, setName] = useState("");
+    const [disabled, setDisabled] = useState(false);
     const [inputRef, setInputFocus] = useFocus();
     const settingsData = useRecoilValue(settingsDataState);
     const isHighlighted = useRecoilValue(isHighlightedState);
@@ -49,10 +50,12 @@ function AddNewTextbox(props) {
             openSnackbar('Please enter a name for the collection', 2000);
             return;
         }
+        setDisabled(true);
         const newItem = await getCurrentTabsAndGroups(confTitle, isHighlighted);
-        const newSettingsData = [newItem, ...settingsData];
+        const newSettingsData = settingsData ? [newItem, ...settingsData] : [newItem];
         setRowToHighlight(0);
-        props.updateRemoteData(newSettingsData);
+        await props.updateRemoteData(newSettingsData);
+        setTimeout(() => setDisabled(false), 1000);
     }
 
     async function _handleKeyDown(e) {
@@ -65,7 +68,7 @@ function AddNewTextbox(props) {
                 <div className="group">
                     <input 
                         type="text" 
-                        maxLength="40" 
+                        maxLength="50" 
                         placeholder=" " 
                         name="new_setting_title" 
                         id="new_setting_title"
@@ -77,6 +80,7 @@ function AddNewTextbox(props) {
                 </div>
                 <button 
                     id="add_new_setting" 
+                    disabled={disabled} 
                     className="btn"
                     onClick={async () => await handleSave()}
                     >

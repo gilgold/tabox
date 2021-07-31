@@ -5,7 +5,7 @@ import './Footer.css';
 import { browser } from '../static/index';
 import TimeAgo from 'javascript-time-ago';
 import ReactTimeAgo from 'react-time-ago';
-import en from 'javascript-time-ago/locale/en'
+import en from 'javascript-time-ago/locale/en';
 
 function DarkModeSwitch(props) {
   const [themeMode, setThemeMode] = useRecoilState(themeState);

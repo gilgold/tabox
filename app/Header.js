@@ -54,13 +54,13 @@ function LoginSection(props) {
                         </div>
                     ) : <span className="header_text">Signin with Google to enable sync</span> }
                 </div>
-                <SettingsMenu/>
             </div>;
 }
 
 function Header(props) {
   return <header className="header">
             <LoginSection applyDataFromServer={props.applyDataFromServer} logout={props.logout}/>
+            <SettingsMenu updateRemoteData={props.updateRemoteData} />
         </header>;
 };
 
