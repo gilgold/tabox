@@ -1,6 +1,6 @@
 import React from 'react';
 import './UndoButton.css';
-import { CountdownCircleTimer } from 'react-countdown-circle-timer'
+import { FaUndoAlt } from 'react-icons/fa';
 
 export const UndoButton = (props) => {
     const handleUndo = async () => {
@@ -8,18 +8,11 @@ export const UndoButton = (props) => {
         props.closeSnackbar();
     }
 
-    return <CountdownCircleTimer
-        isPlaying
-        size={36}
-        trailColor={'snow'}
-        trailStrokeWidth={3}
-        rotation={'counterclockwise'}
-        strokeWidth={5}
-        duration={props.duration}
-        colors={[
-        [props.backgroundColor, 1],
-        ]}
-    >
-        {({ remainingTime }) => <button className="undo-button" onClick={async () => await handleUndo()}>undo</button>}
-    </CountdownCircleTimer>
+    return <button 
+        className="snackbar-button undo-button" 
+        onClick={async () => await handleUndo()}
+        title="Undo this action"
+        >
+            <FaUndoAlt />
+        </button>
 }

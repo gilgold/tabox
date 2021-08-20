@@ -96,8 +96,8 @@ export default function SettingsMenu(props) {
                 <Switch 
                     id="chkColEditIgnoreDuplicateGroups"
                     data-tip="A group is considered 'duplicate' <br />if it has the exact same name and color as another group"
-                    textOn={<span>If a group already exists, <strong>do not add it</strong></span>}
-                    textOff={<span>If a group already exists, <strong>add it anyway</strong></span>}
+                    textOn={<span>If a group already exists, <strong>append tabs to it</strong></span>}
+                    textOff={<span>If a group already exists, <strong>add as a new group</strong></span>}
                 />
                 )}
             </FocusableItem>

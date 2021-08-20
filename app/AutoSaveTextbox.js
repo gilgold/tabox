@@ -38,9 +38,8 @@ export const AutoSaveTextbox = (props) => {
         let typingTimer;
         let savedTimer;    
         const timeoutId = setTimeout(() => {
-            props.action(value.trim(), props.item)
-            setSaved(true);
-            typingTimer = setTimeout(() => setTyping(false), 900);
+            props.action(value.trim(), props.item);
+            typingTimer = setTimeout(() => {setTyping(false); setSaved(true);}, 100);
             savedTimer = setTimeout(() => setSaved(false), 2300);
         }, 700);
         return () => {

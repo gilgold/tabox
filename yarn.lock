@@ -3290,6 +3290,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"react-icons@npm:^4.2.0":
+  version: 4.2.0
+  resolution: "react-icons@npm:4.2.0"
+  peerDependencies:
+    react: "*"
+  checksum: 0052e25c6aacab93da3328ab856e4971214dce082de4bce857801802903366c7a8f9f490fe02ecd4ce181512b7b55cac12d6273c3c8dccc0e3b71b30dfd28256
+  languageName: node
+  linkType: hard
+
 "react-is@npm:^16.8.1":
   version: 16.13.1
   resolution: "react-is@npm:16.13.1"
@@ -3841,6 +3850,7 @@ __metadata:
     react-confirm-alert: ^2.7.0
     react-countdown-circle-timer: ^2.5.3
     react-dom: ^17.0.2
+    react-icons: ^4.2.0
     react-popover: ^0.5.10
     react-simple-animate: ^3.3.12
     react-simple-snackbar: ^1.1.11

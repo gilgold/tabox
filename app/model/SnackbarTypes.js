@@ -12,7 +12,8 @@ export const SnackbarStyle = {
         color: '#ffffff',
         fontSize: '.8em',
         fontWeight: 600,
-        textAlign: 'center'
+        textAlign: 'center',
+        width: '90%'
     },
     INFO: {
         backgroundColor: '#0277bd',

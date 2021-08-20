@@ -18,9 +18,11 @@ import { SnackbarStyle } from './model/SnackbarTypes';
 import { AutoSaveTextbox } from './AutoSaveTextbox';
 import DeleteWithConfirmationButton from './DeleteWithConfirmationButton';
 import { SnackBarWithUndo } from './SnackBarWithUndo';
+import { FaTrash, FaRegCheckCircle } from 'react-icons/fa';
+import { AiOutlineFolderAdd } from 'react-icons/ai';
 
 
-const UNDO_TIME = 15;
+const UNDO_TIME = 10;
 
 
 if (typeof Array.prototype.move === "undefined") {
@@ -121,8 +123,8 @@ function CollectionListItem(props) {
     const [isExpanded, setExpanded] = useState(false);
     const [shouldHighlight, setShouldHighlight] = useState(false);
     const [openSnackbar, closeSnackbar] = useSnackbar({ style: collectionName === '' ? SnackbarStyle.ERROR : SnackbarStyle.SUCCESS });
-    const [openUpdateSnackbar, closeUpdateSnackbar] = useSnackbar({ style: SnackbarStyle.SUCCESS });
-    const [openDeleteSnackbar, closeDeleteSnackbar] = useSnackbar({ style: SnackbarStyle.SUCCESS });
+    const [openUpdateSnackbar, closeUpdateSnackbar] = useSnackbar({ style: SnackbarStyle.SUCCESS, closeStyle: {display: 'none'} });
+    const [openDeleteSnackbar, closeDeleteSnackbar] = useSnackbar({ style: SnackbarStyle.SUCCESS, closeStyle: {display: 'none'} });
 
     const { style: deleteStyle, play: playDelete } = useAnimateKeyframes({
         duration: .7,
@@ -166,7 +168,8 @@ function CollectionListItem(props) {
         setTimeout(async () => { setDeleted(false); await props.updateRemoteData(newList); }, 400);
         openUpdateSnackbar(
             <SnackBarWithUndo
-                message={`Has been deleted`}
+                icon={<FaTrash />}
+                message={`Collection deleted successfully`}
                 collectionName={props.collection.name}
                 updateRemoteData={props.updateRemoteData}
                 collections={previousCollections}
@@ -197,7 +200,8 @@ function CollectionListItem(props) {
         setTimeout(() => setRowToHighlight(-1), 1000);
         openUpdateSnackbar(
             <SnackBarWithUndo
-                message={`Updated successfully`}
+                icon={<FaRegCheckCircle />}
+                message={`Collection updated successfully`}
                 collectionName={props.collection.name}
                 updateRemoteData={props.updateRemoteData}
                 collections={previousCollections}
@@ -242,7 +246,7 @@ function CollectionListItem(props) {
         currentCollection.name = val;
         newSettingsData[props.index] = currentCollection;
         props.updateRemoteData(newSettingsData);
-        openSnackbar(`Collection name for '${val}' saved successfully!`, 5000);
+        openSnackbar(`Collection name updated to '${val}'!`, 5000);
     }
 
     const totalGroups = props.collection.chromeGroups ? props.collection.chromeGroups.length : 0;
@@ -272,7 +276,7 @@ function CollectionListItem(props) {
                     action={handleCollectionNameChange} />
             </div> : props.collection.name}</span>
         </div>
-        <div className="column total_tabs">
+        <div className="column total_tabs" onClick={_handleOpenTabs}>
             {props.collection.tabs.length} tab{props.collection.tabs.length > 1 ? 's' : ''} {totalGroups > 0 && '(' + totalGroups + ' group' + (totalGroups > 1 ? 's' : '') + ')'}
         </div>
         <div className="column right_items">
@@ -295,7 +299,7 @@ function CollectionListItem(props) {
 function ExpandedCollectionData(props) {
 
     const settingsData = useRecoilValue(settingsDataState);
-    const [openSnackbar, closeSnackbar] = useSnackbar({ style: SnackbarStyle.SUCCESS });
+    const [openSnackbar, closeSnackbar] = useSnackbar({ style: SnackbarStyle.SUCCESS, closeStyle: {display: 'none'} });
     const isHighlighted = useRecoilValue(isHighlightedState);
 
     let previousGroupUid = null;
@@ -456,7 +460,8 @@ function ExpandedCollectionData(props) {
         props.updateRemoteData(newSettingsData);
         openSnackbar(
             <SnackBarWithUndo
-                message={`${totalTabsAdded} ${totalTabsAdded === 1 ? 'tab has' : 'tabs have'} been added.`}
+                icon={<AiOutlineFolderAdd size="32px" />}
+                message={`${totalTabsAdded} ${totalTabsAdded === 1 ? 'tab' : 'tabs'} added to collection.`}
                 collectionName={props.collection.name}
                 updateRemoteData={props.updateRemoteData}
                 collections={previousCollections}

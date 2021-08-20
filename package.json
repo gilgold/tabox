@@ -33,6 +33,7 @@
     "react-confirm-alert": "^2.7.0",
     "react-countdown-circle-timer": "^2.5.3",
     "react-dom": "^17.0.2",
+    "react-icons": "^4.2.0",
     "react-popover": "^0.5.10",
     "react-simple-animate": "^3.3.12",
     "react-simple-snackbar": "^1.1.11",
