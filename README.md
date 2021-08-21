@@ -14,6 +14,8 @@ You can also export and import collections, allowing you the option of sharing a
 
 Tabox allows you to sync your collections so you can have them in all your devices (Using your Google Drive account)
 
+Want to help support Tabox and get your link, icon or banner here on this repo? [Click here to sponsor Tabox!](https://github.com/sponsors/gilgold)
+
 [Get Tabox on the Chrome Web Store](https://chrome.google.com/webstore/detail/tabox-save-and-share-tab/bdbliblipiempfdkkkjohnecmeknnpoa)
 
 [Get Tabox on the Edge Add-on Store](https://microsoftedge.microsoft.com/addons/detail/tabox-save-and-share-ta/ekkmpemnpkaecapbjcgidkflglondcem)
