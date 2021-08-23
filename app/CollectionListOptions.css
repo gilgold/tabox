@@ -1,0 +1,51 @@
+.sortLabel {
+	color: var(--text-color);
+	font-weight: 700;
+	font-size: .7rem;
+}
+
+.button {
+	background-color: transparent;
+	border: none;
+	border-radius: 5px;
+	color: var(--settings-row-text-color);
+	font-weight: 400;
+	padding: 2px 12px;
+	margin: 5px 5px;
+	cursor: pointer;
+	line-height: 16px;
+	font-size: .7rem;
+	transition: background-color .2s ease-in !important;
+}
+
+.button:hover {
+	background-color: var(--setting-row-hover-bg-color);
+}
+
+.sort-icon:before {
+	content: '';
+	width: 9px;
+	border-top: 1px solid var(--text-color);
+	position: absolute;
+	top: 2px;
+	height: 1px;
+}
+
+.sort-icon {
+	position: relative;
+	display: inline-block;
+	width: 12px;
+	height: 7px;
+	margin: 0 5px;
+	border-top: 1px solid var(--text-color);
+}
+
+.sort-icon:after {
+	content: '';
+	position: absolute;
+	top: 5px;
+	left: 0;
+	width: 6px;
+	height: 1px;
+	border-top: 1px solid var(--text-color);
+}

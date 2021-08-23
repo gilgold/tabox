@@ -1,5 +1,5 @@
 import './App.css';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import Header from './Header';
 import AddNewTextbox from './AddNewTextbox';
 import ImportCollection from './ImportCollection';
@@ -7,7 +7,7 @@ import CollectionList from './CollectionList';
 import Footer from './Footer';
 import { useRecoilState, useSetRecoilState } from 'recoil';
 import { settingsDataState } from './atoms/settingsDataState';
-import { convertOldDataToNewFormat } from './utils';
+import { applyUid, convertOldDataToNewFormat } from './utils';
 import { 
   isHighlightedState, 
   themeState, 
@@ -21,6 +21,7 @@ import { SnackbarStyle } from './model/SnackbarTypes';
 import ReopenLastSession from './ReopenLastSession';
 import TaboxGroupItem from './model/TaboxGroupItem';
 import ReactTooltip from 'react-tooltip';
+import { CollectionListOptions } from './CollectionListOptions';
 
 const Divder = () => <div className='hr'></div>;
 
@@ -73,6 +74,7 @@ function App() {
       if (response !== false) {
         setSettingsData(response);
         setLastSyncTime(Date.now());
+        loadCollectionsFromStorage();
       }
       setSyncInProgress(false);
     }).catch(async (err) => {
@@ -80,35 +82,41 @@ function App() {
     });
   }
 
-  const updateRemoteData = async (newData, overrideLoginCheck = false) => {
-    setSettingsData(newData);
-    await browser.storage.local.set({localTimestamp: Date.now()});
-    if (!isLoggedIn && !overrideLoginCheck) return;
+  const _update = async () => {
     setSyncInProgress(true);
-    browser.runtime.sendMessage({type: 'updateRemote', newData: newData}).then((response) => {
-      setLastSyncTime(Date.now());
+    browser.runtime.sendMessage({type: 'updateRemote'}).then((response) => {
       setSyncInProgress(false);
+      setLastSyncTime(Date.now());
     }).catch(async (err) => {
+      setSyncInProgress(false);
       await _handleSyncError(err)
     });
-    
+  }
+
+  const updateRemoteData = async (newData) => {
+    setSettingsData(newData);
+    await browser.storage.local.set({localTimestamp: Date.now()});
+    if (!isLoggedIn) return;
+    _update();
   }
 
   const loadCollectionsFromStorage = async () => {
     const {tabsArray} = await browser.storage.local.get('tabsArray');
     let newCollections = [];
-    if (tabsArray) {
+    if (tabsArray && tabsArray.length > 0 && !('uid' in tabsArray[0].tabs[0])) {
       tabsArray.forEach((collection) => {
-        let taboxItem = new TaboxGroupItem(collection.name, collection.tabs, collection.chromeGroups, collection.color, collection.createdOn);
+        const taboxItem = applyUid(collection);
         newCollections.push(taboxItem);
       });
+    } else {
+      newCollections = tabsArray;
     }
     setSettingsData(newCollections);
   }
   
   useEffect(async () => {
     await convertOldDataToNewFormat();
-    checkSyncStatus();
+    await checkSyncStatus();
     await loadCollectionsFromStorage();
     
     const {theme} = await browser.storage.local.get('theme');
@@ -125,10 +133,12 @@ function App() {
         eventOff={'click mouseout'} 
         delayShow={200}
         type={themeMode === 'light' ? 'dark' : 'light'} />
-      <Header applyDataFromServer={applyDataFromServer} logout={logout} />
+      <Header applyDataFromServer={applyDataFromServer} updateRemoteData={updateRemoteData} logout={logout} />
       <div className="main-content-wrapper">
         <AddNewTextbox updateRemoteData={updateRemoteData} />
         <ImportCollection updateRemoteData={updateRemoteData} />
+        <Divder/>
+        <CollectionListOptions updateRemoteData={updateRemoteData} />
         <Divder/>
         <CollectionList 
           updateRemoteData={updateRemoteData}  

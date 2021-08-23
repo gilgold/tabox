@@ -42,6 +42,8 @@ jobs:
             cd build
             zip -r ../tabox.zip *
             cd ..
+      - store_artifacts:
+          path: /build/tabox.zip
       - run:
           name: "Upload & Publish Extension to the Google Chrome Store"
           command: |

@@ -1,0 +1,79 @@
+.modal-card {
+    text-align: center;
+    width: 440px;
+    background: var(--bg-color);
+    box-shadow: 0 0 13px 4px rgb(0 0 0 / 60%);
+    color: var(--text-color);
+    border-top: 5px solid #FFCC00;
+    border-radius: 3px;
+}
+.modal-card-wrapper {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    flex-basis: 100%;
+    padding: 25px 10px;
+}
+.modal-card-image {
+    display: flex;
+    flex-direction: column;
+    width: 64px;
+    height: 64px;
+}
+.modal-card-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    margin-left: 10px;
+}
+.modal-card-header { 
+    font-size: 1.1em;
+    text-align: left;
+    margin-bottom: 10px;
+}
+
+.modal-card-body {
+    text-align: left;
+    font-size: 0.8em;
+}
+
+.button-row {
+    display: flex;
+    flex-basis: 100%;
+    align-items: center;
+    justify-content: flex-end;
+    border-top: 1px solid var(--avatar-bg);
+    padding: 10px 5px;
+}
+
+.modal-button {
+    padding: 3px 16px;
+    background-color: transparent;
+    color: #277bb7;
+    border: 1px solid #277bb7;
+    border-radius: 5px;
+    transition: all 0.2s ease-in;
+    cursor: pointer;
+}
+
+.primary {
+    background-color: #277bb7;
+    color: #fff;
+    margin-left: 10px;
+}
+
+.modal-button:hover {
+    background-color: transparent;
+    border-color: #3c8cc5;
+    color: #3c8cc5;
+}
+
+.primary:hover {
+    background-color: #3c8cc5;
+    color: #fff;
+}
+.react-confirm-alert-overlay {
+    background-color: rgb(150 150 150 / 80%) !important;
+    backdrop-filter: blur(2px);
+}

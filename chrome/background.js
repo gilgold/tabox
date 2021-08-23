@@ -63,7 +63,7 @@ try {
     if (request.type === 'updateRemote') {
       const token = await getAuthToken();
       if (token === false) return Promise.reject('unable to get token');
-      await updateRemote(token, request.newData);
+      await updateRemote(token);
       return Promise.resolve(true);
     }
 
@@ -90,6 +90,19 @@ try {
       return Promise.resolve(user);
     }
   });
+  browser.runtime.onInstalled.addListener(async (details) => {
+    const previousVersion = details.previousVersion;
+    const reason = details.reason;
+
+    if (reason === "update") {
+      const {tabsArray} = await browser.storage.local.get('tabsArray');
+      const backupObj = {
+        version: previousVersion,
+        tabsArray: tabsArray
+      }
+      await browser.storage.local.set({backup: backupObj});
+    }
+ })
 } catch (e) {
   console.error(e)
 };

@@ -1,5 +1,8 @@
+import { uid } from 'react-uid';
+
 class TaboxGroupItem {
     constructor(name, tabs, chromeGroups, color = null, createdOn = null) {
+      this.uid = uid(this);
       this.name = name;
       this.tabs = tabs;
       this.chromeGroups = chromeGroups;

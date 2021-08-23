@@ -1,0 +1,68 @@
+.del {
+	cursor: pointer;
+	margin-left: 5px;
+	overflow: hidden;
+	display: inline-block;
+	background-image: url("../static/images/delete.png");
+	background-repeat: no-repeat;
+	background-size: 18px 18px;
+	background-position: center center;
+	height: 28px;
+	width: 18px;
+}
+
+.slider-wrapper {
+    position: relative;
+    display: flex;
+}
+
+.slider-message {
+    font-size: 0.7em;
+    font-weight: 500;
+    color: #fff;
+    text-overflow: clip;
+    white-space: nowrap;
+}
+
+.slider-del {
+    display: inline-flex;
+}
+
+.slider {
+    background-color: #d22c28;
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: space-evenly;
+    width: 0px;
+    overflow: hidden;
+    text-overflow: clip;
+    transition: all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    transform-origin: top left;
+}
+.slider:before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -3px;
+    background-color: var(--setting-row-hover-bg-color);
+    width: 6px;
+    height: 28px;
+    border-radius: 5px;
+}
+.slider-open {
+    width: 80px;
+}
+.slider-button {
+    background-color: transparent;
+    border-radius: 5px;
+    border: none;
+    color: #fff;
+    font-size: 0.7em;
+    padding: 2px 15px;
+    cursor: pointer;
+}
+.slider-button:hover {
+    background-color: #e94b48;
+}
