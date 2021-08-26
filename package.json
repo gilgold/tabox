@@ -1,6 +1,6 @@
 {
   "name": "tabox-react",
-  "version": "1.0.0",
+  "version": "3.4.9",
   "description": "Tabox React",
   "main": "index.js",
   "scripts": {
@@ -25,6 +25,8 @@
   "homepage": "https://github.com/gilgold/tabox-react#readme",
   "dependencies": {
     "@babel/runtime": "^7.14.0",
+    "@sentry/react": "^6.11.0",
+    "@sentry/tracing": "^6.11.0",
     "@szhsin/react-menu": "^1.10.1",
     "babel-plugin-transform-runtime": "^6.23.0",
     "chrome-extension-async": "^3.4.1",
@@ -49,6 +51,7 @@
     "@babel/plugin-transform-runtime": "^7.14.3",
     "@babel/preset-env": "^7.14.2",
     "@babel/preset-react": "^7.13.13",
+    "@sentry/webpack-plugin": "^1.17.1",
     "@types/sortablejs": "^1.10.6",
     "babel-loader": "^8.2.2",
     "copy-webpack-plugin": "^9.0.1",
