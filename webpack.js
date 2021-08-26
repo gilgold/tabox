@@ -3,6 +3,7 @@ const HtmlWebpackPlugin = require("html-webpack-plugin");
 const CopyPlugin = require("copy-webpack-plugin");
 const baseManifest = require("./chrome/manifest.json");
 const WebpackExtensionManifestPlugin = require("webpack-extension-manifest-plugin");
+const SentryCliPlugin = require('@sentry/webpack-plugin');
 
 module.exports = (env, argv) => {
   // Use env.<YOUR VARIABLE> here:
@@ -45,6 +46,14 @@ module.exports = (env, argv) => {
       }
     },
     plugins: [
+      new SentryCliPlugin({
+        include: '.',
+        project: 'tabox',
+        org: 'tabox',
+        release: 'tabox-' + baseManifest.version,
+        authToken: '4a797cec142141988c2056b53dd4a0bc599fea0502fd4f428f40d864a15292b4',
+        ignore: ['node_modules', 'webpack.config.js'],
+      }),
       new HtmlWebpackPlugin({
         title: "Tabox - Save and Share Tab Groups",
         meta: {
