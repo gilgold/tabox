@@ -5,7 +5,7 @@ import { settingsDataState } from './atoms/settingsDataState';
 import { isHighlightedState } from './atoms/globalAppSettingsState';
 import { rowToHighlightState } from './atoms/animationsState';
 import { getCurrentTabsAndGroups } from './utils';
-import { browser } from '../static/index';
+import { browser } from '../static/globals';
 import { useSnackbar } from 'react-simple-snackbar';
 import { SnackbarStyle } from './model/SnackbarTypes';
 
@@ -31,7 +31,7 @@ const useFocus = () => {
 
 function AddNewTextbox(props) {
 
-    const [confName, setName] = useState("");
+    const [collectionName, setName] = useState("");
     const [disabled, setDisabled] = useState(false);
     const [inputRef, setInputFocus] = useFocus();
     const settingsData = useRecoilValue(settingsDataState);
@@ -45,13 +45,12 @@ function AddNewTextbox(props) {
 
 
     async function handleSave() {
-        const confTitle = confName ? confName.replace("'",'&#39;') : "";
-        if (confTitle.trim() === '') {
+        if (collectionName.trim() === '') {
             openSnackbar('Please enter a name for the collection', 2000);
             return;
         }
         setDisabled(true);
-        const newItem = await getCurrentTabsAndGroups(confTitle, isHighlighted);
+        const newItem = await getCurrentTabsAndGroups(collectionName, isHighlighted);
         const newSettingsData = settingsData ? [newItem, ...settingsData] : [newItem];
         setRowToHighlight(0);
         await props.updateRemoteData(newSettingsData);

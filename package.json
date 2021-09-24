@@ -1,16 +1,16 @@
 {
   "name": "tabox-react",
-  "version": "3.4.9",
+  "version": "3.5",
   "description": "Tabox React",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"no test specified\"",
+    "test": "jest --transformIgnorePatterns \"node_modules/(?!@toolz/allow-react)/\" --env=jsdom",
     "dev": "INLINE_RUNTIME_CHUNK=false NODE_ENV=development webpack --mode development --config webpack.js --watch",
     "prod": "INLINE_RUNTIME_CHUNK=false NODE_ENV=production webpack --mode production --config webpack.js"
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/gilgold/tabox-react.git"
+    "url": "git+ssh://git@github.com/gilgold/tabox.git"
   },
   "keywords": [
     "tabox",
@@ -20,14 +20,32 @@
   "author": "Gil Goldstein",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/gilgold/tabox-react/issues"
+    "url": "https://github.com/gilgold/tabox/issues"
   },
-  "homepage": "https://github.com/gilgold/tabox-react#readme",
+  "homepage": "https://tabox.co",
+  "jest": {
+    "transform": {
+      ".+\\.(css|styl|less|sass|scss|png|jpg|ttf|woff|woff2)$": "jest-transform-stub",
+      "^.+\\.js$": "babel-jest"
+    },
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "jsx",
+      "ts",
+      "tsx",
+      "node"
+    ],
+    "setupFiles": [
+      "jest-webextension-mock",
+      "<rootDir>/jest.setup.js"
+    ]
+  },
   "dependencies": {
     "@babel/runtime": "^7.14.0",
-    "@sentry/react": "^6.11.0",
-    "@sentry/tracing": "^6.11.0",
-    "@szhsin/react-menu": "^1.10.1",
+    "@sentry/react": "^6.13.2",
+    "@sentry/tracing": "^6.13.2",
+    "@szhsin/react-menu": "^2.0.1",
     "babel-plugin-transform-runtime": "^6.23.0",
     "chrome-extension-async": "^3.4.1",
     "javascript-time-ago": "^2.3.8",
@@ -43,21 +61,26 @@
     "react-time-ago": "^7.0.0",
     "react-tooltip": "^4.2.21",
     "react-uid": "^2.3.1",
-    "recoil": "^0.3.1",
+    "recoil": "^0.4.1",
     "sortablejs": "^1.14.0"
   },
   "devDependencies": {
     "@babel/core": "^7.14.2",
     "@babel/plugin-transform-runtime": "^7.14.3",
-    "@babel/preset-env": "^7.14.2",
-    "@babel/preset-react": "^7.13.13",
+    "@babel/preset-env": "^7.15.0",
+    "@babel/preset-react": "^7.14.5",
     "@sentry/webpack-plugin": "^1.17.1",
     "@types/sortablejs": "^1.10.6",
+    "babel-jest": "^27.2.1",
     "babel-loader": "^8.2.2",
     "copy-webpack-plugin": "^9.0.1",
     "css-loader": "^6.2.0",
     "file-loader": "^6.2.0",
     "html-webpack-plugin": "^5.3.2",
+    "jest": "^27.2.1",
+    "jest-transform-stub": "^2.0.0",
+    "jest-webextension-mock": "^3.7.19",
+    "react-test-renderer": "^17.0.2",
     "style-loader": "^3.2.1",
     "webextension-polyfill": "^0.8.0",
     "webpack": "^5.46.0",

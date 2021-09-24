@@ -1,5 +1,5 @@
 import TaboxGroupItem from './model/TaboxGroupItem';
-import { browser } from '../static/index';
+import { browser } from '../static/globals';
 import { uid } from 'react-uid';
 
 const URL_SEPERATOR = '`';
@@ -49,6 +49,8 @@ export async function convertOldDataToNewFormat() {
 
 export function applyUid(item) {
   // Applies a unique id to all tabs and groups in a TaboxGroupItem
+  if (!item || !'tabs' in item || item.tabs.length === 0) return item;
+  console.log('applying uid to collection', item.name);
   let tabs = [...item.tabs];
   let chromeGroups = [...item.chromeGroups];
   tabs.forEach((tab) => tab.uid = uid(tab));
@@ -59,18 +61,20 @@ export function applyUid(item) {
       tabs = tabs.map(t => (t.groupId === group.id ? { ...t, groupUid: groupUid } : t));
     });
   }
-  return new TaboxGroupItem(item.name, tabs, chromeGroups, item.color, item.createdOn);
+  return new TaboxGroupItem(item.name, tabs, chromeGroups, item.color, item.createdOn, item.window);
 }
 
 export async function getCurrentTabsAndGroups(title, onlyHighlighted = false) {
   let tabQueryProperties = { currentWindow: true };
   if (onlyHighlighted) tabQueryProperties.highlighted = true;
   let tabs = await browser.tabs.query(tabQueryProperties);
+  const window = await browser.windows.getCurrent({ populate: true, windowTypes: ['normal'] });
+  console.log('window', window);
   let allChromeGroups = await browser.tabGroups.query({});
   if (allChromeGroups && allChromeGroups.length > 0) {
     const groupIds = [...new Set(tabs.filter(({ groupId }) => groupId > -1).map((t) => t.groupId))];
     allChromeGroups = allChromeGroups.filter(({ id }) => groupIds.includes(id));
   }
-  const newItem = new TaboxGroupItem(title, tabs, allChromeGroups);
+  const newItem = new TaboxGroupItem(title, tabs, allChromeGroups, null, null, window);
   return applyUid(newItem);
 }

@@ -1,0 +1,24 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Import Collection section tests Import collection component renders correctly 1`] = `
+<span
+  className="image-upload"
+>
+  <label
+    htmlFor="file-input"
+  >
+    <img
+      src="images/import_file.png"
+    />
+     
+    <span>
+      Import a collection from file
+    </span>
+  </label>
+  <input
+    id="file-input"
+    onChange={[Function]}
+    type="file"
+  />
+</span>
+`;

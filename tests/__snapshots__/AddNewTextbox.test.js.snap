@@ -1,0 +1,56 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Add new collection textbox tests Add new collection textbox renders correctly - sync disabled 1`] = `
+<section>
+  <div
+    className="group"
+  >
+    <input
+      id="new_setting_title"
+      maxLength="50"
+      name="new_setting_title"
+      onChange={[Function]}
+      onKeyDown={[Function]}
+      placeholder=" "
+      type="text"
+    />
+    <span
+      className="bar"
+    />
+    <label
+      className="textbox_label"
+    >
+      Save 
+      all
+       tabs as...
+    </label>
+  </div>
+  <button
+    className="btn"
+    disabled={false}
+    id="add_new_setting"
+    onClick={[Function]}
+  >
+    <span>
+      Add
+    </span>
+  </button>
+  <span
+    className="highlighted_note"
+    style={
+      Object {
+        "display": "none",
+      }
+    }
+  >
+    Save 
+    <span
+      className="highlighter"
+    >
+      0
+       selected
+    </span>
+     tabs
+  </span>
+</section>
+`;

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useRecoilState, useRecoilValue } from 'recoil';
 import { syncInProgressState, themeState, isLoggedInState, lastSyncTimeState } from './atoms/globalAppSettingsState';
 import './Footer.css';
-import { browser } from '../static/index';
+import { browser } from '../static/globals';
 import TimeAgo from 'javascript-time-ago';
 import ReactTimeAgo from 'react-time-ago';
 import en from 'javascript-time-ago/locale/en';

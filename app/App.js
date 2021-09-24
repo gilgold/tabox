@@ -15,11 +15,10 @@ import {
   syncInProgressState,
   lastSyncTimeState,
 } from './atoms/globalAppSettingsState';
-import { browser } from '../static/index';
+import { browser } from '../static/globals';
 import { useSnackbar } from 'react-simple-snackbar';
 import { SnackbarStyle } from './model/SnackbarTypes';
 import ReopenLastSession from './ReopenLastSession';
-import TaboxGroupItem from './model/TaboxGroupItem';
 import ReactTooltip from 'react-tooltip';
 import { CollectionListOptions } from './CollectionListOptions';
 
@@ -58,7 +57,6 @@ function App() {
 
   const _handleSyncError = async (e) => {
       await logout();
-      console.log(e)
       openSnackbar('Error syncing data, please login again', 6000);
   }
 
@@ -68,9 +66,9 @@ function App() {
     })
   };
 
-  const applyDataFromServer = async () => {
+  const applyDataFromServer = async (force = false) => {
     setSyncInProgress(true);
-    browser.runtime.sendMessage({type: 'loadFromServer'}).then((response) => {
+    browser.runtime.sendMessage({type: 'loadFromServer', force: force}).then((response) => {
       if (response !== false) {
         setSettingsData(response);
         setLastSyncTime(Date.now());
@@ -94,8 +92,8 @@ function App() {
   }
 
   const updateRemoteData = async (newData) => {
-    setSettingsData(newData);
     await browser.storage.local.set({localTimestamp: Date.now()});
+    setSettingsData(newData);
     if (!isLoggedIn) return;
     _update();
   }
@@ -103,13 +101,15 @@ function App() {
   const loadCollectionsFromStorage = async () => {
     const {tabsArray} = await browser.storage.local.get('tabsArray');
     let newCollections = [];
-    if (tabsArray && tabsArray.length > 0 && !('uid' in tabsArray[0].tabs[0])) {
+    if (tabsArray && tabsArray.length > 0) {
       tabsArray.forEach((collection) => {
-        const taboxItem = applyUid(collection);
-        newCollections.push(taboxItem);
+        if (collection.tabs && collection.tabs.length > 0 && !('uid' in collection.tabs[0])) {
+          const taboxItem = applyUid(collection);
+          newCollections.push(taboxItem);
+        } else {
+          newCollections.push(collection);
+        }
       });
-    } else {
-      newCollections = tabsArray;
     }
     setSettingsData(newCollections);
   }

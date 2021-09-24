@@ -22,28 +22,7 @@ module.exports = (env, argv) => {
       extensions: ["*", ".js"]
     },
     optimization: {
-      minimize: argv.mode === 'production',
-      splitChunks: {
-        chunks: 'all',
-        minSize: 20000,
-        minRemainingSize: 0,
-        minChunks: 1,
-        maxAsyncRequests: 30,
-        maxInitialRequests: 30,
-        enforceSizeThreshold: 50000,
-        cacheGroups: {
-          defaultVendors: {
-            test: /[\\/]node_modules[\\/]/,
-            priority: -10,
-            reuseExistingChunk: true,
-          },
-          default: {
-            minChunks: 2,
-            priority: -20,
-            reuseExistingChunk: true,
-          },
-        },
-      }
+      minimize: argv.mode === 'production'
     },
     plugins: [
       new SentryCliPlugin({
@@ -70,6 +49,7 @@ module.exports = (env, argv) => {
           patterns: [
               { from: "chrome/icons", to: "icons" },
               { from: "static/images", to: "images" },
+              { from: "static/globals.js", to: "[name][ext]" },
               { from: "chrome/*.js", to: "[name][ext]" },
               { from: "chrome/api-keys.json", to: "[name][ext]" },
               {

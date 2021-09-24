@@ -18,6 +18,36 @@
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
   },
+  "commands": {
+    "open-collection-1": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+1",
+        "mac": "Command+Shift+1"
+      },
+      "description": "Open the first collection in your list"
+    },
+    "open-collection-2": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+2",
+        "mac": "Command+Shift+2"
+      },
+      "description": "Open the 2nd collection in your list"
+    },
+    "open-collection-3": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+3",
+        "mac": "Command+Shift+3"
+      },
+      "description": "Open the 3rd collection in your list"
+    },
+    "open-collection-4": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+4",
+        "mac": "Command+Shift+4"
+      },
+      "description": "Open the 4th collection in your list"
+    }
+  },
   "permissions": [
    "tabs",
    "tabGroups",
@@ -42,5 +72,5 @@
     ]
   },
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAgbFz4tW1ZT+Vmf+jMh5GJOLfHVI2UNoEDaqJKn0ZMC+9+9nePws++SBA9/lkQFjTc9symjYrgkr389ZBsPAtLsGC1D099eVrPeADts3pWYn0KopJjXIMBxcqRmffC7VwpYYCxJ1olACQuE1WHRvjNX4J84xWwCLf7lV1dCjB+viNnRLp2VJ7xKDj6/axdco2x9NVK8/0qRlH1eGe3i956hV+u8DkhF9fgH0sKKQACgJRSUE1fF1Y+FvDZFw7EdYSFTAxSxOCblE+8dw5Kwr0edPd3hWRehTV0bawTW4CYyRVhiICW9UogmDpTCkAgXbhzc8sDjHDF96ChdPPQE8KkwIDAQAB",
-  "version": "3.4.9"
+  "version": "3.5"
 }

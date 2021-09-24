@@ -1,5 +1,5 @@
 import React from 'react'
-import { applyUid, convertOldStringToDataArray } from './utils'
+import { applyUid } from './utils'
 import './ImportCollection.css';
 import { useRecoilValue, useSetRecoilState } from 'recoil';
 import { settingsDataState } from './atoms/settingsDataState';
@@ -24,20 +24,22 @@ function ImportCollection(props) {
         let reader = new FileReader();
         reader.onload = function (e) {
             const result = reader.result;
-            if (result.indexOf('`') == -1 && !result.startsWith('{"')) {
+            if (!result.startsWith('{"')) {
                 openSnackbar('Invalid File: This file is not a valid collection', 4000);
                 event.target.value = '';
                 return;
             }
             let newItem;
-            if (result.indexOf('`') > -1) {
-                newItem = convertOldStringToDataArray(result)[0];
-            }
-            if (result.startsWith('{"')) {
+            try {
                 newItem = JSON.parse(result);
                 newItem['createdOn'] = Date.now();
+                if (newItem && newItem.tabs.length > 0 && !('uid' in newItem.tabs[0])) newItem = applyUid(newItem);
             }
-            if (!('uid' in newItem.tabs[0])) newItem = applyUid(newItem);
+            catch {
+                openSnackbar('Invalid File: This file is not a valid collection', 4000);
+                event.target.value = '';
+                return;
+            }
             const newData = [newItem, ...settingsData];
             props.updateRemoteData(newData).then(() => {
                 setRowToHighlight(0);
