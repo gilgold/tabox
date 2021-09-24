@@ -10,7 +10,7 @@ import {
 } from './atoms/globalAppSettingsState';
 import { getCurrentTabsAndGroups } from './utils';
 import { ReactSortable } from 'react-sortablejs';
-import { browser } from '../static/index';
+import { browser } from '../static/globals';
 import Popover from 'react-popover';
 import ReactTooltip from 'react-tooltip';
 import { useSnackbar } from 'react-simple-snackbar';
@@ -216,7 +216,14 @@ function CollectionListItem(props) {
         const openInNewWindow = (await browser.storage.local.get('chkOpenNewWindow')).chkOpenNewWindow;
         var window;
         if (openInNewWindow) {
-            window = await browser.windows.create({ focused: true });
+            const hasWindowProp = 'window' in props.collection && props.collection.window;
+            window = await browser.windows.create({ 
+                focused: true, 
+                left: hasWindowProp ? props.collection.window.left : null, 
+                top: hasWindowProp ? props.collection.window.top : null, 
+                width: hasWindowProp ? props.collection.window.width : null, 
+                height: hasWindowProp ? props.collection.window.height : null
+            });
             window.tabs = await browser.tabs.query({ windowId: window.id });
         } else {
             window = await browser.windows.getCurrent({ populate: true, windowTypes: ['normal'] });

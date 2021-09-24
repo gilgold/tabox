@@ -9,3 +9,5 @@ build
 !.yarn/versions
 .pnp.*
 chrome/api-keys.json
+.vscode
+.DS_Store

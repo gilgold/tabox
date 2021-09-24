@@ -227,7 +227,7 @@ async function createNewSyncFileAndBackup(token) {
     await getOrCreateSyncFile(token);
 }
 
-async function updateLocalDataFromServer(token) {
+async function updateLocalDataFromServer(token, force = false) {
     const { syncFileId } = await browser.storage.sync.get('syncFileId');
     const serverTimestamp = await _getServerFileTimestamp(token, syncFileId);
     console.log(`server timestamp = ${serverTimestamp}`)
@@ -238,7 +238,7 @@ async function updateLocalDataFromServer(token) {
     let { localTimestamp } = await browser.storage.local.get('localTimestamp');
     localTimestamp = localTimestamp ?? 0;
     console.log(`Comparing timestamps, remote is: ${(serverTimestamp > localTimestamp) ? 'newer' : 'older'}`)
-    if (serverTimestamp > localTimestamp) return await _loadSettingsFile(token, syncFileId);
+    if (serverTimestamp > localTimestamp || force) return await _loadSettingsFile(token, syncFileId);
     return false;
 }
 

@@ -5,7 +5,7 @@ import {
 } from './atoms/globalAppSettingsState';
 import SettingsMenu from './SettingsMenu';
 import { useRecoilState } from 'recoil';
-import { browser } from '../static/index';
+import { browser } from '../static/globals';
 import { useSnackbar } from 'react-simple-snackbar';
 import { SnackbarStyle } from './model/SnackbarTypes';
 
@@ -28,10 +28,12 @@ function LoginSection(props) {
             openSnackbar('Sync has been disabled', 3000)
         } else {
             await browser.runtime.sendMessage({type: 'login'}).then(async (response) => {
+                console.log(response);
+                if (response === false) return;
                 setGoogleUser(response);
                 setIsLoggedIn(true);
-                openSnackbar('Sync is now enabled!', 3000)
-                await props.applyDataFromServer();
+                openSnackbar('Sync is now enabled!', 3000);
+                await props.applyDataFromServer(true);
             })
         }
     }
@@ -59,7 +61,11 @@ function LoginSection(props) {
 
 function Header(props) {
   return <header className="header">
-            <LoginSection applyDataFromServer={props.applyDataFromServer} logout={props.logout}/>
+            <LoginSection 
+                applyDataFromServer={props.applyDataFromServer} 
+                logout={props.logout}
+                updateRemoteData={props.updateRemoteData}    
+            />
             <SettingsMenu updateRemoteData={props.updateRemoteData} />
         </header>;
 };

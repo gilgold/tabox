@@ -1,0 +1,1 @@
+export var browser = require("webextension-polyfill");

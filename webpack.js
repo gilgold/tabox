@@ -70,6 +70,7 @@ module.exports = (env, argv) => {
           patterns: [
               { from: "chrome/icons", to: "icons" },
               { from: "static/images", to: "images" },
+              { from: "static/globals.js", to: "[name][ext]" },
               { from: "chrome/*.js", to: "[name][ext]" },
               { from: "chrome/api-keys.json", to: "[name][ext]" },
               {

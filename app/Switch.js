@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import './Switch.css';
-import { browser } from '../static/index';
+import { browser } from '../static/globals';
 import ReactTooltip from 'react-tooltip';
 
 const Switch = props => {

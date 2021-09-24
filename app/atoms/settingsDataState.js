@@ -1,5 +1,5 @@
 import { atom } from 'recoil';
-import { browser } from '../../static/index';
+import { browser } from '../../static/globals';
 
 const localStorageEffect = () => ({onSet}) => {
     onSet(async (newValue) => {

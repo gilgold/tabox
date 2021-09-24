@@ -1,11 +1,14 @@
 import { React, useState, useEffect } from 'react';
 import './ReopenLastSession.css';
-import { browser } from '../static/index';
+import { browser } from '../static/globals';
+import { useSnackbar } from 'react-simple-snackbar';
+import { SnackbarStyle } from './model/SnackbarTypes';
 
 export default function ReopenLastSession(props) {
 
     const [lastClosedTab, setLastClosedTab] = useState();
     const [lastClosedWindow, setLastClosedWindow] = useState();
+    const [openSnackbar, closeSnackbar] = useSnackbar({style: SnackbarStyle.ERROR});
   
     useEffect(async () => {
       const filter = {maxResults:10};
@@ -18,19 +21,21 @@ export default function ReopenLastSession(props) {
       setLastClosedTab(mostRecentTab);
     }, []);
   
-    const handleOpenTab = () => {
-      browser.sessions.restore(lastClosedTab);
-    };
-    const handleOpenWindow = () => {
-      browser.sessions.restore(lastClosedWindow);
+    const handleSessionRestore = async (session) => {
+      try {
+        await browser.sessions.restore(session);
+      } catch (e) {
+        openSnackbar('Invalid session ID - please reopen Tabox and try again', 4000);
+        return;
+      }
     };
   
     return lastClosedTab || lastClosedWindow ? <div id='rowClosed'>
       <div className='session_div'>
         Reopen your last closed 
-        { lastClosedTab ? <button onClick={handleOpenTab} title='Reopen your recently closed tab'>tab</button> : '' }
+        { lastClosedTab ? <button onClick={async () => await handleSessionRestore(lastClosedTab)} title='Reopen your recently closed tab'>tab</button> : '' }
         { lastClosedTab && lastClosedWindow ? 'or' : '' }
-        { lastClosedWindow ? <button onClick={handleOpenWindow} title='Reopen your recently closed window'>window</button> : ''}
+        { lastClosedWindow ? <button onClick={async () => await handleSessionRestore(lastClosedWindow)} title='Reopen your recently closed window'>window</button> : ''}
       </div>
     </div> : '';
   }

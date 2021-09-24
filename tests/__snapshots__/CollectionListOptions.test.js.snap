@@ -1,0 +1,68 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Collection List Options tests CollectionListOptions renders correctly 1`] = `
+<div>
+  <div
+    className="sort-icon"
+  />
+   
+  <span
+    className="sortLabel"
+  >
+    Sort by: 
+  </span>
+  <button
+    className="button"
+    onClick={[Function]}
+  >
+    Color
+  </button>
+  <button
+    className="button"
+    onClick={[Function]}
+  >
+    Newest
+  </button>
+  <div
+    className="spacer"
+  />
+  <span
+    data-class="small-tooltip"
+    data-multiline={true}
+  >
+    <input
+      checked={false}
+      className="switch-input"
+      id="chkOpenNewWindow"
+      name="chkOpenNewWindow"
+      onChange={[Function]}
+      type="checkbox"
+    />
+    <label
+      className="switch-label"
+      htmlFor="chkOpenNewWindow"
+    >
+      <span
+        className="toggle--on"
+      >
+        <span>
+          Tabs will open in a 
+          <strong>
+            new window
+          </strong>
+        </span>
+      </span>
+      <span
+        className="toggle--off"
+      >
+        <span>
+          Tabs will be added to 
+          <strong>
+            this window
+          </strong>
+        </span>
+      </span>
+    </label>
+  </span>
+</div>
+`;
