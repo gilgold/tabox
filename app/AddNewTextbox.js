@@ -26,7 +26,7 @@ const useFocus = () => {
     const htmlElRef = useRef(null)
     const setFocus = () => {htmlElRef.current && htmlElRef.current.focus()}
 
-    return [ htmlElRef, setFocus ] 
+    return [ htmlElRef, setFocus ]
 }
 
 function AddNewTextbox(props) {
@@ -65,21 +65,31 @@ function AddNewTextbox(props) {
 
     return <section>
                 <div className="group">
-                    <input 
-                        type="text" 
-                        maxLength="50" 
-                        placeholder=" " 
-                        name="new_setting_title" 
+                    <input
+                        type="text"
+                        maxLength="50"
+                        placeholder=" "
+                        name="new_setting_title"
                         id="new_setting_title"
-                        onKeyDown={async e => await _handleKeyDown(e)} 
-                        onChange={e => setName(e.target.value)} 
-                        ref={inputRef}  />
-                    <span className="bar"></span>
+                        onKeyDown={async e => await _handleKeyDown(e)}
+                        onChange={e => setName(e.target.value)}
+                        ref={inputRef}
+                        style={{
+                            float: 'left',
+                            width: '290px',
+                        }}
+                    />
+                    <span
+                        className="bar"
+                        style={{
+                            float: 'left',
+                            width: '290px',
+                        }}></span>
                     <label className="textbox_label">Save {isHighlighted ? 'selected' : 'all'} tabs as...</label>
                 </div>
-                <button 
-                    id="add_new_setting" 
-                    disabled={disabled} 
+                <button
+                    id="add_new_setting"
+                    disabled={disabled}
                     className="btn"
                     onClick={async () => await handleSave()}
                     >

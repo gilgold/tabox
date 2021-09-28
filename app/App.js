@@ -1,16 +1,24 @@
 import './App.css';
-import React, { useEffect } from 'react';
+import React, {
+  useEffect,
+  useMemo,
+} from 'react';
 import Header from './Header';
 import AddNewTextbox from './AddNewTextbox';
 import ImportCollection from './ImportCollection';
 import CollectionList from './CollectionList';
 import Footer from './Footer';
-import { useRecoilState, useSetRecoilState } from 'recoil';
+import {
+  useRecoilState,
+  useRecoilValue,
+  useSetRecoilState,
+} from 'recoil';
 import { settingsDataState } from './atoms/settingsDataState';
+import { searchState } from './atoms/globalAppSettingsState';
 import { applyUid, convertOldDataToNewFormat } from './utils';
-import { 
-  isHighlightedState, 
-  themeState, 
+import {
+  isHighlightedState,
+  themeState,
   isLoggedInState,
   syncInProgressState,
   lastSyncTimeState,
@@ -21,6 +29,7 @@ import { SnackbarStyle } from './model/SnackbarTypes';
 import ReopenLastSession from './ReopenLastSession';
 import ReactTooltip from 'react-tooltip';
 import { CollectionListOptions } from './CollectionListOptions';
+import { CollectionSearch } from './CollectionSearch';
 
 const Divder = () => <div className='hr'></div>;
 
@@ -32,6 +41,20 @@ function App() {
   const [syncInProgress, setSyncInProgress] = useRecoilState(syncInProgressState);
   const setLastSyncTime = useSetRecoilState(lastSyncTimeState);
   const [openSnackbar, closeSnackbar] = useSnackbar({style: SnackbarStyle.ERROR});
+  const search = useRecoilValue(searchState);
+
+  const collectionsToShow = useMemo(() => {
+    if (!search || !search.trim()) {
+      return settingsData;
+    }
+
+    const searchRegex = new RegExp(search, 'i');
+
+    return settingsData.filter(collection => collection.name.match(searchRegex));
+  }, [
+    search,
+    settingsData,
+  ]);
 
   const applyTheme = (theme) => {
     setThemeMode(theme);
@@ -113,12 +136,12 @@ function App() {
     }
     setSettingsData(newCollections);
   }
-  
+
   useEffect(async () => {
     await convertOldDataToNewFormat();
     await checkSyncStatus();
     await loadCollectionsFromStorage();
-    
+
     const {theme} = await browser.storage.local.get('theme');
     let currentTheme = theme;
     if (!currentTheme) currentTheme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -128,9 +151,9 @@ function App() {
   }, []);
 
   return <div className="App">
-      <ReactTooltip 
-        event={'mouseover'} 
-        eventOff={'click mouseout'} 
+      <ReactTooltip
+        event={'mouseover'}
+        eventOff={'click mouseout'}
         delayShow={200}
         type={themeMode === 'light' ? 'dark' : 'light'} />
       <Header applyDataFromServer={applyDataFromServer} updateRemoteData={updateRemoteData} logout={logout} />
@@ -138,11 +161,12 @@ function App() {
         <AddNewTextbox updateRemoteData={updateRemoteData} />
         <ImportCollection updateRemoteData={updateRemoteData} />
         <Divder/>
+        <CollectionSearch updateRemoteData={updateRemoteData} />
         <CollectionListOptions updateRemoteData={updateRemoteData} />
         <Divder/>
-        <CollectionList 
-          updateRemoteData={updateRemoteData}  
-          collections={settingsData} />
+        <CollectionList
+          updateRemoteData={updateRemoteData}
+          collections={collectionsToShow} />
         <Divder/>
         <ReopenLastSession/>
       </div>

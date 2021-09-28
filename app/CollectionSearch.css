@@ -1,0 +1,29 @@
+.search-group {
+  position: relative;
+  margin: 25px 0 10px 0;
+}
+
+.button {
+	background-color: transparent;
+	border: none;
+	border-radius: 5px;
+	color: var(--settings-row-text-color);
+	font-weight: 400;
+	padding: 2px 12px;
+	margin: 5px 5px;
+	cursor: pointer;
+	line-height: 16px;
+	font-size: .7rem;
+	transition: background-color .2s ease-in !important;
+}
+
+.button:hover {
+	background-color: var(--setting-row-hover-bg-color);
+}
+
+.search-icon {
+	display: inline-block;
+	width: 12px;
+	height: 12px;
+	margin: 0 5px 0 0;
+}

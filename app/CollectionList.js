@@ -217,11 +217,11 @@ function CollectionListItem(props) {
         var window;
         if (openInNewWindow) {
             const hasWindowProp = 'window' in props.collection && props.collection.window;
-            window = await browser.windows.create({ 
-                focused: true, 
-                left: hasWindowProp ? props.collection.window.left : null, 
-                top: hasWindowProp ? props.collection.window.top : null, 
-                width: hasWindowProp ? props.collection.window.width : null, 
+            window = await browser.windows.create({
+                focused: true,
+                left: hasWindowProp ? props.collection.window.left : null,
+                top: hasWindowProp ? props.collection.window.top : null,
+                width: hasWindowProp ? props.collection.window.width : null,
                 height: hasWindowProp ? props.collection.window.height : null
             });
             window.tabs = await browser.tabs.query({ windowId: window.id });
@@ -382,7 +382,7 @@ function ExpandedCollectionData(props) {
                 </div>
             </div>
                 <div className="group-header-actions" key={`group-actions-${groupUid}`}>
-                    <DeleteWithConfirmationButton 
+                    <DeleteWithConfirmationButton
                         action={_handleDeleteGroup}
                         group={group}
                     />
@@ -549,16 +549,18 @@ function NoCollections(props) {
 
 }
 
-function CollectionList(props) {
+function CollectionList({
+    collections,
+    ...props
+}) {
     const rowToHighlight = useRecoilValue(rowToHighlightState);
-    const settingsData = useRecoilValue(settingsDataState);
     const [isDragging, setIsDragging] = useState(false);
     const [abortSync, setAbortSync] = useState(true);
     const [initialLoad, setInitialLoad] = useState(true);
 
     useEffect(() => {
         ReactTooltip.rebuild();
-    }, [settingsData])
+    }, [ collections ])
 
     const updateTimestamp = async () => {
         setIsDragging(true)
@@ -577,9 +579,9 @@ function CollectionList(props) {
     }
 
     return <section className="settings_body">
-        {settingsData && settingsData.length > 0 ? (
+        {collections && collections.length > 0 ? (
             <ReactSortable
-                list={settingsData}
+                list={collections}
                 ghostClass="sortable_ghost"
                 handle=".handle"
                 onStart={() => setAbortSync(true)}
@@ -587,7 +589,7 @@ function CollectionList(props) {
                 onSort={updateTimestamp}
                 onEnd={handleOnEnd}
                 setList={setList}>
-                {settingsData.map((collection, index) => (
+                {collections.map((collection, index) => (
                     <CollectionListItem
                         key={`collection-${index}`}
                         updateRemoteData={props.updateRemoteData}
