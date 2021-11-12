@@ -6,8 +6,6 @@ const URL_SEPERATOR = '`';
 const SETTING_SEPERATOR = '|';
 const PINNED_TAB_INDICATOR = '*';
 
-let lastValidated = 0;
-
 export function convertOldStringToDataArray(oldDataString) {
   // Converts a given string of old tabox data into new json format
   let oldDataArray = oldDataString.split(SETTING_SEPERATOR);
@@ -37,6 +35,16 @@ export function convertOldStringToDataArray(oldDataString) {
   return newDataArray;
 }
 
+export function downloadTextFile(text, filename) {
+  // Downloads a text file
+  const element = document.createElement("a");
+  const file = new Blob([text], { type: 'text/plain' });
+  element.href = URL.createObjectURL(file);
+  element.download = `${filename}.txt`;
+  document.body.appendChild(element);
+  element.click();
+}
+
 export async function convertOldDataToNewFormat() {
   // Checks local storage for the old "settings" data and if it exists, converts it to the new json format
   const { settings } = await browser.storage.local.get('settings');
@@ -49,10 +57,10 @@ export async function convertOldDataToNewFormat() {
 
 export function applyUid(item) {
   // Applies a unique id to all tabs and groups in a TaboxGroupItem
-  if (!item || !'tabs' in item || item.tabs.length === 0) return item;
+  if (!item || !('tabs' in item) || item.tabs.length === 0) return item;
   console.log('applying uid to collection', item.name);
   let tabs = [...item.tabs];
-  let chromeGroups = [...item.chromeGroups];
+  let chromeGroups = item.chromeGroups ? [...item.chromeGroups] : [];
   tabs.forEach((tab) => tab.uid = uid(tab));
   if (chromeGroups.length > 0) {
     chromeGroups.forEach((group) => {
@@ -66,10 +74,12 @@ export function applyUid(item) {
 
 export async function getCurrentTabsAndGroups(title, onlyHighlighted = false) {
   let tabQueryProperties = { currentWindow: true };
+  const { chkIgnorePinned } = await browser.storage.local.get('chkIgnorePinned');
   if (onlyHighlighted) tabQueryProperties.highlighted = true;
+  if (chkIgnorePinned) tabQueryProperties.pinned = false;
   let tabs = await browser.tabs.query(tabQueryProperties);
   const window = await browser.windows.getCurrent({ populate: true, windowTypes: ['normal'] });
-  console.log('window', window);
+  delete window.tabs;
   let allChromeGroups = await browser.tabGroups.query({});
   if (allChromeGroups && allChromeGroups.length > 0) {
     const groupIds = [...new Set(tabs.filter(({ groupId }) => groupId > -1).map((t) => t.groupId))];

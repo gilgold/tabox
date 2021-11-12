@@ -13,27 +13,27 @@ function LoginSection(props) {
 
     const [isLoggedIn, setIsLoggedIn] = useRecoilState(isLoggedInState);
     const [googleUser, setGoogleUser] = useState();
-    const [openSnackbar, closeSnackbar] = useSnackbar({style: SnackbarStyle.SUCCESS});
+    const [openSnackbar, ] = useSnackbar({style: SnackbarStyle.SUCCESS});
 
     useEffect(async () => {
-        if (isLoggedIn) {
-            const {googleUser} = await browser.storage.local.get('googleUser');
+        const { googleUser } = await browser.storage.local.get('googleUser');
+        if (isLoggedIn && googleUser) {
             setGoogleUser(googleUser);
         }
     }, [isLoggedIn])
  
-    const handleClick = async (e) => {
+    const handleClick = async () => {
         if (isLoggedIn) {
             await props.logout();
+            setGoogleUser(null);
             openSnackbar('Sync has been disabled', 3000)
         } else {
-            await browser.runtime.sendMessage({type: 'login'}).then(async (response) => {
-                console.log(response);
+            browser.runtime.sendMessage({type: 'login'}).then(async (response) => {
                 if (response === false) return;
                 setGoogleUser(response);
                 setIsLoggedIn(true);
                 openSnackbar('Sync is now enabled!', 3000);
-                await props.applyDataFromServer(true);
+                await props.applyDataFromServer();
             })
         }
     }
@@ -63,11 +63,10 @@ function Header(props) {
   return <header className="header">
             <LoginSection 
                 applyDataFromServer={props.applyDataFromServer} 
-                logout={props.logout}
-                updateRemoteData={props.updateRemoteData}    
+                logout={props.logout} 
             />
-            <SettingsMenu updateRemoteData={props.updateRemoteData} />
+            <SettingsMenu updateRemoteData={props.updateRemoteData} applyDataFromServer={props.applyDataFromServer} />
         </header>;
-};
+}
 
 export default Header;

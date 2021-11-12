@@ -43,3 +43,8 @@ export const showPickerState = atom({
     key: 'showPickerState',
     default: false,
 });
+
+export const searchState = atom({
+    key: 'search',
+    default: undefined,
+});

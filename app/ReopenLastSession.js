@@ -4,11 +4,11 @@ import { browser } from '../static/globals';
 import { useSnackbar } from 'react-simple-snackbar';
 import { SnackbarStyle } from './model/SnackbarTypes';
 
-export default function ReopenLastSession(props) {
+export default function ReopenLastSession() {
 
     const [lastClosedTab, setLastClosedTab] = useState();
     const [lastClosedWindow, setLastClosedWindow] = useState();
-    const [openSnackbar, closeSnackbar] = useSnackbar({style: SnackbarStyle.ERROR});
+    const [openSnackbar, ] = useSnackbar({style: SnackbarStyle.ERROR});
   
     useEffect(async () => {
       const filter = {maxResults:10};

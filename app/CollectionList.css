@@ -103,17 +103,16 @@
 
 .handle {
 	cursor: grab;
-	display: inline-block;
+	display: inline-flex;
 	font-family: "Times", "Times New Roman", "serif", "sans-serif", "EmojiSymbols", "apple color emoji";
 	color: var(--settings-row-text-color);
 	font-weight: bolder;
-	font-size: 1.3em;
-	letter-spacing: -4px;
+	font-size: 1.1em;
 	width: 14px;
 	margin-left: -2px;
 	vertical-align: middle;
 	line-height: 27px;
-	flex: 0 0 14px !important;
+	flex: 0 0 18px !important;
 }
 
 .update_btn {
@@ -145,6 +144,7 @@
 	vertical-align: middle;
 	justify-content: center;
 	align-items: center;
+	margin-right: 5px;
 }
 
 .right_items {
@@ -226,7 +226,7 @@
 	position: relative;
 	background-color: var(--picker-bg-color);
 	border-radius: 5px;
-	left: 2px;
+	left: 5px;
 	padding: 4px;
 	display: flex;
 	flex-direction: row;
@@ -330,6 +330,30 @@
 
 .tab-property {
 	width: 16px;
+}
+
+.pinned-tab {
+	flex-basis: 20px;
+	height: 14px;
+	background-color: #C80836;
+	border-radius: 5px;
+	padding: 3px;
+	margin-right: 5px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.muted-tab {
+	flex-basis: 20px;
+	height: 14px;
+	background-color: #6c6c6c;
+	border-radius: 5px;
+	padding: 3px;
+	margin-right: 5px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 }
 
 .tab-favicon {
@@ -501,19 +525,12 @@ div.expanded-wrapper .single-tab-row:last-child .tree-line {
 
 .action-button {
 	border: none;
-	background-repeat: no-repeat;
-	background-size: 18px 18px;
-	background-position: center center;
 	background-color: transparent;
 	height: 28px;
-	width: 18px;
+	width: 22px;
 	text-align: right;
 	display: inline-block;
 	cursor: pointer;
-}
-
-button.del {
-	background-image: url('../static/images/delete.png');
 }
 
 .edit-collection-wrapper {
@@ -546,4 +563,18 @@ button.del {
 
 .edit-collection-button:hover {
 	background-color: #21a77e;
+}
+
+.search-title {
+	font-size: 1.1em;
+	color: var(--text-color);
+	font-weight: normal;
+}
+
+.del-tab {
+	cursor: pointer;
+	margin-left: 5px;
+	overflow: hidden;
+	display: inline-block;
+	height: 28px;
 }

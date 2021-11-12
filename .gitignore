@@ -11,3 +11,4 @@ build
 chrome/api-keys.json
 .vscode
 .DS_Store
+*.zip

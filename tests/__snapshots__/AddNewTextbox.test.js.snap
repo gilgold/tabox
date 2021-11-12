@@ -13,6 +13,7 @@ exports[`Add new collection textbox tests Add new collection textbox renders cor
       onKeyDown={[Function]}
       placeholder=" "
       type="text"
+      value=""
     />
     <span
       className="bar"
@@ -20,10 +21,37 @@ exports[`Add new collection textbox tests Add new collection textbox renders cor
     <label
       className="textbox_label"
     >
-      Save 
-      all
-       tabs as...
+      Search or Add collections
     </label>
+    <button
+      className="clear-button"
+      disabled={true}
+      onClick={[Function]}
+      style={
+        Object {
+          "opacity": "0",
+        }
+      }
+    >
+      <svg
+        fill="currentColor"
+        height="16px"
+        stroke="currentColor"
+        strokeWidth="0"
+        style={
+          Object {
+            "color": undefined,
+          }
+        }
+        viewBox="0 0 512 512"
+        width="16px"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M289.94 256l95-95A24 24 0 00351 127l-95 95-95-95a24 24 0 00-34 34l95 95-95 95a24 24 0 1034 34l95-95 95 95a24 24 0 0034-34z"
+        />
+      </svg>
+    </button>
   </div>
   <button
     className="btn"

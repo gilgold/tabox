@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './AutoSaveTextbox.css';
+import { AiFillEdit } from 'react-icons/ai';
 
 const TypingLoader = () => <div className="lds-ring"><div /><div /><div /><div /></div>;
 
@@ -52,9 +53,7 @@ export const AutoSaveTextbox = (props) => {
     return (
         <div className="autosave-wrapper">
             <div className="edit-icon" onClick={() => inputRef.current.focus()}>
-                <svg width="17" height="17" viewBox="0 0 17 17" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M2.125 12.2187V14.8749H4.78125L12.6154 7.04077L9.95917 4.38452L2.125 12.2187ZM14.6696 4.98661C14.9458 4.71036 14.9458 4.26411 14.6696 3.98786L13.0121 2.33036C12.7358 2.05411 12.2896 2.05411 12.0133 2.33036L10.7171 3.62661L13.3733 6.28286L14.6696 4.98661V4.98661Z" fill="var(--text-color)"/>
-                </svg>
+                <AiFillEdit size="17px" color="var(--text-color)" />
             </div>
             <input 
                 ref={inputRef} 
