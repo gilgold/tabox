@@ -1,12 +1,13 @@
 import React from 'react';
 import './Modal.css';
+import { IoIosWarning } from 'react-icons/io';
 
 export const Modal = (props) => {
     return (
         <div className='modal-card'>
             <div className='modal-card-wrapper'>
                 <div className='modal-card-image'>
-                    <img src="./images/warning.svg" alt='warning image' />
+                    <IoIosWarning color="#FFCC00" size="70px" />
                 </div>
                 <div className='modal-card-content'>
                     <div className='modal-card-header'>

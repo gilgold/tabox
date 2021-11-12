@@ -1,0 +1,37 @@
+{
+    "env": {
+        "browser": true,
+        "es2021": true,
+        "jest/globals": true
+    },
+    "extends": [
+        "eslint:recommended",
+        "plugin:react/recommended"
+    ],
+    "parserOptions": {
+        "ecmaFeatures": {
+            "jsx": true
+        },
+        "ecmaVersion": "latest",
+        "sourceType": "module"
+    },
+    "plugins": [
+        "react",
+        "jest"
+    ],
+    "ignorePatterns": [
+        "static/*.js",
+        "chrome/*.js",
+        "build/*.*",
+        "/*.js",
+        "__mocks__/*.js"
+    ],
+    "rules": {
+        "react/prop-types": 0
+    },
+    "settings": {
+        "react": {
+            "version": "detect"
+        }
+    }
+}

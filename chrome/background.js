@@ -22,9 +22,11 @@ async function openTabs(collection, window = null, newWindow = null) {
           muted: tabInTaboxGrp.muted
       }
       if (index === 0 && (window.tabs.length === 1 && (!window.tabs[0].url || window.tabs[0].url.indexOf('://newtab') > 0))){
-          tabInTaboxGrp.newTabId = window.tabs[0].id;
-          updatedTabsWithNewId.push(tabInTaboxGrp);
-          browser.tabs.update(window.tabs[0].id,{...tabProperties, ...updateOnlyProperties});
+          setTimeout(async () => {
+            tabInTaboxGrp.newTabId = window.tabs[0].id;
+            updatedTabsWithNewId.push(tabInTaboxGrp);
+            await browser.tabs.update(window.tabs[0].id,{...tabProperties, ...updateOnlyProperties});
+          }, 500);
       } else {
           tabProperties.windowId = window.id;
           browser.tabs.create(tabProperties).then((newTab) => {
@@ -44,9 +46,12 @@ async function openTabs(collection, window = null, newWindow = null) {
 
 try {
   browser.runtime.onMessage.addListener(async (request) => {
-    if (request.type === 'openTabs') {
-      openTabs(request.collection, request.window);
-      return;
+    if (request.type === 'checkSyncStatus') {
+      const token = await getAuthToken();
+      if (token === false) return Promise.resolve(false);
+      await getOrCreateSyncFile(token);
+      const user = await getGoogleUser(token);
+      return Promise.resolve(user);
     }
     if (request.type === 'login') {
       try {
@@ -58,7 +63,7 @@ try {
         const urlParams = url.searchParams;
         const params = Object.fromEntries(urlParams.entries());
         const token = await getTokens(params.code);
-        if (token === false) return Promise.reject('unable to get token');
+        if (token === false) return Promise.resolve(false);
         await getOrCreateSyncFile(token);
         const user = await getGoogleUser(token);
         return Promise.resolve(user);
@@ -66,38 +71,34 @@ try {
         return Promise.resolve(false);
       }
     }
+    if (request.type === 'openTabs') {
+      await openTabs(request.collection, request.window);
+      return Promise.resolve(true);
+    }
 
     if (request.type === 'updateRemote') {
       const token = await getAuthToken();
-      if (token === false) return Promise.reject('unable to get token');
+      if (token === false) return Promise.resolve(false);
       await updateRemote(token);
       return Promise.resolve(true);
     }
 
     if (request.type === 'loadFromServer') {
       const token = await getAuthToken();
-      if (token === false) return Promise.reject('unable to get token');
+      if (token === false) return Promise.resolve(false);
       const newData = await updateLocalDataFromServer(token, request.force);
+      if (newData === false) await updateRemote(token);
       return Promise.resolve(newData);
     }
 
     if (request.type === 'logout') {
       const token = await getAuthToken();
       if (token === false) return;
-      await removeToken(token);
-      await browser.storage.local.remove(['googleUser', 'googleRefreshToken']);
+      await browser.storage.local.remove('googleUser');
       await browser.storage.sync.remove('syncFileId');
     }
-
-    if (request.type === 'checkSyncStatus') {
-      const token = await getAuthToken();
-      if (token === false) return Promise.reject(false);
-      await getOrCreateSyncFile(token);
-      const user = await getGoogleUser(token);
-      return Promise.resolve(user);
-    }
   });
-  chrome.commands.onCommand.addListener(async (command) => {
+  browser.commands.onCommand.addListener(async (command) => {
     const index = parseInt(command.replace('open-collection-', '')) - 1;
     const {tabsArray} = await browser.storage.local.get('tabsArray');
     if (!tabsArray || tabsArray.length === 0 || index > tabsArray.length - 1) return;

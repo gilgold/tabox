@@ -32,7 +32,7 @@ export const SnackBarWithUndo = (props) => {
                 [props.undoBackgroundColor, 1],
                 ]}
             >
-                {({ remainingTime }) => <button className="snackbar-button" onClick={props.closeSnackbar}><IoClose size="24px" /></button>}
+                {() => <button className="snackbar-button" onClick={props.closeSnackbar}><IoClose size="24px" /></button>}
             </CountdownCircleTimer>
         </div>
     </div>

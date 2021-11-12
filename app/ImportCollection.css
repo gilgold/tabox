@@ -1,7 +1,6 @@
 .image-upload {
-	display: inline-block;
-	margin-top: 5px;
-	margin-right: 11px;
+	display: block;
+	margin: 8px 0 4px 0;
 	height: 30px;
     line-height: 16px;
 }
@@ -13,15 +12,27 @@
 .image-upload > label {
 	cursor: pointer;
 }
-.image-upload > label > img {
-	float:left;
-	width: 25px;
-	height: 25px;
+.input-label {
+	margin-top: 3px;
+	display: flex;
+    align-items: center;
+	width: 160px;
 }
-.image-upload > label > span {
+.import-icon {
+	float: left;
+}
+.import-button {
+	background-color: var(--primary-color);
+	color: #fff;
+	border: none;
+	border-radius: 3px;
+	padding: 5px 14px;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: space-between;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, .6);
 	font-size:.75em;
-	font-weight: 400;
-	color: var(--text-color);
-	display: inline-block;
-	padding: 6px 0 0 5px;
+	font-weight: 600;
+	flex-basis: 160px;
 }

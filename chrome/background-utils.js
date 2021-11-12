@@ -193,7 +193,7 @@ async function updateRemote(token, collections = null) {
         'contentType': 'json',
         body: JSON.stringify({ tabsArray: tabsArray })
     };
-    console.log('updating remote sync file with new data')
+    console.log('updating remote sync file with new data', tabsArray)
     const url = `https://www.googleapis.com/upload/drive/v3/files/${syncFileId}?uploadType=media&access_token=${token}`;
     const response = await handleRequest(url, init);
     return response;
