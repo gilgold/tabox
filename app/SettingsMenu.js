@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import './SettingsMenu.css';
 import Switch from './Switch';
-import { themeState, isLoggedInState } from './atoms/globalAppSettingsState';
-import { useRecoilValue } from 'recoil';
+import { themeState, isLoggedInState, listKeyState } from './atoms/globalAppSettingsState';
+import { useRecoilValue, useSetRecoilState } from 'recoil';
 import {
     Menu,
     FocusableItem,
@@ -19,17 +19,23 @@ import { useSnackbar } from 'react-simple-snackbar';
 import { SnackbarStyle } from './model/SnackbarTypes';
 import { Modal } from './Modal';
 import { downloadTextFile } from './utils';
-import { RiSettings5Fill } from 'react-icons/ri';
+import { RiFolderAddFill, RiEdit2Line, RiSettings5Fill } from 'react-icons/ri';
+import { AiTwotoneExperiment } from 'react-icons/ai';
+import { ImNewTab } from 'react-icons/im';
+import { MdOutlineSyncAlt, MdSettingsBackupRestore } from 'react-icons/md';
 
 
 export default function SettingsMenu(props) {
     const themeMode = useRecoilValue(themeState);
     const [backupVersion, setBackupVersion] = useState(null);
-    const [openSnackbar, ] = useSnackbar({style: SnackbarStyle.SUCCESS});
+    const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(false);
+    const [openSnackbar, ] = useSnackbar({ style: SnackbarStyle.SUCCESS });
     const isLoggedIn = useRecoilValue(isLoggedInState);
+    const setListKey = useSetRecoilState(listKeyState);
 
     useEffect(async () => {
-        const { backup } = await browser.storage.local.get('backup');
+        const { backup, chkEnableAutoUpdate } = await browser.storage.local.get(['backup', 'chkEnableAutoUpdate']);
+        setAutoUpdateEnabled(chkEnableAutoUpdate || false);
         if (backup && backup.version) { 
             setBackupVersion(backup.version);
         }
@@ -71,6 +77,13 @@ export default function SettingsMenu(props) {
         openSnackbar(`Exported all collections to file: ${filename}.txt`);
     }
 
+    const handleAutoUpdate = async () => {
+        setTimeout(async () => {
+            setListKey(Date.now().toString());
+            setAutoUpdateEnabled(!autoUpdateEnabled);
+        }, 100);
+    }
+
     const confirmLoadFromDrive = async (onClose) => {
         onClose();
         await props.applyDataFromServer(true);
@@ -101,10 +114,12 @@ export default function SettingsMenu(props) {
             </div>}
             arrow
             theming={themeMode === 'dark' ? 'dark' : undefined}
+            overflow="auto"
+            position="anchor"
             className='settings-items-wrapper'
         >
-            <MenuHeader>When adding a collection</MenuHeader>
-            <FocusableItem styles={{width: '380px'}}>
+            <MenuHeader><RiFolderAddFill /> When adding a collection</MenuHeader>
+            <FocusableItem styles={{ width: '380px' }}>
                 {() => (
                 <Switch 
                     id="chkIgnorePinned"
@@ -114,8 +129,8 @@ export default function SettingsMenu(props) {
                 )}
             </FocusableItem>
             <MenuDivider />
-            <MenuHeader>When opening collections</MenuHeader>
-            <FocusableItem styles={{width: '380px'}}>
+            <MenuHeader><ImNewTab /> When opening collections</MenuHeader>
+            <FocusableItem styles={{ width: '380px' }}>
                 {() => (
                 <Switch 
                     id="chkIgnoreDuplicates"
@@ -125,8 +140,8 @@ export default function SettingsMenu(props) {
                 )}
             </FocusableItem>
             <MenuDivider />
-            <MenuHeader>When editing collections</MenuHeader>
-            <FocusableItem styles={{width: '380px'}}>
+            <MenuHeader><RiEdit2Line /> When editing collections</MenuHeader>
+            <FocusableItem styles={{ width: '380px' }}>
                 {() => (
                 <Switch 
                     id="chkColEditIgnoreDuplicateTabs"
@@ -136,7 +151,7 @@ export default function SettingsMenu(props) {
                 />
                 )}
             </FocusableItem>
-            <FocusableItem styles={{width: '380px'}}>
+            <FocusableItem styles={{ width: '380px' }}>
                 {() => (
                 <Switch 
                     id="chkColEditIgnoreDuplicateGroups"
@@ -147,9 +162,47 @@ export default function SettingsMenu(props) {
                 )}
             </FocusableItem>
             <MenuDivider />
+            <MenuHeader><MdOutlineSyncAlt /> Auto update collections</MenuHeader>
+            <FocusableItem styles={{ width: '380px' }}>
+                {() => (
+                    <>
+                    <Switch 
+                        id="chkEnableAutoUpdate"
+                        onMouseUp={handleAutoUpdate}
+                        data-multiline={true}
+                        data-tip="When opening a collection, track changes<br />to the window and update the collection in the background."
+                        textOn={<span>Auto updating collections: <strong>Enabled</strong><sup>BETA</sup></span>}
+                        textOff={<span>Auto updating collections: <strong>Disabled</strong><sup>BETA</sup></span>}
+                    />&nbsp;
+                    <AiTwotoneExperiment 
+                        size="16" 
+                        data-multiline={true} 
+                        data-tip="WARNING!<br />This feature is experimental and may cause unexpected issues." />
+                    </>
+                )}
+            </FocusableItem>
+            <FocusableItem styles={{ width: '380px' }}>
+                {() => (
+                    <>
+                    <Switch 
+                        id="chkAutoUpdateOnNewCollection"
+                        data-multiline={true}
+                        disabled={!autoUpdateEnabled}
+                        data-tip="When adding a new collection, start auto updating<br /> it with changes in the current window."
+                        textOn={<span>Auto update new collections: <strong>Enabled</strong><sup>BETA</sup></span>}
+                        textOff={<span>Auto update new collections: <strong>Disabled</strong><sup>BETA</sup></span>}
+                    />&nbsp;
+                    <AiTwotoneExperiment 
+                        size="16" 
+                        data-multiline={true} 
+                        data-tip="WARNING!<br />This feature is experimental and may cause unexpected issues." />
+                    </>
+                )}
+            </FocusableItem>
+            <MenuDivider />
+            <MenuHeader><MdSettingsBackupRestore /> Backup &amp; Restore</MenuHeader>
             <MenuItem onClick={handleExport}>Export all collections</MenuItem>
             { isLoggedIn && <MenuItem onClick={handleForceLoad}>Load collections from Google Drive backup</MenuItem> }
-            <MenuDivider />
             { generateBackupMenuItem() }
         </Menu>
     </div>

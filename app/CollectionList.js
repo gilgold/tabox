@@ -7,6 +7,7 @@ import {
     isHighlightedState,
     themeState,
     searchState,
+    listKeyState,
 } from './atoms/globalAppSettingsState';
 import { getCurrentTabsAndGroups, downloadTextFile } from './utils';
 import { ReactSortable } from 'react-sortablejs';
@@ -18,7 +19,7 @@ import { SnackbarStyle } from './model/SnackbarTypes';
 import { AutoSaveTextbox } from './AutoSaveTextbox';
 import DeleteWithConfirmationButton from './DeleteWithConfirmationButton';
 import { SnackBarWithUndo } from './SnackBarWithUndo';
-import { FaTrash, FaRegCheckCircle } from 'react-icons/fa';
+import { FaTrash, FaRegCheckCircle, FaStop } from 'react-icons/fa';
 import { AiOutlineFolderAdd } from 'react-icons/ai';
 import { BsSearch } from 'react-icons/bs';
 import { FaCloudDownloadAlt, FaVolumeMute } from 'react-icons/fa';
@@ -120,6 +121,8 @@ function CollectionListItem(props) {
     const [collectionName, setCollectionName] = useState(props.collection.name);
     const [isExpanded, setExpanded] = useState(false);
     const [shouldHighlight, setShouldHighlight] = useState(false);
+    const [isAutoUpdate, setIsAutoUpdate] = useState(false);
+    const setListKey = useSetRecoilState(listKeyState);
     const [openSnackbar] = useSnackbar({ style: collectionName === '' ? SnackbarStyle.ERROR : SnackbarStyle.SUCCESS });
     const [openUpdateSnackbar, closeUpdateSnackbar] = useSnackbar({ style: SnackbarStyle.SUCCESS, closeStyle: { display: 'none' } });
     const [, closeDeleteSnackbar] = useSnackbar({ style: SnackbarStyle.SUCCESS, closeStyle: { display: 'none' } });
@@ -144,6 +147,14 @@ function CollectionListItem(props) {
         setTimeout(() => setRowToHighlight(-1), 1000);
     });
 
+    useEffect(async () => {
+        const { chkEnableAutoUpdate } = await browser.storage.local.get('chkEnableAutoUpdate');
+        const { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack') || [];
+        const activeCollections = collectionsToTrack.map(c => c.collectionUid);
+        const collectionIsActive = activeCollections.includes(props.collection.uid);
+        setIsAutoUpdate(chkEnableAutoUpdate && collectionIsActive);
+    }, [props.collection])
+
     const handleSaveCollectionColor = async (color) => {
         let newCollectionItem = { ...props.collection };
         newCollectionItem.color = color;
@@ -153,6 +164,7 @@ function CollectionListItem(props) {
     async function _handleDelete() {
         const { tabsArray: previousCollections } = await browser.storage.local.get('tabsArray');
         setExpanded(false);
+        _handleStopTracking();
         const newList = props.removeCollectionAtIndex(props.index);
         setDeleted(true);
         playDelete(true);
@@ -198,6 +210,10 @@ function CollectionListItem(props) {
 
     const _handleOpenTabs = async () => {
         if (isExpanded) return;
+        if (isAutoUpdate) { 
+            await _handleFocusWindow(); 
+            return;
+        }
         const openInNewWindow = (await browser.storage.local.get('chkOpenNewWindow')).chkOpenNewWindow;
         var window;
         if (openInNewWindow) {
@@ -218,12 +234,34 @@ function CollectionListItem(props) {
             collection: props.collection,
             window: window
         };
-        browser.runtime.sendMessage(msg);
+        await browser.runtime.sendMessage(msg);
+        setTimeout(() => setListKey(Math.random().toString()), 500);
     }
 
     const _handleExpand = () => {
         setExpanded(!isExpanded);
         setCollectionName(props.collection.name)
+    }
+
+    const _handleFocusWindow = async () => {
+        const { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack') || [];
+        const activeWindowId = collectionsToTrack.find(c => c.collectionUid === props.collection.uid)?.windowId;
+        if (!activeWindowId) return;
+        const msg = {
+            type: 'focusWindow',
+            windowId: activeWindowId
+        };
+        browser.runtime.sendMessage(msg);
+    }
+
+    const _handleStopTracking = async () => {
+        const { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack') || [];
+        const activeCollections = collectionsToTrack.map(c => c.collectionUid);
+        const collectionIsActive = activeCollections.includes(props.collection.uid);
+        if (!collectionIsActive) return;
+        const newCollectionsToTrack = collectionsToTrack.filter(c => c.collectionUid !== props.collection.uid);
+        await browser.storage.local.set({ collectionsToTrack: newCollectionsToTrack });
+        setIsAutoUpdate(false);
     }
 
     const handleCollectionNameChange = (val) => {
@@ -243,7 +281,7 @@ function CollectionListItem(props) {
     let style = shouldHighlight ? highlightStyle : {};
     style = isDeleted ? deleteStyle : style;
 
-    return <div className="row setting_row" style={{ ...style, backgroundColor: isExpanded ? 'var(--setting-row-hover-bg-color)' : null }}>
+    return <div className={`row setting_row ${isAutoUpdate && 'active-auto-tracking'}`} style={{ ...style, backgroundColor: isExpanded ? 'var(--setting-row-hover-bg-color)' : null }}>
         <div
             className="column handle"
             data-tip={props.disableDrag ? "Drag & Drop is disabled when searching" : null}
@@ -260,7 +298,11 @@ function CollectionListItem(props) {
                     action={handleSaveCollectionColor} />
             </div>
         </div>
-        <div className="column settings_div" title={props.collection.name} onClick={_handleOpenTabs}>
+        <div
+            className="column settings_div"
+            title={props.collection.name}
+            onClick={async () => await _handleOpenTabs()}
+        >
             <span className="truncate_box">{isExpanded ? <div className="edit-collection-wrapper">
                 <AutoSaveTextbox
                     onChange={setCollectionName}
@@ -274,12 +316,18 @@ function CollectionListItem(props) {
             {props.collection.tabs.length} tab{props.collection.tabs.length > 1 ? 's' : ''} {totalGroups > 0 && '(' + totalGroups + ' group' + (totalGroups > 1 ? 's' : '') + ')'}
         </div>
         <div className="column right_items">
-            <span className="update_btn" onClick={async () => await _handleUpdate()}>update</span>
+            <span 
+                data-tip="Stop auto updating this collection"
+                className={`float-button ${isAutoUpdate ? 'stop_btn' : 'update_btn'}`} 
+                onClick={async () => isAutoUpdate ? _handleStopTracking() : await _handleUpdate()}
+            >
+                {isAutoUpdate ? <FaStop /> : 'update'}
+            </span>
             <span title={'Export ' + props.collection.name} onClick={() => _exportCollectionToFile()} className="export">
                 <FaCloudDownloadAlt color="var(--primary-color)" size="40" />
             </span>
             <span title={'Delete ' + props.collection.name} className="export" onClick={async () => await _handleDelete()}>
-                <MdDeleteForever color="#B64A4A" size="40" />
+                <MdDeleteForever color="#e74c3c" size="40" />
             </span>
             <span className={`expand-icon ${isExpanded ? 'expan-open' : ''}`} title={`${isExpanded ? 'Collapse' : 'Expand'} list of tabs`} onClick={() => _handleExpand()}>⌃</span>
         </div>
@@ -490,7 +538,14 @@ function ExpandedCollectionData(props) {
         </div>
         {props.collection.tabs.map((tab, index) => [GroupHeader(tab.groupUid), <div className="row single-tab-row" key={`line-${index}`}>
             <div className="tree-line"></div>
-            {(tab.groupId > -1) ? <div className="group-indicator" style={{ backgroundColor: groupFromId(tab.groupUid) ? getColorCode(groupFromId(tab.groupUid).color) : 'transparent' }} /> : <div className="group-placeholder" />}
+            {(tab.groupId > -1) ? 
+                <div 
+                    className="group-indicator" 
+                    style={{ 
+                        backgroundColor: groupFromId(tab.groupUid) ? getColorCode(groupFromId(tab.groupUid).color) : 'transparent', 
+                        boxShadow: groupFromId(tab.groupUid) ? `${getColorCode(groupFromId(tab.groupUid).color)} -3px 1px 3px -2px` : 'none'
+                    }} /> : 
+                <div className="group-placeholder" />}
             {tab.pinned ? <div className="tab-property pinned-tab" title="Pinned Tab">
                 <AiFillPushpin size="12px" color="#FFF" />
             </div> : null}
@@ -572,7 +627,8 @@ function CollectionList({
         {search ? <SearchTitle searchTerm={search} /> : null}
         {collections && collections.length > 0 ? (
             <ReactSortable
-                list={collections}
+                list={collections.map((c) => ({ ...c }))}
+                id={`collection-list-${disableDrag}`}
                 key={`collection-list-${disableDrag}`}
                 disabled={disableDrag}
                 ghostClass="sortable_ghost"

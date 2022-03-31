@@ -52,7 +52,7 @@ function AddNewTextbox(props) {
 
 
     const handleSave = async () => {
-        console.log("handleSave");
+        console.log("add new collection", collectionName);
         if (collectionName.trim() === '') {
             openSnackbar('Please enter a name for the collection', 2000);
             return;

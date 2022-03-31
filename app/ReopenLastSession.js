@@ -8,10 +8,10 @@ export default function ReopenLastSession() {
 
     const [lastClosedTab, setLastClosedTab] = useState();
     const [lastClosedWindow, setLastClosedWindow] = useState();
-    const [openSnackbar, ] = useSnackbar({style: SnackbarStyle.ERROR});
+    const [openSnackbar, ] = useSnackbar({ style: SnackbarStyle.ERROR });
   
     useEffect(async () => {
-      const filter = {maxResults:10};
+      const filter = { maxResults:10 };
       const sessions = await browser.sessions.getRecentlyClosed(filter);
       const windows = sessions.filter(({ window }) => window !== undefined);
       const tabs = sessions.filter(({ tab }) => tab !== undefined);

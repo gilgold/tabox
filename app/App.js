@@ -8,7 +8,7 @@ import CollectionList from './CollectionList';
 import Footer from './Footer';
 import { useRecoilState, useSetRecoilState, useRecoilValue } from 'recoil';
 import { settingsDataState } from './atoms/settingsDataState';
-import { applyUid, convertOldDataToNewFormat } from './utils';
+import { applyUid } from './utils';
 import {
   isHighlightedState,
   themeState,
@@ -16,6 +16,7 @@ import {
   syncInProgressState,
   lastSyncTimeState,
   searchState,
+  listKeyState,
 } from './atoms/globalAppSettingsState';
 import { rowToHighlightState } from './atoms/animationsState';
 import { browser } from '../static/globals';
@@ -37,6 +38,7 @@ function App() {
   const setLastSyncTime = useSetRecoilState(lastSyncTimeState);
   const [openSnackbar] = useSnackbar({ style: SnackbarStyle.ERROR });
   const search = useRecoilValue(searchState);
+  const [listKey, setListKey] = useRecoilState(listKeyState)
 
   const applyTheme = async () => {
     let { theme } = await browser.storage.local.get('theme');
@@ -48,15 +50,10 @@ function App() {
   const checkSyncStatus = async () => {
     console.log('check sync status')
     const { googleRefreshToken } = await browser.storage.local.get('googleRefreshToken');
-    const { googleUser } = await browser.storage.local.get('googleUser');
-    if (!googleRefreshToken || !googleUser) return;
+    if (!googleRefreshToken) return;
     browser.runtime.sendMessage({ type: 'checkSyncStatus' }).then(async (response) => {
-      if (response === false) throw new Error('Refresh token is no longer valid');
-      setIsLoggedIn(response !== null);
-      await applyDataFromServer();
-    }).catch(async (error) => {
-      console.log('checkSyncStatus error', error);
-      setIsLoggedIn(false);
+      setIsLoggedIn(response === null ? false : response);
+      if (response) await applyDataFromServer();
     });
   }
 
@@ -89,7 +86,7 @@ function App() {
 
   const _update = async () => {
     setSyncInProgress(true);
-    console.log('_update');
+    console.log('Update remote data');
     browser.runtime.sendMessage({ type: 'updateRemote' }).then(() => {
       setLastSyncTime(Date.now());
     }).catch(async (err) => {
@@ -101,7 +98,6 @@ function App() {
 
   const updateRemoteData = async (newData) => {
     setSettingsData(newData);
-    console.log('updateRemoteData');
     await browser.storage.local.set({ localTimestamp: Date.now() });
     if (!isLoggedIn) return;
     _update();
@@ -121,6 +117,23 @@ function App() {
     const newList = settingsData ? [newCollection, ...settingsData] : [newCollection];
     setRowToHighlight(0);
     await updateRemoteData(newList);
+    const { chkAutoUpdateOnNewCollection } = await browser.storage.local.get('chkAutoUpdateOnNewCollection');
+    if (!chkAutoUpdateOnNewCollection) return;
+    setTimeout(async () => {
+      let { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack') || [];
+      const window = await browser.windows.getLastFocused({ windowTypes: ['normal'] });
+      const index = collectionsToTrack.findIndex(c => c.collectionUid === newCollection.uid);
+      if (index !== undefined && index > -1) {
+          collectionsToTrack[index].windowId = window.id;
+      } else {
+          collectionsToTrack.push({
+              collectionUid: newCollection.uid,
+              windowId: window.id
+          });
+      }
+      await browser.storage.local.set({ collectionsToTrack });
+      setListKey(Math.random().toString(36));
+    }, 1000)
   }
 
   const loadCollectionsFromStorage = async () => {
@@ -145,10 +158,9 @@ function App() {
   }
 
   useEffect(async () => {
-    await convertOldDataToNewFormat();
+    await applyTheme();
     await checkSyncStatus();
     await loadCollectionsFromStorage();
-    await applyTheme();
     await checkForHighlightedTabs();
   }, []);
 
@@ -182,6 +194,7 @@ function App() {
       <CollectionListOptions updateRemoteData={updateRemoteData} />
       <Divder />
       <CollectionList
+        key={`collection-list-${listKey}`}
         updateRemoteData={updateRemoteData}
         collections={collectionsToShow}
         updateCollection={updateCollection}

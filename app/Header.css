@@ -36,6 +36,6 @@
 	cursor: pointer;
 	display: block;
 	font-size: .62em;
-	color: var(--text-color);
+	color: var(--footer-text-color);
 	text-align: left;
 }

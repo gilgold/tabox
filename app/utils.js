@@ -1,39 +1,5 @@
 import TaboxGroupItem from './model/TaboxGroupItem';
 import { browser } from '../static/globals';
-import { uid } from 'react-uid';
-
-const URL_SEPERATOR = '`';
-const SETTING_SEPERATOR = '|';
-const PINNED_TAB_INDICATOR = '*';
-
-export function convertOldStringToDataArray(oldDataString) {
-  // Converts a given string of old tabox data into new json format
-  let oldDataArray = oldDataString.split(SETTING_SEPERATOR);
-  let newDataArray = [];
-  oldDataArray.forEach((oldDataMember) => {
-    let urlArray = oldDataMember.split(URL_SEPERATOR);
-    let newTabsArray = [];
-    urlArray.forEach((url, index) => {
-      if (index === 0 || url === '') {
-        return;
-      }
-      let tabObject = {
-        url: '',
-        pinned: false
-      };
-      const pinned = url.startsWith(PINNED_TAB_INDICATOR);
-      if (pinned) {
-        url = url.substring(1, url.length)
-      }
-      tabObject.url = url;
-      tabObject.pinned = pinned;
-      newTabsArray.push(tabObject);
-    });
-    const newDataItem = new TaboxGroupItem(urlArray[0], newTabsArray, null);
-    newDataArray.push(newDataItem);
-  });
-  return newDataArray;
-}
 
 export function downloadTextFile(text, filename) {
   // Downloads a text file
@@ -45,26 +11,20 @@ export function downloadTextFile(text, filename) {
   element.click();
 }
 
-export async function convertOldDataToNewFormat() {
-  // Checks local storage for the old "settings" data and if it exists, converts it to the new json format
-  const { settings } = await browser.storage.local.get('settings');
-  if (settings) {
-    let newDataArray = convertOldStringToDataArray(settings);
-    await browser.storage.local.remove('settings');
-    await browser.storage.local.set({ tabsArray: newDataArray });
-  }
-}
-
 export function applyUid(item) {
   // Applies a unique id to all tabs and groups in a TaboxGroupItem
   if (!item || !('tabs' in item) || item.tabs.length === 0) return item;
   console.log('applying uid to collection', item.name);
   let tabs = [...item.tabs];
   let chromeGroups = item.chromeGroups ? [...item.chromeGroups] : [];
-  tabs.forEach((tab) => tab.uid = uid(tab));
+  tabs.forEach((tab) => {
+    const uid = (crypto && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    tab.uid = uid;
+  });
   if (chromeGroups.length > 0) {
     chromeGroups.forEach((group) => {
-      const groupUid = uid(group);
+      const uid = (crypto && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+      const groupUid = uid;
       group.uid = groupUid;
       tabs = tabs.map(t => (t.groupId === group.id ? { ...t, groupUid: groupUid } : t));
     });

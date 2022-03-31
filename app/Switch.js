@@ -4,19 +4,24 @@ import { browser } from '../static/globals';
 import ReactTooltip from 'react-tooltip';
 
 const Switch = props => {
+  const { id: _id, textOn, textOff, disabled, ...otherProps } = props;
   const [isChecked, setIsChecked] = useState(false);
   useEffect(() => {
     ReactTooltip.rebuild();
-    browser.storage.local.get(props.id).then((items) => {
-        if (items[props.id]) {
-            setIsChecked(items[props.id]);
+    browser.storage.local.get(_id).then((items) => {
+        if (items[_id]) {
+            setIsChecked(items[_id]);
         }
     });
   }, []);
 
+  useEffect(() => {
+    setLocalStorage(disabled ? false : isChecked);
+  } , [disabled, isChecked]);
+
   const setLocalStorage = (value) => {
     const localStorageObj = {};
-    localStorageObj[props.id] = value;
+    localStorageObj[_id] = value;
     browser.storage.local.set(localStorageObj);
   }
 
@@ -26,10 +31,8 @@ const Switch = props => {
     setLocalStorage(target.checked);
   });
 
-  const {id: _id, textOn, textOff, ...otherProps} = props;
-
   return <span {...otherProps} data-class="small-tooltip" data-multiline={true}>
-                <input type="checkbox" checked={isChecked} onChange={toggle} id={_id} name={_id} className="switch-input" />
+                <input type="checkbox" disabled={disabled} checked={disabled ? false : isChecked} onChange={toggle} id={_id} name={_id} className="switch-input" />
                 <label htmlFor={_id} className="switch-label">
                         <span className="toggle--on">
                             {textOn}

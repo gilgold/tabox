@@ -29,7 +29,8 @@ export const SnackBarWithUndo = (props) => {
                 strokeWidth={4}
                 duration={props.duration}
                 colors={[
-                [props.undoBackgroundColor, 1],
+                    props.undoBackgroundColor, 
+                    '#fff',
                 ]}
             >
                 {() => <button className="snackbar-button" onClick={props.closeSnackbar}><IoClose size="24px" /></button>}

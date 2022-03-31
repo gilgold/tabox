@@ -1,10 +1,11 @@
 .main-content-wrapper {
   padding: 0 5px 5px 5px;
+  overflow: hidden;
   background-color: var(--bg-color);
 }
 .hr {
 	height: 1px;
-	border-top: 1px solid var(--primary-color);
+	border-top: 1px solid var(--divider-color);
 	margin: 3px 0;
 }
 
