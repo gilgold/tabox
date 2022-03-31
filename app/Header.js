@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react'
+import React, { useState, useEffect } from 'react'
 import './Header.css';
 import { 
     isLoggedInState, 
@@ -13,7 +13,7 @@ function LoginSection(props) {
 
     const [isLoggedIn, setIsLoggedIn] = useRecoilState(isLoggedInState);
     const [googleUser, setGoogleUser] = useState();
-    const [openSnackbar, ] = useSnackbar({style: SnackbarStyle.SUCCESS});
+    const [openSnackbar, ] = useSnackbar({ style: SnackbarStyle.SUCCESS });
 
     useEffect(async () => {
         const { googleUser } = await browser.storage.local.get('googleUser');
@@ -28,13 +28,12 @@ function LoginSection(props) {
             setGoogleUser(null);
             openSnackbar('Sync has been disabled', 3000)
         } else {
-            browser.runtime.sendMessage({type: 'login'}).then(async (response) => {
+            browser.runtime.sendMessage({ type: 'login' }).then(async (response) => {
                 if (response === false) return;
                 setGoogleUser(response);
                 setIsLoggedIn(true);
                 openSnackbar('Sync is now enabled!', 3000);
-                await props.applyDataFromServer();
-            })
+            });
         }
     }
 
@@ -61,11 +60,10 @@ function LoginSection(props) {
 
 function Header(props) {
   return <header className="header">
-            <LoginSection 
-                applyDataFromServer={props.applyDataFromServer} 
-                logout={props.logout} 
-            />
-            <SettingsMenu updateRemoteData={props.updateRemoteData} applyDataFromServer={props.applyDataFromServer} />
+            <LoginSection logout={props.logout} />
+            <SettingsMenu 
+                updateRemoteData={props.updateRemoteData} 
+                applyDataFromServer={props.applyDataFromServer} />
         </header>;
 }
 

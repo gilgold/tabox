@@ -15,7 +15,4 @@ Sentry.init({
     tracesSampleRate: 0.1,
 });
 
-require('chrome-extension-async/chrome-extension-async');
-require('chrome-extension-async/execute-async-function');
-
 ReactDOM.render(<RecoilRoot><SnackbarProvider><App /></SnackbarProvider></RecoilRoot>, document.querySelector("#root"));

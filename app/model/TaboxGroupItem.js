@@ -1,8 +1,7 @@
-import { uid } from 'react-uid';
-
 class TaboxGroupItem {
     constructor(name, tabs, chromeGroups, color = null, createdOn = null, window = null) {
-      this.uid = uid(this);
+      const newUid = (crypto && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+      this.uid = newUid;
       this.name = name;
       this.tabs = tabs;
       this.chromeGroups = chromeGroups;

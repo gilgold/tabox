@@ -1,5 +1,6 @@
 import * as Snackbar from 'react-simple-snackbar';
 
+if (!chrome.runtime.id) chrome.runtime.id = "tabox-test";
 const openSnackbarMock = jest.fn()
 const closeSnackbarMock = jest.fn()
 jest.spyOn(Snackbar, 'useSnackbar').mockImplementation(() => [openSnackbarMock, closeSnackbarMock])

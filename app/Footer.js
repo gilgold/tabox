@@ -16,7 +16,7 @@ function DarkModeSwitch() {
   const [checked, setChecked] = useState(false);
 
   useEffect(async () => {
-    const {theme} = await browser.storage.local.get('theme');
+    const { theme } = await browser.storage.local.get('theme');
     const isDark = theme === 'dark';
     setChecked(isDark);
     setSwitchLabelState(isDark ? 'out' : 'over')

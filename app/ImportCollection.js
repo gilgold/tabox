@@ -13,7 +13,7 @@ function ImportCollection(props) {
 
     const settingsData = useRecoilValue(settingsDataState);
     const setRowToHighlight = useSetRecoilState(rowToHighlightState);
-    const [openSnackbar, ] = useSnackbar({style: SnackbarStyle.ERROR});
+    const [openSnackbar, ] = useSnackbar({ style: SnackbarStyle.ERROR });
 
     const handleFileSelection = (event) => {
         const file = event.target.files[0];

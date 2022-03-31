@@ -21,12 +21,12 @@
     ],
     "ignorePatterns": [
         "static/*.js",
-        "chrome/*.js",
         "build/*.*",
         "/*.js",
         "__mocks__/*.js"
     ],
     "rules": {
+        "object-curly-spacing": [1, "always"],
         "react/prop-types": 0
     },
     "settings": {

@@ -17,6 +17,12 @@
     color: var(--primary-color);
     font-size: 1.05em;
   }
+  .switch-label sup {
+    font-size: .45em;
+    margin-left: 3px;
+    font-weight: 500;
+    letter-spacing: 1px;
+  }
   .switch-label:before, .switch-label:after {
     content: "";
     position: absolute;
@@ -33,7 +39,7 @@
     left: 1px;
     width: 34px;
     height: 14px;
-    background-color: var(--input-bg-color);
+    background-color: var(--switch-bg-color);
     border-radius: 8px;
   }
   .switch-label:after {
@@ -44,6 +50,9 @@
     border-radius: 50%;
     box-shadow: 0 3px 1px -2px rgba(0, 0, 0, 0.14), 0 2px 2px 0 rgba(0, 0, 0, 0.098), 0 1px 5px 0 rgba(0, 0, 0, 0.084);
   }
+  .switch-input[disabled] + .switch-label, .switch-input[disabled] + .switch-label strong {
+    color: #859189;
+  }
   .switch-label .toggle--on {
     display: none;
   }
@@ -51,13 +60,16 @@
     display: inline-block;
   }
   .switch-input:checked + .switch-label:before {
-    background-color: var(--input-bg-color);
+    background-color: var(--switch-bg-color);
   }
   .switch-input:checked + .switch-label:after {
     background-color: var(--primary-color);
     -ms-transform: translate(80%, -50%);
     -webkit-transform: translate(80%, -50%);
     transform: translate(80%, -50%);
+  }
+  .switch-input[disabled] + .switch-label:after {
+    background-color: #859189;
   }
   .switch-input:checked + .switch-label .toggle--on {
     display: inline-block;

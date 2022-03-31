@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars */
+/* eslint-disable no-undef */
 
 let lastValidated = 0;
 
@@ -7,12 +9,25 @@ async function handleRequest(url, options = null) {
     return false;
 }
 
+function updateCollectionsUids(collections) {
+    console.log('checking collections UIDs');
+    if (!collections) { return; }
+    let tabsArray = collections;
+    tabsArray.forEach((collection, index) => {
+      if (collection.uid.includes('uid')) {
+        const newUid = (crypto && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+        tabsArray[index].uid = newUid;
+      }
+    });
+    return tabsArray;
+  }
+
 function applyChromeGroupSettings(tabs, windowId, collection) {
     if (!collection.chromeGroups) {
       return;
     }
     collection.chromeGroups.forEach((chromeGroup) => {
-      const tabsToGroup = tabs.filter(({groupId}) => chromeGroup.id === groupId).map((t) => t.newTabId);
+      const tabsToGroup = tabs.filter(({ groupId }) => chromeGroup.id === groupId).map((t) => t.newTabId);
       const groupProperties = {
         createProperties: {
           windowId: windowId
@@ -64,13 +79,14 @@ async function getNewAccessToken() {
 async function getAuthToken() {
     const { googleToken } = await browser.storage.local.get('googleToken');
     if (googleToken) {
-        if (Date.now() - lastValidated < 10000) return googleToken;
+        if (Date.now() - lastValidated < 60000) return googleToken;
         console.log('validating existing token')
         const response = await handleRequest(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${googleToken}`);
         lastValidated = Date.now();
         if (response) return googleToken;
     }
-    return (await getNewAccessToken());
+    const newToken = await getNewAccessToken();
+    return newToken;
 }
 
 async function getGoogleUser(token) {
@@ -179,7 +195,7 @@ async function _getServerFileTimestamp(token, fileId) {
 }
 
 async function updateRemote(token, collections = null) {
-    let {tabsArray} = await browser.storage.local.get('tabsArray');
+    let { tabsArray } = await browser.storage.local.get('tabsArray');
     if (collections) tabsArray = collections;
     await getOrCreateSyncFile(token);
     const { syncFileId } = await browser.storage.sync.get('syncFileId');
@@ -193,8 +209,9 @@ async function updateRemote(token, collections = null) {
         'contentType': 'json',
         body: JSON.stringify({ tabsArray: tabsArray })
     };
-    console.log('updating remote sync file with new data', tabsArray)
+    console.log('updating remote sync file with new data')
     const url = `https://www.googleapis.com/upload/drive/v3/files/${syncFileId}?uploadType=media&access_token=${token}`;
+    await browser.storage.local.set({ localTimestamp: Date.now() + 200 });
     const response = await handleRequest(url, init);
     return response;
 }
@@ -211,15 +228,8 @@ async function _loadSettingsFile(token, fileId) {
     };
     console.log('loading sync file from server')
     const data = await handleRequest(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, init);
-    await browser.storage.local.set({ settings: data.settings });
-    let serverData = data.tabsArray;
-    if (data.settings) {
-        await convertOldDataToNewFormat();
-        const { tabsArray } = await browser.storage.local.get('tabsArray');
-        serverData = tabsArray;
-    }
     await browser.storage.local.set({ localTimestamp: Date.now() });
-    return serverData;
+    return updateCollectionsUids(data.tabsArray);
 }
 
 async function createNewSyncFileAndBackup(token) {
@@ -230,13 +240,16 @@ async function createNewSyncFileAndBackup(token) {
 async function updateLocalDataFromServer(token, force = false) {
     const { syncFileId } = await browser.storage.sync.get('syncFileId');
     const serverTimestamp = await _getServerFileTimestamp(token, syncFileId);
-    console.log(`server timestamp = ${serverTimestamp}`)
     if (serverTimestamp === undefined || serverTimestamp === false) {
         await createNewSyncFileAndBackup(token);
         return false;
     }
-    let { localTimestamp } = await browser.storage.local.get('localTimestamp');
-    localTimestamp = localTimestamp ?? 0;
+    const { localTimestamp } = (await browser.storage.local.get('localTimestamp')) || 0;
+    if (Math.abs(serverTimestamp - localTimestamp) < 1000 && !force) {
+        console.log('data is in sync, no need to update');
+        const { tabsArray } = await browser.storage.local.get('tabsArray');
+        return tabsArray;
+    }
     console.log(`Comparing timestamps, remote is: ${(serverTimestamp > localTimestamp) ? 'newer' : 'older'}`)
     if (serverTimestamp > localTimestamp || force) return await _loadSettingsFile(token, syncFileId);
     return false;
@@ -282,3 +295,72 @@ function createAuthEndpoint() {
     });
     return `https://accounts.google.com/o/oauth2/v2/auth?${authParams.toString()}`;
 }
+
+function applyUid(item) {
+    // Applies a unique id to all tabs and groups in a TaboxGroupItem
+    if (!item || !('tabs' in item) || item.tabs.length === 0) return item;
+    let tabs = [...item.tabs];
+    let chromeGroups = item.chromeGroups ? [...item.chromeGroups] : [];
+    let tabUidCount = 0;
+    tabs.forEach((tab) => {
+        tab.uid = `uid${tabUidCount}`
+        tabUidCount++;
+    });
+    let groupUidCount = 0;
+    if (chromeGroups.length > 0) {
+      chromeGroups.forEach((group) => {
+        const groupUid = `uid${groupUidCount}`;
+        group.uid = groupUid;
+        tabs = tabs.map(t => (t.groupId === group.id ? { ...t, groupUid: groupUid } : t));
+        groupUidCount++;
+      });
+    }
+    const newCollection = { ...item };
+    newCollection.tabs = tabs;
+    newCollection.chromeGroups = chromeGroups;
+    return newCollection;
+  }
+  
+  async function updateCollection(collection, windowId) {
+    let tabQueryProperties = {
+        windowId: windowId,
+    };
+    const { chkIgnorePinned } = await browser.storage.local.get('chkIgnorePinned');
+    if (chkIgnorePinned) tabQueryProperties.pinned = false;
+    let tabs = await browser.tabs.query(tabQueryProperties);
+    const window = await browser.windows.get(windowId, { populate: true, windowTypes: ['normal'] });
+    delete window.tabs;
+    let allChromeGroups = await browser.tabGroups.query({ windowId: windowId });
+    if (allChromeGroups && allChromeGroups.length > 0) {
+      const groupIds = [...new Set(tabs.filter(({ groupId }) => groupId > -1).map((t) => t.groupId))];
+      allChromeGroups = allChromeGroups.filter(({ id }) => groupIds.includes(id));
+    }
+    const newItem = {
+        uid: collection.uid,
+        name: collection.name,
+        tabs: tabs,
+        chromeGroups: allChromeGroups,
+        color: collection.color,
+        createdOn: Date.now(),
+        window: window
+    };
+    return applyUid(newItem);
+  }
+
+  async function syncData(token) {
+    const { syncFileId } = await browser.storage.sync.get('syncFileId');
+    const { localTimestamp } = await browser.storage.local.get('localTimestamp') || 0;
+    const serverTimestamp = await _getServerFileTimestamp(token, syncFileId);
+    if (serverTimestamp === undefined || serverTimestamp === false) {
+        if (localTimestamp === 0) { return; }
+        await createNewSyncFileAndBackup(token);
+        await updateRemote(token);
+        return;
+    }
+    if (serverTimestamp > localTimestamp) {
+        const tabsArray = await _loadSettingsFile(token, syncFileId);
+        await browser.storage.local.set({ tabsArray });
+    } else {
+        await updateRemote(token);
+    }
+  }

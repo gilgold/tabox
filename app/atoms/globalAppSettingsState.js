@@ -6,9 +6,9 @@ export const isHighlightedState = atom({
     default: false,
 });
 
-const localStorageEffect = (key) => async ({onSet}) => {
+const localStorageEffect = (key) => async ({ onSet }) => {
     onSet(async newValue => {
-        let obj = {[key]: newValue};
+        let obj = { [key]: newValue };
         await browser.storage.local.set(obj);
     });
 };
@@ -16,7 +16,7 @@ const localStorageEffect = (key) => async ({onSet}) => {
 export const themeState = atom({
     key: 'theme',
     default: [],
-    effects_UNSTABLE: [
+    effects: [
         localStorageEffect('theme'),
     ]
 });
@@ -24,7 +24,7 @@ export const themeState = atom({
 export const isLoggedInState = atom({
     key: 'isLoggedIn',
     default: false,
-    effects_UNSTABLE: [
+    effects: [
         localStorageEffect('isLoggedIn'),
     ]
 });
@@ -47,4 +47,9 @@ export const showPickerState = atom({
 export const searchState = atom({
     key: 'search',
     default: undefined,
+});
+
+export const listKeyState = atom({
+    key: 'listKey',
+    default: 'key',
 });

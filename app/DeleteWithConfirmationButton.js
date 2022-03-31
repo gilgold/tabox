@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, { useState } from 'react';
 import './DeleteWithConfirmationButton.css';
 import { MdDeleteForever } from 'react-icons/md';
 
