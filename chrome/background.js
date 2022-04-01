@@ -13,9 +13,18 @@ async function setInitialOptions() {
     tabsArray, 
     chkOpenNewWindow,
     collectionsToTrack,
-  } = await browser.storage.local.get(['tabsArray', 'chkOpenNewWindow', 'collectionsToTrack']);
+    localTimestamp,
+  } = await browser.storage.local.get([
+    'tabsArray', 
+    'chkOpenNewWindow', 
+    'collectionsToTrack',
+    'localTimestamp',
+  ]);
   if (tabsArray === undefined) {
     await browser.storage.local.set({ tabsArray: [] });
+  }
+  if (localTimestamp === undefined) {
+    await browser.storage.local.set({ localTimestamp: 0 });
   }
   if (collectionsToTrack === undefined) {
     await browser.storage.local.set({ collectionsToTrack: [] });

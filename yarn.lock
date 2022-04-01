@@ -7465,9 +7465,9 @@ fsevents@^2.3.2:
   languageName: node
   linkType: hard
 
-"recoil@npm:^0.6.1":
-  version: 0.6.1
-  resolution: "recoil@npm:0.6.1"
+"recoil@npm:0.7.0":
+  version: 0.7.0
+  resolution: "recoil@npm:0.7.0"
   dependencies:
     hamt_plus: 1.0.2
   peerDependencies:
@@ -7477,7 +7477,7 @@ fsevents@^2.3.2:
       optional: true
     react-native:
       optional: true
-  checksum: 67c93c49d3ef7a104f1fcb28a635a341d36ab676b31b761c3e9dfe5667f43330a6b1b3dde2d1a82a148c6d300e12130c26ab83e20eaabff8e2565de15522bf18
+  checksum: e9a4c1b7c5712cade7d5ea64f9ffdbcb438d3bded111128ee93afebb754905c2b8353ce8685c87a0154ba69eb46a2d6f47dd80273576b2fdf6a34e313a67e8bf
   languageName: node
   linkType: hard
 
@@ -8295,11 +8295,11 @@ resolve@^2.0.0-next.3:
     react-time-ago: ^7.1.9
     react-tiny-popover: ^7.0.1
     react-tooltip: ^4.2.21
-    recoil: ^0.6.1
+    recoil: 0.7.0
     sortablejs: 1.15.0
     style-loader: ^3.3.1
     webextension-polyfill: ^0.9.0
-    webpack: ^5.70.0
+    webpack: 5.71.0
     webpack-cli: ^4.9.2
     webpack-extension-manifest-plugin: ^0.8.0
   languageName: unknown
@@ -8808,9 +8808,9 @@ resolve@^2.0.0-next.3:
   languageName: node
   linkType: hard
 
-"webpack@npm:^5.70.0":
-  version: 5.70.0
-  resolution: "webpack@npm:5.70.0"
+"webpack@npm:5.71.0":
+  version: 5.71.0
+  resolution: "webpack@npm:5.71.0"
   dependencies:
     "@types/eslint-scope": ^3.7.3
     "@types/estree": ^0.0.51
@@ -8841,7 +8841,7 @@ resolve@^2.0.0-next.3:
       optional: true
   bin:
     webpack: bin/webpack.js
-  checksum: cc36eac95909430aec9c3031dda9d7905f3dcf9e5874a079921e5c190f9948ed6f5c1d46e5ce7998b28d5787da3f766ff9cf484cf0217d62177ad300e3a12d23
+  checksum: fdfd4f69c93f698a608dabe5092c0cbf70ed5f0c31e561889927f098b7b5a534eb4819fc69c3584524f67ebdcdd7df8aba284555f49f04b92d89d5541dc580be
   languageName: node
   linkType: hard
 
