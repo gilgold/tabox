@@ -11,10 +11,23 @@ let updateInProgress = false;
 async function setInitialOptions() {
   const { 
     tabsArray, 
-    chkOpenNewWindow
-  } = await browser.storage.local.get(['tabsArray', 'chkOpenNewWindow']);
+    chkOpenNewWindow,
+    collectionsToTrack,
+    localTimestamp,
+  } = await browser.storage.local.get([
+    'tabsArray', 
+    'chkOpenNewWindow', 
+    'collectionsToTrack',
+    'localTimestamp',
+  ]);
   if (tabsArray === undefined) {
     await browser.storage.local.set({ tabsArray: [] });
+  }
+  if (localTimestamp === undefined) {
+    await browser.storage.local.set({ localTimestamp: 0 });
+  }
+  if (collectionsToTrack === undefined) {
+    await browser.storage.local.set({ collectionsToTrack: [] });
   }
   if (chkOpenNewWindow === undefined) {
     await browser.storage.local.set({ chkOpenNewWindow: true });
@@ -88,7 +101,7 @@ async function openTabs(collection, window = null, newWindow = null) {
                   // reached the last tab to open
                   applyChromeGroupSettings(updatedTabsWithNewId, window.id, collection);
                   setTimeout(async () => {
-                    let { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack') || [];
+                    let { collectionsToTrack } = (await browser.storage.local.get('collectionsToTrack')) || [];
                     const index = collectionsToTrack.findIndex(c => c.collectionUid === collection.uid);
                     if (index !== undefined && index > -1) {
                         collectionsToTrack[index].windowId = window.id;
@@ -98,7 +111,7 @@ async function openTabs(collection, window = null, newWindow = null) {
                             windowId: window.id
                         });
                     }
-                    await browser.storage.local.set({ collectionsToTrack });
+                    await browser.storage.local.set({ collectionsToTrack: collectionsToTrack });
                   }, 300);
               } 
             });
@@ -193,7 +206,7 @@ try {
  })
  // window events
  browser.windows.onRemoved.addListener(async windowId => {
-  let { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack');
+  let { collectionsToTrack } = (await browser.storage.local.get('collectionsToTrack')) || [];
   if (!collectionsToTrack || collectionsToTrack.length === 0) { return; }
   const index = collectionsToTrack.findIndex(c => c.windowId === windowId);
   if (index === -1) { return; }

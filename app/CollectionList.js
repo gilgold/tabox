@@ -255,7 +255,7 @@ function CollectionListItem(props) {
     }
 
     const _handleStopTracking = async () => {
-        const { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack') || [];
+        const { collectionsToTrack } = (await browser.storage.local.get('collectionsToTrack')) || [];
         const activeCollections = collectionsToTrack.map(c => c.collectionUid);
         const collectionIsActive = activeCollections.includes(props.collection.uid);
         if (!collectionIsActive) return;

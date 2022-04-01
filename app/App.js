@@ -157,6 +157,10 @@ function App() {
     setIsHighlighted(tabs && tabs.length > 1);
   }
 
+  useEffect(() => {
+    if (isLoggedIn) loadCollectionsFromStorage();
+  }, [isLoggedIn]);
+
   useEffect(async () => {
     await applyTheme();
     await checkSyncStatus();
