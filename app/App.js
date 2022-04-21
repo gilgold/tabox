@@ -7,10 +7,9 @@ import ImportCollection from './ImportCollection';
 import CollectionList from './CollectionList';
 import Footer from './Footer';
 import { useRecoilState, useSetRecoilState, useRecoilValue } from 'recoil';
-import { settingsDataState } from './atoms/settingsDataState';
+import { settingsDataState } from './atoms/globalAppSettingsState';
 import { applyUid } from './utils';
 import {
-  isHighlightedState,
   themeState,
   isLoggedInState,
   syncInProgressState,
@@ -31,7 +30,6 @@ const Divder = () => <div className='hr' />;
 function App() {
   const [settingsData, setSettingsData] = useRecoilState(settingsDataState);
   const setRowToHighlight = useSetRecoilState(rowToHighlightState);
-  const setIsHighlighted = useSetRecoilState(isHighlightedState);
   const [themeMode, setThemeMode] = useRecoilState(themeState);
   const [isLoggedIn, setIsLoggedIn] = useRecoilState(isLoggedInState);
   const setSyncInProgress = useSetRecoilState(syncInProgressState);
@@ -120,7 +118,7 @@ function App() {
     const { chkAutoUpdateOnNewCollection } = await browser.storage.local.get('chkAutoUpdateOnNewCollection');
     if (!chkAutoUpdateOnNewCollection) return;
     setTimeout(async () => {
-      let { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack') || [];
+      let { collectionsToTrack } = (await browser.storage.local.get('collectionsToTrack')) || [];
       const window = await browser.windows.getLastFocused({ windowTypes: ['normal'] });
       const index = collectionsToTrack.findIndex(c => c.collectionUid === newCollection.uid);
       if (index !== undefined && index > -1) {
@@ -133,7 +131,7 @@ function App() {
       }
       await browser.storage.local.set({ collectionsToTrack });
       setListKey(Math.random().toString(36));
-    }, 1000)
+    }, 1000);
   }
 
   const loadCollectionsFromStorage = async () => {
@@ -152,11 +150,6 @@ function App() {
     setSettingsData(newCollections);
   }
 
-  const checkForHighlightedTabs = async () => {
-    const tabs = await browser.tabs.query({ currentWindow: true, highlighted: true })
-    setIsHighlighted(tabs && tabs.length > 1);
-  }
-
   useEffect(() => {
     if (isLoggedIn) loadCollectionsFromStorage();
   }, [isLoggedIn]);
@@ -165,7 +158,6 @@ function App() {
     await applyTheme();
     await checkSyncStatus();
     await loadCollectionsFromStorage();
-    await checkForHighlightedTabs();
   }, []);
 
   const escapeRegex = string => {

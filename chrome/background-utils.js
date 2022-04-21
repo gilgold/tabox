@@ -4,8 +4,12 @@
 let lastValidated = 0;
 
 async function handleRequest(url, options = null) {
-    const response = await fetch(url, options);
-    if (response.ok) return (await response.json());
+    try {
+        const response = await fetch(url, options);
+        if (response.ok) return (await response.json());
+    } catch {
+        return false;
+    }
     return false;
 }
 
@@ -22,12 +26,12 @@ function updateCollectionsUids(collections) {
     return tabsArray;
   }
 
-function applyChromeGroupSettings(tabs, windowId, collection) {
-    if (!collection.chromeGroups) {
+function applyChromeGroupSettings(windowId, collection) {
+    if (!collection.chromeGroups || !browser.tabs.group || !browser.tabGroups) {
       return;
     }
     collection.chromeGroups.forEach((chromeGroup) => {
-      const tabsToGroup = tabs.filter(({ groupId }) => chromeGroup.id === groupId).map((t) => t.newTabId);
+      const tabsToGroup = collection.tabs.filter(({ groupId }) => chromeGroup.id === groupId).map((t) => t.newTabId);
       const groupProperties = {
         createProperties: {
           windowId: windowId
@@ -144,6 +148,7 @@ async function getOrCreateSyncFile(token) {
             console.log('Found sync file in Google Drive')
             await browser.storage.sync.set({ syncFileId: response.files[0].id });
         }
+        return true;
     }
     return false;
 }
@@ -330,10 +335,15 @@ function applyUid(item) {
     let tabs = await browser.tabs.query(tabQueryProperties);
     const window = await browser.windows.get(windowId, { populate: true, windowTypes: ['normal'] });
     delete window.tabs;
-    let allChromeGroups = await browser.tabGroups.query({ windowId: windowId });
-    if (allChromeGroups && allChromeGroups.length > 0) {
-      const groupIds = [...new Set(tabs.filter(({ groupId }) => groupId > -1).map((t) => t.groupId))];
-      allChromeGroups = allChromeGroups.filter(({ id }) => groupIds.includes(id));
+    let allChromeGroups;
+    if (browser.tabGroups) {
+        allChromeGroups = await browser.tabGroups.query({ windowId: windowId });
+        if (allChromeGroups && allChromeGroups.length > 0) {
+        const groupIds = [...new Set(tabs.filter(({ groupId }) => groupId > -1).map((t) => t.groupId))];
+        allChromeGroups = allChromeGroups.filter(({ id }) => groupIds.includes(id));
+        }
+    } else {
+        allChromeGroups = [];
     }
     const newItem = {
         uid: collection.uid,

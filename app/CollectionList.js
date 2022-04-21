@@ -4,7 +4,6 @@ import './CollectionList.css';
 import { rowToHighlightState } from './atoms/animationsState';
 import { useAnimateKeyframes } from 'react-simple-animate';
 import {
-    isHighlightedState,
     themeState,
     searchState,
     listKeyState,
@@ -70,7 +69,10 @@ function ColorPicker(props) {
         }
     }, [props.currentColor]);
 
-    useEffect(() => ReactTooltip.rebuild(), []);
+    useEffect(() => {
+        ReactTooltip.rebuild();
+        return () => setShowPicker(false);
+    }, []);
 
     const handleChange = async (color, index) => {
         setColor(color);
@@ -116,11 +118,9 @@ function ColorPicker(props) {
 
 function CollectionListItem(props) {
     const setRowToHighlight = useSetRecoilState(rowToHighlightState);
-    const areTabsHighlighted = useRecoilValue(isHighlightedState);
     const [isDeleted, setDeleted] = useState(false);
     const [collectionName, setCollectionName] = useState(props.collection.name);
     const [isExpanded, setExpanded] = useState(false);
-    const [shouldHighlight, setShouldHighlight] = useState(false);
     const [isAutoUpdate, setIsAutoUpdate] = useState(false);
     const setListKey = useSetRecoilState(listKeyState);
     const [openSnackbar] = useSnackbar({ style: collectionName === '' ? SnackbarStyle.ERROR : SnackbarStyle.SUCCESS });
@@ -139,21 +139,27 @@ function CollectionListItem(props) {
     });
 
     useEffect(() => {
+        let timer;
         if (props.highlightRow) {
             setExpanded(false);
+            playHighlight(true);
+            timer = setTimeout(() => setRowToHighlight(-1), 1000);
         }
-        setShouldHighlight(props.highlightRow);
-        if (shouldHighlight) playHighlight(true);
-        setTimeout(() => setRowToHighlight(-1), 1000);
-    });
+        return () => {
+            setRowToHighlight(-1);
+            playHighlight(false);
+            clearTimeout(timer);
+        };
+    }, [props.collection]);
 
     useEffect(async () => {
         const { chkEnableAutoUpdate } = await browser.storage.local.get('chkEnableAutoUpdate');
-        const { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack') || [];
+        const { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack');
+        if (!collectionsToTrack || collectionsToTrack === {}) return;
         const activeCollections = collectionsToTrack.map(c => c.collectionUid);
         const collectionIsActive = activeCollections.includes(props.collection.uid);
         setIsAutoUpdate(chkEnableAutoUpdate && collectionIsActive);
-    }, [props.collection])
+    }, [props.collection]);
 
     const handleSaveCollectionColor = async (color) => {
         let newCollectionItem = { ...props.collection };
@@ -189,7 +195,7 @@ function CollectionListItem(props) {
 
     async function _handleUpdate() {
         const { tabsArray: previousCollections } = await browser.storage.local.get('tabsArray');
-        let newItem = await getCurrentTabsAndGroups(props.collection.name, areTabsHighlighted);
+        let newItem = await getCurrentTabsAndGroups(props.collection.name);
         newItem.color = props.collection.color;
         await props.updateCollection(props.index, newItem);
         setRowToHighlight(props.index);
@@ -255,13 +261,14 @@ function CollectionListItem(props) {
     }
 
     const _handleStopTracking = async () => {
-        const { collectionsToTrack } = (await browser.storage.local.get('collectionsToTrack')) || [];
+        const { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack');
+        setIsAutoUpdate(false);
+        if (!collectionsToTrack || collectionsToTrack === {}) return;
         const activeCollections = collectionsToTrack.map(c => c.collectionUid);
         const collectionIsActive = activeCollections.includes(props.collection.uid);
         if (!collectionIsActive) return;
         const newCollectionsToTrack = collectionsToTrack.filter(c => c.collectionUid !== props.collection.uid);
         await browser.storage.local.set({ collectionsToTrack: newCollectionsToTrack });
-        setIsAutoUpdate(false);
     }
 
     const handleCollectionNameChange = (val) => {
@@ -278,7 +285,7 @@ function CollectionListItem(props) {
     }
 
     const totalGroups = props.collection.chromeGroups ? props.collection.chromeGroups.length : 0;
-    let style = shouldHighlight ? highlightStyle : {};
+    let style = props.highlightRow ? highlightStyle : {};
     style = isDeleted ? deleteStyle : style;
 
     return <div className={`row setting_row ${isAutoUpdate && 'active-auto-tracking'}`} style={{ ...style, backgroundColor: isExpanded ? 'var(--setting-row-hover-bg-color)' : null }}>
@@ -317,7 +324,7 @@ function CollectionListItem(props) {
         </div>
         <div className="column right_items">
             <span 
-                data-tip="Stop auto updating this collection"
+                data-tip={`${isAutoUpdate ? 'Stop auto updating' : 'Update'} this collection`}
                 className={`float-button ${isAutoUpdate ? 'stop_btn' : 'update_btn'}`} 
                 onClick={async () => isAutoUpdate ? _handleStopTracking() : await _handleUpdate()}
             >
@@ -341,7 +348,11 @@ function CollectionListItem(props) {
 
 function ExpandedCollectionData(props) {
     const [openSnackbar, closeSnackbar] = useSnackbar({ style: SnackbarStyle.SUCCESS, closeStyle: { display: 'none' } });
-    const isHighlighted = useRecoilValue(isHighlightedState);
+    const [isHighlighted, setIsHighlighted] = useState(false);
+
+    useEffect(async () => {
+        setIsHighlighted((await browser.tabs.query({ highlighted: true })).length > 1);
+    }, [])
 
     let previousGroupUid = null;
     const fallbackFavicon = './images/favicon-fallback.png';
@@ -549,7 +560,7 @@ function ExpandedCollectionData(props) {
             {tab.pinned ? <div className="tab-property pinned-tab" title="Pinned Tab">
                 <AiFillPushpin size="12px" color="#FFF" />
             </div> : null}
-            {tab.mutedInfo.muted ? <div className="tab-property muted-tab" title="Muted Tab">
+            {tab.mutedInfo?.muted ? <div className="tab-property muted-tab" title="Muted Tab">
                 <FaVolumeMute color="#fff" size="14px" />
             </div> : null}
             <div className="column favicon-col">

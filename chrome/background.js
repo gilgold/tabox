@@ -20,16 +20,16 @@ async function setInitialOptions() {
     'collectionsToTrack',
     'localTimestamp',
   ]);
-  if (tabsArray === undefined) {
+  if (tabsArray === undefined || tabsArray === {}) {
     await browser.storage.local.set({ tabsArray: [] });
   }
-  if (localTimestamp === undefined) {
+  if (localTimestamp === undefined || localTimestamp === {}) {
     await browser.storage.local.set({ localTimestamp: 0 });
   }
-  if (collectionsToTrack === undefined) {
+  if (collectionsToTrack === undefined || collectionsToTrack === {}) {
     await browser.storage.local.set({ collectionsToTrack: [] });
   }
-  if (chkOpenNewWindow === undefined) {
+  if (chkOpenNewWindow === undefined || chkOpenNewWindow === {}) {
     await browser.storage.local.set({ chkOpenNewWindow: true });
   }
 }
@@ -70,53 +70,48 @@ async function handleRemoteUpdate() {
   return true;
 }
 
-async function openTabs(collection, window = null, newWindow = null) {
-    let updatedTabsWithNewId = [];
-    const currentUrlsInWindow = window.tabs.map((t) => t.url);
+async function openTabs(collection, window, newWindow = null) {
+    const currentUrlsInWindow = window.tabs ? window.tabs.map((t) => t.url) : [];
     const { chkIgnoreDuplicates } = newWindow ?? await browser.storage.local.get('chkIgnoreDuplicates');
-    collection.tabs.forEach((tabInGrp, index) => {
+    collection.tabs.forEach((tabInGrp, index, arr) => {
       if (chkIgnoreDuplicates && currentUrlsInWindow.includes(tabInGrp.url)) { return; }
-      let tabInTaboxGrp = { ...tabInGrp }; // create a copy since tabInGrp is immutable
       let tabProperties = {
-          pinned: tabInTaboxGrp.pinned,
-          active: tabInTaboxGrp.active
+          pinned: tabInGrp.pinned,
+          active: tabInGrp.active
       };
       const updateOnlyProperties = {
-          url: tabInTaboxGrp.url,
-          muted: tabInTaboxGrp.muted
+          url: tabInGrp.url,
+          muted: tabInGrp.muted
       }
       if (index === 0 && (window.tabs.length === 1 && (!window.tabs[0].url || window.tabs[0].url.indexOf('://newtab') > 0))){
           setTimeout(async () => {
-            tabInTaboxGrp.newTabId = window.tabs[0].id;
-            updatedTabsWithNewId.push(tabInTaboxGrp);
-            await browser.tabs.update(window.tabs[0].id,{ ...tabProperties, ...updateOnlyProperties });
-          }, 500);
+            const tab = await browser.tabs.update(window.tabs[0].id,{ ...tabProperties, ...updateOnlyProperties });
+            arr[index].newTabId = tab.id;
+          }, 1);
       } else {
-          tabProperties.windowId = window.id;
-          browser.tabs.create(tabProperties).then((newTab) => {
-            tabInTaboxGrp.newTabId = newTab.id;
-            browser.tabs.update(newTab.id, updateOnlyProperties).then(async () => {
-              updatedTabsWithNewId.push(tabInTaboxGrp);
-              if (index === collection.tabs.length - 1) {
-                  // reached the last tab to open
-                  applyChromeGroupSettings(updatedTabsWithNewId, window.id, collection);
-                  setTimeout(async () => {
-                    let { collectionsToTrack } = (await browser.storage.local.get('collectionsToTrack')) || [];
-                    const index = collectionsToTrack.findIndex(c => c.collectionUid === collection.uid);
-                    if (index !== undefined && index > -1) {
-                        collectionsToTrack[index].windowId = window.id;
-                    } else {
-                        collectionsToTrack.push({
-                            collectionUid: collection.uid,
-                            windowId: window.id
-                        });
-                    }
-                    await browser.storage.local.set({ collectionsToTrack: collectionsToTrack });
-                  }, 300);
-              } 
-            });
-          });       
+        tabProperties.windowId = window.id;
+        browser.tabs.create(tabProperties).then(async (newTab) => {
+          arr[index].newTabId = newTab.id;
+          await browser.tabs.update(newTab.id, updateOnlyProperties);
+        });       
       }
+      if (index === collection.tabs.length - 1) {
+        // reached the last tab to open
+        setTimeout(() => applyChromeGroupSettings(window.id, collection), 300);
+        setTimeout(async () => {
+          let { collectionsToTrack } = (await browser.storage.local.get('collectionsToTrack')) || [];
+          const index = collectionsToTrack.findIndex(c => c.collectionUid === collection.uid);
+          if (index !== undefined && index > -1) {
+              collectionsToTrack[index].windowId = window.id;
+          } else {
+              collectionsToTrack.push({
+                  collectionUid: collection.uid,
+                  windowId: window.id
+              });
+          }
+          await browser.storage.local.set({ collectionsToTrack: collectionsToTrack });
+        }, 300);
+    } 
     });
     return true;
 }
@@ -128,7 +123,8 @@ try {
       if (!googleUser) return Promise.resolve(false);
       const token = await getAuthToken();
       if (token === false) return Promise.resolve(false);
-      await getOrCreateSyncFile(token);
+      const syncFileSuccess = await getOrCreateSyncFile(token);
+      if (syncFileSuccess === false) return Promise.resolve(false);
       const user = await getGoogleUser(token);
       return Promise.resolve(user);
     }
@@ -171,9 +167,10 @@ try {
 
     if (request.type === 'logout') {
       const token = await getAuthToken();
-      if (token === false) return;
+      if (token === false) return Promise.resolve(true);
       await browser.storage.local.remove('googleUser');
       await browser.storage.sync.remove('syncFileId');
+      return Promise.resolve(true);
     }
 
     if (request.type === 'focusWindow') {
@@ -223,7 +220,7 @@ try {
   await handlleAutoUpdate(tab.windowId, 1000);
  });
  browser.tabs.onUpdated.addListener(async (_tabId, changeInfo, tab) => {
-  const allowedChanges = ['mutedInfo', 'pinned'];
+  const allowedChanges = ['mutedInfo', 'pinned', 'groupId'];
   const allowUpdate = Object.keys(changeInfo).some(key => allowedChanges.includes(key));
   if (('status' in changeInfo && changeInfo.status === 'complete') || allowUpdate) {
     await handlleAutoUpdate(tab.windowId);
