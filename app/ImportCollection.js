@@ -2,7 +2,7 @@ import React from 'react'
 import { applyUid } from './utils'
 import './ImportCollection.css';
 import { useRecoilValue, useSetRecoilState } from 'recoil';
-import { settingsDataState } from './atoms/settingsDataState';
+import { settingsDataState } from './atoms/globalAppSettingsState';
 import { rowToHighlightState } from './atoms/animationsState';
 import { useSnackbar } from 'react-simple-snackbar';
 import { SnackbarStyle } from './model/SnackbarTypes';

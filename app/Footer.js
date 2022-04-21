@@ -51,13 +51,13 @@ function SyncLabel() {
   useEffect(() => {
     TimeAgo.addDefaultLocale(en);
   }, []);
+
   const msg = syncInProgress ? 'syncing...' : <ReactTimeAgo date={lastSyncTime ?? Date.now()} locale="en-US" timeStyle="round"/>
 
   return <span id="last_sync">
     <BiSync 
       className={`sync_dark ${syncInProgress ? 'rotate' : ''}`} 
       key={`syncImg-${syncInProgress}`} 
-      size={34}
       id="syncImg" /> <span className="sync_msg">{ isLoggedIn ? msg : `Sync Disabled` }</span>
   </span>
 }

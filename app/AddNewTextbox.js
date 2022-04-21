@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useSetRecoilState, useRecoilValue } from 'recoil';
+import { useSetRecoilState } from 'recoil';
 import './AddNewTextbox.css';
-import { isHighlightedState, searchState } from './atoms/globalAppSettingsState';
+import { searchState } from './atoms/globalAppSettingsState';
 import { getCurrentTabsAndGroups } from './utils';
 import { browser } from '../static/globals';
 import { useSnackbar } from 'react-simple-snackbar';
@@ -10,15 +10,15 @@ import { IoClose } from 'react-icons/io5';
 
 
 function SaveHighlightedOnlyLabel() {
-    const isHighlighted = useRecoilValue(isHighlightedState);
     const [totalHighlighted, setTotalHighlighted] = useState(0);
 
     useEffect(async () => {
-        const total = (await browser.tabs.query({ highlighted: true })).length;
+        const windowId = await browser.windows.WINDOW_ID_CURRENT;
+        const total = (await browser.tabs.query({ highlighted: true, windowId: windowId })).length;
         setTotalHighlighted(total);
     }, [])
 
-    return <span className="highlighted_note" style={{ display: (isHighlighted ? 'inline-block' : 'none') }}>Save <span className="highlighter">{totalHighlighted} selected</span> tabs</span>
+    return <span className="highlighted_note" style={{ display: (totalHighlighted > 1 ? 'inline-block' : 'none') }}>Save <span className="highlighter">{totalHighlighted} selected</span> tabs</span>
 }
 
 const useFocus = () => {
@@ -33,7 +33,6 @@ function AddNewTextbox(props) {
     const [collectionName, setName] = useState("");
     const [disabled, setDisabled] = useState(false);
     const [inputRef, setInputFocus] = useFocus();
-    const isHighlighted = useRecoilValue(isHighlightedState);
     const [openSnackbar] = useSnackbar({ style: SnackbarStyle.ERROR });
     const setSearch = useSetRecoilState(searchState);
     const [hideClear, setHideClear] = useState(true);
@@ -59,7 +58,7 @@ function AddNewTextbox(props) {
         }
         setSearch(null);
         setDisabled(true);
-        const newItem = await getCurrentTabsAndGroups(collectionName, isHighlighted);
+        const newItem = await getCurrentTabsAndGroups(collectionName);
         await props.addCollection(newItem);
         setTimeout(() => setDisabled(false), 1000);
     }

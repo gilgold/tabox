@@ -6,6 +6,8 @@ input[type="text"] {
   float: left;
   width: 290px;
   border: none;
+  border-top-left-radius: 5px;
+  border-top-right-radius: 5px;
   border-bottom: 1px solid var(--primary-color);
   padding-right: 25px;
 }
@@ -75,15 +77,14 @@ input[type="text"]:focus~.bar:before, input[type="text"]:focus~.bar:after {
   overflow: hidden;
   border-width: 0;
   outline: none;
-  border-radius: 2px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, .6);
+  border-radius: 5px;
   background-color: var(--primary-color);
   color: #ecf0f1;
   transition: background-color .3s;
 }
 
 .btn:hover, .btn:focus {
-  background-color: #21a77e;
+  background-color: #029ef8;
   cursor: pointer;
 }
 

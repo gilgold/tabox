@@ -11,6 +11,9 @@ import { browser } from '../static/globals';
 Sentry.init({
     dsn: "https://315246baa1ed462883bab2ecd7507290@o975143.ingest.sentry.io/5931101",
     integrations: [new Integrations.BrowserTracing()],
+    ignoreErrors: [
+        'ResizeObserver loop limit exceeded',
+    ],
     release: 'tabox-' + browser.runtime.getManifest().version,
     tracesSampleRate: 0.1,
 });

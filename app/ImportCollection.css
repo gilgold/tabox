@@ -1,6 +1,6 @@
 .image-upload {
 	display: block;
-	margin: 8px 0 4px 0;
+	margin: 8px 0 6px 0;
 	height: 30px;
     line-height: 16px;
 }
@@ -25,13 +25,12 @@
 	background-color: var(--primary-color);
 	color: #fff;
 	border: none;
-	border-radius: 3px;
-	padding: 5px 14px;
+	border-radius: 5px;
+	padding: 6px 14px;
 	display: flex;
 	flex-direction: row;
 	align-items: center;
 	justify-content: space-between;
-	box-shadow: 0 1px 4px rgba(0, 0, 0, .6);
 	font-size:.75em;
 	font-weight: 600;
 	flex-basis: 160px;

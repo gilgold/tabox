@@ -1,6 +1,6 @@
 import React from 'react';
 import { useRecoilValue } from 'recoil';
-import { settingsDataState } from './atoms/settingsDataState';
+import { settingsDataState } from './atoms/globalAppSettingsState';
 import './CollectionListOptions.css';
 import Switch from './Switch';
 import { IoColorPalette } from 'react-icons/io5';

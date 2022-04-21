@@ -23,8 +23,7 @@ export function applyUid(item) {
   });
   if (chromeGroups.length > 0) {
     chromeGroups.forEach((group) => {
-      const uid = (crypto && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
-      const groupUid = uid;
+      const groupUid = (crypto && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
       group.uid = groupUid;
       tabs = tabs.map(t => (t.groupId === group.id ? { ...t, groupUid: groupUid } : t));
     });
@@ -32,18 +31,29 @@ export function applyUid(item) {
   return new TaboxGroupItem(item.name, tabs, chromeGroups, item.color, item.createdOn, item.window);
 }
 
-export async function getCurrentTabsAndGroups(title, onlyHighlighted = false) {
+export async function getCurrentTabsAndGroups(title, forceOnlyHighlighted = false) {
   let tabQueryProperties = { currentWindow: true };
+  const totalHighlighted = await browser.tabs.query({ highlighted: true, windowId: browser.windows.WINDOW_ID_CURRENT });
+  const onlyHighlighted = forceOnlyHighlighted || totalHighlighted.length > 1;
   const { chkIgnorePinned } = await browser.storage.local.get('chkIgnorePinned');
   if (onlyHighlighted) tabQueryProperties.highlighted = true;
   if (chkIgnorePinned) tabQueryProperties.pinned = false;
   let tabs = await browser.tabs.query(tabQueryProperties);
   const window = await browser.windows.getCurrent({ populate: true, windowTypes: ['normal'] });
   delete window.tabs;
-  let allChromeGroups = await browser.tabGroups.query({});
-  if (allChromeGroups && allChromeGroups.length > 0) {
-    const groupIds = [...new Set(tabs.filter(({ groupId }) => groupId > -1).map((t) => t.groupId))];
-    allChromeGroups = allChromeGroups.filter(({ id }) => groupIds.includes(id));
+  let allChromeGroups;
+  if (browser.tabGroups) {
+    try {
+      allChromeGroups = await browser.tabGroups.query({});
+      if (allChromeGroups && allChromeGroups.length > 0) {
+        const groupIds = [...new Set(tabs.filter(({ groupId }) => groupId > -1).map((t) => t.groupId))];
+        allChromeGroups = allChromeGroups.filter(({ id }) => groupIds.includes(id));
+      }
+    } catch {
+      allChromeGroups = [];
+    }
+  } else {
+    allChromeGroups = [];
   }
   const newItem = new TaboxGroupItem(title, tabs, allChromeGroups, null, null, window);
   return applyUid(newItem);
