@@ -77,27 +77,34 @@ async function openTabs(collection, window, newWindow = null) {
       if (chkIgnoreDuplicates && currentUrlsInWindow.includes(tabInGrp.url)) { return; }
       let tabProperties = {
           pinned: tabInGrp.pinned,
-          active: tabInGrp.active
+          active: tabInGrp.active,
       };
       const updateOnlyProperties = {
           url: tabInGrp.url,
-          muted: tabInGrp.muted
+          muted: tabInGrp.muted,
       }
       if (index === 0 && (window.tabs.length === 1 && (!window.tabs[0].url || window.tabs[0].url.indexOf('://newtab') > 0))){
           setTimeout(async () => {
-            const tab = await browser.tabs.update(window.tabs[0].id,{ ...tabProperties, ...updateOnlyProperties });
-            arr[index].newTabId = tab.id;
+            browser.tabs.update(window.tabs[0].id,{ ...tabProperties, ...updateOnlyProperties }).then(tab => {
+              arr[index].newTabId = tab.id;
+              if (index === arr.length - 1) {
+                applyChromeGroupSettings(window.id, collection);
+              }
+            });
           }, 1);
       } else {
         tabProperties.windowId = window.id;
         browser.tabs.create(tabProperties).then(async (newTab) => {
           arr[index].newTabId = newTab.id;
-          await browser.tabs.update(newTab.id, updateOnlyProperties);
+          browser.tabs.update(newTab.id, updateOnlyProperties).then(() => {
+            if (index === arr.length - 1) {
+              applyChromeGroupSettings(window.id, collection);
+            }
+          });
         });       
       }
-      if (index === collection.tabs.length - 1) {
+       {
         // reached the last tab to open
-        setTimeout(() => applyChromeGroupSettings(window.id, collection), 300);
         setTimeout(async () => {
           let { collectionsToTrack } = (await browser.storage.local.get('collectionsToTrack')) || [];
           const index = collectionsToTrack.findIndex(c => c.collectionUid === collection.uid);
