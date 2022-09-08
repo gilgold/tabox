@@ -54,4 +54,3 @@ jobs:
               curl -H "Authorization: Bearer ${ACCESS_TOKEN}" -H "x-goog-api-version: 2" -X PUT -T tabox.zip -v "https://www.googleapis.com/upload/chromewebstore/v1.1/items/${APP_ID}"
               curl -H "Authorization: Bearer ${ACCESS_TOKEN}" -H "x-goog-api-version: 2" -H "Content-Length: 0" -X POST -v "https://www.googleapis.com/chromewebstore/v1.1/items/${APP_ID}/publish"
             fi
-    resource_class: large
