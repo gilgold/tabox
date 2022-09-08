@@ -1917,9 +1917,9 @@ __metadata:
   linkType: hard
 
 "@sinclair/typebox@npm:^0.24.1":
-  version: 0.24.38
-  resolution: "@sinclair/typebox@npm:0.24.38"
-  checksum: 628cf62baeed891f51f74b58a49e5719a098411d07613b993932c67af8d1cb91c2c9c04d65d809483a39f8e0ddd1bfa676f2e44f9e3e486291d1d1cc185ba7eb
+  version: 0.24.39
+  resolution: "@sinclair/typebox@npm:0.24.39"
+  checksum: a126a3b9643a8865a4a7841aab96d57e4b0bf45b454738857d9a32a1f356102b24d188a5a1a0fdd2f315eede5b2fd3cf791b5d98dc0bd7bc30e4753b13434601
   languageName: node
   linkType: hard
 
@@ -3609,9 +3609,9 @@ __metadata:
   linkType: hard
 
 "electron-to-chromium@npm:^1.4.202":
-  version: 1.4.244
-  resolution: "electron-to-chromium@npm:1.4.244"
-  checksum: f05a07f3c9757e5097df557f3daaf3cb592b0017dfb057aa9db76dd991bcdf529fa09eeb3d1fbde413e336c870f05c69452970a278ac31876293715d0281ec30
+  version: 1.4.245
+  resolution: "electron-to-chromium@npm:1.4.245"
+  checksum: 23f23c1b7c04e125a4d1f2cf836078fbd69e4136be74812983d0c4b6e4d4e795f43005311a6026e71c50314284bb4f2b37b098e35d40f94de793305ece7104c5
   languageName: node
   linkType: hard
 
@@ -5292,18 +5292,6 @@ fsevents@^2.3.2:
     pretty-format: ^27.5.1
     throat: ^6.0.1
   checksum: 024043fd261d1e9844c4615dae43d7aa55ca1d6bc4e0fb8bd6aacb84dbdeedd2c03b7fbd6bfe052ab595dad474aa5cb55d9b5f2fa3a0e4d2794f7c81c80c9a70
-  languageName: node
-  linkType: hard
-
-"jest-junit@npm:^14.0.1":
-  version: 14.0.1
-  resolution: "jest-junit@npm:14.0.1"
-  dependencies:
-    mkdirp: ^1.0.4
-    strip-ansi: ^6.0.1
-    uuid: ^8.3.2
-    xml: ^1.0.1
-  checksum: d88be49402326201c2c12d8225db6b2a458dc24f8c1de88ac099450587488477c5ad26778c8d79c5cb5d12b923bc21f8b3c445f7b5f94b3cc8c82efea8e06eec
   languageName: node
   linkType: hard
 
@@ -7795,7 +7783,6 @@ resolve@^2.0.0-next.3:
     javascript-time-ago: 2.3.13
     jest: ^27.5.1
     jest-environment-jsdom: ^27.5.1
-    jest-junit: ^14.0.1
     jest-transform-stub: ^2.0.0
     jest-webextension-mock: ^3.7.22
     react: ^17.0.2
@@ -8167,15 +8154,6 @@ resolve@^2.0.0-next.3:
   languageName: node
   linkType: hard
 
-"uuid@npm:^8.3.2":
-  version: 8.3.2
-  resolution: "uuid@npm:8.3.2"
-  bin:
-    uuid: dist/bin/uuid
-  checksum: aed2bcef341f95635f308fea8831fb9038b18c485fe7e71feb89d2e05602dfecad0cb6f2246fae096d4da425cca6e8a71056f28abd97ad98cf770a2018853248
-  languageName: node
-  linkType: hard
-
 "v8-to-istanbul@npm:^8.1.0":
   version: 8.1.1
   resolution: "v8-to-istanbul@npm:8.1.1"
@@ -8483,13 +8461,6 @@ resolve@^2.0.0-next.3:
   version: 3.0.0
   resolution: "xml-name-validator@npm:3.0.0"
   checksum: b96679a42e6be36d2433987fe3cc45e972d20d7c2c2a787a2d6b2da94392bd9f23f671cdba29a91211289a2fa8e6965e466dbc1105d0e5730fc3a43e4f1a0688
-  languageName: node
-  linkType: hard
-
-"xml@npm:^1.0.1":
-  version: 1.0.1
-  resolution: "xml@npm:1.0.1"
-  checksum: adde7652a6f6010d28079586e7f608d616138bcb6c44bbc9174292b5cc2fab09b351d6c5f009e9304df2e0030888198225dd2e9ccbf51b776c8928479bfea4cb
   languageName: node
   linkType: hard
 
