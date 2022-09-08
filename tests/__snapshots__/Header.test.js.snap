@@ -71,6 +71,11 @@ exports[`Header -- Sync disabled Header renders correctly - sync disabled 1`] = 
       className="szh-menu-container settings-items-wrapper"
       onBlur={[Function]}
       onKeyDown={[Function]}
+      style={
+        Object {
+          "position": "relative",
+        }
+      }
     />
   </div>
 </header>

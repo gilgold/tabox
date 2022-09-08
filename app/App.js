@@ -36,7 +36,17 @@ function App() {
   const setLastSyncTime = useSetRecoilState(lastSyncTimeState);
   const [openSnackbar] = useSnackbar({ style: SnackbarStyle.ERROR });
   const search = useRecoilValue(searchState);
-  const [listKey, setListKey] = useRecoilState(listKeyState)
+  const [listKey, setListKey] = useRecoilState(listKeyState);
+
+  const removeInactiveWindowsFromAutoUpdate = async () => {
+    let { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack');
+    const { chkEnableAutoUpdate } = await browser.storage.local.get('chkEnableAutoUpdate');
+    if (!collectionsToTrack || collectionsToTrack.length === 0 || !chkEnableAutoUpdate) { return; }
+    const activeWindowIds = (await browser.windows.getAll({ populate: false })).map(c => c.id);
+    collectionsToTrack = collectionsToTrack.filter(c => activeWindowIds.includes(c.windowId));
+    console.log('collectionsToTrack', collectionsToTrack);
+    await browser.storage.local.set({ collectionsToTrack: collectionsToTrack });
+  }
 
   const applyTheme = async () => {
     let { theme } = await browser.storage.local.get('theme');
@@ -113,7 +123,7 @@ function App() {
 
   const addCollection = async (newCollection) => {
     const newList = settingsData ? [newCollection, ...settingsData] : [newCollection];
-    setRowToHighlight(0);
+    setTimeout(() => setRowToHighlight(0), 100);
     await updateRemoteData(newList);
     const { chkAutoUpdateOnNewCollection } = await browser.storage.local.get('chkAutoUpdateOnNewCollection');
     if (!chkAutoUpdateOnNewCollection) return;
@@ -155,6 +165,7 @@ function App() {
   }, [isLoggedIn]);
 
   useEffect(async () => {
+    await removeInactiveWindowsFromAutoUpdate();
     await applyTheme();
     await checkSyncStatus();
     await loadCollectionsFromStorage();
