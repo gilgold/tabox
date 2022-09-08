@@ -13,3 +13,4 @@ chrome/api-keys.json
 .DS_Store
 *.zip
 coverage
+test-results

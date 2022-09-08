@@ -4,7 +4,7 @@
   "description": "Tabox - Save and share your tabs!",
   "main": "index.js",
   "scripts": {
-    "test": "jest --transformIgnorePatterns \"node_modules/(?!@toolz/allow-react)/\" --env=jsdom",
+    "test": "jest --transformIgnorePatterns \"node_modules/(?!@toolz/allow-react)/\" --env=jsdom --coverage",
     "dev": "INLINE_RUNTIME_CHUNK=false NODE_ENV=development webpack --mode development --config webpack.js --watch",
     "prod": "INLINE_RUNTIME_CHUNK=false NODE_ENV=production webpack --mode production --config webpack.js",
     "lint": "eslint './**/*.js'"
@@ -29,6 +29,10 @@
       ".+\\.(css|styl|less|sass|scss|png|jpg|ttf|woff|woff2)$": "jest-transform-stub",
       "^.+\\.js$": "babel-jest"
     },
+    "reporters": [
+      "default",
+      ["jest-junit", {"outputDirectory": "test-results/jest", "outputName": "report.xml"}]
+    ],
     "moduleFileExtensions": [
       "js",
       "json",

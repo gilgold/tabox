@@ -5295,6 +5295,18 @@ fsevents@^2.3.2:
   languageName: node
   linkType: hard
 
+"jest-junit@npm:^14.0.1":
+  version: 14.0.1
+  resolution: "jest-junit@npm:14.0.1"
+  dependencies:
+    mkdirp: ^1.0.4
+    strip-ansi: ^6.0.1
+    uuid: ^8.3.2
+    xml: ^1.0.1
+  checksum: d88be49402326201c2c12d8225db6b2a458dc24f8c1de88ac099450587488477c5ad26778c8d79c5cb5d12b923bc21f8b3c445f7b5f94b3cc8c82efea8e06eec
+  languageName: node
+  linkType: hard
+
 "jest-leak-detector@npm:^27.5.1":
   version: 27.5.1
   resolution: "jest-leak-detector@npm:27.5.1"
@@ -7783,6 +7795,7 @@ resolve@^2.0.0-next.3:
     javascript-time-ago: 2.3.13
     jest: ^27.5.1
     jest-environment-jsdom: ^27.5.1
+    jest-junit: ^14.0.1
     jest-transform-stub: ^2.0.0
     jest-webextension-mock: ^3.7.22
     react: ^17.0.2
@@ -8154,6 +8167,15 @@ resolve@^2.0.0-next.3:
   languageName: node
   linkType: hard
 
+"uuid@npm:^8.3.2":
+  version: 8.3.2
+  resolution: "uuid@npm:8.3.2"
+  bin:
+    uuid: dist/bin/uuid
+  checksum: aed2bcef341f95635f308fea8831fb9038b18c485fe7e71feb89d2e05602dfecad0cb6f2246fae096d4da425cca6e8a71056f28abd97ad98cf770a2018853248
+  languageName: node
+  linkType: hard
+
 "v8-to-istanbul@npm:^8.1.0":
   version: 8.1.1
   resolution: "v8-to-istanbul@npm:8.1.1"
@@ -8461,6 +8483,13 @@ resolve@^2.0.0-next.3:
   version: 3.0.0
   resolution: "xml-name-validator@npm:3.0.0"
   checksum: b96679a42e6be36d2433987fe3cc45e972d20d7c2c2a787a2d6b2da94392bd9f23f671cdba29a91211289a2fa8e6965e466dbc1105d0e5730fc3a43e4f1a0688
+  languageName: node
+  linkType: hard
+
+"xml@npm:^1.0.1":
+  version: 1.0.1
+  resolution: "xml@npm:1.0.1"
+  checksum: adde7652a6f6010d28079586e7f608d616138bcb6c44bbc9174292b5cc2fab09b351d6c5f009e9304df2e0030888198225dd2e9ccbf51b776c8928479bfea4cb
   languageName: node
   linkType: hard
 
