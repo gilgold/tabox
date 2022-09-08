@@ -43,9 +43,9 @@ jobs:
             zip -r ../tabox.zip *
             cd ..
       - store_artifacts:
-          path: /tabox.zip
+          path: ~/tabox/tabox.zip
       - store_test_results:
-          path: ~/test-results/jest/
+          path: ~/tabox/test-results/jest/
       - run:
           name: "Upload & Publish Extension to the Google Chrome Store"
           command: |
