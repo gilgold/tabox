@@ -46,7 +46,7 @@ jobs:
             cd ..
       - store_artifacts:
           path: tabox.zip
-          destination: artifact-file
+          destination: tabox-chrome.zip
      
       - run:
           name: "Upload & Publish Extension to the Google Chrome Store"
