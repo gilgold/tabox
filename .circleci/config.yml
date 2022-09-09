@@ -36,6 +36,8 @@ jobs:
       - run:
           name: "Run Tests"
           command: yarn test
+      - store_test_results:
+          path: test-results/jest/
       - run:
           name: "Package Extension"
           command: |
@@ -43,9 +45,9 @@ jobs:
             zip -r ../tabox.zip *
             cd ..
       - store_artifacts:
-          path: ~/tabox/tabox.zip
-      - store_test_results:
-          path: ~/tabox/test-results/jest/
+          path: tabox.zip
+          destination: artifact-file
+     
       - run:
           name: "Upload & Publish Extension to the Google Chrome Store"
           command: |
