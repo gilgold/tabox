@@ -139,6 +139,16 @@ export default function SettingsMenu(props) {
                 />
                 )}
             </FocusableItem>
+            <FocusableItem styles={{ width: '380px' }}>
+                {() => (
+                <Switch 
+                    id="chkEnableTabDiscard"
+                    data-tip="Tab discard will unload the tab, quickly reloading it when focused.<br>This can help improve performance when opening a lot of tabs."
+                    textOn={<span>Discard tabs on open: <strong>Enabled</strong></span>}
+                    textOff={<span>Discard tabs on open: <strong>Disabled</strong></span>}
+                />
+                )}
+            </FocusableItem>
             <MenuDivider />
             <MenuHeader><RiEdit2Line /> When editing collections</MenuHeader>
             <FocusableItem styles={{ width: '380px' }}>

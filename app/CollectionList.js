@@ -331,10 +331,10 @@ function CollectionListItem(props) {
                 {isAutoUpdate ? <FaStop /> : 'update'}
             </span>
             <span title={'Export ' + props.collection.name} onClick={() => _exportCollectionToFile()} className="export">
-                <FaCloudDownloadAlt color="var(--primary-color)" size="40" />
+                <FaCloudDownloadAlt color="var(--primary-color)" size="18" />
             </span>
             <span title={'Delete ' + props.collection.name} className="export" onClick={async () => await _handleDelete()}>
-                <MdDeleteForever color="#e74c3c" size="40" />
+                <MdDeleteForever color="#e74c3c" size="18" />
             </span>
             <span className={`expand-icon ${isExpanded ? 'expan-open' : ''}`} title={`${isExpanded ? 'Collapse' : 'Expand'} list of tabs`} onClick={() => _handleExpand()}>⌃</span>
         </div>

@@ -36,6 +36,8 @@ jobs:
       - run:
           name: "Run Tests"
           command: yarn test
+      - store_test_results:
+          path: test-results/jest/
       - run:
           name: "Package Extension"
           command: |
@@ -43,9 +45,9 @@ jobs:
             zip -r ../tabox.zip *
             cd ..
       - store_artifacts:
-          path: /build/tabox.zip
-      - store_test_results:
-          path: tests
+          path: tabox.zip
+          destination: tabox-chrome.zip
+     
       - run:
           name: "Upload & Publish Extension to the Google Chrome Store"
           command: |
@@ -54,3 +56,5 @@ jobs:
               curl -H "Authorization: Bearer ${ACCESS_TOKEN}" -H "x-goog-api-version: 2" -X PUT -T tabox.zip -v "https://www.googleapis.com/upload/chromewebstore/v1.1/items/${APP_ID}"
               curl -H "Authorization: Bearer ${ACCESS_TOKEN}" -H "x-goog-api-version: 2" -H "Content-Length: 0" -X POST -v "https://www.googleapis.com/chromewebstore/v1.1/items/${APP_ID}/publish"
             fi
+    # The resource_class feature allows configuring CPU and RAM resources for each job. Different resource classes are available for different executors. https://circleci.com/docs/2.0/configuration-reference/#resourceclass
+    resource_class: large

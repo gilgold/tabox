@@ -58,6 +58,7 @@ function AddNewTextbox(props) {
         }
         setSearch(null);
         setDisabled(true);
+        setName('');
         const newItem = await getCurrentTabsAndGroups(collectionName);
         await props.addCollection(newItem);
         setTimeout(() => setDisabled(false), 1000);

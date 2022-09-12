@@ -14,11 +14,13 @@ async function setInitialOptions() {
     chkOpenNewWindow,
     collectionsToTrack,
     localTimestamp,
+    chkEnableTabDiscard,
   } = await browser.storage.local.get([
     'tabsArray', 
     'chkOpenNewWindow', 
     'collectionsToTrack',
     'localTimestamp',
+    'chkEnableTabDiscard',
   ]);
   if (tabsArray === undefined || tabsArray === {}) {
     await browser.storage.local.set({ tabsArray: [] });
@@ -31,6 +33,9 @@ async function setInitialOptions() {
   }
   if (chkOpenNewWindow === undefined || chkOpenNewWindow === {}) {
     await browser.storage.local.set({ chkOpenNewWindow: true });
+  }
+  if (chkEnableTabDiscard === undefined || chkEnableTabDiscard === {}) {
+    await browser.storage.local.set({ chkEnableTabDiscard: true });
   }
 }
 
@@ -70,55 +75,97 @@ async function handleRemoteUpdate() {
   return true;
 }
 
+async function addCollectionToTrack(collectionUid, windowId) {
+  setTimeout(async () => {
+    let { collectionsToTrack } = (await browser.storage.local.get('collectionsToTrack')) || [];
+    const index = collectionsToTrack.findIndex(c => c.collectionUid === collectionUid);
+    if (index !== undefined && index > -1) {
+        collectionsToTrack[index].windowId = windowId;
+    } else {
+        collectionsToTrack.push({
+            collectionUid: collectionUid,
+            windowId: windowId
+        });
+    }
+    await browser.storage.local.set({ collectionsToTrack: collectionsToTrack });
+  }, 300);
+}
+
+function shouldDiscardTab(tab) {
+  const conditions = [
+    tab.url.indexOf('://newtab') < 0,
+    tab.url.indexOf('chrome://') < 0,
+    tab.url.indexOf('chrome-extension://') < 0,
+    tab.url.indexOf('chrome-devtools://') < 0,
+    !tab.pinned,
+    !tab.active,
+  ];
+  return conditions.every(c => c === true);
+}
+
+const dummyCatchHandler = () => {};
+
 async function openTabs(collection, window, newWindow = null) {
     const currentUrlsInWindow = window.tabs ? window.tabs.map((t) => t.url) : [];
     const { chkIgnoreDuplicates } = newWindow ?? await browser.storage.local.get('chkIgnoreDuplicates');
+    const { chkEnableTabDiscard } = await browser.storage.local.get('chkEnableTabDiscard');
     collection.tabs.forEach((tabInGrp, index, arr) => {
       if (chkIgnoreDuplicates && currentUrlsInWindow.includes(tabInGrp.url)) { return; }
       let tabProperties = {
           pinned: tabInGrp.pinned,
           active: tabInGrp.active,
+          url: tabInGrp.url,
       };
       const updateOnlyProperties = {
-          url: tabInGrp.url,
           muted: tabInGrp.muted,
       }
+
       if (index === 0 && (window.tabs.length === 1 && (!window.tabs[0].url || window.tabs[0].url.indexOf('://newtab') > 0))){
-          setTimeout(async () => {
-            browser.tabs.update(window.tabs[0].id,{ ...tabProperties, ...updateOnlyProperties }).then(tab => {
-              arr[index].newTabId = tab.id;
-              if (index === arr.length - 1) {
-                applyChromeGroupSettings(window.id, collection);
-              }
-            });
-          }, 1);
+        browser.tabs.update(window.tabs[0].id,{ ...tabProperties, ...updateOnlyProperties }).then(tab => {
+          arr[index].newTabId = tab.id;
+          if (index === arr.length - 1) {
+            applyChromeGroupSettings(window.id, collection);
+            addCollectionToTrack(collection.uid, window.id);
+          }
+        });
       } else {
         tabProperties.windowId = window.id;
-        browser.tabs.create(tabProperties).then(async (newTab) => {
+        browser.tabs.create(tabProperties).then((newTab) => {
           arr[index].newTabId = newTab.id;
-          browser.tabs.update(newTab.id, updateOnlyProperties).then(() => {
+          let discardedTabs = [];
+          browser.tabs.update(newTab.id, updateOnlyProperties).then(updatedTab => {
+            if (chkEnableTabDiscard) {
+              chrome.tabs.onUpdated.addListener(function listener (tabId, info) {
+                if (tabId === updatedTab.id) {
+                    if (info.favIconUrl !== undefined || info.status === 'complete') {
+                      if(shouldDiscardTab(updatedTab)) {
+                        browser.tabs.discard(updatedTab.id).then().catch(dummyCatchHandler);
+                        discardedTabs.push(tabId);
+                        chrome.tabs.onUpdated.removeListener(listener);
+                      }
+                    } else {
+                      setTimeout(() => {
+                        if (!discardedTabs.includes(tabId)) {
+                          browser.tabs.get(tabId).then(t => {
+                            if(shouldDiscardTab(t)) {
+                              browser.tabs.discard(t.id).then().catch(dummyCatchHandler);
+                              discardedTabs.push(t.id);
+                            }
+                            }).catch(dummyCatchHandler);
+                            chrome.tabs.onUpdated.removeListener(listener);
+                        }
+                      }, 5000)
+                    }
+                  } 
+              });
+            }
             if (index === arr.length - 1) {
               applyChromeGroupSettings(window.id, collection);
+              addCollectionToTrack(collection.uid, window.id);
             }
           });
         });       
       }
-       {
-        // reached the last tab to open
-        setTimeout(async () => {
-          let { collectionsToTrack } = (await browser.storage.local.get('collectionsToTrack')) || [];
-          const index = collectionsToTrack.findIndex(c => c.collectionUid === collection.uid);
-          if (index !== undefined && index > -1) {
-              collectionsToTrack[index].windowId = window.id;
-          } else {
-              collectionsToTrack.push({
-                  collectionUid: collection.uid,
-                  windowId: window.id
-              });
-          }
-          await browser.storage.local.set({ collectionsToTrack: collectionsToTrack });
-        }, 300);
-    } 
     });
     return true;
 }
@@ -210,7 +257,7 @@ try {
  })
  // window events
  browser.windows.onRemoved.addListener(async windowId => {
-  let { collectionsToTrack } = (await browser.storage.local.get('collectionsToTrack')) || [];
+  let { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack');
   if (!collectionsToTrack || collectionsToTrack.length === 0) { return; }
   const index = collectionsToTrack.findIndex(c => c.windowId === windowId);
   if (index === -1) { return; }
