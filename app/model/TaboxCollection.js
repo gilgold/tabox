@@ -1,4 +1,4 @@
-class TaboxGroupItem {
+class TaboxCollection {
     constructor(name, tabs, chromeGroups, color = null, createdOn = null, window = null) {
       const newUid = (crypto && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
       this.uid = newUid;
@@ -11,4 +11,4 @@ class TaboxGroupItem {
     }
 }
 
-export default TaboxGroupItem;
+export default TaboxCollection;

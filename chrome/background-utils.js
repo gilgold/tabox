@@ -302,7 +302,7 @@ function createAuthEndpoint() {
 }
 
 function applyUid(item) {
-    // Applies a unique id to all tabs and groups in a TaboxGroupItem
+    // Applies a unique id to all tabs and groups in a TaboxCollection
     if (!item || !('tabs' in item) || item.tabs.length === 0) return item;
     let tabs = [...item.tabs];
     let chromeGroups = item.chromeGroups ? [...item.chromeGroups] : [];

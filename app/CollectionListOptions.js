@@ -1,31 +1,71 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useRecoilValue } from 'recoil';
 import { settingsDataState } from './atoms/globalAppSettingsState';
 import './CollectionListOptions.css';
 import Switch from './Switch';
-import { IoColorPalette } from 'react-icons/io5';
-import { FaCalendarAlt } from 'react-icons/fa';
+import Select from 'react-select';
+import { sortOptions, SortType } from './model/SortOptions';
+import { browser } from '../static/globals';
 
 
 export function CollectionListOptions(props) {
     const settingsData = useRecoilValue(settingsDataState);
-
-    const SortType = {
-        COLOR: (a, b) => (b.color > a.color) ? 1 : ((a.color > b.color) ? -1 : 0),
-        DATE: (a, b) => b.createdOn - a.createdOn
-    }
+    const [sortValue, setSortValue] = useState(sortOptions.find(o => o.value === props.selected));
 
     const handleSort = async (sortBy) => {
         if (!settingsData || settingsData.length === 0) return;
         let newSettingsData = [...settingsData];
-        newSettingsData.sort(sortBy)
+        newSettingsData.sort(SortType[sortBy])
         await props.updateRemoteData(newSettingsData);
     }
 
+    const formatOptionLabel = ({ label, icon }) => (
+        <div className='sort-select-custom-option'>
+            <div style={{ minWidth: '18px' }}>{icon}</div>
+            <div>{label}</div>
+        </div>
+    );
+
+    const handleChange = async (option) => {
+        setSortValue(option);
+        await browser.storage.local.set({ currentSortValue: option.value })
+        handleSort(option.value);
+    };
+
+    const styles = {
+        control: (base) => ({
+          ...base,
+          minHeight: 18,
+        }),
+        input: (base) => ({
+            ...base,
+            minHeight: 16,
+            padding: 0
+        }),
+        dropdownIndicator: (base) => ({
+          ...base,
+          paddingTop: 0,
+          paddingBottom: 0,
+          color: 'var(--settings-row-text-color)'
+        }),
+        clearIndicator: (base) => ({
+          ...base,
+          paddingTop: 0,
+          paddingBottom: 0,
+        }),
+    };
+
     return <div className="options-wrapper">
         <div className="sort-icon" /> <span className="sortLabel">Sort by: </span>
-        <button className="button" onClick={async () => handleSort(SortType.COLOR)}><IoColorPalette />&nbsp; Color</button>
-        <button className="button" onClick={async () => handleSort(SortType.DATE)}><FaCalendarAlt />&nbsp; Newest</button>
+        <Select
+            value={sortValue}
+            formatOptionLabel={formatOptionLabel}
+            onChange={async (e) => await handleChange(e)}
+            options={sortOptions}
+            className="sort-select-container"
+            classNamePrefix={'sort-select'}
+            styles={styles}
+        />
         <div className="verticle-divider" />
         <Switch 
             id="chkOpenNewWindow" 
