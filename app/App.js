@@ -1,6 +1,6 @@
 /* eslint-disable no-useless-escape */
 import './App.css';
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Header from './Header';
 import AddNewTextbox from './AddNewTextbox';
 import ImportCollection from './ImportCollection';
@@ -37,6 +37,7 @@ function App() {
   const [openSnackbar] = useSnackbar({ style: SnackbarStyle.ERROR });
   const search = useRecoilValue(searchState);
   const [listKey, setListKey] = useRecoilState(listKeyState);
+  const [sortValue, setSortValue] = useState(null);
 
   const removeInactiveWindowsFromAutoUpdate = async () => {
     let { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack');
@@ -107,6 +108,7 @@ function App() {
   const updateRemoteData = async (newData) => {
     setSettingsData(newData);
     await browser.storage.local.set({ localTimestamp: Date.now() });
+    await browser.runtime.sendMessage({ type: 'addCollection' });
     if (!isLoggedIn) return;
     _update();
   }
@@ -160,11 +162,17 @@ function App() {
     setSettingsData(newCollections);
   }
 
+  const getSelectedSort = async () => {
+    const { currentSortValue } = await browser.storage.local.get('currentSortValue');
+    setSortValue(currentSortValue);
+  }
+
   useEffect(() => {
     if (isLoggedIn) loadCollectionsFromStorage();
   }, [isLoggedIn]);
 
   useEffect(async () => {
+    await getSelectedSort();
     await removeInactiveWindowsFromAutoUpdate();
     await applyTheme();
     await checkSyncStatus();
@@ -198,7 +206,11 @@ function App() {
       <AddNewTextbox addCollection={addCollection} />
       <ImportCollection updateRemoteData={updateRemoteData} />
       <Divder />
-      <CollectionListOptions updateRemoteData={updateRemoteData} />
+      <CollectionListOptions 
+        key={`${sortValue}-select`}
+        updateRemoteData={updateRemoteData} 
+        selected={sortValue}
+      />
       <Divder />
       <CollectionList
         key={`collection-list-${listKey}`}

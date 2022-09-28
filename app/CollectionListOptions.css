@@ -11,16 +11,14 @@
 	font-size: .7rem;
 }
 
-.button {
-	background-color: transparent;
+.sort-select-container {
+	color: var(--settings-row-text-color);
+	background-color: var(--input-bg-color);
 	border: 1px solid transparent;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	border-radius: 5px;
-	color: var(--settings-row-text-color);
 	font-weight: 400;
-	padding: 2px 12px;
 	margin: 5px 5px;
 	cursor: pointer;
 	line-height: 16px;
@@ -28,9 +26,40 @@
 	transition: all .2s ease-in !important;
 }
 
-.button:hover {
-	background-color: var(--setting-row-hover-bg-color);
-	border: 1px solid var(--settings-row-text-color);
+.sort-select-custom-option {
+	display: flex;
+	justify-content: flex-start;
+}
+
+.sort-select__control {
+	color: var(--settings-row-text-color) !important;
+	background-color: var(--input-bg-color) !important;
+}
+
+.sort-select__indicator svg {
+	fill: var(--settings-row-text-color) !important;
+}
+
+.sort-select__option {
+	background-color: var(--input-bg-color) !important;
+}
+
+.sort-select__option:hover {
+	background-color: var(--single-tab-row-hover-color) !important;
+}
+
+.sort-select__menu {
+	background-color: var(--input-bg-color) !important;
+}
+
+.sort-select__single-value {
+	color: var(--settings-row-text-color) !important;
+	min-width: 40px !important;
+}
+
+.sort-select__option--is-selected {
+	color: var(--primary-color) !important;
+	font-weight: 700 !important;
 }
 
 .sort-icon:before {

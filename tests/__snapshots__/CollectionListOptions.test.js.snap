@@ -13,54 +13,104 @@ exports[`Collection List Options tests CollectionListOptions renders correctly 1
   >
     Sort by: 
   </span>
-  <button
-    className="button"
-    onClick={[Function]}
+  <div
+    className="sort-select-container css-b62m3t-container"
+    onKeyDown={[Function]}
   >
-    <svg
-      fill="currentColor"
-      height="1em"
-      stroke="currentColor"
-      strokeWidth="0"
-      style={
-        Object {
-          "color": undefined,
-        }
-      }
-      viewBox="0 0 512 512"
-      width="1em"
-      xmlns="http://www.w3.org/2000/svg"
+    <span
+      className="css-1f43avz-a11yText-A11yText"
+      id="react-select-2-live-region"
+    />
+    <span
+      aria-atomic="false"
+      aria-live="polite"
+      aria-relevant="additions text"
+      className="css-1f43avz-a11yText-A11yText"
+    />
+    <div
+      className="sort-select__control css-1ifnqgf-control"
+      onMouseDown={[Function]}
+      onTouchEnd={[Function]}
     >
-      <path
-        d="M441 336.2l-.06-.05c-9.93-9.18-22.78-11.34-32.16-12.92l-.69-.12c-9.05-1.49-10.48-2.5-14.58-6.17-2.44-2.17-5.35-5.65-5.35-9.94s2.91-7.77 5.34-9.94l30.28-26.87c25.92-22.91 40.2-53.66 40.2-86.59s-14.25-63.68-40.2-86.6c-35.89-31.59-85-49-138.37-49C223.72 48 162 71.37 116 112.11c-43.87 38.77-68 90.71-68 146.24s24.16 107.47 68 146.23c21.75 19.24 47.49 34.18 76.52 44.42a266.17 266.17 0 0086.87 15h1.81c61 0 119.09-20.57 159.39-56.4 9.7-8.56 15.15-20.83 15.34-34.56.21-14.17-5.37-27.95-14.93-36.84zM112 208a32 32 0 1132 32 32 32 0 01-32-32zm40 135a32 32 0 1132-32 32 32 0 01-32 32zm40-199a32 32 0 1132 32 32 32 0 01-32-32zm64 271a48 48 0 1148-48 48 48 0 01-48 48zm72-239a32 32 0 1132-32 32 32 0 01-32 32z"
-      />
-    </svg>
-      Color
-  </button>
-  <button
-    className="button"
-    onClick={[Function]}
-  >
-    <svg
-      fill="currentColor"
-      height="1em"
-      stroke="currentColor"
-      strokeWidth="0"
-      style={
-        Object {
-          "color": undefined,
-        }
-      }
-      viewBox="0 0 448 512"
-      width="1em"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path
-        d="M0 464c0 26.5 21.5 48 48 48h352c26.5 0 48-21.5 48-48V192H0v272zm320-196c0-6.6 5.4-12 12-12h40c6.6 0 12 5.4 12 12v40c0 6.6-5.4 12-12 12h-40c-6.6 0-12-5.4-12-12v-40zm0 128c0-6.6 5.4-12 12-12h40c6.6 0 12 5.4 12 12v40c0 6.6-5.4 12-12 12h-40c-6.6 0-12-5.4-12-12v-40zM192 268c0-6.6 5.4-12 12-12h40c6.6 0 12 5.4 12 12v40c0 6.6-5.4 12-12 12h-40c-6.6 0-12-5.4-12-12v-40zm0 128c0-6.6 5.4-12 12-12h40c6.6 0 12 5.4 12 12v40c0 6.6-5.4 12-12 12h-40c-6.6 0-12-5.4-12-12v-40zM64 268c0-6.6 5.4-12 12-12h40c6.6 0 12 5.4 12 12v40c0 6.6-5.4 12-12 12H76c-6.6 0-12-5.4-12-12v-40zm0 128c0-6.6 5.4-12 12-12h40c6.6 0 12 5.4 12 12v40c0 6.6-5.4 12-12 12H76c-6.6 0-12-5.4-12-12v-40zM400 64h-48V16c0-8.8-7.2-16-16-16h-32c-8.8 0-16 7.2-16 16v48H160V16c0-8.8-7.2-16-16-16h-32c-8.8 0-16 7.2-16 16v48H48C21.5 64 0 85.5 0 112v48h448v-48c0-26.5-21.5-48-48-48z"
-      />
-    </svg>
-      Newest
-  </button>
+      <div
+        className="sort-select__value-container css-dlobye-Component"
+      >
+        <div
+          className="sort-select__placeholder css-14el2xx-placeholder"
+          id="react-select-2-placeholder"
+        >
+          Select...
+        </div>
+        <div
+          className="sort-select__input-container css-481i1o-Component"
+          data-value=""
+        >
+          <input
+            aria-autocomplete="list"
+            aria-describedby="react-select-2-placeholder"
+            aria-expanded={false}
+            aria-haspopup={true}
+            autoCapitalize="none"
+            autoComplete="off"
+            autoCorrect="off"
+            className="sort-select__input"
+            disabled={false}
+            id="react-select-2-input"
+            onBlur={[Function]}
+            onChange={[Function]}
+            onFocus={[Function]}
+            role="combobox"
+            spellCheck="false"
+            style={
+              Object {
+                "background": 0,
+                "border": 0,
+                "color": "inherit",
+                "font": "inherit",
+                "gridArea": "1 / 2",
+                "label": "input",
+                "margin": 0,
+                "minWidth": "2px",
+                "opacity": 1,
+                "outline": 0,
+                "padding": 0,
+                "width": "100%",
+              }
+            }
+            tabIndex={0}
+            type="text"
+            value=""
+          />
+        </div>
+      </div>
+      <div
+        className="sort-select__indicators css-ny0e4k-Component"
+      >
+        <span
+          className="sort-select__indicator-separator css-1okebmr-indicatorSeparator"
+        />
+        <div
+          aria-hidden="true"
+          className="sort-select__indicator sort-select__dropdown-indicator css-1ui3yp9-indicatorContainer"
+          onMouseDown={[Function]}
+          onTouchEnd={[Function]}
+        >
+          <svg
+            aria-hidden="true"
+            className="css-tj5bde-Svg"
+            focusable="false"
+            height={20}
+            viewBox="0 0 20 20"
+            width={20}
+          >
+            <path
+              d="M4.516 7.548c0.436-0.446 1.043-0.481 1.576 0l3.908 3.747 3.908-3.747c0.533-0.481 1.141-0.446 1.574 0 0.436 0.445 0.408 1.197 0 1.615-0.406 0.418-4.695 4.502-4.695 4.502-0.217 0.223-0.502 0.335-0.787 0.335s-0.57-0.112-0.789-0.335c0 0-4.287-4.084-4.695-4.502s-0.436-1.17 0-1.615z"
+            />
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
   <div
     className="verticle-divider"
   />

@@ -15,12 +15,14 @@ async function setInitialOptions() {
     collectionsToTrack,
     localTimestamp,
     chkEnableTabDiscard,
+    currentSortValue,
   } = await browser.storage.local.get([
     'tabsArray', 
     'chkOpenNewWindow', 
     'collectionsToTrack',
     'localTimestamp',
     'chkEnableTabDiscard',
+    'currentSortValue',
   ]);
   if (tabsArray === undefined || tabsArray === {}) {
     await browser.storage.local.set({ tabsArray: [] });
@@ -36,6 +38,9 @@ async function setInitialOptions() {
   }
   if (chkEnableTabDiscard === undefined || chkEnableTabDiscard === {}) {
     await browser.storage.local.set({ chkEnableTabDiscard: true });
+  }
+  if (currentSortValue === undefined || currentSortValue === {}) {
+    await browser.storage.local.set({ currentSortValue: 'DATE' });
   }
 }
 
@@ -231,6 +236,10 @@ try {
       await browser.windows.update(request.windowId, { focused: true });
       return Promise.resolve(true);
     }
+
+    if (request.type === 'addCollection') {
+      await handleContextMenuCreation();
+    }
   });
   browser.commands.onCommand.addListener(async (command) => {
     const index = parseInt(command.replace('open-collection-', '')) - 1;
@@ -241,10 +250,86 @@ try {
     window.tabs = await browser.tabs.query({ windowId: window.id });
     await openTabs(tabsArray[index], window, true);
   });
+
+  const createCollectionContextMenu = (collection) => {
+    browser.contextMenus.create({
+      title: collection.name,
+      contexts: ['all'],
+      parentId: 'tabox-super',
+      id: collection.chromeGroups?.length > 0 ? `${collection.uid}-main` : collection.uid,
+    });
+    if (collection.chromeGroups && collection.chromeGroups.length > 0) {
+      browser.contextMenus.create({
+        title: 'Add tab to this collection',
+        contexts: ['all'],
+        parentId: `${collection.uid}-main`,
+        id: collection.uid,
+      });
+      browser.contextMenus.create({
+        parentId: `${collection.uid}-main`,
+        id: `${collection.uid}-seperator`,
+        type: 'separator'
+      });
+      browser.contextMenus.create({
+        title: 'Add tab to a group inside this collection',
+        contexts: ['all'],
+        enabled: false,
+        parentId: `${collection.uid}-main`,
+        id: `${collection.uid}-title`,
+      });
+      collection.chromeGroups.forEach(cg => {
+        browser.contextMenus.create({
+          title: cg.title,
+          contexts: ['all'],
+          parentId: `${collection.uid}-main`,
+          id: `${Math.random().toString(36).slice(2)}|${cg.uid}`,
+        });
+      })
+    }
+  }
+
+  const handleMenuClick = async (info, tab) => {
+    if (info.menuItemId === 'tabox-super') return;
+    let { tabsArray } = await browser.storage.local.get('tabsArray');
+    let tabToAdd = { ...tab };
+    const isClickOnTabGroup = info?.parentMenuItemId?.includes('-main');
+    const collectionUid = isClickOnTabGroup ? info?.parentMenuItemId?.replace('-main', '') : info.menuItemId;
+    const collectionIndex = tabsArray.findIndex(c => c.uid === collectionUid);
+    if (isClickOnTabGroup) {
+      // add to inside a chrome group
+      const groupUid = info.menuItemId.split('|')[1];
+      const group = tabsArray[collectionIndex].chromeGroups?.find(cg => cg.uid === groupUid);
+      const indexInTabs = tabsArray[collectionIndex].tabs.findIndex(t => t.groupUid === group.uid);
+      tabToAdd.groupId = group.id;
+      tabToAdd.groupUid = group.uid;
+      tabsArray[collectionIndex]?.tabs?.splice(indexInTabs, 0, tabToAdd);
+    } else {
+      tabsArray[collectionIndex]?.tabs?.push(tabToAdd);
+    }
+    
+    await browser.storage.local.set({ tabsArray });
+    await handleRemoteUpdate();
+  }
+
+  const handleContextMenuCreation = async () => {
+    await browser.contextMenus.removeAll();
+    const { tabsArray } = await browser.storage.local.get('tabsArray');
+    if (!tabsArray || tabsArray.length === 0) return;
+    browser.contextMenus.create({
+      title: 'Add tab to Tabox Collection',
+      contexts: ['all'],
+      id: 'tabox-super'
+    });
+    tabsArray.forEach(collection => createCollectionContextMenu(collection));
+  }
+
+  browser.contextMenus.onClicked.addListener(handleMenuClick);
+
   browser.runtime.onInstalled.addListener(async (details) => {
     const previousVersion = details.previousVersion;
     const reason = details.reason;
     await setInitialOptions();
+    await handleContextMenuCreation();
     if (reason === "update") {
       let { tabsArray } = await browser.storage.local.get('tabsArray');
       tabsArray = updateCollectionsUids(tabsArray);

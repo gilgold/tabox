@@ -1,4 +1,4 @@
-import TaboxGroupItem from './model/TaboxGroupItem';
+import TaboxCollection from './model/TaboxCollection';
 import { browser } from '../static/globals';
 
 export function downloadTextFile(text, filename) {
@@ -12,7 +12,7 @@ export function downloadTextFile(text, filename) {
 }
 
 export function applyUid(item) {
-  // Applies a unique id to all tabs and groups in a TaboxGroupItem
+  // Applies a unique id to all tabs and groups in a TaboxCollection
   if (!item || !('tabs' in item) || item.tabs.length === 0) return item;
   console.log('applying uid to collection', item.name);
   let tabs = [...item.tabs];
@@ -28,7 +28,7 @@ export function applyUid(item) {
       tabs = tabs.map(t => (t.groupId === group.id ? { ...t, groupUid: groupUid } : t));
     });
   }
-  return new TaboxGroupItem(item.name, tabs, chromeGroups, item.color, item.createdOn, item.window);
+  return new TaboxCollection(item.name, tabs, chromeGroups, item.color, item.createdOn, item.window);
 }
 
 export async function getCurrentTabsAndGroups(title, forceOnlyHighlighted = false) {
@@ -55,6 +55,6 @@ export async function getCurrentTabsAndGroups(title, forceOnlyHighlighted = fals
   } else {
     allChromeGroups = [];
   }
-  const newItem = new TaboxGroupItem(title, tabs, allChromeGroups, null, null, window);
+  const newItem = new TaboxCollection(title, tabs, allChromeGroups, null, null, window);
   return applyUid(newItem);
 }
