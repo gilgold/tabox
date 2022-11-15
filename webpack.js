@@ -10,7 +10,7 @@ module.exports = (env, argv) => {
 
   return {
     mode: argv.mode,
-    devtool: argv.mode === "development" ? 'inline-source-map' : 'source-map',
+    devtool: argv.mode === "development" ? 'cheap-module-source-map' : 'source-map',
     entry: {
       app: path.join(__dirname, "./static/index.js"),
     },
@@ -51,6 +51,7 @@ module.exports = (env, argv) => {
               { from: "chrome/icons", to: "icons" },
               { from: "static/images", to: "images" },
               { from: "static/globals.js", to: "[name][ext]" },
+              { from: "static/deferedLoading.*", to: "[name][ext]" },
               { from: "chrome/*.js", to: "[name][ext]" },
               { from: "chrome/api-keys.json", to: "[name][ext]" },
               {

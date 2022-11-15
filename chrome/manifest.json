@@ -49,6 +49,9 @@
       "description": "Open the 4th collection in your list"
     }
   },
+  "sandbox": {
+    "pages": ["deferedLoading.html"]
+  },
   "permissions": [
    "tabs",
    "tabGroups",
@@ -56,7 +59,8 @@
    "sessions",
    "identity",
    "unlimitedStorage",
-   "contextMenus"
+   "contextMenus",
+   "system.display"
   ],
   "host_permissions": [
     "https://www.googleapis.com/",
@@ -75,5 +79,5 @@
     ]
   },
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAgbFz4tW1ZT+Vmf+jMh5GJOLfHVI2UNoEDaqJKn0ZMC+9+9nePws++SBA9/lkQFjTc9symjYrgkr389ZBsPAtLsGC1D099eVrPeADts3pWYn0KopJjXIMBxcqRmffC7VwpYYCxJ1olACQuE1WHRvjNX4J84xWwCLf7lV1dCjB+viNnRLp2VJ7xKDj6/axdco2x9NVK8/0qRlH1eGe3i956hV+u8DkhF9fgH0sKKQACgJRSUE1fF1Y+FvDZFw7EdYSFTAxSxOCblE+8dw5Kwr0edPd3hWRehTV0bawTW4CYyRVhiICW9UogmDpTCkAgXbhzc8sDjHDF96ChdPPQE8KkwIDAQAB",
-  "version": "3.5.7"
+  "version": "3.5.8"
 }

@@ -164,14 +164,14 @@ function CollectionListItem(props) {
     const handleSaveCollectionColor = async (color) => {
         let newCollectionItem = { ...props.collection };
         newCollectionItem.color = color;
-        await props.updateCollection(props.index, newCollectionItem);
+        await props.updateCollection(newCollectionItem);
     }
 
-    async function _handleDelete() {
+    const _handleDelete = async () => {
         const { tabsArray: previousCollections } = await browser.storage.local.get('tabsArray');
         setExpanded(false);
-        _handleStopTracking();
-        const newList = props.removeCollectionAtIndex(props.index);
+        await _handleStopTracking();
+        const newList = props.removeCollection(props.collection.uid);
         setDeleted(true);
         playDelete(true);
         await browser.storage.local.set({ localTimestamp: Date.now() });
@@ -189,22 +189,38 @@ function CollectionListItem(props) {
             />, UNDO_TIME * 1000);
     }
 
-    function _exportCollectionToFile() {
+    const _exportCollectionToFile = () => {
         downloadTextFile(JSON.stringify(props.collection), props.collection.name);
     }
 
-    async function _handleUpdate() {
+    const _handleUpdate = async () => {
         const { tabsArray: previousCollections } = await browser.storage.local.get('tabsArray');
+        const { chkEnableAutoUpdate } = await browser.storage.local.get('chkEnableAutoUpdate');
+        const { chkManualUpdateLinkCollection } = await browser.storage.local.get('chkManualUpdateLinkCollection');
+        if (chkEnableAutoUpdate && chkManualUpdateLinkCollection) {
+            let { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack') || [];
+            const activeWindowId = collectionsToTrack.find(c => c.collectionUid === props.collection.uid)?.windowId;
+            if (!activeWindowId) {
+                const trackObj = {
+                    collectionUid: props.collection.uid,
+                    windowId: (await browser.windows.get(browser.windows.WINDOW_ID_CURRENT)).id
+                }
+                collectionsToTrack.push(trackObj);
+                await browser.storage.local.set({ collectionsToTrack: collectionsToTrack });
+                setIsAutoUpdate(true);
+            }
+        }
         let newItem = await getCurrentTabsAndGroups(props.collection.name);
         newItem.color = props.collection.color;
-        await props.updateCollection(props.index, newItem);
+        newItem.uid = props.collection.uid;
+        await props.updateCollection(newItem);
         setRowToHighlight(props.index);
         playHighlight(true);
         setTimeout(() => setRowToHighlight(-1), 1000);
         openUpdateSnackbar(
             <SnackBarWithUndo
                 icon={<FaRegCheckCircle />}
-                message={`Collection updated successfully`}
+                message={`Collection updated ${chkEnableAutoUpdate && chkManualUpdateLinkCollection ? 'and linked to window' : ''} successfully`}
                 collectionName={props.collection.name}
                 updateRemoteData={props.updateRemoteData}
                 collections={previousCollections}
@@ -212,7 +228,7 @@ function CollectionListItem(props) {
                 undoBackgroundColor={SnackbarStyle.SUCCESS.backgroundColor}
                 duration={UNDO_TIME}
             />, UNDO_TIME * 1000);
-    }
+    };
 
     const _handleOpenTabs = async () => {
         if (isExpanded) return;
@@ -220,14 +236,22 @@ function CollectionListItem(props) {
             await _handleFocusWindow(); 
             return;
         }
-        const openInNewWindow = (await browser.storage.local.get('chkOpenNewWindow')).chkOpenNewWindow;
-        var window;
-        if (openInNewWindow) {
+        const { chkOpenNewWindow } = await browser.storage.local.get('chkOpenNewWindow');
+        let window;
+        if (chkOpenNewWindow) {
+            const displays = await browser.system.display.getInfo();
             const hasWindowProp = 'window' in props.collection && props.collection.window;
+            const l = props.collection?.window?.left;
+            const t = props.collection?.window?.top;
+            const lastDisplay = displays[displays.length - 1];
+            const lastDisplayLeftBound = lastDisplay.bounds.left + lastDisplay.bounds.width;
+            const lastDisplayTopBound = lastDisplay.bounds.top + lastDisplay.bounds.height;
+            const left = l < lastDisplayLeftBound ? l : lastDisplay.bounds.left;
+            const top = t < lastDisplayTopBound ? t : lastDisplay.bounds.top;
             window = await browser.windows.create({
                 focused: true,
-                left: hasWindowProp ? props.collection.window.left : null,
-                top: hasWindowProp ? props.collection.window.top : null,
+                left: hasWindowProp ? left : null,
+                top: hasWindowProp ? top : null,
                 width: hasWindowProp ? props.collection.window.width : null,
                 height: hasWindowProp ? props.collection.window.height : null
             });
@@ -280,7 +304,7 @@ function CollectionListItem(props) {
         }
         let currentCollection = { ...props.collection };
         currentCollection.name = val;
-        props.updateCollection(props.index, currentCollection);
+        props.updateCollection(currentCollection);
         openSnackbar(`Collection name updated to '${val}'!`, 5000);
     }
 
@@ -301,7 +325,6 @@ function CollectionListItem(props) {
                 <ColorPicker
                     currentColor={props.collection.color}
                     tooltip="Choose a color for this collection"
-                    collectionIndex={props.index}
                     action={handleSaveCollectionColor} />
             </div>
         </div>
@@ -339,11 +362,26 @@ function CollectionListItem(props) {
             <span className={`expand-icon ${isExpanded ? 'expan-open' : ''}`} title={`${isExpanded ? 'Collapse' : 'Expand'} list of tabs`} onClick={() => _handleExpand()}>⌃</span>
         </div>
         {isExpanded ? <ExpandedCollectionData
-            collectionIndex={props.index}
             collection={props.collection}
             updateCollection={props.updateCollection}
             updateRemoteData={props.updateRemoteData} /> : null}
     </div>;
+}
+
+const colorChart = {
+    'grey': '#54585d',
+    'blue': '#1b68de',
+    'red': '#d22c28',
+    'yellow': '#fcd065',
+    'green': '#21823d',
+    'pink': '#fd80c2',
+    'purple': '#872fdb',
+    'cyan': '#6fd3e7'
+}
+
+const getColorCode = (name) => {
+    const _name = name.toLowerCase();
+    return (_name in colorChart) ? colorChart[_name] : name;
 }
 
 function ExpandedCollectionData(props) {
@@ -355,21 +393,9 @@ function ExpandedCollectionData(props) {
     }, [])
 
     let previousGroupUid = null;
-    const fallbackFavicon = './images/favicon-fallback.png';
 
     const groupFromId = (_id, groups = props.collection.chromeGroups) => {
         return groups.find(el => el.uid === _id);
-    }
-
-    const colorChart = {
-        'grey': '#54585d',
-        'blue': '#1b68de',
-        'red': '#d22c28',
-        'yellow': '#fcd065',
-        'green': '#21823d',
-        'pink': '#fd80c2',
-        'purple': '#872fdb',
-        'cyan': '#6fd3e7'
     }
 
     const _updateGroupAttribute = (group, attr, val) => {
@@ -380,26 +406,17 @@ function ExpandedCollectionData(props) {
         chromeGrp[attr] = val;
         chromeGroups[grpIndex] = chromeGrp;
         currentCollection.chromeGroups = chromeGroups;
-        props.updateCollection(props.collectionIndex, currentCollection);
+        props.updateCollection(currentCollection);
     }
     const getColorName = (value) => Object.keys(colorChart).find(key => colorChart[key] === value);
     const handleSaveGroupColor = async (color, group) => _updateGroupAttribute(group, 'color', getColorName(color));
     const saveGroupName = (title, group) => _updateGroupAttribute(group, 'title', title);
 
-    const getColorCode = (name) => {
-        const _name = name.toLowerCase();
-        return (_name in colorChart) ? colorChart[_name] : name;
-    }
-
     const _handleDeleteGroup = (groupUid) => {
         let currentCollection = { ...props.collection };
-        const grpIndex = currentCollection.chromeGroups.findIndex(el => el.uid === groupUid);
-        let chromeGroups = [...currentCollection.chromeGroups];
-        chromeGroups.splice(grpIndex, 1);
-        let tabs = [...currentCollection.tabs];
-        currentCollection.tabs = tabs.filter(el => el.groupUid !== groupUid);
-        currentCollection.chromeGroups = chromeGroups;
-        props.updateCollection(props.collectionIndex, currentCollection);
+        currentCollection.tabs = [...currentCollection.tabs].filter(el => el.groupUid !== groupUid);
+        currentCollection.chromeGroups = [...currentCollection.chromeGroups].filter(cg => cg.uid !== groupUid);
+        props.updateCollection(currentCollection);
     }
 
     const GroupHeader = (groupUid) => {
@@ -429,39 +446,6 @@ function ExpandedCollectionData(props) {
                     />
                 </div>
             </div> : null;
-        }
-    }
-
-    function _removeItemAtIndex(tabs, index) {
-        return [...tabs.slice(0, index), ...tabs.slice(index + 1)];
-    }
-
-    const handleTabDelete = (index) => {
-        let currentCollection = { ...props.collection };
-        let newTabList = _removeItemAtIndex(currentCollection.tabs, index);
-        const groupUid = currentCollection.tabs[index].groupUid;
-        let newChromeGroups = [...currentCollection.chromeGroups];
-        if (groupUid) {
-            const totalTabsInGroup = newTabList.filter(el => el.groupUid === groupUid).length;
-            if (totalTabsInGroup === 0) {
-                newChromeGroups = _removeItemAtIndex(newChromeGroups, newChromeGroups.findIndex(el => el.uid === groupUid));
-            }
-        }
-        currentCollection.tabs = newTabList;
-        currentCollection.chromeGroups = newChromeGroups;
-        props.updateCollection(props.collectionIndex, currentCollection);
-    }
-
-    const handleFaviconError = (e) => {
-        e.target.src = fallbackFavicon;
-    }
-
-    const handleOpenTab = async (tab) => {
-        const { chkOpenNewWindow } = await browser.storage.local.get('chkOpenNewWindow');
-        if (chkOpenNewWindow) {
-            await browser.windows.create({ focused: true, url: tab.url });
-        } else {
-            await browser.tabs.create({ url: tab.url, active: true });
         }
     }
 
@@ -506,7 +490,7 @@ function ExpandedCollectionData(props) {
         currentCollection.tabs = [...updatedTabs, ...newCollectionTabs];
         totalTabsAdded = currentCollection.tabs.length - totalTabsAdded;
         currentCollection.chromeGroups = [...currentCollection.chromeGroups, ...newCollectionGroups];
-        props.updateCollection(props.collectionIndex, currentCollection);
+        props.updateCollection(currentCollection);
         openSnackbar(
             <SnackBarWithUndo
                 icon={<AiOutlineFolderAdd size="32px" />}
@@ -547,38 +531,84 @@ function ExpandedCollectionData(props) {
                 <div className="multi-plus-icon">+</div> Add all open tabs
             </div>
         </div>
-        {props.collection.tabs.map((tab, index) => [GroupHeader(tab.groupUid), <div className="row single-tab-row" key={`line-${index}`}>
-            <div className="tree-line"></div>
-            {(tab.groupId > -1) ? 
-                <div 
-                    className="group-indicator" 
-                    style={{ 
-                        backgroundColor: groupFromId(tab.groupUid) ? getColorCode(groupFromId(tab.groupUid).color) : 'transparent', 
-                        boxShadow: groupFromId(tab.groupUid) ? `${getColorCode(groupFromId(tab.groupUid).color)} -3px 1px 3px -2px` : 'none'
-                    }} /> : 
-                <div className="group-placeholder" />}
-            {tab.pinned ? <div className="tab-property pinned-tab" title="Pinned Tab">
-                <AiFillPushpin size="12px" color="#FFF" />
-            </div> : null}
-            {tab.mutedInfo?.muted ? <div className="tab-property muted-tab" title="Muted Tab">
-                <FaVolumeMute color="#fff" size="14px" />
-            </div> : null}
-            <div className="column favicon-col">
-                <img onError={handleFaviconError} className="tab-favicon" src={tab.favIconUrl ? tab.favIconUrl : /\.(jpg|jpeg|gif|png|ico|tiff)$/.test(tab.url.split('?')[0]) ? tab.url : fallbackFavicon} />
+        {props.collection.tabs.map(tab => [
+            GroupHeader(tab.groupUid),
+            <TabRow 
+                key={`tab-row-${tab.uid}`}
+                tab={tab}
+                updateCollection={props.updateCollection} 
+                collection={props.collection}
+                group={groupFromId(tab.groupUid)} />
+        ])}
+        </div>
+}
+
+function TabRow({ tab, updateCollection, collection, group = null }) {
+    const fallbackFavicon = './images/favicon-fallback.png';
+
+    const handleTabDelete = () => {
+        let currentCollection = { ...collection };
+        let newTabList = [...currentCollection.tabs].filter(t => t.uid !== tab.uid)
+        let newChromeGroups = [...currentCollection.chromeGroups];
+        if (tab.groupUid) {
+            const totalTabsInGroup = newTabList.filter(el => el.groupUid === tab.groupUid).length;
+            if (totalTabsInGroup === 0) {
+                newChromeGroups = newChromeGroups.filter(cg => cg.uid !== tab.groupUid)
+            }
+        }
+        currentCollection.tabs = newTabList;
+        currentCollection.chromeGroups = newChromeGroups;
+        updateCollection(currentCollection);
+    }
+
+    const handleFaviconError = (e) => {
+        e.target.src = fallbackFavicon;
+    }
+
+    const handleOpenTab = async (tab) => {
+        const { chkOpenNewWindow } = await browser.storage.local.get('chkOpenNewWindow');
+        if (chkOpenNewWindow) {
+            await browser.windows.create({ focused: true, url: tab.url });
+        } else {
+            await browser.tabs.create({ url: tab.url, active: true });
+        }
+    }
+
+    return (
+        <div className='tab-line' id={`tab-line-${tab.uid}`} key={`tab-line-${tab.uid}`}>
+            <div className="row single-tab-row" key={`line-${tab.uid}`}>
+                <div className="tree-line"></div>
+                {(tab.groupId > -1) ? 
+                    <div 
+                        className="group-indicator" 
+                        style={{ 
+                            backgroundColor: group ? getColorCode(group.color) : 'transparent', 
+                            boxShadow: group ? `${getColorCode(group.color)} -3px 1px 3px -2px` : 'none'
+                        }} /> : 
+                    <div className="group-placeholder" />}
+                {tab.pinned ? <div className="tab-property pinned-tab" title="Pinned Tab">
+                    <AiFillPushpin size="12px" color="#FFF" />
+                </div> : null}
+                {tab.mutedInfo?.muted ? <div className="tab-property muted-tab" title="Muted Tab">
+                    <FaVolumeMute color="#fff" size="14px" />
+                </div> : null}
+                <div className="column favicon-col">
+                    <img onError={handleFaviconError} className="tab-favicon" src={tab.favIconUrl ? tab.favIconUrl : /\.(jpg|jpeg|gif|png|ico|tiff)$/.test(tab?.url?.split('?')[0]) ? tab.url : fallbackFavicon} />
+                </div>
+                <div className="column single-tab-title-col">
+                    <span className="single-tab-title" title={tab.title}>{tab.title}</span>
+                </div>
+                <div className="column actions-col">
+                    <button className="action-button" title="Open this tab" onClick={async () => await handleOpenTab(tab)}>
+                        <MdOutlineOpenInNew size="16px" color="var(--primary-color)" />
+                    </button>
+                    <button className="action-button del-tab" title="Delete this tab" onClick={() => handleTabDelete()}>
+                        <MdDeleteForever color="#B64A4A" size="20" />
+                    </button>
+                </div>
             </div>
-            <div className="column single-tab-title-col">
-                <span className="single-tab-title" title={tab.title}>{tab.title}</span>
-            </div>
-            <div className="column actions-col">
-                <button className="action-button" title="Open this tab" onClick={async () => await handleOpenTab(tab)}>
-                    <MdOutlineOpenInNew size="16px" color="var(--primary-color)" />
-                </button>
-                <button className="action-button del-tab" title="Delete this tab" onClick={() => handleTabDelete(index)}>
-                    <MdDeleteForever color="#B64A4A" size="20" />
-                </button>
-            </div>
-        </div>])}
-    </div>
+        </div>
+    );
 }
 
 function SearchTitle({ searchTerm }) {
@@ -658,7 +688,7 @@ function CollectionList({
                         disableDrag={disableDrag}
                         index={index}
                         updateCollection={props.updateCollection}
-                        removeCollectionAtIndex={props.removeCollectionAtIndex}
+                        removeCollection={props.removeCollection}
                         collection={collection} />
                 ))}
             </ReactSortable>
