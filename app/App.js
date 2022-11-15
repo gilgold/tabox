@@ -113,14 +113,15 @@ function App() {
     _update();
   }
 
-  const updateCollection = async (index, newCollection) => {
+  const updateCollection = async (newCollection) => {
     const newList = [...settingsData];
+    const index = newList.findIndex(c => c.uid === newCollection.uid);
     newList[index] = newCollection;
     await updateRemoteData(newList);
   }
 
-  const removeCollectionAtIndex = (index) => {
-    return [...settingsData.slice(0, index), ...settingsData.slice(index + 1)];
+  const removeCollection = (collectionUid) => {
+    return [...settingsData].filter(c => c.uid !== collectionUid);
   }
 
   const addCollection = async (newCollection) => {
@@ -217,7 +218,7 @@ function App() {
         updateRemoteData={updateRemoteData}
         collections={collectionsToShow}
         updateCollection={updateCollection}
-        removeCollectionAtIndex={removeCollectionAtIndex} />
+        removeCollection={removeCollection} />
       <Divder />
       <ReopenLastSession />
     </div>

@@ -44,7 +44,22 @@ async function setInitialOptions() {
   }
 }
 
-async function handlleAutoUpdate(windowId, timeDelay = 1) {
+async function handleBadge() {
+  const { chkShowBadge } = await browser.storage.local.get('chkShowBadge');
+  if (!chkShowBadge) { 
+    browser.action.setBadgeText({ text: '' });
+    return; 
+  }
+  const tabCount = (await browser.tabs.query({ windowId: browser.windows.WINDOW_ID_CURRENT })).length;
+  let badgeColor;
+  if (tabCount <= 20) badgeColor = '#07A361';
+  if (tabCount > 20 && tabCount <= 50) badgeColor = '#DF9402';
+  if (tabCount > 50) badgeColor = '#DB392F';
+  browser.action.setBadgeBackgroundColor({ color: badgeColor });
+  browser.action.setBadgeText({ text: tabCount.toString() });
+}
+
+async function handleAutoUpdate(windowId, timeDelay = 1, rebuildContextMenus = false) {
   const { chkEnableAutoUpdate } = await browser.storage.local.get('chkEnableAutoUpdate');
   if (!chkEnableAutoUpdate) { return; }
   const { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack');
@@ -65,6 +80,7 @@ async function handlleAutoUpdate(windowId, timeDelay = 1) {
   await browser.storage.local.set({ tabsArray: newTabsArray });
   if (updateInProgress) { return; }
   updateInProgress = true;
+  if (rebuildContextMenus && JSON.stringify(tabsArray[index].chromeGroups) !== JSON.stringify(newCollection.chromeGroups)) await handleContextMenuCreation();
   setTimeout(async () => {
     await handleRemoteUpdate(windowId);
     updateInProgress = false;
@@ -108,69 +124,35 @@ function shouldDiscardTab(tab) {
   return conditions.every(c => c === true);
 }
 
-const dummyCatchHandler = () => {};
+const isNewWindow = window => window?.tabs?.length === 1 && (!window?.tabs[0].url || window?.tabs[0].url.indexOf('://newtab') > 0);
 
 async function openTabs(collection, window, newWindow = null) {
     const currentUrlsInWindow = window.tabs ? window.tabs.map((t) => t.url) : [];
     const { chkIgnoreDuplicates } = newWindow ?? await browser.storage.local.get('chkIgnoreDuplicates');
     const { chkEnableTabDiscard } = await browser.storage.local.get('chkEnableTabDiscard');
-    collection.tabs.forEach((tabInGrp, index, arr) => {
+    collection.tabs.forEach(async (tabInGrp, index, arr) => {
       if (chkIgnoreDuplicates && currentUrlsInWindow.includes(tabInGrp.url)) { return; }
       let tabProperties = {
           pinned: tabInGrp.pinned,
           active: tabInGrp.active,
-          url: tabInGrp.url,
+          url: (chkEnableTabDiscard && shouldDiscardTab(tabInGrp)) ? browser.runtime.getURL(`deferedLoading.html?url=${tabInGrp.url}&favicon=${tabInGrp?.favIconUrl || ''}`) : tabInGrp.url,
       };
       const updateOnlyProperties = {
           muted: tabInGrp.muted,
       }
-
-      if (index === 0 && (window.tabs.length === 1 && (!window.tabs[0].url || window.tabs[0].url.indexOf('://newtab') > 0))){
-        browser.tabs.update(window.tabs[0].id,{ ...tabProperties, ...updateOnlyProperties }).then(tab => {
-          arr[index].newTabId = tab.id;
-          if (index === arr.length - 1) {
-            applyChromeGroupSettings(window.id, collection);
-            addCollectionToTrack(collection.uid, window.id);
-          }
-        });
+      let tab;
+      if (index === 0 && isNewWindow(window)){
+        tab = await browser.tabs.update(window.tabs[0].id, { ...tabProperties, ...updateOnlyProperties });
       } else {
         tabProperties.windowId = window.id;
-        browser.tabs.create(tabProperties).then((newTab) => {
-          arr[index].newTabId = newTab.id;
-          let discardedTabs = [];
-          browser.tabs.update(newTab.id, updateOnlyProperties).then(updatedTab => {
-            if (chkEnableTabDiscard) {
-              chrome.tabs.onUpdated.addListener(function listener (tabId, info) {
-                if (tabId === updatedTab.id) {
-                    if (info.favIconUrl !== undefined || info.status === 'complete') {
-                      if(shouldDiscardTab(updatedTab)) {
-                        browser.tabs.discard(updatedTab.id).then().catch(dummyCatchHandler);
-                        discardedTabs.push(tabId);
-                        chrome.tabs.onUpdated.removeListener(listener);
-                      }
-                    } else {
-                      setTimeout(() => {
-                        if (!discardedTabs.includes(tabId)) {
-                          browser.tabs.get(tabId).then(t => {
-                            if(shouldDiscardTab(t)) {
-                              browser.tabs.discard(t.id).then().catch(dummyCatchHandler);
-                              discardedTabs.push(t.id);
-                            }
-                            }).catch(dummyCatchHandler);
-                            chrome.tabs.onUpdated.removeListener(listener);
-                        }
-                      }, 5000)
-                    }
-                  } 
-              });
-            }
-            if (index === arr.length - 1) {
-              applyChromeGroupSettings(window.id, collection);
-              addCollectionToTrack(collection.uid, window.id);
-            }
-          });
-        });       
+        tab = await browser.tabs.create(tabProperties);
+        await browser.tabs.update(tab.id, updateOnlyProperties);
       }
+      arr[index].newTabId = tab.id;
+      if (index === arr.length - 1) {
+        applyChromeGroupSettings(window.id, collection);
+        addCollectionToTrack(collection.uid, window.id);
+      }       
     });
     return true;
 }
@@ -211,6 +193,11 @@ try {
       return Promise.resolve(true);
     }
 
+    if (request.type === 'updateBadge') {
+      await handleBadge();
+      return Promise.resolve(true);
+    }
+
     if (request.type === 'updateRemote') {
       const res = await handleRemoteUpdate();
       return Promise.resolve(res);
@@ -239,6 +226,7 @@ try {
 
     if (request.type === 'addCollection') {
       await handleContextMenuCreation();
+      return Promise.resolve(true);
     }
   });
   browser.commands.onCommand.addListener(async (command) => {
@@ -250,43 +238,6 @@ try {
     window.tabs = await browser.tabs.query({ windowId: window.id });
     await openTabs(tabsArray[index], window, true);
   });
-
-  const createCollectionContextMenu = (collection) => {
-    browser.contextMenus.create({
-      title: collection.name,
-      contexts: ['all'],
-      parentId: 'tabox-super',
-      id: collection.chromeGroups?.length > 0 ? `${collection.uid}-main` : collection.uid,
-    });
-    if (collection.chromeGroups && collection.chromeGroups.length > 0) {
-      browser.contextMenus.create({
-        title: 'Add tab to this collection',
-        contexts: ['all'],
-        parentId: `${collection.uid}-main`,
-        id: collection.uid,
-      });
-      browser.contextMenus.create({
-        parentId: `${collection.uid}-main`,
-        id: `${collection.uid}-seperator`,
-        type: 'separator'
-      });
-      browser.contextMenus.create({
-        title: 'Add tab to a group inside this collection',
-        contexts: ['all'],
-        enabled: false,
-        parentId: `${collection.uid}-main`,
-        id: `${collection.uid}-title`,
-      });
-      collection.chromeGroups.forEach(cg => {
-        browser.contextMenus.create({
-          title: cg.title,
-          contexts: ['all'],
-          parentId: `${collection.uid}-main`,
-          id: `${Math.random().toString(36).slice(2)}|${cg.uid}`,
-        });
-      })
-    }
-  }
 
   const handleMenuClick = async (info, tab) => {
     if (info.menuItemId === 'tabox-super') return;
@@ -311,18 +262,6 @@ try {
     await handleRemoteUpdate();
   }
 
-  const handleContextMenuCreation = async () => {
-    await browser.contextMenus.removeAll();
-    const { tabsArray } = await browser.storage.local.get('tabsArray');
-    if (!tabsArray || tabsArray.length === 0) return;
-    browser.contextMenus.create({
-      title: 'Add tab to Tabox Collection',
-      contexts: ['all'],
-      id: 'tabox-super'
-    });
-    tabsArray.forEach(collection => createCollectionContextMenu(collection));
-  }
-
   browser.contextMenus.onClicked.addListener(handleMenuClick);
 
   browser.runtime.onInstalled.addListener(async (details) => {
@@ -330,6 +269,7 @@ try {
     const reason = details.reason;
     await setInitialOptions();
     await handleContextMenuCreation();
+    await handleBadge();
     if (reason === "update") {
       let { tabsArray } = await browser.storage.local.get('tabsArray');
       tabsArray = updateCollectionsUids(tabsArray);
@@ -344,50 +284,60 @@ try {
  browser.windows.onRemoved.addListener(async windowId => {
   let { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack');
   if (!collectionsToTrack || collectionsToTrack.length === 0) { return; }
-  const index = collectionsToTrack.findIndex(c => c.windowId === windowId);
-  if (index === -1) { return; }
-  collectionsToTrack.splice(index, 1);
+  collectionsToTrack = collectionsToTrack.filter(c => c.windowId !== windowId);
   await browser.storage.local.set({ collectionsToTrack: collectionsToTrack });
  }, { windowTypes: ['normal'] });
 
+ browser.windows.onCreated.addListener(async () => {
+  await handleBadge();
+ });
+
+ browser.windows.onFocusChanged.addListener(async () => {
+  await handleBadge();
+ });
+
  browser.windows.onBoundsChanged.addListener(async window => {
-  await handlleAutoUpdate(window.id, 5000);
+  await handleAutoUpdate(window.id, 5000);
  });
 
  // tab events
  browser.tabs.onCreated.addListener(async tab => {
-  await handlleAutoUpdate(tab.windowId, 1000);
+  await handleBadge();
+  await handleAutoUpdate(tab.windowId, 1);
  });
  browser.tabs.onUpdated.addListener(async (_tabId, changeInfo, tab) => {
   const allowedChanges = ['mutedInfo', 'pinned', 'groupId'];
   const allowUpdate = Object.keys(changeInfo).some(key => allowedChanges.includes(key));
   if (('status' in changeInfo && changeInfo.status === 'complete') || allowUpdate) {
-    await handlleAutoUpdate(tab.windowId);
+    await handleAutoUpdate(tab.windowId);
   }
  });
  browser.tabs.onDetached.addListener(async (_tabId, detachInfo) => {
-  await handlleAutoUpdate(detachInfo.oldWindowId);
+  await handleAutoUpdate(detachInfo.oldWindowId);
+  await handleBadge();
  });
  browser.tabs.onAttached.addListener(async (_tabId, attachInfo) => {
-  await handlleAutoUpdate(attachInfo.newWindowId);
+  await handleAutoUpdate(attachInfo.newWindowId);
+  await handleBadge();
  });
  browser.tabs.onMoved.addListener(async (_tabId, moveInfo) => {
-  await handlleAutoUpdate(moveInfo.windowId, 1000);
+  await handleAutoUpdate(moveInfo.windowId, 1);
  });
  browser.tabs.onRemoved.addListener(async (_tabId, removeInfo) => {
    if (removeInfo.isWindowClosing) return;
-   await handlleAutoUpdate(removeInfo.windowId);
+   await handleBadge();
+   await handleAutoUpdate(removeInfo.windowId);
  });
 
  // tabGroup events
  browser.tabGroups.onCreated.addListener(async (tabGroup) => {
-  await handlleAutoUpdate(tabGroup.windowId);
+  await handleAutoUpdate(tabGroup.windowId, 0, true);
  });
  browser.tabGroups.onRemoved.addListener(async (tabGroup) => {
-  await handlleAutoUpdate(tabGroup.windowId);
+  await handleAutoUpdate(tabGroup.windowId, 0, true);
  });
  browser.tabGroups.onUpdated.addListener(async (tabGroup) => {
-  await handlleAutoUpdate(tabGroup.windowId, 5000);
+  await handleAutoUpdate(tabGroup.windowId, 0, true);
  });
 } catch (e) {
   console.error(e)

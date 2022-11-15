@@ -29,6 +29,7 @@ export default function SettingsMenu(props) {
     const themeMode = useRecoilValue(themeState);
     const [backupVersion, setBackupVersion] = useState(null);
     const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(false);
+    const [badgeEnabled, setBadgeEnabled] = useState(false);
     const [openSnackbar, ] = useSnackbar({ style: SnackbarStyle.SUCCESS });
     const isLoggedIn = useRecoilValue(isLoggedInState);
     const setListKey = useSetRecoilState(listKeyState);
@@ -40,6 +41,10 @@ export default function SettingsMenu(props) {
             setBackupVersion(backup.version);
         }
     }, []);
+
+    useEffect(async () => {
+        await browser.runtime.sendMessage({ type: 'updateBadge' });
+    }, [badgeEnabled]);
 
     const confirmRestore = async (onClose) => {
         onClose();
@@ -89,6 +94,12 @@ export default function SettingsMenu(props) {
         await props.applyDataFromServer(true);
     }
 
+    const handleShowBadge = async () => {
+        setTimeout(async () => {
+            setBadgeEnabled(!badgeEnabled);
+        }, 100);
+    }
+
     const handleForceLoad = async () => {
         confirmAlert({
             customUI: ({ onClose }) => <Modal 
@@ -106,6 +117,8 @@ export default function SettingsMenu(props) {
         });
     }
 
+    const focusableItemStyles = { width: '390px' };
+
     return <div className="settings-wrapper">
         <Menu 
             menuButton={
@@ -118,8 +131,20 @@ export default function SettingsMenu(props) {
             position="anchor"
             className='settings-items-wrapper'
         >
+            <MenuHeader><RiSettings5Fill /> General Settings</MenuHeader>
+            <FocusableItem styles={focusableItemStyles}>
+                {() => (
+                <Switch 
+                    id="chkShowBadge"
+                    onMouseUp={handleShowBadge}
+                    textOn={<span>Tab counter badge <strong>Enabled</strong></span>}
+                    textOff={<span>Tab counter badge <strong>Disabled</strong></span>}
+                />
+                )}
+            </FocusableItem>
+            <MenuDivider />
             <MenuHeader><RiFolderAddFill /> When adding a collection</MenuHeader>
-            <FocusableItem styles={{ width: '380px' }}>
+            <FocusableItem styles={focusableItemStyles}>
                 {() => (
                 <Switch 
                     id="chkIgnorePinned"
@@ -130,7 +155,7 @@ export default function SettingsMenu(props) {
             </FocusableItem>
             <MenuDivider />
             <MenuHeader><ImNewTab /> When opening collections</MenuHeader>
-            <FocusableItem styles={{ width: '380px' }}>
+            <FocusableItem styles={focusableItemStyles}>
                 {() => (
                 <Switch 
                     id="chkIgnoreDuplicates"
@@ -139,7 +164,7 @@ export default function SettingsMenu(props) {
                 />
                 )}
             </FocusableItem>
-            <FocusableItem styles={{ width: '380px' }}>
+            <FocusableItem styles={focusableItemStyles}>
                 {() => (
                 <Switch 
                     id="chkEnableTabDiscard"
@@ -151,7 +176,7 @@ export default function SettingsMenu(props) {
             </FocusableItem>
             <MenuDivider />
             <MenuHeader><RiEdit2Line /> When editing collections</MenuHeader>
-            <FocusableItem styles={{ width: '380px' }}>
+            <FocusableItem styles={focusableItemStyles}>
                 {() => (
                 <Switch 
                     id="chkColEditIgnoreDuplicateTabs"
@@ -161,7 +186,7 @@ export default function SettingsMenu(props) {
                 />
                 )}
             </FocusableItem>
-            <FocusableItem styles={{ width: '380px' }}>
+            <FocusableItem styles={focusableItemStyles}>
                 {() => (
                 <Switch 
                     id="chkColEditIgnoreDuplicateGroups"
@@ -173,7 +198,7 @@ export default function SettingsMenu(props) {
             </FocusableItem>
             <MenuDivider />
             <MenuHeader><MdOutlineSyncAlt /> Auto update collections</MenuHeader>
-            <FocusableItem styles={{ width: '380px' }}>
+            <FocusableItem styles={focusableItemStyles}>
                 {() => (
                     <>
                     <Switch 
@@ -191,7 +216,7 @@ export default function SettingsMenu(props) {
                     </>
                 )}
             </FocusableItem>
-            <FocusableItem styles={{ width: '380px' }}>
+            <FocusableItem styles={focusableItemStyles}>
                 {() => (
                     <>
                     <Switch 
@@ -201,6 +226,24 @@ export default function SettingsMenu(props) {
                         data-tip="When adding a new collection, start auto updating<br /> it with changes in the current window."
                         textOn={<span>Auto update new collections: <strong>Enabled</strong><sup>BETA</sup></span>}
                         textOff={<span>Auto update new collections: <strong>Disabled</strong><sup>BETA</sup></span>}
+                    />&nbsp;
+                    <AiTwotoneExperiment 
+                        size="16" 
+                        data-multiline={true} 
+                        data-tip="WARNING!<br />This feature is experimental and may cause unexpected issues." />
+                    </>
+                )}
+            </FocusableItem>
+            <FocusableItem styles={focusableItemStyles}>
+                {() => (
+                    <>
+                    <Switch 
+                        id="chkManualUpdateLinkCollection"
+                        data-multiline={true}
+                        disabled={!autoUpdateEnabled}
+                        data-tip="When clicking the 'Update' button, this will link<br /> the collection to the window, making it 'active'."
+                        textOn={<span>Click on &#39;Update&#39; sets active: <strong>Enabled</strong><sup>BETA</sup></span>}
+                        textOff={<span>Click on &#39;Update&#39; sets active: <strong>Disabled</strong><sup>BETA</sup></span>}
                     />&nbsp;
                     <AiTwotoneExperiment 
                         size="16" 

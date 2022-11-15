@@ -376,7 +376,7 @@
 .favicon-col {
 	flex: 0 20px !important;
 }
-div.expanded-wrapper .single-tab-row:first-child .tree-line:before {
+div.expanded-wrapper .tab-line:first-child .single-tab-row .tree-line:before {
 	content: '';
     border-left: 1px solid;
     border-color: inherit;
@@ -405,7 +405,7 @@ div.expanded-wrapper .single-tab-row:first-child .tree-line:before {
 	position: absolute;
 }
 
-div.expanded-wrapper .single-tab-row:last-child .tree-line {
+div.expanded-wrapper .tab-line:last-child .single-tab-row .tree-line {
 	height: 16px;
 	align-self: flex-start;
 }

@@ -44,7 +44,7 @@ export async function getCurrentTabsAndGroups(title, forceOnlyHighlighted = fals
   let allChromeGroups;
   if (browser.tabGroups) {
     try {
-      allChromeGroups = await browser.tabGroups.query({});
+      allChromeGroups = await browser.tabGroups.query({ windowId: window.id });
       if (allChromeGroups && allChromeGroups.length > 0) {
         const groupIds = [...new Set(tabs.filter(({ groupId }) => groupId > -1).map((t) => t.groupId))];
         allChromeGroups = allChromeGroups.filter(({ id }) => groupIds.includes(id));

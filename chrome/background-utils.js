@@ -18,38 +18,89 @@ function updateCollectionsUids(collections) {
     if (!collections) { return; }
     let tabsArray = collections;
     tabsArray.forEach((collection, index) => {
-      if (collection.uid.includes('uid')) {
-        const newUid = (crypto && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
-        tabsArray[index].uid = newUid;
-      }
+        if (collection.uid.includes('uid')) {
+            const newUid = (crypto && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+            tabsArray[index].uid = newUid;
+        }
     });
     return tabsArray;
-  }
+}
+
+const createCollectionContextMenu = (collection) => {
+    browser.contextMenus.create({
+        title: collection.name,
+        contexts: ['all'],
+        parentId: 'tabox-super',
+        id: collection.chromeGroups?.length > 0 ? `${collection.uid}-main` : collection.uid,
+    });
+    if (collection.chromeGroups && collection.chromeGroups.length > 0) {
+        browser.contextMenus.create({
+            title: 'Add tab to this collection',
+            contexts: ['all'],
+            parentId: `${collection.uid}-main`,
+            id: collection.uid,
+        });
+        browser.contextMenus.create({
+            parentId: `${collection.uid}-main`,
+            id: `${collection.uid}-seperator`,
+            type: 'separator'
+        });
+        browser.contextMenus.create({
+            title: 'Add tab to a group inside this collection',
+            contexts: ['all'],
+            enabled: false,
+            parentId: `${collection.uid}-main`,
+            id: `${collection.uid}-title`,
+        });
+        collection.chromeGroups.forEach(cg => {
+            browser.contextMenus.create({
+                title: cg.title || '-',
+                contexts: ['all'],
+                parentId: `${collection.uid}-main`,
+                id: `${Math.random().toString(36).slice(2)}|${cg.uid}`,
+            });
+        })
+    }
+}
+
+const handleContextMenuCreation = async () => {
+    await browser.contextMenus.removeAll();
+    const { tabsArray } = await browser.storage.local.get('tabsArray');
+    if (!tabsArray || tabsArray.length === 0) return;
+    setTimeout(() => {
+        browser.contextMenus.create({
+            title: 'Add tab to Tabox Collection',
+            contexts: ['all'],
+            id: 'tabox-super'
+        });
+        tabsArray.forEach(collection => createCollectionContextMenu(collection));
+    }, 500);
+}
 
 function applyChromeGroupSettings(windowId, collection) {
     if (!collection.chromeGroups || !browser.tabs.group || !browser.tabGroups) {
-      return;
+        return;
     }
     collection.chromeGroups.forEach((chromeGroup) => {
-      const tabsToGroup = collection.tabs.filter(({ groupId }) => chromeGroup.id === groupId).map((t) => t.newTabId);
-      const groupProperties = {
-        createProperties: {
-          windowId: windowId
-        }, 
-        tabIds: tabsToGroup
-      }
-      const updateProperties = {
-        collapsed: chromeGroup.collapsed,
-        color: chromeGroup.color,
-        title: chromeGroup.title
-      };
-      if (tabsToGroup && tabsToGroup.length > 0){
-        browser.tabs.group(groupProperties).then((groupId) => {
-          browser.tabGroups.update(groupId, updateProperties)
-        });
-      }
+        const tabsToGroup = collection.tabs.filter(({ groupId }) => chromeGroup.id === groupId).map((t) => t.newTabId);
+        const groupProperties = {
+            createProperties: {
+                windowId: windowId
+            },
+            tabIds: tabsToGroup
+        }
+        const updateProperties = {
+            collapsed: chromeGroup.collapsed,
+            color: chromeGroup.color,
+            title: chromeGroup.title
+        };
+        if (tabsToGroup && tabsToGroup.length > 0) {
+            browser.tabs.group(groupProperties).then((groupId) => {
+                browser.tabGroups.update(groupId, updateProperties)
+            });
+        }
     });
-  }
+}
 
 async function getNewAccessToken() {
     const { oauth2 } = browser.runtime.getManifest();
@@ -313,20 +364,20 @@ function applyUid(item) {
     });
     let groupUidCount = 0;
     if (chromeGroups.length > 0) {
-      chromeGroups.forEach((group) => {
-        const groupUid = `uid${groupUidCount}`;
-        group.uid = groupUid;
-        tabs = tabs.map(t => (t.groupId === group.id ? { ...t, groupUid: groupUid } : t));
-        groupUidCount++;
-      });
+        chromeGroups.forEach((group) => {
+            const groupUid = `uid${groupUidCount}`;
+            group.uid = groupUid;
+            tabs = tabs.map(t => (t.groupId === group.id ? { ...t, groupUid: groupUid } : t));
+            groupUidCount++;
+        });
     }
     const newCollection = { ...item };
     newCollection.tabs = tabs;
     newCollection.chromeGroups = chromeGroups;
     return newCollection;
-  }
-  
-  async function updateCollection(collection, windowId) {
+}
+
+async function updateCollection(collection, windowId) {
     let tabQueryProperties = {
         windowId: windowId,
     };
@@ -339,12 +390,21 @@ function applyUid(item) {
     if (browser.tabGroups) {
         allChromeGroups = await browser.tabGroups.query({ windowId: windowId });
         if (allChromeGroups && allChromeGroups.length > 0) {
-        const groupIds = [...new Set(tabs.filter(({ groupId }) => groupId > -1).map((t) => t.groupId))];
-        allChromeGroups = allChromeGroups.filter(({ id }) => groupIds.includes(id));
+            const groupIds = [...new Set(tabs.filter(({ groupId }) => groupId > -1).map((t) => t.groupId))];
+            allChromeGroups = allChromeGroups.filter(({ id }) => groupIds.includes(id));
         }
     } else {
         allChromeGroups = [];
     }
+    tabs = [...tabs].map(t => {
+        if (t.url.indexOf('deferedLoading.html') > -1) {
+            const url = new URL(t.url);
+            const urlParams = url.searchParams;
+            const params = Object.fromEntries(urlParams.entries());
+            t.url = params?.url || t.url;
+        }
+        return t;
+    })
     const newItem = {
         uid: collection.uid,
         name: collection.name,
@@ -355,9 +415,9 @@ function applyUid(item) {
         window: window
     };
     return applyUid(newItem);
-  }
+}
 
-  async function syncData(token) {
+async function syncData(token) {
     const { syncFileId } = await browser.storage.sync.get('syncFileId');
     const { localTimestamp } = await browser.storage.local.get('localTimestamp') || 0;
     const serverTimestamp = await _getServerFileTimestamp(token, syncFileId);
@@ -373,4 +433,4 @@ function applyUid(item) {
     } else {
         await updateRemote(token);
     }
-  }
+}
