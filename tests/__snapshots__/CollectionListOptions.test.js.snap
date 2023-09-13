@@ -28,21 +28,21 @@ exports[`Collection List Options tests CollectionListOptions renders correctly 1
       className="css-1f43avz-a11yText-A11yText"
     />
     <div
-      className="sort-select__control css-1ifnqgf-control"
+      className="sort-select__control css-qt765t-control"
       onMouseDown={[Function]}
       onTouchEnd={[Function]}
     >
       <div
-        className="sort-select__value-container css-dlobye-Component"
+        className="sort-select__value-container css-16674sh-Component"
       >
         <div
-          className="sort-select__placeholder css-14el2xx-placeholder"
+          className="sort-select__placeholder css-1jqq78o-placeholder"
           id="react-select-2-placeholder"
         >
           Select...
         </div>
         <div
-          className="sort-select__input-container css-481i1o-Component"
+          className="sort-select__input-container css-jkf187-Component"
           data-value=""
         >
           <input
@@ -87,11 +87,11 @@ exports[`Collection List Options tests CollectionListOptions renders correctly 1
         className="sort-select__indicators css-ny0e4k-Component"
       >
         <span
-          className="sort-select__indicator-separator css-1okebmr-indicatorSeparator"
+          className="sort-select__indicator-separator css-1u9des2-indicatorSeparator"
         />
         <div
           aria-hidden="true"
-          className="sort-select__indicator sort-select__dropdown-indicator css-1ui3yp9-indicatorContainer"
+          className="sort-select__indicator sort-select__dropdown-indicator css-1t9vv14-indicatorContainer"
           onMouseDown={[Function]}
           onTouchEnd={[Function]}
         >

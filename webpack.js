@@ -3,7 +3,7 @@ const HtmlWebpackPlugin = require("html-webpack-plugin");
 const CopyPlugin = require("copy-webpack-plugin");
 const baseManifest = require("./chrome/manifest.json");
 const WebpackExtensionManifestPlugin = require("webpack-extension-manifest-plugin");
-const SentryCliPlugin = require('@sentry/webpack-plugin');
+const { sentryWebpackPlugin } = require("@sentry/webpack-plugin");
 
 module.exports = (env, argv) => {
   // Use env.<YOUR VARIABLE> here:
@@ -26,7 +26,7 @@ module.exports = (env, argv) => {
       concatenateModules: true,
     },
     plugins: [
-      new SentryCliPlugin({
+      sentryWebpackPlugin({
         include: '.',
         project: 'tabox',
         org: 'tabox',

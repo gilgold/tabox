@@ -4,7 +4,7 @@
     background: var(--bg-color);
     box-shadow: 0 0 13px 4px rgb(0 0 0 / 60%);
     color: var(--text-color);
-    border-top: 5px solid #FFCC00;
+    border-top: 5px solid var(--primary-color);
     border-radius: 3px;
 }
 .modal-card-wrapper {
@@ -35,7 +35,14 @@
 
 .modal-card-body {
     text-align: left;
+    display: flex;
     font-size: 0.8em;
+    flex-basis: 100%;
+    flex-direction: column;
+}
+.modal-card-body-section {
+    text-align: left;
+    display: flex;
 }
 
 .button-row {
@@ -76,4 +83,20 @@
 .react-confirm-alert-overlay {
     background-color: rgb(150 150 150 / 80%) !important;
     backdrop-filter: blur(2px);
+}
+
+.backup-select-container {
+	color: var(--settings-row-text-color);
+	background-color: var(--input-bg-color);
+	border: 1px solid transparent;
+	display: flex;
+    flex-basis: 100%;
+	align-items: center;
+	justify-content: center;
+	font-weight: 400;
+	margin: 5px 5px;
+	cursor: pointer;
+	line-height: 16px;
+	font-size: .8rem;
+	transition: all .2s ease-in !important;
 }

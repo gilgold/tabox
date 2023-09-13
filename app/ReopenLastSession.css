@@ -9,13 +9,13 @@
 	flex-grow: 1;
 	text-align: center;
 }
-.session_div button{
+.session_div button {
 	background-color: transparent;
     border: 1px solid var(--setting-row-border-color);
     border-radius: 5px;
     color: var(--settings-row-text-color);
     font-weight: 600;
-    padding: 2px 10px;
+    padding: 2px 20px;
     margin: 5px 5px;
 	cursor: pointer;
 	font-size: .8rem;
@@ -23,4 +23,8 @@
 }
 .session_div button:hover {
 	background-color: var(--setting-row-hover-bg-color);
+}
+.session_div button:disabled, .session_div button:disabled:hover {
+	cursor: default;
+	color: var(--divider-color);
 }

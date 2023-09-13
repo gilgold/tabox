@@ -17,7 +17,7 @@ import { confirmAlert } from 'react-confirm-alert';
 import 'react-confirm-alert/src/react-confirm-alert.css';
 import { useSnackbar } from 'react-simple-snackbar';
 import { SnackbarStyle } from './model/SnackbarTypes';
-import { Modal } from './Modal';
+import { BackupOptionsModal } from './BackupOptionsModal';
 import { downloadTextFile } from './utils';
 import { RiFolderAddFill, RiEdit2Line, RiSettings5Fill } from 'react-icons/ri';
 import { AiTwotoneExperiment } from 'react-icons/ai';
@@ -27,7 +27,6 @@ import { MdOutlineSyncAlt, MdSettingsBackupRestore } from 'react-icons/md';
 
 export default function SettingsMenu(props) {
     const themeMode = useRecoilValue(themeState);
-    const [backupVersion, setBackupVersion] = useState(null);
     const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(false);
     const [badgeEnabled, setBadgeEnabled] = useState(false);
     const [openSnackbar, ] = useSnackbar({ style: SnackbarStyle.SUCCESS });
@@ -35,11 +34,8 @@ export default function SettingsMenu(props) {
     const setListKey = useSetRecoilState(listKeyState);
 
     useEffect(async () => {
-        const { backup, chkEnableAutoUpdate } = await browser.storage.local.get(['backup', 'chkEnableAutoUpdate']);
+        const { chkEnableAutoUpdate } = await browser.storage.local.get(['chkEnableAutoUpdate']);
         setAutoUpdateEnabled(chkEnableAutoUpdate || false);
-        if (backup && backup.version) { 
-            setBackupVersion(backup.version);
-        }
     }, []);
 
     useEffect(async () => {
@@ -48,29 +44,25 @@ export default function SettingsMenu(props) {
 
     const confirmRestore = async (onClose) => {
         onClose();
-        const { backup } = await browser.storage.local.get('backup');
-        if (backup && backup.tabsArray) {
-            await props.updateRemoteData(backup.tabsArray);
-            openSnackbar(`Restored ${backup.tabsArray.length} collections from backup!`);
-        }
+        openSnackbar(`Successfully restored collections from backup!`);
     }
 
     const handleRestoreBackup = async () => {
+        const { backup } = await browser.storage.local.get('backup');
+        const { autoBackups } = await browser.storage.local.get('autoBackups');
+
         confirmAlert({
-            customUI: ({ onClose }) => <Modal 
-                title="Restore from backup?"
-                message={<span>Are you sure you want to restore collections from backup?<br />This action cannot be undone!</span>}
+            customUI: ({ onClose }) => <BackupOptionsModal 
                 onClose={onClose} 
+                onUpdateBackup={backup}
+                isLoggedIn={isLoggedIn}
+                updateRemoteData={props.updateRemoteData}
+                applyDataFromServer={props.applyDataFromServer}
+                autoBackups={autoBackups}
                 onConfirm={() => confirmRestore(onClose)}
                 cancelLabel='Cancel'
                 confirmLabel='Restore' />
         });
-    }
-
-    const generateBackupMenuItem = () => {
-        return backupVersion ? <MenuItem onClick={handleRestoreBackup}>
-            Restore collections from version { backupVersion }
-        </MenuItem> : null;
     }
 
     const handleExport = async () => {
@@ -89,32 +81,10 @@ export default function SettingsMenu(props) {
         }, 100);
     }
 
-    const confirmLoadFromDrive = async (onClose) => {
-        onClose();
-        await props.applyDataFromServer(true);
-    }
-
     const handleShowBadge = async () => {
         setTimeout(async () => {
             setBadgeEnabled(!badgeEnabled);
         }, 100);
-    }
-
-    const handleForceLoad = async () => {
-        confirmAlert({
-            customUI: ({ onClose }) => <Modal 
-                title="Load from Google Drive?"
-                message={
-                    <span>
-                        Are you sure you want to load collections from Google Drive?<br />
-                        This will only work if the data in Google Drive is different from what you see here.<br /><br />
-                        This action cannot be undone!
-                    </span>}
-                onClose={onClose} 
-                onConfirm={() => confirmLoadFromDrive(onClose)}
-                cancelLabel='Cancel'
-                confirmLabel='Load' />
-        });
     }
 
     const focusableItemStyles = { width: '390px' };
@@ -254,9 +224,8 @@ export default function SettingsMenu(props) {
             </FocusableItem>
             <MenuDivider />
             <MenuHeader><MdSettingsBackupRestore /> Backup &amp; Restore</MenuHeader>
-            <MenuItem onClick={handleExport}>Export all collections</MenuItem>
-            { isLoggedIn && <MenuItem onClick={handleForceLoad}>Load collections from Google Drive backup</MenuItem> }
-            { generateBackupMenuItem() }
+            <MenuItem onClick={handleExport}>Export all collections to file</MenuItem>
+            <MenuItem onClick={handleRestoreBackup}>Restore collections from backup</MenuItem>
         </Menu>
     </div>
 }

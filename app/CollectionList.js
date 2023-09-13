@@ -155,7 +155,7 @@ function CollectionListItem(props) {
     useEffect(async () => {
         const { chkEnableAutoUpdate } = await browser.storage.local.get('chkEnableAutoUpdate');
         const { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack');
-        if (!collectionsToTrack || collectionsToTrack === {}) return;
+        if (!collectionsToTrack || collectionsToTrack == {}) return;
         const activeCollections = collectionsToTrack.map(c => c.collectionUid);
         const collectionIsActive = activeCollections.includes(props.collection.uid);
         setIsAutoUpdate(chkEnableAutoUpdate && collectionIsActive);
@@ -174,7 +174,6 @@ function CollectionListItem(props) {
         const newList = props.removeCollection(props.collection.uid);
         setDeleted(true);
         playDelete(true);
-        await browser.storage.local.set({ localTimestamp: Date.now() });
         setTimeout(async () => { setDeleted(false); await props.updateRemoteData(newList); }, 400);
         openUpdateSnackbar(
             <SnackBarWithUndo
@@ -192,6 +191,28 @@ function CollectionListItem(props) {
     const _exportCollectionToFile = () => {
         downloadTextFile(JSON.stringify(props.collection), props.collection.name);
     }
+
+    const isWithinDisplayBounds = async (collection) => {
+        const { top, left } = collection.window;
+        // Get information about available displays
+        const displayInfo = await browser.system.display.getInfo();
+        // Iterate through displays
+        for (let display of displayInfo) {
+            const displayBounds = display.bounds;
+
+            // Check if the coordinates are within this display's bounds
+            if (
+                top >= displayBounds.top &&
+                top <= displayBounds.top + displayBounds.height &&
+                left >= displayBounds.left &&
+                left <= displayBounds.left + displayBounds.width
+            ) {
+                return true; // Found a display that contains the coordinates
+            }
+        }
+        return false; // Coordinates are not within any display bounds
+    };
+
 
     const _handleUpdate = async () => {
         const { tabsArray: previousCollections } = await browser.storage.local.get('tabsArray');
@@ -232,22 +253,17 @@ function CollectionListItem(props) {
 
     const _handleOpenTabs = async () => {
         if (isExpanded) return;
-        if (isAutoUpdate) { 
-            await _handleFocusWindow(); 
+        if (isAutoUpdate) {
+            await _handleFocusWindow();
             return;
         }
         const { chkOpenNewWindow } = await browser.storage.local.get('chkOpenNewWindow');
         let window;
         if (chkOpenNewWindow) {
-            const displays = await browser.system.display.getInfo();
             const hasWindowProp = 'window' in props.collection && props.collection.window;
-            const l = props.collection?.window?.left;
-            const t = props.collection?.window?.top;
-            const lastDisplay = displays[displays.length - 1];
-            const lastDisplayLeftBound = lastDisplay.bounds.left + lastDisplay.bounds.width;
-            const lastDisplayTopBound = lastDisplay.bounds.top + lastDisplay.bounds.height;
-            const left = l < lastDisplayLeftBound ? l : lastDisplay.bounds.left;
-            const top = t < lastDisplayTopBound ? t : lastDisplay.bounds.top;
+            const isCollectionWithinBounds = await isWithinDisplayBounds(props.collection);
+            const left = isCollectionWithinBounds ? props.collection.window.left : null;
+            const top = isCollectionWithinBounds ? props.collection.window.top : null;
             window = await browser.windows.create({
                 focused: true,
                 left: hasWindowProp ? left : null,
@@ -287,7 +303,7 @@ function CollectionListItem(props) {
     const _handleStopTracking = async () => {
         const { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack');
         setIsAutoUpdate(false);
-        if (!collectionsToTrack || collectionsToTrack === {}) return;
+        if (!collectionsToTrack || collectionsToTrack == {}) return;
         const activeCollections = collectionsToTrack.map(c => c.collectionUid);
         const collectionIsActive = activeCollections.includes(props.collection.uid);
         if (!collectionIsActive) return;
@@ -346,9 +362,9 @@ function CollectionListItem(props) {
             {props.collection.tabs.length} tab{props.collection.tabs.length > 1 ? 's' : ''} {totalGroups > 0 && '(' + totalGroups + ' group' + (totalGroups > 1 ? 's' : '') + ')'}
         </div>
         <div className="column right_items">
-            <span 
+            <span
                 data-tip={`${isAutoUpdate ? 'Stop auto updating' : 'Update'} this collection`}
-                className={`float-button ${isAutoUpdate ? 'stop_btn' : 'update_btn'}`} 
+                className={`float-button ${isAutoUpdate ? 'stop_btn' : 'update_btn'}`}
                 onClick={async () => isAutoUpdate ? _handleStopTracking() : await _handleUpdate()}
             >
                 {isAutoUpdate ? <FaStop /> : 'update'}
@@ -533,14 +549,14 @@ function ExpandedCollectionData(props) {
         </div>
         {props.collection.tabs.map(tab => [
             GroupHeader(tab.groupUid),
-            <TabRow 
+            <TabRow
                 key={`tab-row-${tab.uid}`}
                 tab={tab}
-                updateCollection={props.updateCollection} 
+                updateCollection={props.updateCollection}
                 collection={props.collection}
                 group={groupFromId(tab.groupUid)} />
         ])}
-        </div>
+    </div>
 }
 
 function TabRow({ tab, updateCollection, collection, group = null }) {
@@ -578,13 +594,13 @@ function TabRow({ tab, updateCollection, collection, group = null }) {
         <div className='tab-line' id={`tab-line-${tab.uid}`} key={`tab-line-${tab.uid}`}>
             <div className="row single-tab-row" key={`line-${tab.uid}`}>
                 <div className="tree-line"></div>
-                {(tab.groupId > -1) ? 
-                    <div 
-                        className="group-indicator" 
-                        style={{ 
-                            backgroundColor: group ? getColorCode(group.color) : 'transparent', 
+                {(tab.groupId > -1) ?
+                    <div
+                        className="group-indicator"
+                        style={{
+                            backgroundColor: group ? getColorCode(group.color) : 'transparent',
                             boxShadow: group ? `${getColorCode(group.color)} -3px 1px 3px -2px` : 'none'
-                        }} /> : 
+                        }} /> :
                     <div className="group-placeholder" />}
                 {tab.pinned ? <div className="tab-property pinned-tab" title="Pinned Tab">
                     <AiFillPushpin size="12px" color="#FFF" />
