@@ -173,9 +173,9 @@ function App() {
   }, [isLoggedIn]);
 
   useEffect(async () => {
+    await applyTheme();
     await getSelectedSort();
     await removeInactiveWindowsFromAutoUpdate();
-    await applyTheme();
     await checkSyncStatus();
     await loadCollectionsFromStorage();
   }, []);
@@ -220,7 +220,7 @@ function App() {
         updateCollection={updateCollection}
         removeCollection={removeCollection} />
       <Divder />
-      <ReopenLastSession />
+      <ReopenLastSession addCollection={addCollection} />
     </div>
     <Footer />
   </div>;

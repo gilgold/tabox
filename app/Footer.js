@@ -6,8 +6,8 @@ import { browser } from '../static/globals';
 import TimeAgo from 'javascript-time-ago';
 import ReactTimeAgo from 'react-time-ago';
 import en from 'javascript-time-ago/locale/en';
-import { IoLogoTwitter } from 'react-icons/io';
-import { MdFacebook } from 'react-icons/md';
+import { RiTwitterXLine } from 'react-icons/ri';
+import { FaFacebook } from 'react-icons/fa';
 import { BiSync } from 'react-icons/bi';
 
 function DarkModeSwitch() {
@@ -75,10 +75,10 @@ function Footer() {
       <span className="right_footer">
         <div className="footer_icons">
           <a href="https://twitter.com/Taboxapp" target="_blank" rel="noreferrer">
-            <IoLogoTwitter className="social_icon twitter" />
+            <RiTwitterXLine className="social_icon twitter" />
           </a> 
           <a href="https://www.facebook.com/taboxext" target="_blank" rel="noreferrer">
-            <MdFacebook className="social_icon facebook" />
+            <FaFacebook className="social_icon facebook" />
           </a>
         </div>
         <a href="http://tabox.co" target="_blank" rel="noreferrer">www.tabox.co</a>

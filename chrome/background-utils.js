@@ -179,7 +179,9 @@ async function removeToken(token) {
 
 async function getOrCreateSyncFile(token) {
     const { syncFileId } = await browser.storage.sync.get('syncFileId');
-    if (syncFileId) return;
+    if (syncFileId) {
+        return;
+    }
     console.log('searching for sync file on server')
     const url = "https://www.googleapis.com/drive/v3/files/?corpora=user&spaces=appDataFolder&fields=files(id)&q=name='appSettings.json'&pageSize=1&orderBy=modifiedByMeTime desc";
     const response = await handleRequest(url, {
@@ -211,7 +213,9 @@ async function _createNewSyncFile(token) {
         mimeType: 'application/json',
         parents: ['appDataFolder'],
     };
+    const { localTimestamp } = await browser.storage.local.get('localTimestamp');
     let fileContent = {
+        timestamp: localTimestamp || Date.now(),
         tabsArray: tabsArray
     };
     let file = new Blob([JSON.stringify(fileContent)], { type: 'application/json' });
@@ -245,9 +249,13 @@ async function _getServerFileTimestamp(token, fileId) {
         },
         'contentType': 'json'
     };
-    console.log('getting sync file timestamp from server')
-    const response = await handleRequest(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=json&fields=modifiedByMeTime`, init)
-    return response ? Date.parse(response.modifiedByMeTime) : response;
+    console.log('getting sync file timestamp from server');
+    const response = await handleRequest(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, init)
+    if (response.timestamp === undefined) {
+        const response = await handleRequest(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=json&fields=modifiedByMeTime`, init);
+        return response ? Date.parse(response.modifiedByMeTime) : response;
+    }
+    return response.timestamp;
 }
 
 async function updateRemote(token, collections = null) {
@@ -255,6 +263,7 @@ async function updateRemote(token, collections = null) {
     if (collections) tabsArray = collections;
     await getOrCreateSyncFile(token);
     const { syncFileId } = await browser.storage.sync.get('syncFileId');
+    const timestamp = Date.now();
     const init = {
         method: 'PATCH',
         async: true,
@@ -263,11 +272,11 @@ async function updateRemote(token, collections = null) {
             'Content-Type': 'application/json'
         },
         'contentType': 'json',
-        body: JSON.stringify({ tabsArray: tabsArray })
+        body: JSON.stringify({ timestamp, tabsArray })
     };
     console.log('updating remote sync file with new data')
     const url = `https://www.googleapis.com/upload/drive/v3/files/${syncFileId}?uploadType=media&access_token=${token}`;
-    await browser.storage.local.set({ localTimestamp: Date.now() + 200 });
+    await browser.storage.local.set({ localTimestamp: timestamp });
     const response = await handleRequest(url, init);
     return response;
 }
@@ -284,7 +293,8 @@ async function _loadSettingsFile(token, fileId) {
     };
     console.log('loading sync file from server')
     const data = await handleRequest(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, init);
-    await browser.storage.local.set({ localTimestamp: Date.now() });
+    console.log(data);
+    await browser.storage.local.set({ localTimestamp: data.timestamp || Date.now() });
     return updateCollectionsUids(data.tabsArray);
 }
 
@@ -357,18 +367,15 @@ function applyUid(item) {
     if (!item || !('tabs' in item) || item.tabs.length === 0) return item;
     let tabs = [...item.tabs];
     let chromeGroups = item.chromeGroups ? [...item.chromeGroups] : [];
-    let tabUidCount = 0;
     tabs.forEach((tab) => {
-        tab.uid = `uid${tabUidCount}`
-        tabUidCount++;
+        const uid = (crypto && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+        tab.uid = uid;
     });
-    let groupUidCount = 0;
     if (chromeGroups.length > 0) {
         chromeGroups.forEach((group) => {
-            const groupUid = `uid${groupUidCount}`;
+            const groupUid = (crypto && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
             group.uid = groupUid;
             tabs = tabs.map(t => (t.groupId === group.id ? { ...t, groupUid: groupUid } : t));
-            groupUidCount++;
         });
     }
     const newCollection = { ...item };
@@ -421,6 +428,7 @@ async function syncData(token) {
     const { syncFileId } = await browser.storage.sync.get('syncFileId');
     const { localTimestamp } = await browser.storage.local.get('localTimestamp') || 0;
     const serverTimestamp = await _getServerFileTimestamp(token, syncFileId);
+    console.log(serverTimestamp, localTimestamp);
     if (serverTimestamp === undefined || serverTimestamp === false) {
         if (localTimestamp === 0) { return; }
         await createNewSyncFileAndBackup(token);
