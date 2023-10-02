@@ -17,6 +17,9 @@ const params = Object.fromEntries(urlParams.entries());
 const sanitizedUrl = sanitizeUrl(params.url);
 const sanitizedFavicon = sanitizeUrl(params.favicon);
 
+params.url = decodeURIComponent(params.url).trim().replaceAll(/\t|\n|\r/g, '')
+if (params.url.indexOf("javascript:")==0) params.url = "#"
+
 window.addEventListener("focus", () => {
     if (sanitizedUrl === '#') return;
     setTimeout(window.location.replace(sanitizedUrl), 1);
