@@ -13,14 +13,13 @@ exports[`Import Collection section tests Import collection component renders cor
     >
       <svg
         className="import-icon"
-        color="#fff"
         fill="currentColor"
         height="16px"
         stroke="currentColor"
         strokeWidth="0"
         style={
           Object {
-            "color": "#fff",
+            "color": "var(--text-color)",
           }
         }
         viewBox="0 0 512 512"
@@ -33,7 +32,7 @@ exports[`Import Collection section tests Import collection component renders cor
       </svg>
        
       <span>
-        Import Collections
+        Import from file
       </span>
     </div>
   </label>

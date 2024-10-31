@@ -83,7 +83,6 @@ exports[`Footer Tests Footer renders correctly 1`] = `
       className="version"
     >
       version 
-      1.0.0
     </span>
   </div>
   <span

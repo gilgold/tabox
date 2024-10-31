@@ -1,9 +1,11 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
 exports[`Add new collection textbox tests Add new collection textbox renders correctly - sync disabled 1`] = `
-<section>
+<section
+  className="add-collections-wrapper"
+>
   <div
-    className="group"
+    className="add-collection-group"
   >
     <input
       id="new_setting_title"
@@ -48,10 +50,28 @@ exports[`Add new collection textbox tests Add new collection textbox renders cor
         xmlns="http://www.w3.org/2000/svg"
       >
         <path
-          d="M289.94 256l95-95A24 24 0 00351 127l-95 95-95-95a24 24 0 00-34 34l95 95-95 95a24 24 0 1034 34l95-95 95 95a24 24 0 0034-34z"
+          d="m289.94 256 95-95A24 24 0 0 0 351 127l-95 95-95-95a24 24 0 0 0-34 34l95 95-95 95a24 24 0 1 0 34 34l95-95 95 95a24 24 0 0 0 34-34z"
         />
       </svg>
     </button>
+    <br />
+    <span
+      className="highlighted_note"
+      style={
+        Object {
+          "display": "none",
+        }
+      }
+    >
+      Save 
+      <span
+        className="highlighter"
+      >
+        0
+         selected
+      </span>
+       tabs
+    </span>
   </div>
   <button
     className="btn"
@@ -64,21 +84,45 @@ exports[`Add new collection textbox tests Add new collection textbox renders cor
     </span>
   </button>
   <span
-    className="highlighted_note"
-    style={
-      Object {
-        "display": "none",
-      }
-    }
+    className="image-upload"
   >
-    Save 
-    <span
-      className="highlighter"
+    <label
+      className="input-label"
+      htmlFor="file-input"
     >
-      0
-       selected
-    </span>
-     tabs
+      <div
+        className="import-button"
+      >
+        <svg
+          className="import-icon"
+          fill="currentColor"
+          height="16px"
+          stroke="currentColor"
+          strokeWidth="0"
+          style={
+            Object {
+              "color": "var(--text-color)",
+            }
+          }
+          viewBox="0 0 512 512"
+          width="16px"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M16 288c-8.8 0-16 7.2-16 16v32c0 8.8 7.2 16 16 16h112v-64zm489-183L407.1 7c-4.5-4.5-10.6-7-17-7H384v128h128v-6.1c0-6.3-2.5-12.4-7-16.9zm-153 31V0H152c-13.3 0-24 10.7-24 24v264h128v-65.2c0-14.3 17.3-21.4 27.4-11.3L379 308c6.6 6.7 6.6 17.4 0 24l-95.7 96.4c-10.1 10.1-27.4 3-27.4-11.3V352H128v136c0 13.3 10.7 24 24 24h336c13.3 0 24-10.7 24-24V160H376c-13.2 0-24-10.8-24-24z"
+          />
+        </svg>
+         
+        <span>
+          Import from file
+        </span>
+      </div>
+    </label>
+    <input
+      id="file-input"
+      onChange={[Function]}
+      type="file"
+    />
   </span>
 </section>
 `;
