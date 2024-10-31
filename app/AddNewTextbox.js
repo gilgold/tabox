@@ -7,6 +7,7 @@ import { browser } from '../static/globals';
 import { useSnackbar } from 'react-simple-snackbar';
 import { SnackbarStyle } from './model/SnackbarTypes';
 import { IoClose } from 'react-icons/io5';
+import ImportCollection from './ImportCollection';
 
 
 function SaveHighlightedOnlyLabel() {
@@ -18,7 +19,7 @@ function SaveHighlightedOnlyLabel() {
         setTotalHighlighted(total);
     }, [])
 
-    return <span className="highlighted_note" style={{ display: (totalHighlighted > 1 ? 'inline-block' : 'none') }}>Save <span className="highlighter">{totalHighlighted} selected</span> tabs</span>
+    return <span className="highlighted_note" style={{ display: (totalHighlighted > 1 ? 'block' : 'none') }}>Save <span className="highlighter">{totalHighlighted} selected</span> tabs</span>
 }
 
 const useFocus = () => {
@@ -28,7 +29,7 @@ const useFocus = () => {
     return [htmlElRef, setFocus]
 }
 
-function AddNewTextbox(props) {
+function AddNewTextbox({ updateRemoteData, addCollection }) {
 
     const [collectionName, setName] = useState("");
     const [disabled, setDisabled] = useState(false);
@@ -56,11 +57,11 @@ function AddNewTextbox(props) {
             openSnackbar('Please enter a name for the collection', 2000);
             return;
         }
-        setSearch(null);
+        setSearch('');
         setDisabled(true);
         setName('');
         const newItem = await getCurrentTabsAndGroups(collectionName);
-        await props.addCollection(newItem);
+        await addCollection(newItem);
         setTimeout(() => setDisabled(false), 1000);
     }
 
@@ -81,8 +82,8 @@ function AddNewTextbox(props) {
         setInputFocus();
     }
 
-    return <section>
-        <div className="group">
+    return <section className='add-collections-wrapper'>
+        <div className="add-collection-group">
             <input
                 type="text"
                 maxLength="50"
@@ -101,7 +102,8 @@ function AddNewTextbox(props) {
                 disabled={hideClear}
                 onClick={handleClear}>
                 <IoClose size="16px" />
-            </button>
+            </button><br />
+        <SaveHighlightedOnlyLabel />
         </div>
         <button
             id="add_new_setting"
@@ -111,7 +113,7 @@ function AddNewTextbox(props) {
         >
             <span>Add</span>
         </button>
-        <SaveHighlightedOnlyLabel />
+        <ImportCollection updateRemoteData={updateRemoteData} />
     </section>;
 }
 

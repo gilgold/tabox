@@ -28,3 +28,8 @@
 	cursor: default;
 	color: var(--divider-color);
 }
+.alert-overlay {
+    backdrop-filter: none !important;
+    animation: none !important;
+    opacity: 1 !important;
+}

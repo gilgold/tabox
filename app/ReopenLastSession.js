@@ -16,6 +16,7 @@ const ReopenLastSession = ({ addCollection }) => {
 
   const handleSessionClick = async () => {
     confirmAlert({
+      overlayClassName: 'alert-overlay',
       customUI: ({ onClose }) => <SessionsModal
         sessions={sessionList}
         addCollection={addCollection}

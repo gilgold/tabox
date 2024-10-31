@@ -52,6 +52,7 @@ export default function SettingsMenu(props) {
         const { autoBackups } = await browser.storage.local.get('autoBackups');
 
         confirmAlert({
+            overlayClassName: 'alert-overlay',
             customUI: ({ onClose }) => <BackupOptionsModal 
                 onClose={onClose} 
                 onUpdateBackup={backup}

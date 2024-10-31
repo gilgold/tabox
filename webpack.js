@@ -23,11 +23,12 @@ module.exports = (env, argv) => {
     },
     optimization: {
       minimize: argv.mode === 'production',
-      concatenateModules: true,
+      concatenateModules: argv.mode === 'production',
     },
     plugins: [
       sentryWebpackPlugin({
         include: '.',
+        telemetry: argv.mode === 'production',
         project: 'tabox',
         org: 'tabox',
         release: 'tabox-' + baseManifest.version,

@@ -3,7 +3,6 @@ import './App.css';
 import React, { useEffect, useMemo, useState } from 'react';
 import Header from './Header';
 import AddNewTextbox from './AddNewTextbox';
-import ImportCollection from './ImportCollection';
 import CollectionList from './CollectionList';
 import Footer from './Footer';
 import { useRecoilState, useSetRecoilState, useRecoilValue } from 'recoil';
@@ -126,7 +125,7 @@ function App() {
 
   const addCollection = async (newCollection) => {
     const newList = settingsData ? [newCollection, ...settingsData] : [newCollection];
-    setTimeout(() => setRowToHighlight(0), 100);
+    setRowToHighlight(0);
     await updateRemoteData(newList);
     const { chkAutoUpdateOnNewCollection } = await browser.storage.local.get('chkAutoUpdateOnNewCollection');
     if (!chkAutoUpdateOnNewCollection) return;
@@ -204,8 +203,7 @@ function App() {
       updateRemoteData={updateRemoteData}
       logout={logout} />
     <div className="main-content-wrapper">
-      <AddNewTextbox addCollection={addCollection} />
-      <ImportCollection updateRemoteData={updateRemoteData} />
+      <AddNewTextbox addCollection={addCollection} updateRemoteData={updateRemoteData} />
       <Divder />
       <CollectionListOptions 
         key={`${sortValue}-select`}

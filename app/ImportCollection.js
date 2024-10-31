@@ -59,7 +59,7 @@ function ImportCollection(props) {
     return <span className="image-upload">
             <label htmlFor="file-input" className="input-label">
                 <div className="import-button">
-                    <FaFileImport color="#fff" className="import-icon" size="16px" /> <span>Import Collections</span>
+                    <FaFileImport style={{ color: 'var(--text-color)' }} className="import-icon" size="16px" /> <span>Import from file</span>
                 </div>
             </label>
             <input id="file-input" type="file" onChange={handleFileSelection} />

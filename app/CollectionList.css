@@ -1,5 +1,5 @@
 .settings_body {
-	height: 246px;
+	height: 276px;
 	width: 100%;
 	overflow: auto;
 	padding: 5px 0;
@@ -7,17 +7,14 @@
 	font-size: 16px;
 }
 
-.sortable_ghost {
-	opacity: 0;
-}
-
 .setting_row {
 	padding: 0 5px;
 	background-color: transparent;
-	margin: 4px 0;
+	margin: 3px 0;
 	border: 1px solid var(--setting-row-border-color);
 	border-radius: 5px;
 	transition: background-color .2s ease-in !important;
+	transition: border .2s ease-in !important;
 	display: flex;
 	justify-content: space-between;
 	width: 99%;
@@ -78,10 +75,10 @@
 	line-height: 26px;
 	padding: 0 5px;
 	height: 26px;
-	font-size: .7em;
+	font-size: .8em;
 	color: var(--settings-row-text-color);
 	font-weight: 500;
-	flex: 0 0 195px !important;
+	flex: 0 0 275px !important;
 	cursor: pointer;
 	min-width: 0;
 }
@@ -97,7 +94,7 @@
 	position: relative;
 	color: var(--settings-row-text-color);
 	line-height: 14px;
-	font-size: .7em;
+	font-size: .8em;
 	font-weight: 500;
 }
 
@@ -126,7 +123,7 @@
 	vertical-align: middle;
 	line-height: 15px;
 	border-radius: 5px;
-	font-size: 10px;
+	font-size: 12px;
 	font-weight: 500;
 	letter-spacing: .4px;
 	height: 20px;
@@ -178,7 +175,7 @@
 
 .updatingLabel {
 	transition: opacity 0.5s ease;
-	font-size: .7rem;
+	font-size: .8rem;
 }
 
 .show {
@@ -193,7 +190,7 @@
 	margin: 30px auto;
 	text-align: center;
 	color: var(--text-color);
-	font-size: .75em;
+	font-size: .85em;
 	animation: fadeIn ease-in .2s;
 }
 
@@ -230,7 +227,7 @@
 	width: 12px;
 	height: 12px;
 	background: var(--bg-color);
-	transition: none;
+	transition: background-color .2s ease-in !important;
 	border-radius: 10px;
 }
 
@@ -336,7 +333,7 @@
 	text-overflow: ellipsis;
 	overflow: hidden;
 	white-space: nowrap;
-	font-size: .7em;
+	font-size: .8em;
 	width: 390px;
 }
 
@@ -621,3 +618,16 @@ div.expanded-wrapper .tab-line:last-child .single-tab-row .tree-line {
 	  transform:translateX(-25%);
 	}
    }
+
+.sortable-item-ghost-wrapper {
+	position: relative;
+	height: 20px;
+}
+.sortable-item-ghost {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 4px;
+	background-color: var(--primary-color);
+}
