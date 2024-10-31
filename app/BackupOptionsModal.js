@@ -60,7 +60,7 @@ export const BackupOptionsModal = (props) => {
     }
 
     const getBackupLabel = (backup) => {
-        if (!backup) return;
+        if (!backup || !backup.tabsArray) return;
         return `${(new Date(backup.timestamp)).toLocaleString()} | ${backup.tabsArray.length} Collection${backup.tabsArray.length > 1 ? 's' : ''}`;
     }
 
@@ -70,13 +70,14 @@ export const BackupOptionsModal = (props) => {
         let backupOptions = [];
         const autoBackups = props.autoBackups || [];
         for (const backup of autoBackups) {
+            if (!backup.tabsArray) continue;
             backupOptions.push({
                 value: backup,
                 label: getBackupLabel(backup),
                 icon: <MdSettingsBackupRestore />
             })
         }
-        if (autoBackups.length === 0) {
+        if (backupOptions.length === 0) {
             backupOptions.push({
                 value: 'no-options',
                 label: 'No automatic backups available, try again later',
@@ -87,11 +88,14 @@ export const BackupOptionsModal = (props) => {
             value: 'divider',
             label: 'divider',
             isDisabled: true
-        }, {
-            value: props.onUpdateBackup,
-            label: `Restore from version update (v${props.onUpdateBackup.version})`,
-            icon: <MdOutlineInstallDesktop />
         });
+        if (props.onUpdateBackup) {
+            backupOptions.push({
+                value: props.onUpdateBackup,
+                label: `Restore from version update (v${props.onUpdateBackup.version})`,
+                icon: <MdOutlineInstallDesktop />
+            });
+        }
         if (props.isLoggedIn) {
             backupOptions.push({
                 value: 'remote',

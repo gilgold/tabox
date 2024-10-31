@@ -4,7 +4,7 @@ input[type="text"] {
   color: var(--text-color);
   padding: 4px 10px 7px 5px;
   float: left;
-  width: 290px;
+  width: 350px;
   border: none;
   border-top-left-radius: 5px;
   border-top-right-radius: 5px;
@@ -14,6 +14,20 @@ input[type="text"] {
 
 input[type="text"]:focus {
   outline: none;
+}
+
+.add-collections-wrapper {
+  display: flex;
+  flex-direction: row;
+  align-items: start;
+  justify-content: start;
+  padding-bottom: 10px;
+  margin-top: 22px;
+}
+
+.add-collection-group {
+  position: relative;
+  width: 340px;
 }
 
 label.textbox_label {
@@ -38,7 +52,7 @@ input[type="text"]:focus~label.textbox_label, input[type="text"]:not(:placeholde
   float: left;
   position: relative;
   display: block;
-  width: 290px;
+  width: 200px;
 }
 
 .bar:before, .bar:after {
@@ -119,9 +133,7 @@ input[type="text"]:focus~.bar:before, input[type="text"]:focus~.bar:after {
 }
 
 .highlighted_note {
-  font-size: .65em;
-  top: 3px;
-  right: 7.2rem;
+  font-size: .7em;
   color: var(--text-color);
   display: none;
   word-break: break-word;
@@ -129,6 +141,8 @@ input[type="text"]:focus~.bar:before, input[type="text"]:focus~.bar:after {
   width: 110px;
   vertical-align: middle;
   margin-left: 5px;
+  position: relative;
+  top: 4px;
 }
 
 .highlighter {

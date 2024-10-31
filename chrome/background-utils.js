@@ -310,14 +310,11 @@ async function updateLocalDataFromServer(token, force = false) {
         await createNewSyncFileAndBackup(token);
         return false;
     }
-    const { localTimestamp } = (await browser.storage.local.get('localTimestamp')) || 0;
-    if (Math.abs(serverTimestamp - localTimestamp) < 1000 && !force) {
-        console.log('data is in sync, no need to update');
-        const { tabsArray } = await browser.storage.local.get('tabsArray');
-        return tabsArray;
+    let { localTimestamp } = await browser.storage.local.get('localTimestamp');
+    if (!localTimestamp) localTimestamp = 0;
+    if (serverTimestamp > localTimestamp || force) {
+        return await _loadSettingsFile(token, syncFileId);
     }
-    console.log(`Comparing timestamps, remote is: ${(serverTimestamp > localTimestamp) ? 'newer' : 'older'}`)
-    if (serverTimestamp > localTimestamp || force) return await _loadSettingsFile(token, syncFileId);
     return false;
 }
 
@@ -426,13 +423,17 @@ async function updateCollection(collection, windowId) {
 
 async function syncData(token) {
     const { syncFileId } = await browser.storage.sync.get('syncFileId');
-    const { localTimestamp } = await browser.storage.local.get('localTimestamp') || 0;
+    let { localTimestamp } = await browser.storage.local.get('localTimestamp');
+    if (!localTimestamp) localTimestamp = 0;
     const serverTimestamp = await _getServerFileTimestamp(token, syncFileId);
-    console.log(serverTimestamp, localTimestamp);
     if (serverTimestamp === undefined || serverTimestamp === false) {
         if (localTimestamp === 0) { return; }
         await createNewSyncFileAndBackup(token);
         await updateRemote(token);
+        return;
+    }
+    if (serverTimestamp === localTimestamp) {
+        console.log('local and remote data are in sync, no need to take aciton');
         return;
     }
     if (serverTimestamp > localTimestamp) {

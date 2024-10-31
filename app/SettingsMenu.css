@@ -13,3 +13,8 @@
     text-align: left;
     padding: 10px;
 }
+.alert-overlay {
+    backdrop-filter: none !important;
+    animation: none !important;
+    opacity: 1 !important;
+}

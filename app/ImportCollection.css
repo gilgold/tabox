@@ -1,7 +1,5 @@
 .image-upload {
-	display: block;
-	margin: 8px 0 6px 0;
-	height: 30px;
+	display: flex;
     line-height: 16px;
 }
 .image-upload > input {
@@ -13,24 +11,24 @@
 	cursor: pointer;
 }
 .input-label {
-	margin-top: 3px;
 	display: flex;
     align-items: center;
 	width: 160px;
 }
 .import-icon {
 	float: left;
+	margin-right: 5px;
 }
 .import-button {
-	background-color: var(--primary-color);
-	color: #fff;
+	background-color: transparent;
+	color: var(--text-color);
 	border: none;
 	border-radius: 5px;
 	padding: 6px 14px;
 	display: flex;
 	flex-direction: row;
 	align-items: center;
-	justify-content: space-between;
+	justify-content: start;
 	font-size:.75em;
 	font-weight: 600;
 	flex-basis: 160px;

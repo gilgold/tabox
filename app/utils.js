@@ -58,3 +58,33 @@ export async function getCurrentTabsAndGroups(title, forceOnlyHighlighted = fals
   const newItem = new TaboxCollection(title, tabs, allChromeGroups, null, null, window);
   return applyUid(newItem);
 }
+
+export const colorChart = {
+    'grey': '#54585d',
+    'blue': '#1b68de',
+    'red': '#d22c28',
+    'yellow': '#fcd065',
+    'green': '#21823d',
+    'pink': '#fd80c2',
+    'purple': '#872fdb',
+    'cyan': '#6fd3e7'
+  };
+
+export const getColorCode = (name) => {
+  if (!name) return name;
+  const _name = name.toLowerCase();
+  return (_name in colorChart) ? colorChart[_name] : name;
+}
+
+export const updateGroupAttribute = (group, attr, val, collection, updateCollection) => {
+  let currentCollection = { ...collection };
+  const grpIndex = currentCollection.chromeGroups.findIndex(el => el.uid === group.uid);
+  let chromeGroups = [...currentCollection.chromeGroups];
+  let chromeGrp = { ...chromeGroups[grpIndex] }
+  chromeGrp[attr] = val;
+  chromeGroups[grpIndex] = chromeGrp;
+  currentCollection.chromeGroups = chromeGroups;
+  updateCollection(currentCollection);
+}
+
+export const getColorName = (value) => Object.keys(colorChart).find(key => colorChart[key] === value);

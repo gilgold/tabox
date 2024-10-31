@@ -293,6 +293,7 @@ try {
     await handleAutoBackupAlarm();
     if (reason === "update") {
       let { tabsArray } = await browser.storage.local.get('tabsArray');
+      if (!tabsArray || tabsArray.length === 0) return;
       tabsArray = updateCollectionsUids(tabsArray);
       const backupObj = {
         version: previousVersion,
@@ -309,7 +310,7 @@ try {
     if (autoBackups === undefined) {
       autoBackups = [];
     }
-    if (tabsArray.length === 0 || (autoBackups.length > 0 && autoBackups[0].timestamp === localTimestamp)) {
+    if ((tabsArray && tabsArray.length === 0) || (autoBackups.length > 0 && autoBackups[0].timestamp === localTimestamp)) {
       return;
     }
     const backupObj = {
