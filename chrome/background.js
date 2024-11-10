@@ -134,10 +134,11 @@ async function openTabs(collection, window, newWindow = null) {
   const { chkEnableTabDiscard } = await browser.storage.local.get('chkEnableTabDiscard');
   collection.tabs.forEach(async (tabInGrp, index, arr) => {
     if (chkIgnoreDuplicates && currentUrlsInWindow.includes(tabInGrp.url)) { return; }
+    let isFile = tabInGrp.url.startsWith('file:///');
     let tabProperties = {
       pinned: tabInGrp.pinned,
       active: tabInGrp.active,
-      url: (chkEnableTabDiscard && shouldDiscardTab(tabInGrp)) ? browser.runtime.getURL(`deferedLoading.html?url=${tabInGrp.url}&favicon=${tabInGrp?.favIconUrl || ''}`) : tabInGrp.url,
+      url: (chkEnableTabDiscard && shouldDiscardTab(tabInGrp) && !isFile) ? browser.runtime.getURL(`deferedLoading.html?url=${tabInGrp.url}&favicon=${tabInGrp?.favIconUrl || ''}`) : tabInGrp.url,
     };
     const updateOnlyProperties = {
       muted: tabInGrp.muted,
