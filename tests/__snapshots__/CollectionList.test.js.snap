@@ -2,22 +2,28 @@
 
 exports[`Collection List tests Collection List renders correctly 1`] = `
 <section
-  className="settings_body"
+  className="collection-list-container settings_body list-view"
 >
-  <div>
-    <p
-      id="nothing_message"
+  <div
+    className="collection-list"
+  >
+    <div
+      className="no-collections-container"
     >
-      You don't have any collections!
-      <br />
-      <img
-        alt="desert scene"
-        className="no_contant_image"
-        src="images/desert.png"
-      />
-      <br />
-      Add the current tabs or import a collection from file.
-    </p>
+      <p
+        id="nothing_message"
+      >
+        You don't have any collections!
+        <br />
+        <img
+          alt="desert scene"
+          className="no_contant_image"
+          src="images/desert.png"
+        />
+        <br />
+        Add the current tabs or import a collection from file.
+      </p>
+    </div>
   </div>
 </section>
 `;

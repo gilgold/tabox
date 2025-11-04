@@ -6,22 +6,24 @@ const DeleteWithConfirmationButton = (props) => {
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [confirmDisabled, setConfirmDisabled] = useState(true);
 
-    const toggleSlideConfirm = () => {
+    const toggleSlideConfirm = (e) => {
+        e.stopPropagation();
         setConfirmDisabled(true);
         setConfirmOpen(!confirmOpen);
         setTimeout(() => setConfirmDisabled(false), 400);
     }
 
-    const handleDelete = () => {
+    const handleDelete = (e) => {
+        e.stopPropagation();
         props.action(props.group.uid);
     }
 
-    return <div className="slider-wrapper">
-        <div className={`slider ${confirmOpen ? 'slider-open' : null}`}>
-            <button className="slider-button" disabled={confirmDisabled} data-tip="Delete this group and all its tabs?" data-class="small-tooltip" onClick={handleDelete}>Delete</button>
+    return <div className="slider-wrapper" onClick={(e) => e.stopPropagation()}>
+        <div data-tip={confirmOpen ? 'Cancel' : `Delete group '${props.group.title}'`} className="del" onClick={(e) => { e.stopPropagation(); toggleSlideConfirm(e); }}>
+            <MdDeleteForever color="#B64A4A" size="18px" />
         </div>
-        <div data-tip={confirmOpen ? 'Cancel' : `Delete group '${props.group.title}'`} className="del slider-del" onClick={toggleSlideConfirm}>
-            <MdDeleteForever color="#B64A4A" size="20px" />
+        <div className={`slider ${confirmOpen ? 'slider-open' : null}`}>
+            <button className="slider-button" disabled={confirmDisabled} data-tip="Delete this group and all its tabs?" data-class="small-tooltip" onClick={(e) => { e.stopPropagation(); handleDelete(e); }}>Delete</button>
         </div>
     </div>
 }

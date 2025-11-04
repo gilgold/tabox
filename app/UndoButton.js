@@ -1,5 +1,4 @@
 import React from 'react';
-import './UndoButton.css';
 import { FaUndoAlt } from 'react-icons/fa';
 
 export const UndoButton = (props) => {
@@ -9,7 +8,7 @@ export const UndoButton = (props) => {
     }
 
     return <button 
-        className="snackbar-button undo-button" 
+        className="snackbar-button" 
         onClick={async () => await handleUndo()}
         title="Undo this action"
         >

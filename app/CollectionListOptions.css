@@ -1,98 +1,509 @@
-.options-wrapper {
+.collections-toolbar {
 	display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: flex-start;
-	background-color: var(--input-bg-color);
-}
-.sortLabel {
-	color: var(--text-color);
-	font-weight: 700;
-	font-size: .7rem;
+	align-items: center;
+	justify-content: space-between;
+	padding: 8px 12px;
+	margin: 5px 0;
+	gap: 12px;
+	
+	/* True floating toolbar with enhanced transparency */
+	position: fixed;
+	top: 110px;
+	left: 50%;
+	transform: translateX(-50%);
+	width: calc(100% - 20px);
+	max-width: 1200px;
+	z-index: 1000;
+	
+	/* Enhanced Liquid Glass Effect */
+	background: linear-gradient(
+		135deg,
+		rgba(255, 255, 255, 0.25) 0%,
+		rgba(255, 255, 255, 0.15) 50%,
+		rgba(255, 255, 255, 0.10) 100%
+	);
+	backdrop-filter: blur(16px) saturate(180%) brightness(105%);
+	-webkit-backdrop-filter: blur(16px) saturate(180%) brightness(105%);
+	border: 1px solid rgba(255, 255, 255, 0.4);
+	border-radius: 20px;
+	
+	/* Enhanced floating shadows with depth */
+	box-shadow: 
+		0 8px 32px rgba(0, 0, 0, 0.12),
+		0 4px 16px rgba(0, 0, 0, 0.08),
+		inset 0 1px 0 rgba(255, 255, 255, 0.8),
+		inset 0 -1px 0 rgba(255, 255, 255, 0.2),
+		inset 1px 0 0 rgba(255, 255, 255, 0.3),
+		inset -1px 0 0 rgba(255, 255, 255, 0.3);
+	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.sort-select-container {
-	color: var(--settings-row-text-color);
-	background-color: var(--input-bg-color);
-	border: 1px solid transparent;
-	display: inline-flex;
+/* Enhanced floating effect when scrolling */
+.collections-toolbar:hover {
+	background: linear-gradient(
+		135deg,
+		rgba(255, 255, 255, 0.35) 0%,
+		rgba(255, 255, 255, 0.25) 50%,
+		rgba(255, 255, 255, 0.18) 100%
+	);
+	box-shadow: 
+		0 12px 40px rgba(0, 0, 0, 0.15),
+		0 6px 20px rgba(0, 0, 0, 0.1),
+		inset 0 1px 0 rgba(255, 255, 255, 0.9),
+		inset 0 -1px 0 rgba(255, 255, 255, 0.4),
+		inset 1px 0 0 rgba(255, 255, 255, 0.5),
+		inset -1px 0 0 rgba(255, 255, 255, 0.5);
+}
+
+/* Dark mode adjustments for floating toolbar */
+[data-theme="dark"] .collections-toolbar {
+	background: linear-gradient(
+		135deg,
+		rgba(255, 255, 255, 0.15) 0%,
+		rgba(255, 255, 255, 0.08) 50%,
+		rgba(255, 255, 255, 0.05) 100%
+	);
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	box-shadow: 
+		0 8px 32px rgba(0, 0, 0, 0.3),
+		0 4px 16px rgba(0, 0, 0, 0.2),
+		inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+[data-theme="dark"] .collections-toolbar:hover {
+	background: linear-gradient(
+		135deg,
+		rgba(255, 255, 255, 0.2) 0%,
+		rgba(255, 255, 255, 0.12) 50%,
+		rgba(255, 255, 255, 0.08) 100%
+	);
+	box-shadow: 
+		0 12px 40px rgba(0, 0, 0, 0.4),
+		0 6px 20px rgba(0, 0, 0, 0.25),
+		inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.toolbar-left {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-shrink: 0;
+}
+
+.toolbar-center {
+	display: flex;
 	align-items: center;
 	justify-content: center;
-	font-weight: 400;
-	margin: 5px 5px;
-	cursor: pointer;
-	line-height: 16px;
-	font-size: .7rem;
-	transition: all .2s ease-in !important;
+	flex: 1;
+	min-width: 150px; /* Reduced minimum space */
+	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.sort-select-custom-option {
+.toolbar-right {
 	display: flex;
-	justify-content: flex-start;
+	align-items: center;
+	gap: 6px;
+	flex-shrink: 0;
 }
 
-.sort-select__control {
-	color: var(--settings-row-text-color) !important;
-	background-color: var(--input-bg-color) !important;
+/* Standard Liquid Glass Toolbar Button */
+.toolbar-button {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	color: var(--text-color);
+	cursor: pointer;
+	position: relative;
+	overflow: hidden;
+	
+	/* Liquid Glass Effect */
+	background: linear-gradient(
+		135deg,
+		rgba(255, 255, 255, 0.2) 0%,
+		rgba(255, 255, 255, 0.1) 100%
+	);
+	backdrop-filter: blur(8px) saturate(130%);
+	-webkit-backdrop-filter: blur(8px) saturate(130%);
+	border: 1px solid rgba(255, 255, 255, 0.3);
+	border-radius: 12px;
+	
+	/* Shadows for depth */
+	box-shadow: 
+		0 2px 8px rgba(0, 0, 0, 0.08),
+		inset 0 1px 0 rgba(255, 255, 255, 0.4),
+		inset 0 -1px 0 rgba(255, 255, 255, 0.1);
+	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.sort-select__indicator svg {
-	fill: var(--settings-row-text-color) !important;
-}
-
-.sort-select__option {
-	background-color: var(--input-bg-color) !important;
-}
-
-.sort-select__option:hover {
-	background-color: var(--single-tab-row-hover-color) !important;
-}
-
-.sort-select__menu {
-	background-color: var(--input-bg-color) !important;
-}
-
-.sort-select__single-value {
-	color: var(--settings-row-text-color) !important;
-	min-width: 40px !important;
-}
-
-.sort-select__option--is-selected {
-	color: var(--primary-color) !important;
-	font-weight: 700 !important;
-}
-
-.sort-icon:before {
+.toolbar-button::before {
 	content: '';
-	width: 9px;
-	border-top: 1px solid var(--text-color);
 	position: absolute;
-	top: 2px;
-	height: 1px;
+	top: 0;
+	left: -100%;
+	width: 100%;
+	height: 100%;
+	background: linear-gradient(
+		90deg,
+		transparent,
+		rgba(255, 255, 255, 0.3),
+		transparent
+	);
+	transition: left 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+	border-radius: 12px;
+}
+
+.toolbar-button:hover::before {
+	left: 100%;
+}
+
+.toolbar-button:hover {
+	background: linear-gradient(
+		135deg,
+		rgba(255, 255, 255, 0.3) 0%,
+		rgba(255, 255, 255, 0.2) 100%
+	);
+	transform: translateY(-1px) scale(1.02);
+	box-shadow: 
+		0 4px 16px rgba(0, 0, 0, 0.12),
+		inset 0 1px 0 rgba(255, 255, 255, 0.5),
+		inset 0 -1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.toolbar-button:active {
+	transform: translateY(0) scale(0.98);
+	box-shadow: 
+		0 1px 4px rgba(0, 0, 0, 0.2),
+		inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.toolbar-button:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+	transform: none;
+	background: rgba(255, 255, 255, 0.05);
+	box-shadow: 
+		0 1px 3px rgba(0, 0, 0, 0.1),
+		inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.toolbar-button:disabled:hover {
+	transform: none;
+	background: rgba(255, 255, 255, 0.05);
+}
+
+/* Dark mode adjustments for toolbar buttons */
+[data-theme="dark"] .toolbar-button {
+	background: rgba(255, 255, 255, 0.1);
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	box-shadow: 
+		0 2px 8px rgba(0, 0, 0, 0.2),
+		inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .toolbar-button:hover {
+	background: rgba(255, 255, 255, 0.15);
+	box-shadow: 
+		0 4px 16px rgba(0, 0, 0, 0.3),
+		inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.sort-controls {
+	display: flex;
+	align-items: center;
+	gap: 6px;
 }
 
 .sort-icon {
-	position: relative;
-	display: inline-block;
-	width: 12px;
-	height: 7px;
-	margin: 0 5px;
-	border-top: 1px solid var(--text-color);
+	font-size: 14px;
+	color: var(--text-color);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	opacity: 0.8;
+	cursor: pointer;
+	height: 28px;
+	width: 28px;
+	padding: 0;
+	border-radius: 6px;
+	box-sizing: border-box;
+	transition: all 0.2s ease;
 }
 
-.sort-icon:after {
+/* Liquid Glass React Select Styling */
+.sort-type-select {
+	min-width: 90px;
+}
+
+.react-select__control {
+	/* Liquid Glass Effect */
+	background: linear-gradient(
+		135deg,
+		rgba(255, 255, 255, 0.2) 0%,
+		rgba(255, 255, 255, 0.1) 100%
+	) !important;
+	backdrop-filter: blur(8px) saturate(120%) !important;
+	-webkit-backdrop-filter: blur(8px) saturate(120%) !important;
+	border: 1px solid rgba(255, 255, 255, 0.3) !important;
+	border-radius: 8px !important;
+	min-height: 28px !important;
+	font-size: 11px !important;
+	cursor: pointer !important;
+	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+	box-shadow: 
+		0 2px 6px rgba(0, 0, 0, 0.08),
+		inset 0 1px 0 rgba(255, 255, 255, 0.4) !important;
+}
+
+.react-select__control:hover {
+	background: linear-gradient(
+		135deg,
+		rgba(255, 255, 255, 0.25) 0%,
+		rgba(255, 255, 255, 0.15) 100%
+	) !important;
+	transform: translateY(-1px) !important;
+	box-shadow: 
+		0 4px 12px rgba(0, 0, 0, 0.12),
+		inset 0 1px 0 rgba(255, 255, 255, 0.5) !important;
+}
+
+.react-select__control--is-focused {
+	border-color: var(--primary-color) !important;
+	box-shadow: 
+		0 0 0 2px rgba(var(--primary-color-rgb, 52, 152, 219), 0.2),
+		0 4px 12px rgba(0, 0, 0, 0.12),
+		inset 0 1px 0 rgba(255, 255, 255, 0.5) !important;
+}
+
+.react-select__value-container {
+	padding: 0 6px !important; /* Reduced padding */
+}
+
+.react-select__single-value {
+	font-size: 11px !important; /* Reduced font size */
+}
+
+.react-select__indicator-separator {
+	display: none !important;
+}
+
+.react-select__dropdown-indicator {
+	padding: 4px !important; /* Reduced from default */
+	width: 16px !important; /* Smaller dropdown arrow */
+}
+
+.react-select__dropdown-indicator:hover {
+	color: var(--text-color) !important;
+}
+
+.react-select__menu {
+	/* Enhanced Liquid Glass Menu */
+	background: linear-gradient(
+		135deg,
+		rgba(255, 255, 255, 0.95) 0%,
+		rgba(255, 255, 255, 0.9) 100%
+	) !important;
+	backdrop-filter: blur(16px) saturate(180%) !important;
+	-webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+	border: 1px solid rgba(255, 255, 255, 0.4) !important;
+	border-radius: 12px !important;
+	box-shadow: 
+		0 8px 32px rgba(0, 0, 0, 0.15),
+		0 4px 16px rgba(0, 0, 0, 0.1),
+		inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+	z-index: 9999 !important;
+	overflow: hidden !important;
+}
+
+.react-select__option {
+	background: transparent !important;
+	color: var(--text-color) !important;
+	font-size: 12px !important;
+	cursor: pointer !important;
+}
+
+.custom-select-option,
+.custom-select-single-value {
+	padding: 5px 8px !important;
+	display: flex;
+	font-size: 12px !important;
+	align-items: center;
+}
+
+.custom-select-single-value {
+	padding: 3px 8px !important;
+}
+
+.custom-select-option:hover,
+.react-select__option--is-focused {
+	background: var(--primary-color) !important;
+	color: var(--text-color) !important;
+	position: relative !important;
+	cursor: pointer !important;
+}
+
+.react-select__option--is-selected {
+	background: var(--primary-color) !important;
+	color: white !important;
+}
+
+.option-label {
+	padding-left: 10px
+}
+
+/* Compact Toggle Button for Open in New Window (Icon Only) */
+.toolbar-toggle-button {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	color: var(--text-color);
+	cursor: pointer;
+	position: relative;
+	overflow: hidden;
+	
+	/* Liquid Glass Effect */
+	background: linear-gradient(
+		135deg,
+		rgba(255, 255, 255, 0.2) 0%,
+		rgba(255, 255, 255, 0.1) 100%
+	);
+	backdrop-filter: blur(8px) saturate(130%);
+	-webkit-backdrop-filter: blur(8px) saturate(130%);
+	border: 1px solid rgba(255, 255, 255, 0.3);
+	border-radius: 12px;
+	
+	/* Shadows for depth */
+	box-shadow: 
+		0 2px 6px rgba(0, 0, 0, 0.08),
+		inset 0 1px 0 rgba(255, 255, 255, 0.4),
+		inset 0 -1px 0 rgba(255, 255, 255, 0.1);
+	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.toolbar-toggle-button::before {
 	content: '';
 	position: absolute;
-	top: 5px;
-	left: 0;
-	width: 6px;
-	height: 1px;
-	border-top: 1px solid var(--text-color);
+	top: 0;
+	left: -100%;
+	width: 100%;
+	height: 100%;
+	background: linear-gradient(
+		90deg,
+		transparent,
+		rgba(255, 255, 255, 0.3),
+		transparent
+	);
+	transition: left 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+	border-radius: 8px;
 }
 
-.verticle-divider {
-	width: 1px;
-	height: 26px;
-	background-color: var(--divider-color);
-	margin: 0 12px;
+.toolbar-toggle-button:hover::before {
+	left: 100%;
 }
+
+.toolbar-toggle-button:hover {
+	background: linear-gradient(
+		135deg,
+		rgba(255, 255, 255, 0.3) 0%,
+		rgba(255, 255, 255, 0.2) 100%
+	);
+	transform: translateY(-1px) scale(1.02);
+	box-shadow: 
+		0 4px 12px rgba(0, 0, 0, 0.12),
+		inset 0 1px 0 rgba(255, 255, 255, 0.5),
+		inset 0 -1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.toolbar-toggle-button:active {
+	transform: translateY(0) scale(0.98);
+	box-shadow: 
+		0 1px 4px rgba(0, 0, 0, 0.2),
+		inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Active state for toggle button */
+.toolbar-toggle-button.active {
+	background: linear-gradient(
+		135deg,
+		rgba(var(--primary-color-rgb, 52, 152, 219), 0.9) 0%,
+		rgba(var(--primary-color-rgb, 52, 152, 219), 0.8) 100%
+	);
+	color: white;
+	border-color: rgba(var(--primary-color-rgb, 52, 152, 219), 0.6);
+	box-shadow: 
+		0 4px 12px rgba(var(--primary-color-rgb, 52, 152, 219), 0.3),
+		inset 0 1px 0 rgba(255, 255, 255, 0.3),
+		inset 0 -1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.toolbar-toggle-button.active:hover {
+	background: linear-gradient(
+		135deg,
+		rgba(var(--primary-color-rgb, 52, 152, 219), 1) 0%,
+		rgba(var(--primary-color-rgb, 52, 152, 219), 0.9) 100%
+	);
+	box-shadow: 
+		0 6px 16px rgba(var(--primary-color-rgb, 52, 152, 219), 0.4),
+		inset 0 1px 0 rgba(255, 255, 255, 0.4),
+		inset 0 -1px 0 rgba(255, 255, 255, 0.2);
+}
+
+/* Dark mode adjustments for toggle button */
+[data-theme="dark"] .toolbar-toggle-button {
+	background: rgba(255, 255, 255, 0.1);
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	box-shadow: 
+		0 2px 6px rgba(0, 0, 0, 0.2),
+		inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .toolbar-toggle-button:hover {
+	background: rgba(255, 255, 255, 0.15);
+	box-shadow: 
+		0 4px 12px rgba(0, 0, 0, 0.3),
+		inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+[data-theme="dark"] .toolbar-toggle-button.active {
+	background: linear-gradient(
+		135deg,
+		rgba(var(--primary-color-rgb, 52, 152, 219), 0.8) 0%,
+		rgba(var(--primary-color-rgb, 52, 152, 219), 0.7) 100%
+	);
+	border-color: rgba(var(--primary-color-rgb, 52, 152, 219), 0.5);
+}
+
+/* Dark mode select adjustments */
+[data-theme="dark"] .react-select__control {
+	background: rgba(255, 255, 255, 0.08) !important;
+	border: 1px solid rgba(255, 255, 255, 0.15) !important;
+	box-shadow: 
+		0 2px 6px rgba(0, 0, 0, 0.2),
+		inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+[data-theme="dark"] .react-select__control:hover {
+	background: rgba(255, 255, 255, 0.12) !important;
+	box-shadow: 
+		0 4px 12px rgba(0, 0, 0, 0.3),
+		inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
+}
+
+[data-theme="dark"] .react-select__menu {
+	background: linear-gradient(
+		135deg,
+		rgba(40, 44, 52, 0.95) 0%,
+		rgba(40, 44, 52, 0.9) 100%
+	) !important;
+	border: 1px solid rgba(255, 255, 255, 0.2) !important;
+	box-shadow: 
+		0 8px 32px rgba(0, 0, 0, 0.4),
+		0 4px 16px rgba(0, 0, 0, 0.3),
+		inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Dark mode sort controls - no special styling needed since no container */
+

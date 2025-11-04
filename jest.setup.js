@@ -1,9 +1,13 @@
 import * as Snackbar from 'react-simple-snackbar';
+import ReactDOM from 'react-dom';
 
 if (!chrome.runtime.id) chrome.runtime.id = "tabox-test";
 const openSnackbarMock = jest.fn()
 const closeSnackbarMock = jest.fn()
 jest.spyOn(Snackbar, 'useSnackbar').mockImplementation(() => [openSnackbarMock, closeSnackbarMock])
+
+// Mock ReactDOM.createPortal to render portals inline for testing
+jest.spyOn(ReactDOM, 'createPortal').mockImplementation((element, node) => element);
 
 
 const b = {

@@ -47,7 +47,6 @@ export const listKeyState = atom({
 export const settingsDataState = atom({
     key: 'tabsArray',
     default: [],
-    effects: [
-        localStorageEffect('tabsArray'),
-    ]
+    // Removed localStorageEffect to prevent duplicate storage writes
+    // Manual updateRemoteData calls throughout the app handle storage updates
 });

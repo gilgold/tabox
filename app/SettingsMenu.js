@@ -1,79 +1,133 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, lazy, Suspense } from 'react'
+import ReactDOM from 'react-dom'
 import './SettingsMenu.css';
 import Switch from './Switch';
 import { themeState, isLoggedInState, listKeyState } from './atoms/globalAppSettingsState';
-import { useRecoilValue, useSetRecoilState } from 'recoil';
-import {
-    Menu,
-    FocusableItem,
-    MenuHeader,
-    MenuItem,
-    MenuDivider,
-} from '@szhsin/react-menu';
-import '@szhsin/react-menu/dist/index.css';
-import "@szhsin/react-menu/dist/theme-dark.css";
+import { useRecoilValue, useSetRecoilState, useRecoilState } from 'recoil';
 import { browser } from '../static/globals';
-import { confirmAlert } from 'react-confirm-alert';
-import 'react-confirm-alert/src/react-confirm-alert.css';
+import Modal from 'react-modal';
 import { useSnackbar } from 'react-simple-snackbar';
 import { SnackbarStyle } from './model/SnackbarTypes';
-import { BackupOptionsModal } from './BackupOptionsModal';
+import { SnackBarWithUndo } from './SnackBarWithUndo';
+import { UNDO_TIME } from './constants';
 import { downloadTextFile } from './utils';
-import { RiFolderAddFill, RiEdit2Line, RiSettings5Fill } from 'react-icons/ri';
-import { AiTwotoneExperiment } from 'react-icons/ai';
-import { ImNewTab } from 'react-icons/im';
-import { MdOutlineSyncAlt, MdSettingsBackupRestore } from 'react-icons/md';
 
+// Lazy load SyncDebugModal as it's rarely used
+const SyncDebugModal = lazy(() => import('./SyncDebugModal').then(module => ({ default: module.SyncDebugModal })));
+import { RiFolderAddFill, RiEdit2Line, RiSettings5Fill } from 'react-icons/ri';
+import { ImNewTab } from 'react-icons/im';
+import { MdOutlineSyncAlt, MdSettingsBackupRestore, MdClose, MdExpandMore, MdExpandLess } from 'react-icons/md';
+import {  MdBugReport } from 'react-icons/md';
+import { FaRegCheckCircle } from 'react-icons/fa';
+import { IoMoon, IoSunny } from 'react-icons/io5';
 
 export default function SettingsMenu(props) {
-    const themeMode = useRecoilValue(themeState);
+    const [themeMode, setThemeMode] = useRecoilState(themeState);
     const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(false);
     const [badgeEnabled, setBadgeEnabled] = useState(false);
-    const [openSnackbar, ] = useSnackbar({ style: SnackbarStyle.SUCCESS });
+    const [isSyncDebugModalOpen, setIsSyncDebugModalOpen] = useState(false);
+    const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+    
+    // State for tracking which sections are expanded
+    const [expandedSections, setExpandedSections] = useState({
+        general: true,
+        adding: true,
+        opening: true,
+        editing: true,
+        autoUpdate: true,
+        backup: true
+    });
+    
+    const [openSnackbar, closeSnackbar] = useSnackbar({ 
+        style: SnackbarStyle.SUCCESS, 
+        closeStyle: { display: 'none' } 
+    });
     const isLoggedIn = useRecoilValue(isLoggedInState);
     const setListKey = useSetRecoilState(listKeyState);
 
     useEffect(async () => {
         const { chkEnableAutoUpdate } = await browser.storage.local.get(['chkEnableAutoUpdate']);
         setAutoUpdateEnabled(chkEnableAutoUpdate || false);
+        
+        // Initialize dark mode switch state based on current theme
+        const { theme } = await browser.storage.local.get('theme');
+        const isDarkMode = theme === 'dark';
+        await browser.storage.local.set({ darkModeToggle: isDarkMode });
     }, []);
 
     useEffect(async () => {
         await browser.runtime.sendMessage({ type: 'updateBadge' });
     }, [badgeEnabled]);
 
-    const confirmRestore = async (onClose) => {
-        onClose();
-        openSnackbar(`Successfully restored collections from backup!`);
-    }
-
-    const handleRestoreBackup = async () => {
-        const { backup } = await browser.storage.local.get('backup');
-        const { autoBackups } = await browser.storage.local.get('autoBackups');
-
-        confirmAlert({
-            overlayClassName: 'alert-overlay',
-            customUI: ({ onClose }) => <BackupOptionsModal 
-                onClose={onClose} 
-                onUpdateBackup={backup}
-                isLoggedIn={isLoggedIn}
-                updateRemoteData={props.updateRemoteData}
-                applyDataFromServer={props.applyDataFromServer}
-                autoBackups={autoBackups}
-                onConfirm={() => confirmRestore(onClose)}
-                cancelLabel='Cancel'
-                confirmLabel='Restore' />
+    // Dark mode toggle handler
+    const handleDarkModeToggle = async () => {
+        const newMode = themeMode === 'dark' ? 'light' : 'dark';
+        const isDarkMode = newMode === 'dark';
+        
+        setThemeMode(newMode);
+        document.documentElement.setAttribute('data-theme', newMode);
+        await browser.storage.local.set({ 
+            theme: newMode,
+            darkModeToggle: isDarkMode 
         });
-    }
+    };
+
+    const showRecoverySuccess = (previousCollections) => {
+        openSnackbar(
+            <SnackBarWithUndo
+                icon={<FaRegCheckCircle />}
+                message={`Successfully recovered from backup`}
+                collectionName="Collections"
+                updateRemoteData={props.updateRemoteData}
+                collections={previousCollections}
+                closeSnackbar={closeSnackbar}
+                undoBackgroundColor={SnackbarStyle.SUCCESS.backgroundColor}
+                duration={UNDO_TIME}
+            />, UNDO_TIME * 1000);
+    };
+
+    const handleSyncDebug = () => {
+        setIsSyncDebugModalOpen(true);
+        setIsDrawerOpen(false);
+    };
+
+    const closeSyncDebugModal = () => {
+        setIsSyncDebugModalOpen(false);
+    };
 
     const handleExport = async () => {
-        const { tabsArray } = await browser.storage.local.get('tabsArray');
-        const options = { year: 'numeric', month: 'numeric', day: 'numeric' };
-        const date = new Date().toLocaleString('en-US', options).replace(/\//g, '-');
-        const filename = `tabox_collections_${date}`;
-        downloadTextFile(JSON.stringify(tabsArray), filename);
-        openSnackbar(`Exported all collections to file: ${filename}.txt`);
-    }
+        setIsDrawerOpen(false);
+        try {
+            // Get all collections and folders
+            const { loadAllCollections, loadAllFolders } = await import('./utils/storageUtils');
+            const collections = await loadAllCollections();
+            const folders = await loadAllFolders();
+
+            // Create comprehensive export data
+            const exportData = {
+                type: 'full_export',
+                collections: collections,
+                folders: folders,
+                exportedAt: new Date().toISOString(),
+                version: '2.0',
+                stats: {
+                    totalCollections: collections.length,
+                    totalFolders: folders.length,
+                    collectionsInFolders: collections.filter(c => c.parentId).length,
+                    rootCollections: collections.filter(c => !c.parentId).length
+                }
+            };
+
+            const exported = JSON.stringify(exportData, null, 2);
+            downloadTextFile(exported, `tabox-full-export-${Date.now()}`);
+        } catch (error) {
+            console.error('Error exporting all data:', error);
+            // Fallback to old method
+            const { settingsData } = await browser.storage.local.get('settingsData');
+            const exported = JSON.stringify(settingsData, null, 2);
+            downloadTextFile(exported, `tabox-export-${Date.now()}`);
+        }
+    };
 
     const handleAutoUpdate = async () => {
         setTimeout(async () => {
@@ -88,145 +142,235 @@ export default function SettingsMenu(props) {
         }, 100);
     }
 
-    const focusableItemStyles = { width: '390px' };
+    const toggleDrawer = () => {
+        setIsDrawerOpen(!isDrawerOpen);
+    }
 
-    return <div className="settings-wrapper">
-        <Menu 
-            menuButton={
-                ({ open }) => <div className="settings-button">
-                    <RiSettings5Fill color={open ? 'var(--primary-color)' : 'var(--text-color)'} size="24" />
-            </div>}
-            arrow
-            theming={themeMode === 'dark' ? 'dark' : undefined}
-            overflow="auto"
-            position="anchor"
-            className='settings-items-wrapper'
-        >
-            <MenuHeader><RiSettings5Fill /> General Settings</MenuHeader>
-            <FocusableItem styles={focusableItemStyles}>
-                {() => (
-                <Switch 
-                    id="chkShowBadge"
-                    onMouseUp={handleShowBadge}
-                    textOn={<span>Tab counter badge <strong>Enabled</strong></span>}
-                    textOff={<span>Tab counter badge <strong>Disabled</strong></span>}
-                />
-                )}
-            </FocusableItem>
-            <MenuDivider />
-            <MenuHeader><RiFolderAddFill /> When adding a collection</MenuHeader>
-            <FocusableItem styles={focusableItemStyles}>
-                {() => (
-                <Switch 
-                    id="chkIgnorePinned"
-                    textOn={<span><strong>Do not include</strong> pinned tabs</span>}
-                    textOff={<span><strong>Include</strong> pinned tabs</span>}
-                />
-                )}
-            </FocusableItem>
-            <MenuDivider />
-            <MenuHeader><ImNewTab /> When opening collections</MenuHeader>
-            <FocusableItem styles={focusableItemStyles}>
-                {() => (
-                <Switch 
-                    id="chkIgnoreDuplicates"
-                    textOn={<span>If a tab already exists, <strong>do not open it</strong></span>}
-                    textOff={<span>If a tab already exists, <strong>open it anyway</strong></span>}
-                />
-                )}
-            </FocusableItem>
-            <FocusableItem styles={focusableItemStyles}>
-                {() => (
-                <Switch 
-                    id="chkEnableTabDiscard"
-                    data-tip="Tab discard will unload the tab, quickly reloading it when focused.<br>This can help improve performance when opening a lot of tabs."
-                    textOn={<span>Discard tabs on open: <strong>Enabled</strong></span>}
-                    textOff={<span>Discard tabs on open: <strong>Disabled</strong></span>}
-                />
-                )}
-            </FocusableItem>
-            <MenuDivider />
-            <MenuHeader><RiEdit2Line /> When editing collections</MenuHeader>
-            <FocusableItem styles={focusableItemStyles}>
-                {() => (
-                <Switch 
-                    id="chkColEditIgnoreDuplicateTabs"
-                    data-tip="A tab is considered 'duplicate' <br />if it has the exact same URL as another tab"
-                    textOn={<span>If a tab exists in the collection, <strong>do not add it</strong></span>}
-                    textOff={<span>If a tab exists in the collection, <strong>add it anyway</strong></span>}
-                />
-                )}
-            </FocusableItem>
-            <FocusableItem styles={focusableItemStyles}>
-                {() => (
-                <Switch 
-                    id="chkColEditIgnoreDuplicateGroups"
-                    data-tip="A group is considered 'duplicate' <br />if it has the exact same name and color as another group"
-                    textOn={<span>If a group already exists, <strong>append tabs to it</strong></span>}
-                    textOff={<span>If a group already exists, <strong>add as a new group</strong></span>}
-                />
-                )}
-            </FocusableItem>
-            <MenuDivider />
-            <MenuHeader><MdOutlineSyncAlt /> Auto update collections</MenuHeader>
-            <FocusableItem styles={focusableItemStyles}>
-                {() => (
-                    <>
-                    <Switch 
-                        id="chkEnableAutoUpdate"
-                        onMouseUp={handleAutoUpdate}
-                        data-multiline={true}
-                        data-tip="When opening a collection, track changes<br />to the window and update the collection in the background."
-                        textOn={<span>Auto updating collections: <strong>Enabled</strong><sup>BETA</sup></span>}
-                        textOff={<span>Auto updating collections: <strong>Disabled</strong><sup>BETA</sup></span>}
-                    />&nbsp;
-                    <AiTwotoneExperiment 
-                        size="16" 
-                        data-multiline={true} 
-                        data-tip="WARNING!<br />This feature is experimental and may cause unexpected issues." />
-                    </>
-                )}
-            </FocusableItem>
-            <FocusableItem styles={focusableItemStyles}>
-                {() => (
-                    <>
-                    <Switch 
-                        id="chkAutoUpdateOnNewCollection"
-                        data-multiline={true}
-                        disabled={!autoUpdateEnabled}
-                        data-tip="When adding a new collection, start auto updating<br /> it with changes in the current window."
-                        textOn={<span>Auto update new collections: <strong>Enabled</strong><sup>BETA</sup></span>}
-                        textOff={<span>Auto update new collections: <strong>Disabled</strong><sup>BETA</sup></span>}
-                    />&nbsp;
-                    <AiTwotoneExperiment 
-                        size="16" 
-                        data-multiline={true} 
-                        data-tip="WARNING!<br />This feature is experimental and may cause unexpected issues." />
-                    </>
-                )}
-            </FocusableItem>
-            <FocusableItem styles={focusableItemStyles}>
-                {() => (
-                    <>
-                    <Switch 
-                        id="chkManualUpdateLinkCollection"
-                        data-multiline={true}
-                        disabled={!autoUpdateEnabled}
-                        data-tip="When clicking the 'Update' button, this will link<br /> the collection to the window, making it 'active'."
-                        textOn={<span>Click on &#39;Update&#39; sets active: <strong>Enabled</strong><sup>BETA</sup></span>}
-                        textOff={<span>Click on &#39;Update&#39; sets active: <strong>Disabled</strong><sup>BETA</sup></span>}
-                    />&nbsp;
-                    <AiTwotoneExperiment 
-                        size="16" 
-                        data-multiline={true} 
-                        data-tip="WARNING!<br />This feature is experimental and may cause unexpected issues." />
-                    </>
-                )}
-            </FocusableItem>
-            <MenuDivider />
-            <MenuHeader><MdSettingsBackupRestore /> Backup &amp; Restore</MenuHeader>
-            <MenuItem onClick={handleExport}>Export all collections to file</MenuItem>
-            <MenuItem onClick={handleRestoreBackup}>Restore collections from backup</MenuItem>
-        </Menu>
-    </div>
+    // Toggle section expansion
+    const toggleSection = (sectionKey) => {
+        setExpandedSections(prev => ({
+            ...prev,
+            [sectionKey]: !prev[sectionKey]
+        }));
+    };
+
+    return (
+        <>
+            <div className="settings-wrapper">
+                <div className="settings-button" onClick={toggleDrawer}>
+                    <RiSettings5Fill 
+                        color={isDrawerOpen ? 'var(--primary-color)' : 'var(--text-color)'} 
+                        size="24" 
+                    />
+                </div>
+            </div>
+
+            {ReactDOM.createPortal(
+                <div className={`custom-drawer-overlay ${isDrawerOpen ? 'open' : ''}`} onClick={() => setIsDrawerOpen(false)}>
+                    <div className={`custom-drawer ${isDrawerOpen ? 'open' : ''}`} onClick={(e) => e.stopPropagation()}>
+                        <div className="settings-drawer-content">
+                            {/* Header */}
+                            <div className="settings-header">
+                                <h2><RiSettings5Fill /> Settings</h2>
+                                <button className="close-button" onClick={() => setIsDrawerOpen(false)}>
+                                    <MdClose size="20" />
+                                </button>
+                            </div>
+
+                            {/* Content */}
+                            <div className="settings-content">
+                                {/* General Settings */}
+                                <div className="settings-section">
+                                    <h3 className="settings-collapsible-header" onClick={() => toggleSection('general')}>
+                                        <div className="header-content">
+                                            <RiSettings5Fill /> 
+                                            <span>General Settings</span>
+                                        </div>
+                                        {expandedSections.general ? <MdExpandLess /> : <MdExpandMore />}
+                                    </h3>
+                                    <div className={`collapsible-content ${expandedSections.general ? 'expanded' : 'collapsed'}`}>
+                                        <div className="setting-item">
+                                            <Switch 
+                                                id="darkModeToggle"
+                                                onMouseUp={handleDarkModeToggle}
+                                                textOn={<span><IoMoon size="16" style={{ marginRight: '8px' }} />Dark Mode: <strong>On</strong></span>}
+                                                textOff={<span><IoSunny size="16" style={{ marginRight: '8px' }} />Dark Mode: <strong>Off</strong></span>}
+                                            />
+                                        </div>
+                                        <div className="setting-item">
+                                            <Switch 
+                                                id="chkShowBadge"
+                                                onMouseUp={handleShowBadge}
+                                                textOn={<span>Tab counter badge <strong>Enabled</strong></span>}
+                                                textOff={<span>Tab counter badge <strong>Disabled</strong></span>}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* When adding a collection */}
+                                <div className="settings-section">
+                                    <h3 className="settings-collapsible-header" onClick={() => toggleSection('adding')}>
+                                        <div className="header-content">
+                                            <RiFolderAddFill /> 
+                                            <span>When adding a collection</span>
+                                        </div>
+                                        {expandedSections.adding ? <MdExpandLess /> : <MdExpandMore />}
+                                    </h3>
+                                    <div className={`collapsible-content ${expandedSections.adding ? 'expanded' : 'collapsed'}`}>
+                                        <div className="setting-item">
+                                            <Switch 
+                                                id="chkIgnorePinned"
+                                                textOn={<span><strong>Do not include</strong> pinned tabs</span>}
+                                                textOff={<span><strong>Include</strong> pinned tabs</span>}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* When opening collections */}
+                                <div className="settings-section">
+                                    <h3 className="settings-collapsible-header" onClick={() => toggleSection('opening')}>
+                                        <div className="header-content">
+                                            <ImNewTab /> 
+                                            <span>When opening collections</span>
+                                        </div>
+                                        {expandedSections.opening ? <MdExpandLess /> : <MdExpandMore />}
+                                    </h3>
+                                    <div className={`collapsible-content ${expandedSections.opening ? 'expanded' : 'collapsed'}`}>
+                                        <div className="setting-item">
+                                            <Switch 
+                                                id="chkIgnoreDuplicates"
+                                                textOn={<span>If a tab already exists, <strong>do not open it</strong></span>}
+                                                textOff={<span>If a tab already exists, <strong>open it anyway</strong></span>}
+                                            />
+                                        </div>
+                                        <div className="setting-item">
+                                            <Switch 
+                                                id="chkEnableTabDiscard"
+                                                data-tip="Smart tab loading delays non-essential tabs to improve performance.<br>Automatically avoids deferring media, auth, development, and collaboration sites.<br>Tabs load instantly when you switch to them."
+                                                textOn={<span>Smart tab loading: <strong>Enabled</strong></span>}
+                                                textOff={<span>Smart tab loading: <strong>Disabled</strong></span>}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* When editing collections */}
+                                <div className="settings-section">
+                                    <h3 className="settings-collapsible-header" onClick={() => toggleSection('editing')}>
+                                        <div className="header-content">
+                                            <RiEdit2Line /> 
+                                            <span>When editing collections</span>
+                                        </div>
+                                        {expandedSections.editing ? <MdExpandLess /> : <MdExpandMore />}
+                                    </h3>
+                                    <div className={`collapsible-content ${expandedSections.editing ? 'expanded' : 'collapsed'}`}>
+                                        <div className="setting-item">
+                                            <Switch 
+                                                id="chkColEditIgnoreDuplicateTabs"
+                                                data-tip="A tab is considered 'duplicate' <br />if it has the exact same URL as another tab"
+                                                textOn={<span>If a tab exists in the collection, <strong>do not add it</strong></span>}
+                                                textOff={<span>If a tab exists in the collection, <strong>add it anyway</strong></span>}
+                                            />
+                                        </div>
+                                        <div className="setting-item">
+                                            <Switch 
+                                                id="chkColEditIgnoreDuplicateGroups"
+                                                data-tip="A group is considered 'duplicate' <br />if it has the exact same name and color as another group"
+                                                textOn={<span>If a group already exists, <strong>append tabs to it</strong></span>}
+                                                textOff={<span>If a group already exists, <strong>add as a new group</strong></span>}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Auto update collections */}
+                                <div className="settings-section">
+                                    <h3 className="settings-collapsible-header" onClick={() => toggleSection('autoUpdate')}>
+                                        <div className="header-content">
+                                            <MdOutlineSyncAlt /> 
+                                            <span>Auto update collections</span>
+                                        </div>
+                                        {expandedSections.autoUpdate ? <MdExpandLess /> : <MdExpandMore />}
+                                    </h3>
+                                    <div className={`collapsible-content ${expandedSections.autoUpdate ? 'expanded' : 'collapsed'}`}>
+                                        <div className="setting-item">
+                                            <Switch 
+                                                id="chkEnableAutoUpdate"
+                                                onMouseUp={handleAutoUpdate}
+                                                data-multiline={true}
+                                                data-tip="When opening a collection, track changes<br />to the window and update the collection in the background."
+                                                textOn={<span>Auto updating collections: <strong>Enabled</strong></span>}
+                                                textOff={<span>Auto updating collections: <strong>Disabled</strong></span>}
+                                            />
+                                        </div>
+                                        <div className="setting-item">
+                                            <Switch 
+                                                id="chkAutoUpdateOnNewCollection"
+                                                data-multiline={true}
+                                                disabled={!autoUpdateEnabled}
+                                                data-tip="When adding a new collection, start auto updating<br /> it with changes in the current window."
+                                                textOn={<span>Auto update new collections: <strong>Enabled</strong></span>}
+                                                textOff={<span>Auto update new collections: <strong>Disabled</strong></span>}
+                                            />
+                                        </div>
+                                        <div className="setting-item">
+                                            <Switch 
+                                                id="chkManualUpdateLinkCollection"
+                                                data-multiline={true}
+                                                disabled={!autoUpdateEnabled}
+                                                data-tip="When clicking the 'Update' button, this will link<br /> the collection to the window, making it 'active'."
+                                                textOn={<span>Click on &#39;Update&#39; sets active: <strong>Enabled</strong></span>}
+                                                textOff={<span>Click on &#39;Update&#39; sets active: <strong>Disabled</strong></span>}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Backup & Restore */}
+                                <div className="settings-section">
+                                    <h3 className="settings-collapsible-header" onClick={() => toggleSection('backup')}>
+                                        <div className="header-content">
+                                            <MdSettingsBackupRestore /> 
+                                            <span>Backup & Restore</span>
+                                        </div>
+                                        {expandedSections.backup ? <MdExpandLess /> : <MdExpandMore />}
+                                    </h3>
+                                    <div className={`collapsible-content ${expandedSections.backup ? 'expanded' : 'collapsed'}`}>
+                                        <button className="menu-button" onClick={handleExport}>
+                                            Export all collections & folders
+                                        </button>
+                                        {isLoggedIn && (
+                                            <button className="menu-button" onClick={handleSyncDebug}>
+                                                <MdBugReport size="14" style={{ marginRight: '8px' }} />
+                                                Sync Debug & Recovery
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>, document.body)}
+
+            <Modal
+                isOpen={isSyncDebugModalOpen}
+                onRequestClose={closeSyncDebugModal}
+                contentLabel="Sync Debug Modal"
+                className="modal-content"
+                overlayClassName="modal-overlay"
+                ariaHideApp={false}
+            >
+                <Suspense fallback={<div style={{padding: '20px', textAlign: 'center'}}>Loading...</div>}>
+                    <SyncDebugModal 
+                        onClose={closeSyncDebugModal}
+                        applyDataFromServer={props.applyDataFromServer}
+                        updateRemoteData={props.updateRemoteData}
+                        onRecoverySuccess={showRecoverySuccess}
+                    />
+                </Suspense>
+            </Modal>
+        </>
+    )
 }

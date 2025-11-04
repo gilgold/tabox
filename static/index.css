@@ -1,48 +1,58 @@
 :root, [data-theme="light"] {
   --primary-color: #1698e2;
   --divider-color: #d1d1d1;
-  --text-color: #5d5d5d;
+  --text-color: #464646;
   --bg-color: #fff;
-  --setting-row-border-color: #efefef;
+  --settings-bg-color: #fff;
+  --setting-row-border-color: #bebebe;
   --setting-row-hover-bg-color: #efefef;
-  --settings-row-text-color: #838685;
+  --settings-row-text-color: #464646;
   --highlight-row-color: #f2fad1;
-  --footer-bg-color: #d8dadd;
-  --footer-text-color: #86928d;
+  --footer-bg-color: #e3eff6;
+  --section-bg-color: #d1ceff12;
+  --footer-text-color: #464646;
   --link-hover-color: #E09500;
-  --input-bg-color: #efefef;
+  --input-bg-color: #F5F9FB;
   --switch-bg-color: #c2c2c2;
-  --update-btn-bg-color: #e7ce67;
-  --update-btn-main-color: #685211; 
   --avatar-bg: #c4c5c4;
   --picker-bg-color: #a3aca9;
   --single-tab-row-hover-color: #d5e0ea;
-  --active-auto-update-gradient: radial-gradient(circle at center, #e2edf4 0%, #e6eff5 4%, #eef3fb 12.25%);
+  --active-auto-update-gradient: linear-gradient(90deg, rgba(22, 152, 226, 0.35), rgba(139, 93, 255, 0.35), rgba(255, 140, 66, 0.35));
   --focus-btn-bg-color: #e74c3c;
-  --focus-btn-text-color: #f6f9fb;
+  --gradient-blue: #1698e2;
+  --gradient-purple: #8B5DFF;
+  --gradient-orange: #FF8C42;
+  --tile-color: #f0f0f0;
+  --primary-hover-bg: rgba(22, 152, 226, 0.15);
+  --bg-gradient: linear-gradient(to bottom, #b9d8ff, #d3e9ff, #ffffff, #fafcfe, #fafcfe, #fafcfe, #fafcfe, #fafcfe, #ffffff);
 }
 [data-theme="dark"] {
-  --primary-color: #177CB6;
+  --primary-color: #3A77D8;
   --divider-color: #2f343b;
   --text-color: #f2f2f2;
   --bg-color: #212121;
+  --settings-bg-color: #2B303C;
   --setting-row-border-color: #2B303C;
   --setting-row-hover-bg-color: #2f343b;
   --settings-row-text-color: #c3c3c3;
   --highlight-row-color: #5b5f4a;
-  --footer-bg-color: #444c58;
+  --footer-bg-color: #2A333E;
+  --section-bg-color: #2d33478c;
   --footer-text-color: #939fa7;
   --link-hover-color: #E09500;
   --input-bg-color: #2f343b;
   --switch-bg-color: #4b4c4b;
-  --update-btn-bg-color: #8c812e;
-  --update-btn-main-color: #fff189;
   --avatar-bg: #666666;
   --picker-bg-color: #323941;
   --single-tab-row-hover-color: #3e4554;
-  --active-auto-update-gradient: radial-gradient(circle at center, #323b48 0%, #353c46 4%, #313a46 12.25%, #2f343b 31.25%);
+  --active-auto-update-gradient: linear-gradient(90deg, rgba(58, 119, 216, 0.35), rgba(168, 85, 247, 0.35), rgba(251, 146, 60, 0.35));
   --focus-btn-bg-color: #e74c3c;
-  --focus-btn-text-color: #f6f9fb;
+  --gradient-blue: #3A77D8;
+  --gradient-purple: #A855F7;
+  --gradient-orange: #FB923C;
+  --tile-color: #2f3b45;
+  --primary-hover-bg: rgba(58, 119, 216, 0.15);
+  --bg-gradient: linear-gradient(to bottom, #152d4c, #0f1e32, #0d1a27, #090e14, #090e14, #090e14, #090e14, #090e14, #000000);
 }
 body, html, * {
   font-family: "Helvetica Neue", Helvetica, Arial, "Lucida Grande", sans-serif;
@@ -53,10 +63,11 @@ body {
   padding:0;
   margin:0;
   border:0;
-  width: 650px;
-  min-height: 520px;
-  overflow-x:auto;
-  background-color:var(--bg-color);
+  width: 670px;
+  height: 585px;
+  max-height: 585px;
+  overflow: hidden;
+  background: var(--bg-gradient);
   color: var(--text-color);
   font-size:1em;
   user-select: text;
@@ -92,6 +103,85 @@ body {
   width:30px;
 }
 .small-tooltip {
-	font-size: 11px !important;
-	padding: 3px 10px !important;
+	font-size: 12px !important;
+	padding: 6px 10px !important;
+}
+
+/* Global z-index fix for react-tiny-popover in grid tiles */
+body > div[style*="position"]:has(.popover),
+body > div[style*="z-index"]:has(.popover) {
+	z-index: 2000 !important;
+}
+
+/* Catch-all for any popover container */
+[data-popover-container],
+.react-tiny-popover-container {
+	z-index: 2000 !important;
+}
+
+/* Global z-index fix for react-simple-snackbar */
+body > div[style*="position"][style*="bottom"],
+div[style*="position: fixed"][style*="bottom"],
+div[class*="snackbar"],
+[data-snackbar-container],
+.snackbar-wrapper {
+	z-index: 100000 !important;
+}
+
+/* Target react-simple-snackbar's auto-generated containers */
+div[style*="bottom"][style*="position"]:has(.snackbar-wrapper),
+div[style*="position: fixed"][style*="bottom"]:not(:has(.popover)) {
+	z-index: 100000 !important;
+}
+
+/* Simple, non-intrusive styling for react-simple-snackbar containers */
+body > div[style*="position: fixed"][style*="bottom"] > div[style*="background"]:not(:has(.snackbar-wrapper)) {
+	/* Only add visual effects without changing layout */
+	background: 'transparent' !important;
+  backdrop-filter: 'none' !important;
+  border: 'none';
+  border-radius: 0;
+  padding: 0;
+  box-shadow: 'none';
+  text-shadow: 'none';
+}
+
+/* Fix tooltip z-index to appear above all floating elements including settings menu */
+.__react_component_tooltip,
+.react-tooltip,
+[class*="tooltip"],
+div[data-tip],
+div[data-place] {
+	z-index: 1000000 !important;
+}
+
+/* Ensure ReactTooltip containers appear above floating elements */
+.__react_component_tooltip.show {
+	z-index: 1000000 !important;
+}
+
+/* Fix for any tooltip portal containers */
+body > div[role="tooltip"],
+body > div[class*="tooltip"] {
+	z-index: 1000000 !important;
+}
+
+/* Global overrides for react-modern-drawer */
+[class*="drawer"],
+[class*="Drawer"],
+div[style*="position: fixed"][style*="right"],
+div[style*="position: fixed"][style*="left"],
+div[style*="position: fixed"][style*="top"],
+div[style*="position: fixed"][style*="bottom"] {
+	z-index: 999999 !important;
+}
+
+/* Specific overrides for any drawer overlay */
+div[style*="position: fixed"][style*="z-index"] {
+	z-index: 999999 !important;
+}
+
+/* Target any fixed positioned elements that might be the drawer */
+body > div[style*="position: fixed"] {
+	z-index: 999999 !important;
 }

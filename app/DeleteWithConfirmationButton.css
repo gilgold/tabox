@@ -1,14 +1,23 @@
 .del {
 	cursor: pointer;
-	margin-left: 5px;
 	overflow: hidden;
-	display: inline-block;
-	height: 22px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	height: 24px;
+	width: 24px;
+	border-radius: 4px;
+	transition: all 0.2s ease;
+}
+
+.del:hover {
+	background-color: rgba(182, 74, 74, 0.1);
 }
 
 .slider-wrapper {
     position: relative;
     display: flex;
+    align-items: center;
 }
 
 .slider-message {
@@ -19,45 +28,41 @@
     white-space: nowrap;
 }
 
-.slider-del {
-    display: inline-flex;
-}
+
 
 .slider {
     background-color: #d22c28;
-    border-top-right-radius: 5px;
-    border-bottom-right-radius: 5px;
+    border-radius: 5px;
     display: flex;
     align-items: center;
-    justify-content: space-evenly;
+    justify-content: center;
     width: 0px;
+    height: 24px;
     overflow: hidden;
     text-overflow: clip;
     transition: all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    transform-origin: top left;
-}
-.slider:before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: -3px;
-    background-color: var(--setting-row-hover-bg-color);
-    width: 6px;
-    height: 28px;
-    border-radius: 5px;
+    transform-origin: left center;
+    margin-left: 4px;
 }
 .slider-open {
-    width: 80px;
+    width: 70px;
 }
 .slider-button {
     background-color: transparent;
-    border-radius: 5px;
+    border-radius: 4px;
     border: none;
     color: #fff;
-    font-size: 0.7em;
-    padding: 2px 15px;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 4px 12px;
     cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
 }
 .slider-button:hover {
-    background-color: #e94b48;
+    background-color: rgba(255, 255, 255, 0.2);
+}
+.slider-button:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
 }

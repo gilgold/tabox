@@ -10,6 +10,13 @@ export const AutoSaveTextbox = (props) => {
     const [typing, setTyping] = useState(false);
     const [isInitial, setIsInitial] = useState(true);
     const inputRef = useRef();
+    const mountedRef = useRef(true);
+    const timeoutRefs = useRef({
+        action: null,
+        typing: null,
+        saved: null,
+        initial: null
+    });
 
     const handleOnChange = (event) => {
         setSaved(false);
@@ -17,52 +24,103 @@ export const AutoSaveTextbox = (props) => {
         setValue(event.target.value);
     };
 
+    // Cleanup function
+    const clearAllTimeouts = () => {
+        Object.values(timeoutRefs.current).forEach(timeout => {
+            if (timeout) clearTimeout(timeout);
+        });
+        timeoutRefs.current = {
+            action: null,
+            typing: null,
+            saved: null,
+            initial: null
+        };
+    };
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            mountedRef.current = false;
+            clearAllTimeouts();
+        };
+    }, []);
+
     useEffect(() => {
         setValue(props.initValue);
         setIsInitial(false);
     }, []);
 
     useEffect(() => {
-        setIsInitial(true);
-        setValue(props.initValue);
-        const isInitialTimer = setTimeout(() => setIsInitial(false), 200);
+        clearAllTimeouts();
+        
+        if (mountedRef.current) {
+            setIsInitial(true);
+            setValue(props.initValue);
+        }
+        
+        timeoutRefs.current.initial = setTimeout(() => {
+            if (mountedRef.current) {
+                setIsInitial(false);
+            }
+        }, 200);
+
         return () => {
-            clearTimeout(isInitialTimer);
-            setTyping(false);
-            setSaved(false);
+            clearAllTimeouts();
+            if (mountedRef.current) {
+                setTyping(false);
+                setSaved(false);
+            }
         };
     }, [props.initValue]);
 
     useEffect(() => {
         if (isInitial) return;
-        setTyping(true);
-        let typingTimer;
-        let savedTimer;    
-        const timeoutId = setTimeout(() => {
-            props.action(value.trim(), props.item);
-            typingTimer = setTimeout(() => {setTyping(false); setSaved(true);}, 100);
-            savedTimer = setTimeout(() => setSaved(false), 2300);
+        
+        clearAllTimeouts();
+        
+        if (mountedRef.current) {
+            setTyping(true);
+        }
+        
+        timeoutRefs.current.action = setTimeout(() => {
+            if (mountedRef.current) {
+                props.action(value.trim(), props.item);
+                
+                timeoutRefs.current.typing = setTimeout(() => {
+                    if (mountedRef.current) {
+                        setTyping(false);
+                        setSaved(true);
+                    }
+                }, 100);
+                
+                timeoutRefs.current.saved = setTimeout(() => {
+                    if (mountedRef.current) {
+                        setSaved(false);
+                    }
+                }, 2300);
+            }
         }, 700);
+
         return () => {
-            clearTimeout(typingTimer);
-            clearTimeout(savedTimer);
-            clearTimeout(timeoutId);
+            clearAllTimeouts();
         };
     }, [value]);
 
     return (
-        <div className="autosave-wrapper">
-            <div className="edit-icon" onClick={() => inputRef.current.focus()}>
-                <AiFillEdit size="17px" color="var(--text-color)" />
+        <div className="autosave-wrapper" onClick={(e) => e.stopPropagation()}>
+            <div className="edit-icon" onClick={(e) => { e.stopPropagation(); inputRef.current.focus(); }}>
+                <AiFillEdit size="14px" color="var(--text-color)" />
             </div>
             <input 
                 ref={inputRef} 
                 className="autosave-textbox" 
-                placeholder="No name" 
+                placeholder={props.placeholder || "Enter name..."} 
                 maxLength={props.maxLength ?? -1}
                 onChange={handleOnChange} 
+                onClick={(e) => e.stopPropagation()}
+                onFocus={(e) => e.stopPropagation()}
                 data-multiline={true} 
-                data-tip="Type here to edit.<br />Changes are saved automatically." 
+                data-tip="Click to edit • Auto-saves as you type" 
                 data-class="small-tooltip"
                 value={value} />
             {saved ? (

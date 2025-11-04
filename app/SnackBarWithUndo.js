@@ -19,21 +19,20 @@ export const SnackBarWithUndo = (props) => {
                 collections={props.collections}
                 closeSnackbar={props.closeSnackbar}
             />
-            <span style={{ width: '5px' }} />
             <CountdownCircleTimer
                 isPlaying
-                size={36}
-                trailColor={'snow'}
-                trailStrokeWidth={3}
+                size={24}
+                trailColor={'rgba(255, 255, 255, 0.15)'}
+                trailStrokeWidth={2}
                 rotation={'counterclockwise'}
-                strokeWidth={4}
+                strokeWidth={2}
                 duration={props.duration}
                 colors={[
-                    props.undoBackgroundColor, 
-                    '#fff',
+                    'rgba(255, 255, 255, 0.8)', 
+                    'rgba(255, 255, 255, 0.6)',
                 ]}
             >
-                {() => <button className="snackbar-button" onClick={props.closeSnackbar}><IoClose size="24px" /></button>}
+                {() => <button className="snackbar-button" onClick={props.closeSnackbar}><IoClose size="14px" /></button>}
             </CountdownCircleTimer>
         </div>
     </div>

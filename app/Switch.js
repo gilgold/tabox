@@ -7,13 +7,14 @@ const Switch = props => {
   const { id: _id, textOn, textOff, disabled, ...otherProps } = props;
   const [isChecked, setIsChecked] = useState(false);
   useEffect(() => {
+    // Rebuild tooltips when component mounts (only once, not on every render)
     ReactTooltip.rebuild();
     browser.storage.local.get(_id).then((items) => {
         if (items[_id]) {
             setIsChecked(items[_id]);
         }
     });
-  }, []);
+  }, []); // Empty deps array = run only once on mount
 
   useEffect(() => {
     setLocalStorage(disabled ? false : isChecked);

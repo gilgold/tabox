@@ -1,6 +1,5 @@
 import React from 'react';
-import './BackupOptionsModal.css';
-import './SessionsModal.css';
+import './Modal.css';
 import { CgBrowser } from 'react-icons/cg';
 import { SlClose } from 'react-icons/sl';
 import TimeAgo from 'javascript-time-ago';
@@ -32,7 +31,7 @@ export const SessionsModal = ({ sessions, onClose, addCollection }) => {
     return (
         <div className='modal-card'>
             <div className='modal-card-wrapper session-card-wrapper'>
-                <div className='close-button'><SlClose size={'25px'} onClick={onClose} /></div>
+                <div className='modal-close-button'><SlClose size={'25px'} onClick={onClose} /></div>
                 <div className='modal-card-content'>
                     <div className='modal-card-header'>
                         Session Restore

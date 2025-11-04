@@ -1,33 +1,71 @@
 input[type="text"] {
   font-size: .85em;
-  background-color: var(--input-bg-color);
   color: var(--text-color);
-  padding: 4px 10px 7px 5px;
-  float: left;
-  width: 350px;
+  padding: 7px 10px;
   border: none;
-  border-top-left-radius: 5px;
-  border-top-right-radius: 5px;
-  border-bottom: 1px solid var(--primary-color);
+  border-radius: 20px;
   padding-right: 25px;
+  background: linear-gradient(var(--input-bg-color), var(--input-bg-color)) padding-box,
+    linear-gradient(90deg, var(--gradient-blue), var(--gradient-purple), var(--gradient-orange)) border-box;
+  border: 2px solid transparent;
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+  display: flex;
+  flex: none;
+  flex-basis: 310px;
+}
+
+input[type="text"]:hover {
+  box-shadow: 0 0 8px rgba(58, 119, 216, 0.15);
 }
 
 input[type="text"]:focus {
   outline: none;
+  background: linear-gradient(var(--input-bg-color), var(--input-bg-color)) padding-box,
+    linear-gradient(90deg, var(--gradient-blue), var(--gradient-purple), var(--gradient-orange)) border-box;
+  border: 2px solid transparent;
+  box-shadow: 0 0 12px rgb(88 139 221 / 51%);
 }
 
 .add-collections-wrapper {
   display: flex;
   flex-direction: row;
-  align-items: start;
-  justify-content: start;
-  padding-bottom: 10px;
-  margin-top: 22px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0;
+  margin: 2px 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  position: relative;
+  left: 0;
+  right: 0;
+  z-index: 1;
+}
+
+.left-controls-group {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.right-controls-group {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .add-collection-group {
   position: relative;
-  width: 340px;
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  flex: none;
+  width: 310px;
 }
 
 label.textbox_label {
@@ -36,84 +74,106 @@ label.textbox_label {
   font-weight: normal;
   position: absolute;
   pointer-events: none;
-  left: 5px;
-  top: 6px;
+  left: 14px;
+  top: 9px;
   transition: 0.25s ease-in-out all;
 }
 
-input[type="text"]:focus~label.textbox_label, input[type="text"]:not(:placeholder-shown)~label.textbox_label {
-  top: -20px;
-  left: 0;
+input[type="text"]:focus~label.textbox_label,
+input[type="text"]:not(:placeholder-shown)~label.textbox_label {
+  top: -7px;
+  left: 20px;
   font-size: .75em;
   color: var(--text-color);
+  text-shadow:
+    -2px -2px 0 rgba(255, 255, 255, 0.8),
+    2px -2px 0 rgba(255, 255, 255, 0.8),
+    -2px 2px 0 rgba(255, 255, 255, 0.8),
+    2px 2px 0 rgba(255, 255, 255, 0.8);
 }
 
-.bar {
-  float: left;
+/* Dark Mode Label Outline - Dark shadow for light text */
+[data-theme="dark"] input[type="text"]:focus~label.textbox_label,
+[data-theme="dark"] input[type="text"]:not(:placeholder-shown)~label.textbox_label {
+  text-shadow:
+    -2px -2px 0 rgba(0, 0, 0, 0.7),
+    2px -2px 0 rgba(0, 0, 0, 0.7),
+    -2px 2px 0 rgba(0, 0, 0, 0.7),
+    2px 2px 0 rgba(0, 0, 0, 0.7);
+}
+
+/* Modern Liquid Glass Add Collection Button */
+.add-new-collection-btn {
   position: relative;
-  display: block;
-  width: 200px;
-}
-
-.bar:before, .bar:after {
-  content: '';
-  height: 2px;
-  width: 0;
-  bottom: 1px;
-  position: absolute;
-  background: var(--primary-color);
-  transition: 0.3s ease all;
-  -moz-transition: 0.3s ease all;
-  -webkit-transition: 0.3s ease all;
-}
-
-.bar:before {
-  left: 50%;
-}
-
-.bar:after {
-  right: 50%;
-}
-
-/* active state */
-
-input[type="text"]:focus~.bar:before, input[type="text"]:focus~.bar:after {
-  width: 50%;
-}
-
-/* buttons */
-
-.btn {
-  position: relative;
-  margin-left: 5px;
-  display: inline-block;
+  display: flex;
   padding: 0;
   overflow: hidden;
-  border-width: 0;
-  outline: none;
-  border-radius: 5px;
-  background-color: var(--primary-color);
-  color: #ecf0f1;
-  transition: background-color .3s;
+
+  /* Liquid Glass Effect */
+  background: linear-gradient(135deg, #0084d0, #0074b7);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #f2f2f2;
+
+  /* Modern Shape */
+  border-radius: 16px;
+
+  /* Effects */
+  box-shadow:
+    0 2px 8px rgba(0, 132, 208, 0.2),
+    0 1px 3px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Sizing */
+  flex-shrink: 0;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  min-width: 126px;
 }
 
-.btn:hover, .btn:focus {
-  background-color: #029ef8;
+.add-new-collection-btn:hover,
+.add-new-collection-btn:focus {
   cursor: pointer;
+  background: linear-gradient(135deg, #0094e6, #0084d0);
+  transform: translateY(-1px) scale(1.02);
+  box-shadow:
+    0 4px 16px rgba(0, 132, 208, 0.3),
+    0 2px 6px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
-.btn>* {
+.add-new-collection-btn:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow:
+    0 2px 8px rgba(0, 132, 208, 0.4),
+    inset 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.add-new-collection-btn:disabled {
+  opacity: 0.6;
+  transform: none;
+  cursor: not-allowed;
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.add-new-collection-btn>* {
   position: relative;
+  z-index: 2;
 }
 
-.btn span {
+.add-new-collection-btn span {
   display: inline-block;
-  padding: 6px 18px;
-  font-size: 1em;
+  padding: 10px 20px;
+  font-size: 0.9em;
   font-weight: 600;
+  line-height: 1;
 }
 
-.btn:before {
+/* Enhanced Ripple Effect */
+.add-new-collection-btn:before {
   content: "";
   position: absolute;
   top: 50%;
@@ -122,41 +182,381 @@ input[type="text"]:focus~.bar:before, input[type="text"]:focus~.bar:after {
   width: 0;
   padding-top: 0;
   border-radius: 100%;
-  background-color: rgba(236, 240, 241, .3);
+  background-color: rgba(255, 255, 255, 0.2);
   transform: translate(-50%, -50%);
+  z-index: 1;
+  transition: width 0.6s ease-out, padding-top 0.6s ease-out;
 }
 
-.btn:active:before {
+.add-new-collection-btn:active:before {
   width: 120%;
   padding-top: 120%;
-  transition: width .2s ease-out, padding-top .2s ease-out;
+  transition: width 0.2s ease-out, padding-top 0.2s ease-out;
+}
+
+.add-button-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .highlighted_note {
-  font-size: .7em;
-  color: var(--text-color);
-  display: none;
+  font-size: .65em;
+  color: white;
+  display: block;
   word-break: break-word;
-  white-space: normal;
-  width: 110px;
-  vertical-align: middle;
-  margin-left: 5px;
-  position: relative;
-  top: 4px;
+  white-space: nowrap;
+  position: absolute;
+  top: -30px;
+  right: -85px;
+  z-index: 10;
+  padding: 4px 10px;
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  font-weight: 500;
+  text-align: center;
+  min-width: fit-content;
+  background: var(--gradient-orange);
+}
+
+/* When highlighted_note is in right-controls-group, use static positioning */
+.right-controls-group .highlighted_note {
+  position: static;
+  top: auto;
+  right: auto;
+  margin: 0;
+}
+
+/* When highlighted_note is in window-toggle-container, use inline positioning */
+.window-toggle-container .highlighted_note {
+  position: static;
+  top: auto;
+  right: auto;
+  margin: 0;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .highlighter {
-  font-weight: bolder;
+  font-weight: 700;
+  color: white;
 }
 
+/* Modern Clear Button */
 .clear-button {
-  position: absolute;
-  top: 5px;
-  right: 249px;
-  border: none;
-  background-color: transparent;
+  position: relative;
+  top: 0;
+  right: 30px;
+
+  /* Liquid Glass Effect */
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+
+  /* Modern Shape */
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+
+  /* Layout */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  /* Styling */
   color: var(--text-color);
   z-index: 10;
   cursor: pointer;
-  transition: opacity .2s;
+
+  /* Effects */
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.clear-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.1);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.clear-button:active {
+  transform: scale(0.95);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.2),
+    inset 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* Dark Mode Clear Button */
+[data-theme="dark"] .clear-button {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .clear-button:hover {
+  background: rgba(0, 0, 0, 0.4);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+/* Liquid glass sliding animations for window toggle */
+@keyframes slide-to-current {
+  0% {
+    transform: translate(36px, 0) scale(1, 1);
+  }
+
+  40% {
+    transform: translate(18px, 0) scale(1.3, 0.85);
+  }
+
+  70% {
+    transform: translate(2px, 0) scale(1.4, 0.7);
+  }
+
+  85% {
+    transform: translate(0, 0) scale(1.1, 0.95);
+  }
+
+  100% {
+    transform: translate(0, 0) scale(1, 1);
+  }
+}
+
+@keyframes slide-to-all {
+  0% {
+    transform: translate(0, 0) scale(1, 1);
+  }
+
+  40% {
+    transform: translate(20px, 0) scale(1.3, 0.85);
+  }
+
+  70% {
+    transform: translate(36px, 0) scale(1.4, 0.7);
+  }
+
+  85% {
+    transform: translate(38px, 0) scale(1.1, 0.95);
+  }
+
+  100% {
+    transform: translate(38px, 0) scale(1, 1);
+  }
+}
+
+@keyframes toggle-glow {
+
+  0%,
+  100% {
+    box-shadow:
+      0 0 20px rgba(255, 255, 255, 0.2),
+      0 6px 16px rgba(0, 0, 0, 0.1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.4),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.2);
+  }
+
+  50% {
+    box-shadow:
+      0 0 25px rgba(255, 255, 255, 0.3),
+      0 8px 20px rgba(0, 0, 0, 0.15),
+      inset 0 1px 0 rgba(255, 255, 255, 0.5),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.3);
+  }
+}
+
+/* Window Toggle Container - Flexible width to accommodate toggle and label */
+.window-toggle-container {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+
+/* Sliding Window Mode Toggle - Liquid Glass Track */
+.window-choice-toggle {
+  position: relative;
+  display: flex;
+  width: 80px;
+  height: 38px;
+  padding: 5px;
+  border-radius: 22px;
+  background: linear-gradient(145deg,
+      rgba(180, 180, 180, 0.3) 0%,
+      rgba(160, 160, 160, 0.2) 50%,
+      rgba(140, 140, 140, 0.4) 100%);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(160, 160, 160, 0.4);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.15),
+    0 4px 12px rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
+  transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* Sliding Glass Knob */
+.window-choice-toggle::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 4px;
+  width: 32px;
+  height: 28px;
+  border-radius: 18px;
+  background: linear-gradient(145deg,
+      #ffffff 0%,
+      rgba(245, 245, 245, 0.95) 30%,
+      rgba(230, 230, 230, 0.9) 70%,
+      rgba(210, 210, 210, 0.95) 100%);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(180, 180, 180, 0.6);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.15),
+    0 4px 16px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.1);
+  transition: none;
+  z-index: 3;
+}
+
+.mode-toggle-btn {
+  position: absolute;
+  top: 0;
+  width: 50%;
+  height: 100%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: var(--text-color);
+  opacity: 0.6;
+  transition: opacity 0.3s ease;
+}
+
+/* Button positioning */
+.mode-toggle-btn:first-child {
+  left: 0;
+}
+
+.mode-toggle-btn:last-child {
+  right: 0;
+}
+
+.mode-toggle-btn:hover {
+  opacity: 0.8;
+}
+
+/* Active button styling */
+.mode-toggle-btn.active {
+  opacity: 1;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* Active knob styling with primary color */
+.window-choice-toggle.current-active::before,
+.window-choice-toggle.all-active::before {
+  background: linear-gradient(145deg,
+      var(--primary-color, #1698e2) 0%,
+      rgba(22, 152, 226, 0.9) 30%,
+      var(--primary-color, #1698e2) 70%,
+      rgba(22, 152, 226, 1) 100%);
+  border-color: rgba(255, 255, 255, 0.6);
+  box-shadow:
+    0 0 25px rgba(22, 152, 226, 0.5),
+    0 8px 32px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.3);
+}
+
+/* Sliding animations with glow effect */
+.window-choice-toggle.current-active::before {
+  animation: slide-to-current 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards,
+    toggle-glow 2s ease-in-out infinite 0.5s;
+}
+
+.window-choice-toggle.all-active::before {
+  animation: slide-to-all 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards,
+    toggle-glow 2s ease-in-out infinite 0.5s;
+}
+
+.mode-toggle-btn>* {
+  position: relative;
+  z-index: 2;
+}
+
+/* Disabled state with reduced glass effect */
+.mode-toggle-btn.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+  animation: none;
+}
+
+.window-choice-toggle.disabled {
+  opacity: 0.6;
+  background: linear-gradient(145deg,
+      rgba(150, 150, 150, 0.2) 0%,
+      rgba(130, 130, 130, 0.1) 50%,
+      rgba(110, 110, 110, 0.25) 100%);
+}
+
+/* Dark theme adjustments */
+[data-theme="dark"] .window-choice-toggle {
+  background: linear-gradient(145deg,
+      rgba(100, 100, 100, 0.4) 0%,
+      rgba(80, 80, 80, 0.3) 50%,
+      rgba(60, 60, 60, 0.5) 100%);
+  border: 1px solid rgba(120, 120, 120, 0.5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.3),
+    0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .window-choice-toggle::before {
+  background: linear-gradient(145deg,
+      rgba(220, 220, 220, 0.9) 0%,
+      rgba(200, 200, 200, 0.85) 30%,
+      rgba(180, 180, 180, 0.8) 70%,
+      rgba(160, 160, 160, 0.85) 100%);
+  border: 1px solid rgba(140, 140, 140, 0.7);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    0 4px 16px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"] .window-choice-toggle.current-active::before,
+[data-theme="dark"] .window-choice-toggle.all-active::before {
+  background: linear-gradient(145deg,
+      var(--primary-color, #3A77D8) 0%,
+      rgba(58, 119, 216, 0.9) 30%,
+      var(--primary-color, #3A77D8) 70%,
+      rgba(58, 119, 216, 1) 100%);
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow:
+    0 0 25px rgba(58, 119, 216, 0.6),
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.15);
 }

@@ -32,7 +32,7 @@ exports[`Import Collection section tests Import collection component renders cor
       </svg>
        
       <span>
-        Import from file
+        Import file
       </span>
     </div>
   </label>

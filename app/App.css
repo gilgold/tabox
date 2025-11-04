@@ -1,7 +1,17 @@
-.main-content-wrapper {
-  padding: 0 5px 5px 5px;
+.App {
+  height: 585px;
+  max-height: 585px;
   overflow: hidden;
-  background-color: var(--bg-color);
+  display: flex;
+  flex-direction: column;
+}
+
+.main-content-wrapper {
+  padding: 0 5px 0 5px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 .hr {
 	height: 1px;
@@ -11,4 +21,20 @@
 
 p {
 	margin:0;
+}
+
+/* Bottom fade overlay */
+.bottom-fade-overlay {
+	position: fixed;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	height: 15px;
+	background: linear-gradient(
+		to bottom,
+		transparent 0%,
+		var(--bg-color) 100%
+	);
+	pointer-events: none;
+	z-index: 1000;
 }

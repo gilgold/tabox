@@ -1,15 +1,14 @@
-import React from 'react';
+import React, { memo, useCallback, useMemo } from 'react';
 import { browser } from '../static/globals';
 import { AiFillPushpin } from 'react-icons/ai';
 import { FaVolumeMute } from 'react-icons/fa';
-import { MdDeleteForever, MdOutlineOpenInNew } from 'react-icons/md';
+import { MdDeleteForever, MdOutlineOpenInNew, MdDragIndicator } from 'react-icons/md';
 import { getColorCode } from './utils';
 
-
-function TabRow({ tab, updateCollection, collection, group = null }) {
+const TabRow = memo(({ tab, updateCollection, collection, group = null, isDragging = false }) => {
     const fallbackFavicon = './images/favicon-fallback.png';
 
-    const handleTabDelete = () => {
+    const handleTabDelete = useCallback(() => {
         let currentCollection = { ...collection };
         let newTabList = [...currentCollection.tabs].filter(t => t.uid !== tab.uid)
         let newChromeGroups = [...currentCollection.chromeGroups];
@@ -21,57 +20,109 @@ function TabRow({ tab, updateCollection, collection, group = null }) {
         }
         currentCollection.tabs = newTabList;
         currentCollection.chromeGroups = newChromeGroups;
-        updateCollection(currentCollection);
-    }
+        currentCollection.lastUpdated = Date.now();
+        updateCollection(currentCollection, true); // Manual tab deletion - trigger lightning effect
+    }, [collection, tab.uid, tab.groupUid, updateCollection]);
 
-    const handleFaviconError = (e) => {
+    const handleFaviconError = useCallback((e) => {
         e.target.src = fallbackFavicon;
-    }
+    }, [fallbackFavicon]);
 
-    const handleOpenTab = async (tab) => {
+    const handleOpenTab = useCallback(async (tabToOpen) => {
         const { chkOpenNewWindow } = await browser.storage.local.get('chkOpenNewWindow');
         if (chkOpenNewWindow) {
-            await browser.windows.create({ focused: true, url: tab.url });
+            await browser.windows.create({ focused: true, url: tabToOpen.url });
         } else {
-            await browser.tabs.create({ url: tab.url, active: true });
+            await browser.tabs.create({ url: tabToOpen.url, active: true });
         }
-    }
+    }, []);
+
+    // Memoize expensive computations
+    const groupIndicatorStyle = useMemo(() => ({
+        backgroundColor: group ? getColorCode(group.color) : 'transparent',
+        boxShadow: group ? `${getColorCode(group.color)} -3px 1px 3px -2px` : 'none'
+    }), [group]);
+
+    const faviconSrc = useMemo(() => {
+        if (tab.favIconUrl) return tab.favIconUrl;
+        if (tab?.url && /\.(jpg|jpeg|gif|png|ico|tiff)$/.test(tab.url.split('?')[0])) return tab.url;
+        return fallbackFavicon;
+    }, [tab.favIconUrl, tab.url, fallbackFavicon]);
 
     return (
         <div className='tab-line' id={`tab-line-${tab.uid}`} key={`tab-line-${tab.uid}`}>
-            <div className="row single-tab-row" key={`line-${tab.uid}`}>
-                <div className="tree-line"></div>
-                {(tab.groupId > -1) ?
+            <div className={`row single-tab-row ${isDragging ? 'tab-row-dragging' : ''} ${tab.pinned ? 'pinned-tab' : ''}`} key={`line-${tab.uid}`}>
+                {(tab.groupId > -1 && group) ?
                     <div
                         className="group-indicator"
-                        style={{
-                            backgroundColor: group ? getColorCode(group.color) : 'transparent',
-                            boxShadow: group ? `${getColorCode(group.color)} -3px 1px 3px -2px` : 'none'
-                        }} /> :
+                        style={groupIndicatorStyle}
+                    /> :
                     <div className="group-placeholder" />}
-                {tab.pinned ? <div className="tab-property pinned-tab" title="Pinned Tab">
-                    <AiFillPushpin size="12px" color="#FFF" />
-                </div> : null}
-                {tab.mutedInfo?.muted ? <div className="tab-property muted-tab" title="Muted Tab">
-                    <FaVolumeMute color="#fff" size="14px" />
-                </div> : null}
+                
+                {/* Drag Handle */}
+                <div className="drag-handle" title={tab.pinned ? "Cannot drag pinned tab" : "Drag to reorder tab"}>
+                    <MdDragIndicator size="14px" color="var(--text-color)" />
+                </div>
+                
+                {/* Tab Indicators Container */}
+                {(tab.pinned || tab.mutedInfo?.muted) && (
+                    <div className="tab-indicators-container">
+                        {/* Flat Pinned Tab Indicator */}
+                        {tab.pinned && (
+                            <div className="tab-property pinned-tab modern-pinned" title="Pinned Tab">
+                                <div className="pinned-icon-wrapper">
+                                    <AiFillPushpin size="10px" />
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* Flat Muted Tab Indicator */}
+                        {tab.mutedInfo?.muted && (
+                            <div className="tab-property muted-tab modern-muted" title="Muted Tab">
+                                <div className="muted-icon-wrapper">
+                                    <FaVolumeMute size="10px" />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+                
                 <div className="column favicon-col">
-                    <img onError={handleFaviconError} className="tab-favicon" src={tab.favIconUrl ? tab.favIconUrl : /\.(jpg|jpeg|gif|png|ico|tiff)$/.test(tab?.url?.split('?')[0]) ? tab.url : fallbackFavicon} />
+                    <img 
+                        onError={handleFaviconError} 
+                        className="tab-favicon" 
+                        src={faviconSrc}
+                        alt="Site favicon"
+                    />
                 </div>
                 <div className="column single-tab-title-col">
                     <span className="single-tab-title" title={tab.title}>{tab.title}</span>
                 </div>
                 <div className="column actions-col">
-                    <button className="action-button" data-tip="Open this tab" onClick={async () => await handleOpenTab(tab)}>
+                    <button 
+                        className="action-button" 
+                        data-tip="Open this tab" 
+                        onClick={(e) => { 
+                            e.stopPropagation(); 
+                            handleOpenTab(tab); 
+                        }}
+                    >
                         <MdOutlineOpenInNew size="16px" color="var(--primary-color)" />
                     </button>
-                    <button className="action-button del-tab" data-tip="Delete this tab" onClick={() => handleTabDelete()}>
+                    <button 
+                        className="action-button del-tab" 
+                        data-tip="Delete this tab" 
+                        onClick={(e) => { 
+                            e.stopPropagation(); 
+                            handleTabDelete(); 
+                        }}
+                    >
                         <MdDeleteForever color="#B64A4A" size="20" />
                     </button>
                 </div>
             </div>
         </div>
     );
-}
+});
 
 export default TabRow;

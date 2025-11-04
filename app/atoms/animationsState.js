@@ -1,6 +1,13 @@
 import { atom } from 'recoil';
 
-export const rowToHighlightState = atom({
-    key: 'rowToHighlightState',
-    default: -1,
+// New UID-based highlighting system
+export const highlightedCollectionUidState = atom({
+    key: 'highlightedCollectionUidState',
+    default: null,
+});
+
+// New delete animation tracking system
+export const deletingCollectionUidsState = atom({
+    key: 'deletingCollectionUidsState',
+    default: new Set(),
 });
