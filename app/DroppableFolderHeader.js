@@ -41,7 +41,7 @@ function DroppableFolderHeader({ folder, children }) {
             (dropZoneIntensity === 'high' ? 'rgba(79, 172, 254, 0.35)' : 'rgba(79, 172, 254, 0.15)') : 
             'transparent',
         border: shouldShowDropZone ? 
-            (dropZoneIntensity === 'high' ? '3px solid #4facfe' : '2px dashed #4facfe') : 
+            (dropZoneIntensity === 'high' ? '3px dashed #4facfe' : '2px dashed #4facfe') : 
             '3px dashed transparent',
         borderRadius: '8px',
         transition: 'all 0.2s ease',

@@ -5,8 +5,45 @@ import { FaVolumeMute } from 'react-icons/fa';
 import { MdDeleteForever, MdOutlineOpenInNew, MdDragIndicator } from 'react-icons/md';
 import { getColorCode } from './utils';
 
-const TabRow = memo(({ tab, updateCollection, collection, group = null, isDragging = false }) => {
+const TabRow = memo(({ tab, updateCollection, collection, group = null, isDragging = false, search = null }) => {
     const fallbackFavicon = './images/favicon-fallback.png';
+
+    // Helper function to escape regex special characters
+    const escapeRegex = (string) => {
+        return string.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    };
+
+    // Helper function to highlight matching text in tab title
+    const highlightMatchInTitle = useMemo(() => {
+        if (!search || !search.trim() || !tab.title) {
+            return null;
+        }
+        
+        const title = tab.title;
+        const searchTerm = search.trim();
+        
+        // Check if title matches search (case-insensitive)
+        const searchRegex = new RegExp(escapeRegex(searchTerm), 'i');
+        if (!title || !title.match(searchRegex)) {
+            return null;
+        }
+        
+        const escapedSearch = escapeRegex(searchTerm);
+        const highlightRegex = new RegExp(`(${escapedSearch})`, 'gi');
+        const parts = title.split(highlightRegex);
+        
+        return parts.map((part, index) => {
+            // Check if this part matches the search term (case-insensitive)
+            if (part.toLowerCase() === searchTerm.toLowerCase()) {
+                return (
+                    <span key={`match-${index}-${part}`} className="search-match-text">
+                        {part}
+                    </span>
+                );
+            }
+            return part ? <span key={`text-${index}-${part}`}>{part}</span> : null;
+        }).filter(Boolean);
+    }, [search, tab.title]);
 
     const handleTabDelete = useCallback(() => {
         let currentCollection = { ...collection };
@@ -96,7 +133,9 @@ const TabRow = memo(({ tab, updateCollection, collection, group = null, isDraggi
                     />
                 </div>
                 <div className="column single-tab-title-col">
-                    <span className="single-tab-title" title={tab.title}>{tab.title}</span>
+                    <span className="single-tab-title" title={tab.title}>
+                        {highlightMatchInTitle !== null ? highlightMatchInTitle : tab.title}
+                    </span>
                 </div>
                 <div className="column actions-col">
                     <button 

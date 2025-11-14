@@ -132,6 +132,85 @@ function CollectionListItem(props) {
         return props.collection.lastOpened >= threeHoursAgo;
     }, [props.collection.lastOpened]);
 
+    // Helper function to escape regex special characters
+    const escapeRegex = (string) => {
+        return string.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    };
+
+    // Check if collection name matches search (but not tabs)
+    const hasMatchingName = useMemo(() => {
+        if (!props.search || !props.search.trim()) return false;
+        const searchRegex = new RegExp(escapeRegex(props.search), 'i');
+        return props.collection.name?.match(searchRegex) || false;
+    }, [props.search, props.collection.name]);
+
+    // Check if collection has matching tabs when search is active
+    const hasMatchingTabs = useMemo(() => {
+        if (!props.search || !props.search.trim()) return false;
+        const searchRegex = new RegExp(escapeRegex(props.search), 'i');
+        return props.collection.tabs && props.collection.tabs.some(tab => 
+            tab.title?.match(searchRegex) || 
+            tab.url?.match(searchRegex)
+        );
+    }, [props.search, props.collection.tabs]);
+
+    // Count matching tabs when search is active
+    const matchingTabsCount = useMemo(() => {
+        if (!props.search || !props.search.trim()) return 0;
+        const searchRegex = new RegExp(escapeRegex(props.search), 'i');
+        return props.collection.tabs ? props.collection.tabs.filter(tab => 
+            tab.title?.match(searchRegex) || 
+            tab.url?.match(searchRegex)
+        ).length : 0;
+    }, [props.search, props.collection.tabs]);
+
+    // Auto-expand collections ONLY when tabs match (not when only name matches)
+    useEffect(() => {
+        if (props.search && props.search.trim()) {
+            if (hasMatchingTabs) {
+                // Auto-expand if search is active and has matching tabs
+                setExpanded(true);
+            } else {
+                // If no tabs match (even if name matches), ensure collection is collapsed
+                // This handles the case where only collection name matches the search
+                setExpanded(false);
+            }
+        }
+        // Note: We don't auto-collapse when search is cleared to preserve user's manual expansion state
+    }, [props.search, hasMatchingTabs]);
+
+    // Helper function to highlight matching text in collection name
+    const highlightMatchInName = useMemo(() => {
+        if (!props.search || !props.search.trim()) {
+            return null;
+        }
+        
+        const name = props.collection.name;
+        const searchTerm = props.search.trim();
+        
+        // Check if name matches search (case-insensitive)
+        const searchRegex = new RegExp(escapeRegex(searchTerm), 'i');
+        if (!name || !name.match(searchRegex)) {
+            return null;
+        }
+        
+        const escapedSearch = escapeRegex(searchTerm);
+        const highlightRegex = new RegExp(`(${escapedSearch})`, 'gi');
+        const parts = name.split(highlightRegex);
+        
+        return parts.map((part, index) => {
+            // Check if this part matches the search term (case-insensitive)
+            if (part.toLowerCase() === searchTerm.toLowerCase()) {
+                return (
+                    <span key={`match-${index}-${part}`} className="search-match-text">
+                        {part}
+                    </span>
+                );
+            }
+            return part ? <span key={`text-${index}-${part}`}>{part}</span> : null;
+        }).filter(Boolean);
+    }, [props.search, props.collection.name]);
+
     return (
         <div 
             onClick={_handleRowClick} 
@@ -175,7 +254,9 @@ function CollectionListItem(props) {
                             </div>
                             :
                             <div className="collection-name-row">
-                                <span className="truncate_box">{props.collection.name}</span>
+                                <span className="truncate_box">
+                                    {highlightMatchInName !== null ? highlightMatchInName : props.collection.name}
+                                </span>
                                 {isRecentlyOpened && (
                                     <span className="recently-opened-indicator" title="Recently opened (last 3 hours)"></span>
                                 )}
@@ -183,6 +264,14 @@ function CollectionListItem(props) {
                         }
                     </div>
                     <div className="collection-counts">
+                        {props.search && props.search.trim() && hasMatchingTabs ? (
+                            <>
+                                <span className="matching-tabs-indicator">
+                                    {matchingTabsCount} matching tab{matchingTabsCount !== 1 ? 's' : ''}
+                                </span>
+                                <span className="collection-separator"> • </span>
+                            </>
+                        ) : null}
                         <span className="collection-time-ago">
                             {props.collection.lastUpdated ? timeAgo.format(new Date(props.collection.lastUpdated)) :
                                 props.collection.createdOn ? timeAgo.format(new Date(props.collection.createdOn)) : 'Unknown time'}
@@ -228,7 +317,8 @@ function CollectionListItem(props) {
                     <ExpandedCollectionData
                         collection={props.collection}
                         updateCollection={props.updateCollection}
-                        updateRemoteData={props.updateRemoteData} />
+                        updateRemoteData={props.updateRemoteData}
+                        search={props.search} />
                 </div>
             ) : null}
         </div>);

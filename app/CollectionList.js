@@ -159,20 +159,42 @@ function CollectionList({
                 const collectionTargets = pointerCollisions.filter(collision => {
                     const isCollection = collections.some(c => c.uid === collision.id);
                     const isOwnParent = collision.id === `folder-content-${draggedCollection.parentId}`;
-                    return isCollection && !isOwnParent;
+                    const isFolderContainer = folders.some(f => f.uid === collision.id);
+                    return isCollection && !isOwnParent && !isFolderContainer;
                 });
                 
                 if (collectionTargets.length > 0) {
                     return collectionTargets;
                 }
             } else {
-                // When dragging from the root, we might be dropping into a folder.
-                // Prioritize folder drop zones.
+                // When dragging from the root, prioritize collections first, then folder drop zones
+                // This prevents folders from highlighting when dragging over collections
+                
+                // First, check if we're over a collection (prioritize collection-to-collection sorting)
+                const collectionTargets = pointerCollisions.filter(collision => {
+                    const isCollection = collections.some(c => c.uid === collision.id);
+                    const isFolderContainer = folders.some(f => f.uid === collision.id);
+                    const isFolderDropZone = collision.id.startsWith('folder-') || 
+                                           collision.id.startsWith('folder-content-');
+                    return isCollection && !isFolderContainer && !isFolderDropZone;
+                });
+                
+                if (collectionTargets.length > 0) {
+                    return collectionTargets;
+                }
+                
+                // Only check for folder drop zones if we're NOT over a collection
+                // Use pointerWithin only (not closestCorners) to prevent premature highlighting
                 const folderDropZones = pointerCollisions.filter(collision => {
                     const data = collision.data?.current;
-                    return data?.type === 'folder' || 
-                           collision.id.startsWith('folder-') || 
-                           collision.id.startsWith('folder-content-');
+                    const isFolderDropZone = data?.type === 'folder' || 
+                                           collision.id.startsWith('folder-') || 
+                                           collision.id.startsWith('folder-content-');
+                    // Explicitly exclude folder containers (folder UIDs) to prevent sorting
+                    const isFolderContainer = folders.some(f => f.uid === collision.id);
+                    // Also exclude collections - if we're over a collection, don't show folder drop zone
+                    const isCollection = collections.some(c => c.uid === collision.id);
+                    return isFolderDropZone && !isFolderContainer && !isCollection;
                 });
                 
                 if (folderDropZones.length > 0) {
@@ -181,18 +203,27 @@ function CollectionList({
             }
             
             // Fallback for general collection sorting (e.g., root-level reordering)
+            // CRITICAL: Explicitly exclude folder containers to prevent folder movement
             const validCollisionTargets = pointerCollisions.filter(collision => {
                 const isFolderContainer = folders.some(f => f.uid === collision.id);
                 const isCollection = collections.some(c => c.uid === collision.id);
-                return isCollection && !isFolderContainer;
+                // Also exclude folder drop zones from sorting (they're handled above)
+                const isFolderDropZone = collision.id.startsWith('folder-') || 
+                                       collision.id.startsWith('folder-content-');
+                return isCollection && !isFolderContainer && !isFolderDropZone;
             });
             
             if (validCollisionTargets.length > 0) {
                 return validCollisionTargets;
             }
             
-            // Final fallback to closest corners
-            return closestCorners(args);
+            // Final fallback to closest corners, but filter out folder containers
+            const closestCornersResult = closestCorners(args);
+            const filteredCorners = closestCornersResult.filter(collision => {
+                const isFolderContainer = folders.some(f => f.uid === collision.id);
+                return !isFolderContainer;
+            });
+            return filteredCorners.length > 0 ? filteredCorners : [];
         }
         
         // Check if we're dragging a folder
@@ -249,20 +280,6 @@ function CollectionList({
         },
     };
 
-    // Debug sortable items if needed
-    useEffect(() => {
-        // Temporarily enable debug mode for drop zone testing
-        window.DEBUG_FOLDER_DRAG = false; // Set to true to enable debugging
-        
-        if (window.DEBUG_FOLDER_DRAG) {
-            console.log('🔧 Sortable items updated:', {
-                count: sortableItems.length,
-                items: sortableItems.slice(0, 3), // First 3 items
-                allItemsCount: allItems.length,
-                foldersCount: folders.length
-            });
-        }
-    }, [sortableItems, allItems, folders]);
 
     useEffect(() => {
         // ReactTooltip needs rebuild when collections list changes to detect new tooltips
@@ -311,15 +328,6 @@ function CollectionList({
     const handleDragEnd = async (event) => {
         const { active, over } = event;
 
-        // Enhanced debugging for drop detection
-        console.log('🎯 handleDragEnd called:', {
-            activeId: active?.id,
-            overId: over?.id,
-            overData: over?.data?.current,
-            overDataType: over?.data?.current?.type,
-            overDataFolder: over?.data?.current?.folder?.name
-        });
-
         // Preserve scroll position before any data updates
         const scrollContainer = document.querySelector('.settings_body');
         const currentScrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
@@ -333,7 +341,6 @@ function CollectionList({
         };
 
         if (!over || active.id === over.id) {
-            console.log('❌ No valid drop target');
             setActiveCollection(null);
             setActiveFolder(null);
             return;
@@ -341,13 +348,6 @@ function CollectionList({
 
         let draggedItem = allItems.find(item => item.uid === active.id);
         let targetItem = allItems.find(item => item.uid === over.id);
-        
-        console.log('🎯 Initial drag detection:', {
-            activeId: active.id,
-            overId: over.id,
-            draggedItemFound: !!draggedItem,
-            targetItemFound: !!targetItem
-        });
         
         // If not found in allItems, check collections (for collections inside folders)
         if (!draggedItem) {
@@ -362,55 +362,37 @@ function CollectionList({
         }
         
         if (!targetItem) {
-            // Check if it's a folder drop target from DroppableFolderHeader
-            if (over.data.current?.type === 'folder') {
+            // CRITICAL: Check collections FIRST before checking folder drop zones
+            // This prevents collections from being moved to folders when dropped on other collections
+            const collection = collections.find(c => c.uid === over.id);
+            if (collection) {
+                targetItem = {
+                    ...collection,
+                    itemType: 'collection',
+                    isInFolder: !!collection.parentId
+                };
+            } else if (over.data.current?.type === 'folder') {
+                // Only check for folder drop target if we didn't find a collection
                 const folder = over.data.current.folder;
                 targetItem = {
                     ...folder,
                     itemType: 'folder'
                 };
-            } else {
-                // Check collections
-                const collection = collections.find(c => c.uid === over.id);
-                if (collection) {
-                    targetItem = {
-                        ...collection,
-                        itemType: 'collection',
-                        isInFolder: !!collection.parentId
-                    };
-                    console.log('🎯 Found target collection:', {
-                        name: collection.name,
-                        parentId: collection.parentId,
-                        isInFolder: !!collection.parentId
-                    });
-                }
             }
         }
 
 
 
         if (!draggedItem || !targetItem) {
-            console.log('🚫 Missing drag items:', { 
-                draggedItem: draggedItem ? `${draggedItem.itemType}: ${draggedItem.name}` : 'null',
-                targetItem: targetItem ? `${targetItem.itemType}: ${targetItem.name}` : 'null',
-                activeId: active?.id,
-                overId: over?.id
-            });
             setActiveCollection(null);
             setActiveFolder(null);
             return;
         }
 
-        console.log('🎯 Drag detected:', {
-            dragged: `${draggedItem.itemType}: ${draggedItem.name} (parentId: ${draggedItem.parentId})`,
-            target: `${targetItem.itemType}: ${targetItem.name} (parentId: ${targetItem.parentId})`
-        });
-
         // Prevent folder movement when dragging collections within the same folder
         if (draggedItem.itemType === 'collection' && 
             targetItem.itemType === 'folder' && 
             draggedItem.parentId === targetItem.uid) {
-            console.log('🚫 Preventing folder self-targeting during internal collection drag');
             setActiveCollection(null);
             setActiveFolder(null);
             return;
@@ -418,7 +400,6 @@ function CollectionList({
 
         // Prevent folders from being dragged to collection areas
         if (draggedItem.itemType === 'folder' && targetItem.itemType === 'collection') {
-            console.log('🚫 Preventing folder from being dropped on collection');
             setActiveCollection(null);
             setActiveFolder(null);
             return;
@@ -427,12 +408,29 @@ function CollectionList({
         // Handle different drag scenarios
         if (draggedItem.itemType === 'collection' && targetItem.itemType === 'folder') {
             // Collection dropped on folder
+            // CRITICAL: Verify this is actually a folder drop zone, not a false positive
+            // Check that over.id matches a folder drop zone pattern
+            const isFolderDropZone = over.id.startsWith('folder-') || 
+                                    over.id.startsWith('folder-content-') ||
+                                    over.data.current?.type === 'folder';
+            
+            if (!isFolderDropZone) {
+                setActiveCollection(null);
+                setActiveFolder(null);
+                return;
+            }
             
             const success = await moveCollectionToFolder(draggedItem.uid, targetItem.uid);
             
-            if (success && props.onDataUpdate) {
-                props.onDataUpdate(); // Trigger refresh of collections and folders
-                restoreScrollPosition(); // Maintain scroll position after refresh
+            if (success) {
+                if (props.onDataUpdate) {
+                    props.onDataUpdate(); // Trigger refresh of collections and folders
+                    restoreScrollPosition(); // Maintain scroll position after refresh
+                }
+                // Trigger sync to Google Drive
+                if (props.triggerSync) {
+                    props.triggerSync();
+                }
                 // Trigger lightning effect on the target folder
                 if (triggerFolderLightningEffect) {
                     triggerFolderLightningEffect(targetItem.uid);
@@ -452,7 +450,6 @@ function CollectionList({
                 const targetInCollectionsSection = targetIndexInAllItems !== -1 && targetIndexInAllItems >= folderCount;
                 
                 if (!targetInCollectionsSection) {
-                    console.log(`❌ Prevented collection from being sorted into folder area`);
                     return;
                 }
             }
@@ -499,13 +496,6 @@ function CollectionList({
                     const newCollections = [...otherCollections, ...reorderedFolderCollections];
                     props.updateRemoteData(newCollections);
                     restoreScrollPosition(); // Maintain scroll position after reorder
-                } else {
-                    console.log(`❌ Skipping reorder - invalid indices or same position:`, {
-                        oldIndex,
-                        newIndex,
-                        draggedName: draggedItem.name,
-                        targetName: targetItem.name
-                    });
                 }
             } else if (!draggedItem.parentId && targetItem.parentId) {
                 // Moving root collection to a folder
@@ -515,6 +505,10 @@ function CollectionList({
                 if (props.onDataUpdate) {
                     props.onDataUpdate();
                     restoreScrollPosition(); // Maintain scroll position after move
+                }
+                // Trigger sync to Google Drive
+                if (props.triggerSync) {
+                    props.triggerSync();
                 }
             } else if (draggedItem.parentId && !targetItem.parentId) {
                 // Moving folder collection to root with proper positioning
@@ -573,37 +567,24 @@ function CollectionList({
                 }
             } else if (draggedItem.parentId && targetItem.parentId && draggedItem.parentId !== targetItem.parentId) {
                 // Moving collection from one folder to another folder (dropped on collection in target folder)
-                console.log(`🔄 Moving collection from folder ${draggedItem.parentId} to folder ${targetItem.parentId}`);
-                console.log('🔄 Folder-to-folder move details:', {
-                    draggedCollection: draggedItem.name,
-                    targetCollection: targetItem.name,
-                    fromFolder: draggedItem.parentId,
-                    toFolder: targetItem.parentId
-                });
-                
                 try {
                     const success = await moveCollectionToFolder(draggedItem.uid, targetItem.parentId);
-                    console.log('🔄 Move result:', success);
                     
                     if (props.onDataUpdate) {
                         props.onDataUpdate();
                         restoreScrollPosition(); // Maintain scroll position after move
-                        // Trigger lightning effect on the target folder
-                        if (triggerFolderLightningEffect) {
-                            triggerFolderLightningEffect(targetItem.parentId);
-                        }
+                    }
+                    // Trigger sync to Google Drive
+                    if (props.triggerSync) {
+                        props.triggerSync();
+                    }
+                    // Trigger lightning effect on the target folder
+                    if (triggerFolderLightningEffect) {
+                        triggerFolderLightningEffect(targetItem.parentId);
                     }
                 } catch (error) {
                     console.error('Error moving collection between folders:', error);
                 }
-            } else {
-                // Prevent other invalid cross-folder movements
-                console.log(`❌ Prevented invalid collection sorting between different contexts:`, {
-                    draggedParentId: draggedItem.parentId,
-                    targetParentId: targetItem.parentId,
-                    draggedType: draggedItem.itemType,
-                    targetType: targetItem.itemType
-                });
             }
             
         } else if (draggedItem.itemType === 'folder' && targetItem.itemType === 'folder') {
@@ -618,12 +599,7 @@ function CollectionList({
                 if (props.updateFolders) {
                     await props.updateFolders(newFolders);
                     restoreScrollPosition(); // Maintain scroll position after folder reorder
-    
-                } else {
-                    console.log('❌ updateFolders prop not available');
                 }
-            } else {
-                console.log('❌ Invalid folder indices:', { oldIndex, newIndex });
             }
         }
 
@@ -665,96 +641,18 @@ function CollectionList({
                         strategy={props.viewMode === 'grid' ? rectSortingStrategy : verticalListSortingStrategy}
                     >
                         <div className={props.viewMode === 'grid' ? 'collection-grid' : 'collection-list'}>
-                            {/* Folders Section */}
-                            {(() => {
-                                // Filter folders to only show those with matching collections or when no filtering is applied
-                                const visibleFolders = folders.filter(folder => {
-                                    const folderCollections = collections.filter(c => c.parentId === folder.uid);
-                                    return folderCollections.length > 0 || !hasActiveFilters;
-                                });
-                                
-                                // Only render the section if there are visible folders
-                                return visibleFolders.length > 0 && (
+                            {/* During search: show all matching collections in a flat list */}
+                            {search && search.trim() ? (
+                                // Search mode: show all matching collections (including those from folders) in a single list
+                                collections.length > 0 && (
                                     <CollapsableSection
-                                        sectionKey="foldersCollapsed"
-                                        sectionTitle="Folders"
-                                        count={visibleFolders.length}
-                                        expandTooltip="Expand folders section"
-                                        collapseTooltip="Collapse folders section"
+                                        sectionKey="searchResultsCollapsed"
+                                        sectionTitle="Search Results"
+                                        count={collections.length}
+                                        expandTooltip="Expand search results"
+                                        collapseTooltip="Collapse search results"
                                     >
-                                        {visibleFolders.map((folder) => {
-                                            const folderCollections = getCollectionsForFolder(folder.uid);
-                                            
-                                            return (
-                                                <SortableFolderContainer
-                                                    key={folder.uid}
-                                                    id={folder.uid}
-                                                    folder={folder}
-                                                    disableDrag={disableDrag}
-                                                    index={-1}
-                                                    activeId={activeFolder?.uid}
-                                                    onFolderUpdate={props.onDataUpdate}
-                                                    onFolderDelete={props.onDataUpdate}
-                                                    updateRemoteData={props.updateRemoteData}
-                                                    viewMode={props.viewMode}
-                                                    lightningEffect={lightningEffectFolderUid === folder.uid}
-                                                >
-                                                    {/* Render collections within this folder */}
-                                                    {folderCollections.map((collection) => 
-                                                        props.viewMode === 'grid' ? (
-                                                            <SortableCollectionTile
-                                                                key={collection.uid}
-                                                                id={collection.uid}
-                                                                updateRemoteData={props.updateRemoteData}
-                                                                disableDrag={disableDrag}
-                                                                index={-1}
-                                                                activeId={activeCollection?.uid}
-                                                                updateCollection={props.updateCollection}
-                                                                removeCollection={props.removeCollection}
-                                                                addCollection={addCollection}
-                                                                onDataUpdate={props.onDataUpdate}
-                                                                collection={collection}
-                                                                lightningEffect={lightningEffectUid === collection.uid}
-                                                                isInFolder={true}
-                                                            />
-                                                        ) : (
-                                                            <SortableCollectionItem
-                                                                key={collection.uid}
-                                                                id={collection.uid}
-                                                                updateRemoteData={props.updateRemoteData}
-                                                                expanded={false}
-                                                                disableDrag={disableDrag}
-                                                                index={-1}
-                                                                activeId={activeCollection?.uid}
-                                                                updateCollection={props.updateCollection}
-                                                                removeCollection={props.removeCollection}
-                                                                addCollection={addCollection}
-                                                                onDataUpdate={props.onDataUpdate}
-                                                                collection={collection}
-                                                                lightningEffect={lightningEffectUid === collection.uid}
-                                                                isInFolder={true}
-                                                            />
-                                                        )
-                                                    )}
-                                                </SortableFolderContainer>
-                                            );
-                                        })}
-                                    </CollapsableSection>
-                                );
-                            })()}
-                            
-                            {/* Collections Section */}
-                            {collections.filter(c => !c.parentId).length > 0 && (
-                                <CollapsableSection
-                                    sectionKey="collectionsCollapsed"
-                                    sectionTitle="Collections"
-                                    count={collections.filter(c => !c.parentId).length}
-                                    expandTooltip="Expand collections section"
-                                    collapseTooltip="Collapse collections section"
-                                >
-                                    {collections
-                                        .filter(c => !c.parentId)
-                                        .map((collection, index) => 
+                                        {collections.map((collection, index) => 
                                             props.viewMode === 'grid' ? (
                                                 <SortableCollectionTile
                                                     key={collection.uid}
@@ -770,6 +668,7 @@ function CollectionList({
                                                     collection={collection}
                                                     lightningEffect={lightningEffectUid === collection.uid}
                                                     isInFolder={false}
+                                                    search={search}
                                                 />
                                             ) : (
                                                 <SortableCollectionItem
@@ -787,11 +686,148 @@ function CollectionList({
                                                     collection={collection}
                                                     lightningEffect={lightningEffectUid === collection.uid}
                                                     isInFolder={false}
+                                                    search={search}
                                                 />
                                             )
-                                        )
-                                    }
-                                </CollapsableSection>
+                                        )}
+                                    </CollapsableSection>
+                                )
+                            ) : (
+                                // Normal mode: show folders and root collections separately
+                                <>
+                                    {/* Folders Section */}
+                                    {(() => {
+                                        // Filter folders to only show those with matching collections or when no filtering is applied
+                                        const visibleFolders = folders.filter(folder => {
+                                            const folderCollections = collections.filter(c => c.parentId === folder.uid);
+                                            return folderCollections.length > 0 || !hasActiveFilters;
+                                        });
+                                        
+                                        // Only render the section if there are visible folders
+                                        return visibleFolders.length > 0 && (
+                                            <CollapsableSection
+                                                sectionKey="foldersCollapsed"
+                                                sectionTitle="Folders"
+                                                count={visibleFolders.length}
+                                                expandTooltip="Expand folders section"
+                                                collapseTooltip="Collapse folders section"
+                                            >
+                                                {visibleFolders.map((folder) => {
+                                                    const folderCollections = getCollectionsForFolder(folder.uid);
+                                                    
+                                                    return (
+                                                        <SortableFolderContainer
+                                                            key={folder.uid}
+                                                            id={folder.uid}
+                                                            folder={folder}
+                                                            disableDrag={disableDrag}
+                                                            index={-1}
+                                                            activeId={activeFolder?.uid}
+                                                            onFolderUpdate={props.onDataUpdate}
+                                                            onFolderDelete={props.onDataUpdate}
+                                                            updateRemoteData={props.updateRemoteData}
+                                                            viewMode={props.viewMode}
+                                                            lightningEffect={lightningEffectFolderUid === folder.uid}
+                                                        >
+                                                            {/* Render collections within this folder */}
+                                                            {folderCollections.map((collection) => 
+                                                                props.viewMode === 'grid' ? (
+                                                                    <SortableCollectionTile
+                                                                        key={collection.uid}
+                                                                        id={collection.uid}
+                                                                        updateRemoteData={props.updateRemoteData}
+                                                                        disableDrag={disableDrag}
+                                                                        index={-1}
+                                                                        activeId={activeCollection?.uid}
+                                                                        updateCollection={props.updateCollection}
+                                                                        removeCollection={props.removeCollection}
+                                                                        addCollection={addCollection}
+                                                                        onDataUpdate={props.onDataUpdate}
+                                                                        collection={collection}
+                                                                        lightningEffect={lightningEffectUid === collection.uid}
+                                                                        isInFolder={true}
+                                                                        search={search}
+                                                                    />
+                                                                ) : (
+                                                                    <SortableCollectionItem
+                                                                        key={collection.uid}
+                                                                        id={collection.uid}
+                                                                        updateRemoteData={props.updateRemoteData}
+                                                                        expanded={false}
+                                                                        disableDrag={disableDrag}
+                                                                        index={-1}
+                                                                        activeId={activeCollection?.uid}
+                                                                        updateCollection={props.updateCollection}
+                                                                        removeCollection={props.removeCollection}
+                                                                        addCollection={addCollection}
+                                                                        onDataUpdate={props.onDataUpdate}
+                                                                        collection={collection}
+                                                                        lightningEffect={lightningEffectUid === collection.uid}
+                                                                        isInFolder={true}
+                                                                        search={search}
+                                                                    />
+                                                                )
+                                                            )}
+                                                        </SortableFolderContainer>
+                                                    );
+                                                })}
+                                            </CollapsableSection>
+                                        );
+                                    })()}
+                                    
+                                    {/* Collections Section */}
+                                    {collections.filter(c => !c.parentId).length > 0 && (
+                                        <CollapsableSection
+                                            sectionKey="collectionsCollapsed"
+                                            sectionTitle="Collections"
+                                            count={collections.filter(c => !c.parentId).length}
+                                            expandTooltip="Expand collections section"
+                                            collapseTooltip="Collapse collections section"
+                                        >
+                                            {collections
+                                                .filter(c => !c.parentId)
+                                                .map((collection, index) => 
+                                                    props.viewMode === 'grid' ? (
+                                                        <SortableCollectionTile
+                                                            key={collection.uid}
+                                                            id={collection.uid}
+                                                            updateRemoteData={props.updateRemoteData}
+                                                            disableDrag={disableDrag}
+                                                            index={index}
+                                                            activeId={activeCollection?.uid}
+                                                            updateCollection={props.updateCollection}
+                                                            removeCollection={props.removeCollection}
+                                                            addCollection={addCollection}
+                                                            onDataUpdate={props.onDataUpdate}
+                                                            collection={collection}
+                                                            lightningEffect={lightningEffectUid === collection.uid}
+                                                            isInFolder={false}
+                                                            search={search}
+                                                        />
+                                                    ) : (
+                                                        <SortableCollectionItem
+                                                            key={collection.uid}
+                                                            id={collection.uid}
+                                                            updateRemoteData={props.updateRemoteData}
+                                                            expanded={false}
+                                                            disableDrag={disableDrag}
+                                                            index={index}
+                                                            activeId={activeCollection?.uid}
+                                                            updateCollection={props.updateCollection}
+                                                            removeCollection={props.removeCollection}
+                                                            addCollection={addCollection}
+                                                            onDataUpdate={props.onDataUpdate}
+                                                            collection={collection}
+                                                            lightningEffect={lightningEffectUid === collection.uid}
+                                                            isInFolder={false}
+                                                            search={search}
+                                                        />
+                                                    )
+                                                )
+                                            }
+                                        </CollapsableSection>
+                                    )}
+                                </>
                             )}
                         </div>
                     </SortableContext>

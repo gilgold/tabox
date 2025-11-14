@@ -43,7 +43,10 @@ export const createFolder = async (name, color = null, collapsed = false) => {
         const success = await saveSingleFolder(folder, true); // Force timestamp update for new folders
 
         if (success) {
-            console.log(`✅ Created folder: ${folder.name} (${folder.uid})`);
+            // Trigger sync for folder creation
+            await browser.storage.local.set({ localTimestamp: Date.now() });
+            await browser.runtime.sendMessage({ type: 'addCollection' }); // Reuse existing sync trigger
+            
             return folder;
         } else {
             console.error(`❌ Failed to create folder: ${name}`);
@@ -70,7 +73,10 @@ export const updateFolder = async (folder, forceUpdateTimestamp = false) => {
         const success = await saveSingleFolder(folder, forceUpdateTimestamp);
 
         if (success) {
-            console.log(`✅ Updated folder: ${folder.name} (${folder.uid})`);
+            // Trigger sync for folder update
+            await browser.storage.local.set({ localTimestamp: Date.now() });
+            await browser.runtime.sendMessage({ type: 'addCollection' }); // Reuse existing sync trigger
+            
             return true;
         } else {
             console.error(`❌ Failed to update folder: ${folder.name}`);
@@ -112,11 +118,7 @@ export const deleteFolder = async (folderId, force = false, deleteCollections = 
         // If forcing delete, either delete collections or move them to root
         if (collectionsInFolder.length > 0 && force) {
             if (deleteCollections) {
-                console.log(`🗑️ Deleting ${collectionsInFolder.length} collections from folder before deleting folder`);
-                
                 for (const collectionMeta of collectionsInFolder) {
-                    console.log(`🗑️ Deleting collection ${collectionMeta.uid} (${collectionMeta.name || 'Unknown'})`);
-                    
                     if (!collectionMeta.uid) {
                         console.error('⚠️ Skipping collection with undefined UID:', collectionMeta);
                         continue;
@@ -125,17 +127,12 @@ export const deleteFolder = async (folderId, force = false, deleteCollections = 
                     const success = await deleteSingleCollection(collectionMeta.uid);
                     if (success) {
                         collectionsDeleted++;
-                        console.log(`✅ Deleted collection ${collectionMeta.name || collectionMeta.uid}`);
                     } else {
                         console.warn(`⚠️ Failed to delete collection ${collectionMeta.uid}`);
                     }
                 }
             } else {
-                console.log(`📦 Moving ${collectionsInFolder.length} collections to root before deleting folder`);
-                
                 for (const collectionMeta of collectionsInFolder) {
-                    console.log(`🔄 Moving collection ${collectionMeta.uid} (${collectionMeta.name || 'Unknown'}) to root`);
-                    
                     if (!collectionMeta.uid) {
                         console.error('⚠️ Skipping collection with undefined UID:', collectionMeta);
                         continue;
@@ -146,7 +143,6 @@ export const deleteFolder = async (folderId, force = false, deleteCollections = 
                         collection.parentId = null;
                         await saveSingleCollection(collection, true);
                         collectionsMovedToRoot++;
-                        console.log(`✅ Moved collection ${collection.name || collectionMeta.uid} to root`);
                     } else {
                         console.warn(`⚠️ Collection ${collectionMeta.uid} not found in storage, skipping`);
                     }
@@ -157,12 +153,10 @@ export const deleteFolder = async (folderId, force = false, deleteCollections = 
         const success = await deleteSingleFolder(folderId);
 
         if (success) {
-            const actionText = collectionsDeleted > 0 
-                ? ` (deleted ${collectionsDeleted} collections)`
-                : collectionsMovedToRoot > 0 
-                    ? ` (moved ${collectionsMovedToRoot} collections to root)`
-                    : '';
-            console.log(`✅ Deleted folder ${folderId}${actionText}`);
+            // Trigger sync for folder deletion
+            await browser.storage.local.set({ localTimestamp: Date.now() });
+            await browser.runtime.sendMessage({ type: 'addCollection' }); // Reuse existing sync trigger
+            
             return { success: true, collectionsMovedToRoot, collectionsDeleted };
         } else {
             console.error(`❌ Failed to delete folder: ${folderId}`);
@@ -193,7 +187,6 @@ export const checkAndAutoDeleteEmptyFolder = async (folderId) => {
         const collectionsInFolder = Object.values(collectionsIndex).filter(c => c.parentId === folderId);
 
         if (collectionsInFolder.length === 0) {
-            console.log(`🗑️ Auto-deleting empty folder: ${folderId}`);
             const result = await deleteFolder(folderId, false);
             return result.success;
         }
@@ -249,7 +242,10 @@ export const moveCollectionToFolder = async (collectionId, folderId) => {
                 // Note: Empty folders are kept and can receive new collections via drag-and-drop
             }
 
-            console.log(`✅ Moved collection ${collectionId} to folder ${folderId}`);
+            // Trigger sync for collection movement
+            await browser.storage.local.set({ localTimestamp: Date.now() });
+            await browser.runtime.sendMessage({ type: 'addCollection' }); // Reuse existing sync trigger
+
             return true;
         } else {
             console.error(`❌ Failed to move collection ${collectionId} to folder ${folderId}`);
@@ -280,7 +276,6 @@ export const removeCollectionFromFolder = async (collectionId) => {
 
         const oldParentId = collection.parentId;
         if (!oldParentId) {
-            console.log(`ℹ️ Collection ${collectionId} is already at root level`);
             return true;
         }
 
@@ -295,7 +290,10 @@ export const removeCollectionFromFolder = async (collectionId) => {
             
             // Note: Empty folders are kept and can receive new collections via drag-and-drop
 
-            console.log(`✅ Removed collection ${collectionId} from folder ${oldParentId}`);
+            // Trigger sync for collection removal from folder
+            await browser.storage.local.set({ localTimestamp: Date.now() });
+            await browser.runtime.sendMessage({ type: 'addCollection' }); // Reuse existing sync trigger
+
             return true;
         } else {
             console.error(`❌ Failed to remove collection ${collectionId} from folder`);

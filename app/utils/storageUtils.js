@@ -145,8 +145,6 @@ export const atomicStorageTransaction = async (transaction) => {
             throw new Error('Browser storage API not available');
         }
         
-        console.log('📊 Atomic transaction starting...');
-        
         // For large storage, create minimal backup
         const fullData = await getAllStorageData();
         const preTransactionData = {
@@ -158,7 +156,6 @@ export const atomicStorageTransaction = async (transaction) => {
         try {
             // Execute transaction
             await transaction();
-            console.log('✅ Atomic transaction completed successfully');
             return true;
         } catch (transactionError) {
             // Rollback on failure
@@ -167,7 +164,6 @@ export const atomicStorageTransaction = async (transaction) => {
             if (preTransactionData) {
                 await browser.storage.local.clear();
                 await browser.storage.local.set(preTransactionData);
-                console.log('🔄 Atomic transaction rollback completed');
             }
             
             return false;
@@ -316,7 +312,6 @@ export const saveSingleCollection = async (collection, forceUpdateTimestamp = fa
             [STORAGE_KEYS.COLLECTIONS_INDEX]: index
         });
         
-        console.log(`Saved collection ${collection.uid} (${collectionSize} bytes)`);
         return true;
         
     } catch (error) {
@@ -343,7 +338,6 @@ export const deleteSingleCollection = async (uid) => {
             [STORAGE_KEYS.COLLECTIONS_INDEX]: index
         });
         
-        console.log(`Deleted collection ${uid}`);
         return true;
         
     } catch (error) {
@@ -357,28 +351,49 @@ export const deleteSingleCollection = async (uid) => {
  */
 export const migrateLegacyStorage = async () => {
     try {
-        console.log('🔄 Starting migration to indexed storage...');
+        // Check current state
+        const storageData = await browser.storage.local.get([
+            STORAGE_KEYS.STORAGE_VERSION,
+            STORAGE_KEYS.COLLECTIONS_INDEX,
+            STORAGE_KEYS.LEGACY_TABS_ARRAY
+        ]);
         
-        // Check if migration is needed
-        const { [STORAGE_KEYS.STORAGE_VERSION]: version } = await browser.storage.local.get(STORAGE_KEYS.STORAGE_VERSION);
-        if (version >= CURRENT_STORAGE_VERSION) {
-            console.log('✅ Storage already up to date');
+        const version = storageData[STORAGE_KEYS.STORAGE_VERSION];
+        const existingIndex = storageData[STORAGE_KEYS.COLLECTIONS_INDEX];
+        const tabsArray = storageData[STORAGE_KEYS.LEGACY_TABS_ARRAY];
+        
+        // If version is current AND index exists, we're done
+        if (version >= CURRENT_STORAGE_VERSION && existingIndex && Object.keys(existingIndex).length > 0) {
             return { success: true, migrated: false };
         }
         
-        // Load legacy data
-        const { [STORAGE_KEYS.LEGACY_TABS_ARRAY]: tabsArray } = await browser.storage.local.get(STORAGE_KEYS.LEGACY_TABS_ARRAY);
-        
-        if (!tabsArray || tabsArray.length === 0) {
-            console.log('📝 No legacy data found, initializing new storage');
+        // If version is current but no index exists, and no legacy data, initialize empty
+        if (version >= CURRENT_STORAGE_VERSION && (!tabsArray || tabsArray.length === 0)) {
+            // Preserve any existing folders that might have been synced
+            const existingFoldersData = await browser.storage.local.get(STORAGE_KEYS.FOLDERS_INDEX);
+            const existingFoldersIndex = existingFoldersData[STORAGE_KEYS.FOLDERS_INDEX] || {};
+            
             await browser.storage.local.set({
                 [STORAGE_KEYS.COLLECTIONS_INDEX]: {},
+                [STORAGE_KEYS.FOLDERS_INDEX]: existingFoldersIndex,
                 [STORAGE_KEYS.STORAGE_VERSION]: CURRENT_STORAGE_VERSION
             });
             return { success: true, migrated: false };
         }
         
-        console.log(`📦 Migrating ${tabsArray.length} collections...`);
+        // Load legacy data for migration
+        if (!tabsArray || tabsArray.length === 0) {
+            // Preserve any existing folders that might have been synced
+            const existingFoldersData = await browser.storage.local.get(STORAGE_KEYS.FOLDERS_INDEX);
+            const existingFoldersIndex = existingFoldersData[STORAGE_KEYS.FOLDERS_INDEX] || {};
+            
+            await browser.storage.local.set({
+                [STORAGE_KEYS.COLLECTIONS_INDEX]: {},
+                [STORAGE_KEYS.FOLDERS_INDEX]: existingFoldersIndex,
+                [STORAGE_KEYS.STORAGE_VERSION]: CURRENT_STORAGE_VERSION
+            });
+            return { success: true, migrated: false };
+        }
         
         const index = {};
         const savePromises = [];
@@ -428,13 +443,16 @@ export const migrateLegacyStorage = async () => {
         // Save all collections in parallel
         await Promise.all(savePromises);
         
-        // Save index and update version
+        // Preserve any existing folders that might have been synced from Google Drive
+        const existingFoldersData = await browser.storage.local.get(STORAGE_KEYS.FOLDERS_INDEX);
+        const existingFoldersIndex = existingFoldersData[STORAGE_KEYS.FOLDERS_INDEX] || {};
+        
+        // Save indices and update version (preserve folders that might already exist from sync)
         await browser.storage.local.set({
             [STORAGE_KEYS.COLLECTIONS_INDEX]: index,
+            [STORAGE_KEYS.FOLDERS_INDEX]: existingFoldersIndex,  // Preserve existing folders instead of wiping them
             [STORAGE_KEYS.STORAGE_VERSION]: CURRENT_STORAGE_VERSION
         });
-        
-        console.log(`✅ Migration complete! Migrated ${Object.keys(index).length} collections`);
         
         // Keep legacy data for safety (can be cleaned up later)
         // We don't remove tabsArray immediately in case rollback is needed
@@ -468,11 +486,9 @@ export const loadAllCollections = async (options = {}) => {
         
         if (Object.keys(index).length === 0) {
             // No index found, try legacy storage
-            console.log('📄 No collections index found, checking legacy storage...');
             const { [STORAGE_KEYS.LEGACY_TABS_ARRAY]: tabsArray } = await browser.storage.local.get(STORAGE_KEYS.LEGACY_TABS_ARRAY);
             
             if (tabsArray && tabsArray.length > 0) {
-                console.log('🔄 Legacy data found, triggering migration...');
                 await migrateLegacyStorage();
                 // Reload index after migration
                 return await loadAllCollections(options);
@@ -707,9 +723,6 @@ export const saveSingleFolder = async (folder, forceUpdateTimestamp = false, sup
             [STORAGE_KEYS.FOLDERS_INDEX]: foldersIndex
         });
         
-        if (!suppressLogging) {
-            console.log(`Saved folder ${folder.uid} (${folderSize} bytes, ${collectionCount} collections)`);
-        }
         return true;
         
     } catch (error) {
@@ -876,8 +889,6 @@ export const updateFolderCollectionCount = async (folderId) => {
  */
 export const updateFoldersOrder = async (folders) => {
     try {
-        console.log(`🔄 Updating order for ${folders.length} folders...`);
-        
         const foldersIndex = await loadFoldersIndex();
         
         // Update order for each folder in the index
@@ -905,7 +916,6 @@ export const updateFoldersOrder = async (folders) => {
         
         await Promise.all(updatePromises);
         
-        console.log(`✅ Updated order for ${folders.length} folders`);
         return true;
         
     } catch (error) {

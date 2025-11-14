@@ -12,7 +12,6 @@ catch (e) {
   let syncThrottleTimeout = null;
   const throttleSync = async (operation) => {
     if (syncThrottleTimeout) {
-      console.log('🚫 Sync throttled - operation already in progress');
       return false;
     }
     
@@ -46,7 +45,6 @@ catch (e) {
             sessionCollections.push(collection);
           }
         } catch (windowError) {
-          console.log('Failed to save session for window:', window.id, windowError.message);
           // Continue with other windows
         }
       }
@@ -209,7 +207,6 @@ async function handleAutoUpdate(windowId, timeDelay = 1, rebuildContextMenus = f
     try {
       await browser.windows.get(windowId);
     } catch (e) {
-      console.log('Window no longer exists, removing from tracking:', windowId);
       const updatedTracking = collectionsToTrack.filter(c => c.windowId !== windowId);
       await browser.storage.local.set({ collectionsToTrack: updatedTracking });
       return;
@@ -218,7 +215,6 @@ async function handleAutoUpdate(windowId, timeDelay = 1, rebuildContextMenus = f
     // 🚀 NEW: Load single collection instead of entire array (MASSIVE performance improvement!)
     const existingCollection = await loadSingleCollectionBG(tracked.collectionUid);
     if (!existingCollection) {
-      console.log('Collection not found in indexed storage, removing from tracking:', tracked.collectionUid);
       const updatedTracking = collectionsToTrack.filter(c => c.collectionUid !== tracked.collectionUid);
       await browser.storage.local.set({ collectionsToTrack: updatedTracking });
       return;
@@ -275,14 +271,12 @@ async function handleRemoteUpdate(retryCount = 0, maxRetries = 2) {
   try {
     const { googleUser } = await browser.storage.local.get('googleUser');
     if (!googleUser) { 
-      console.log('No Google user found, skipping remote update');
       return false; 
     }
     
     // Check if we have a refresh token before attempting
     const { googleRefreshToken } = await browser.storage.local.get('googleRefreshToken');
     if (!googleRefreshToken) {
-      console.log('No refresh token available, skipping remote update');
       logSyncOperation('info', 'No refresh token available for remote update');
       return false;
     }
@@ -290,7 +284,6 @@ async function handleRemoteUpdate(retryCount = 0, maxRetries = 2) {
     const token = await getAuthToken();
     if (token === false) {
       if (retryCount < maxRetries) {
-        console.log(`Auth token failed, retrying remote update (${retryCount + 1}/${maxRetries + 1})`);
         logSyncOperation('info', `Auth token failed, retrying remote update`, { 
           attempt: retryCount + 1, 
           maxRetries: maxRetries + 1 
@@ -300,7 +293,6 @@ async function handleRemoteUpdate(retryCount = 0, maxRetries = 2) {
         await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
         return await handleRemoteUpdate(retryCount + 1, maxRetries);
       } else {
-        console.log('Failed to get auth token after retries, skipping remote update');
         logSyncOperation('error', 'Failed to get auth token after all retries for remote update');
         return false;
       }
@@ -309,7 +301,6 @@ async function handleRemoteUpdate(retryCount = 0, maxRetries = 2) {
     const result = await updateRemote(token);
     if (result === false) {
       if (retryCount < maxRetries) {
-        console.log(`Remote update failed, retrying (${retryCount + 1}/${maxRetries + 1})`);
         logSyncOperation('info', `Remote update failed, retrying`, { 
           attempt: retryCount + 1, 
           maxRetries: maxRetries + 1 
@@ -319,20 +310,17 @@ async function handleRemoteUpdate(retryCount = 0, maxRetries = 2) {
         await new Promise(resolve => setTimeout(resolve, 2000 * (retryCount + 1)));
         return await handleRemoteUpdate(retryCount + 1, maxRetries);
       } else {
-        console.log('Remote update failed after all retries');
         logSyncOperation('error', 'Remote update failed after all retries');
         return false;
       }
     }
     
-    console.log('Remote update successful');
     logSyncOperation('success', 'Remote update completed successfully', { 
       attempts: retryCount + 1 
     });
     return true;
   } catch (error) {
     if (retryCount < maxRetries) {
-      console.log(`Exception in handleRemoteUpdate, retrying (${retryCount + 1}/${maxRetries + 1}):`, error);
       logSyncOperation('error', `Exception in handleRemoteUpdate, retrying`, { 
         error: error.message, 
         attempt: retryCount + 1, 
@@ -438,7 +426,6 @@ async function openTabs(collection, window, newWindow = null) {
   
   // Early return for empty collections
   if (totalTabs === 0) {
-    console.log('No tabs to open in collection');
     return true;
   }
   
@@ -490,10 +477,6 @@ async function openTabs(collection, window, newWindow = null) {
     });
   }
   
-  // Log performance info for large collections
-  if (totalTabs > 20) {
-    console.log(`🚀 Opening large collection: ${collection.name} (${tabsToCreate.length}/${totalTabs} tabs after filtering)`);
-  }
   
   // Process tabs in optimized batches
   const BATCH_SIZE = totalTabs > 50 ? 8 : totalTabs > 20 ? 12 : 20; // Smaller batches for very large collections
@@ -557,11 +540,6 @@ async function openTabs(collection, window, newWindow = null) {
       }
     });
     
-    // Progress logging for large collections
-    if (batches.length > 3) {
-      const progress = Math.round(((batchIndex + 1) / batches.length) * 100);
-      console.log(`📊 Progress: ${progress}% (${successCount}/${tabsToCreate.length} tabs created)`);
-    }
     
     // Small delay between batches for very large collections to prevent browser overload
     if (totalTabs > 50 && batchIndex < batches.length - 1) {
@@ -577,12 +555,6 @@ async function openTabs(collection, window, newWindow = null) {
     ]);
   } catch (groupError) {
     console.error('Error applying chrome groups or tracking:', groupError);
-  }
-  
-  // Performance summary
-  const duration = Date.now() - startTime;
-  if (totalTabs > 10) {
-    console.log(`✅ Collection opened: ${successCount} tabs created, ${errorCount} failed in ${duration}ms`);
   }
   
   return successCount > 0; // Return true if at least one tab was created successfully
@@ -786,7 +758,6 @@ try {
         }
         
         if (result === false) {
-          console.log('Remote update failed');
           logSyncOperation('error', 'Remote update failed');
         }
         // Success is already logged by handleRemoteUpdate(), no need to log again
@@ -829,7 +800,6 @@ try {
         const newData = await updateLocalDataFromServer(token, request.force);
         if (newData === false) {
           // Actual error occurred - try remote update as fallback
-          console.log('Error loading from server, updating remote with local data');
           logSyncOperation('info', 'Server load failed, attempting to update remote as fallback');
           
           const updateResult = await handleRemoteUpdate();
@@ -840,11 +810,9 @@ try {
           }
         } else if (newData === 'no_update_needed') {
           // No update needed - data is already in sync
-          console.log('Local data is already up to date');
           logSyncOperation('info', 'Local data is already in sync, no action needed');
         } else {
           // Successfully loaded new data from server
-          console.log('Successfully loaded data from server');
           logSyncOperation('success', 'Successfully loaded data from server');
         }
         

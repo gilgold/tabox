@@ -36,7 +36,9 @@ import {
     batchUpdateCollections,
     loadCollectionsIndex,
     loadAllFolders,
-    updateFoldersOrder
+    updateFoldersOrder,
+    STORAGE_KEYS,
+    CURRENT_STORAGE_VERSION
 } from './utils/storageUtils';
 
 // Folder operations
@@ -82,14 +84,10 @@ function App() {
   // Update folders with proper order persistence
   const updateFolders = async (newFolders) => {
     try {
-      console.log('📁 App.js: updateFolders called with:', newFolders.length, 'folders');
-      
       // Update local state immediately for responsive UI
       setFoldersData(newFolders);
-      console.log('✅ App.js: Local state updated');
       
       // Persist the new order to storage
-      console.log('💾 App.js: Persisting to storage...');
       const success = await updateFoldersOrder(newFolders);
       
       if (!success) {
@@ -97,7 +95,10 @@ function App() {
         // Revert to original order on failure
         await refreshDataAfterFolderOperation();
       } else {
-        console.log('✅ App.js: Successfully persisted folder order');
+        // Trigger sync for folder reordering
+        await browser.storage.local.set({ localTimestamp: Date.now() });
+        await browser.runtime.sendMessage({ type: 'addCollection' });
+        triggerSync();
         // Refresh data to ensure UI reflects actual storage state
         await refreshDataAfterFolderOperation();
       }
@@ -114,11 +115,8 @@ function App() {
     if (migrationSystemAvailable) return true;
     
     try {
-      console.log('🔧 Initializing migration system...');
-      
       // Check if we're in browser extension context
       if (!browser || !browser.storage) {
-        console.log('📱 Not in browser extension context - migration system not available');
         return false;
       }
       
@@ -140,12 +138,10 @@ function App() {
       isDataSafe = validationModule.isDataSafe;
       
       migrationSystemAvailable = true;
-      console.log('✅ Migration system initialized successfully');
       return true;
       
     } catch (error) {
       console.error('❌ Failed to initialize migration system:', error);
-      console.log('🔄 Continuing with legacy data loading...');
       return false;
     }
   };
@@ -156,7 +152,6 @@ function App() {
     if (!collectionsToTrack || collectionsToTrack.length === 0 || !chkEnableAutoUpdate) { return; }
     const activeWindowIds = (await browser.windows.getAll({ populate: false })).map(c => c.id);
     collectionsToTrack = collectionsToTrack.filter(c => activeWindowIds.includes(c.windowId));
-    console.log('collectionsToTrack', collectionsToTrack);
     await browser.storage.local.set({ collectionsToTrack: collectionsToTrack });
   }
 
@@ -167,10 +162,44 @@ function App() {
     document.documentElement.setAttribute('data-theme', theme);
   }
 
+  // Phase 2: Batch initial storage operations for better performance
+  const loadInitialSettings = async () => {
+    const initialData = await browser.storage.local.get([
+      'theme',
+      'currentSortValue',
+      'collectionViewMode',
+      'extensionUpdated',
+      'previousVersion',
+      'updateTimestamp'
+    ]);
+    
+    // Apply theme immediately
+    const theme = initialData.theme || 
+      (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    setThemeMode(theme);
+    document.documentElement.setAttribute('data-theme', theme);
+    
+    // Set sort value
+    setSortValue(initialData.currentSortValue || 'DATE');
+    
+    // Set view mode
+    setViewMode(initialData.collectionViewMode || 'list');
+    
+    // Return update flags for migration check
+    return {
+      extensionUpdated: initialData.extensionUpdated,
+      previousVersion: initialData.previousVersion
+    };
+  }
+
   const checkSyncStatus = async () => {
-    console.log('check sync status')
-    const { googleRefreshToken } = await browser.storage.local.get('googleRefreshToken');
+    // Phase 4: Show cached status immediately
+    const { googleUser, googleRefreshToken } = await browser.storage.local.get(['googleUser', 'googleRefreshToken']);
+    setIsLoggedIn(!!googleUser); // Show cached status
+    
+    // Then check actual status in background
     if (!googleRefreshToken) return;
+    
     browser.runtime.sendMessage({ type: 'checkSyncStatus' }).then(async (response) => {
       setIsLoggedIn(response === null ? false : response);
       if (response) await applyDataFromServer();
@@ -195,26 +224,46 @@ function App() {
     browser.runtime.sendMessage({ type: 'loadFromServer', force: force }).then(async (response) => {
       if (response !== false) {
         // Use new storage system for server data
-        console.log('📡 Applying server data using new storage system...');
-        
-        // Convert server data to new format and save using batch update
-        console.log('📡 Response from server:', { type: typeof response, isArray: Array.isArray(response), length: response?.length, response });
         
         if (response && Array.isArray(response) && response.length > 0) {
           const success = await batchUpdateCollections(response);
           if (success) {
-            setSettingsData(response);
+            // Add a small delay to ensure storage writes are committed
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // Reload both collections and folders from storage after sync
+            const [updatedCollections, updatedFolders] = await Promise.all([
+              loadAllCollections({ metadataOnly: false }),
+              loadAllFolders({ metadataOnly: false })
+            ]);
+            
+            setSettingsData(updatedCollections);
+            setFoldersData(updatedFolders);
             setLastSyncTime(Date.now());
-            console.log('✅ Server data applied successfully');
           } else {
             console.error('❌ Failed to save server data');
           }
         } else if (response === 'no_update_needed') {
-          console.log('📡 No server update needed - data already in sync');
+          // Even if no update is needed, ensure UI is fully loaded from storage
+          // This handles the case where folders might have been synced in the background
+          const [updatedCollections, updatedFolders] = await Promise.all([
+            loadAllCollections({ metadataOnly: false }),
+            loadAllFolders({ metadataOnly: false })
+          ]);
+          
+          // Always update state to ensure folders are included
+          if (updatedCollections.length > 0) {
+            setSettingsData(updatedCollections);
+          }
+          if (updatedFolders.length > 0 || foldersData.length === 0) {
+            // Update folders if we found any, or if UI currently has none
+            setFoldersData(updatedFolders);
+          }
+          
           setLastSyncTime(Date.now());
         } else {
-          console.log('📡 Empty or invalid server response, setting empty data');
           setSettingsData([]);
+          setFoldersData([]);
           setLastSyncTime(Date.now());
         }
       }
@@ -234,6 +283,12 @@ function App() {
     }).finally(() => {
       setSyncInProgress(false);
     });
+  }
+
+  // Sync trigger for folder operations (without requiring full collections array)
+  const triggerSync = async () => {
+    if (!isLoggedIn) return;
+    _update();
   }
 
   // Updated to use new storage system
@@ -301,8 +356,6 @@ function App() {
         await browser.runtime.sendMessage({ type: 'addCollection' });
         if (!isLoggedIn) return;
         _update();
-        
-        console.log(`✅ Collection ${newCollection.uid} updated successfully`);
       } else {
         console.error(`❌ Failed to update collection ${newCollection.uid}`);
         // Fallback to legacy full update
@@ -334,8 +387,6 @@ function App() {
 
   // Updated to use new storage system
   const addCollection = async (newCollection, skipContextMenuUpdate = false, skipStateUpdate = false) => {
-    console.log(`🔄 Adding new collection ${newCollection.uid}...`);
-    
     try {
       // Use new single collection save for better performance
       const success = await saveSingleCollection(newCollection, true); // Force timestamp update for new collections
@@ -360,8 +411,6 @@ function App() {
         if (isLoggedIn && !skipStateUpdate) {
           _update();
         }
-        
-        console.log(`✅ Collection ${newCollection.uid} added successfully`);
       } else {
         console.error(`❌ Failed to add collection ${newCollection.uid}`);
         // Fallback to legacy system
@@ -416,7 +465,6 @@ function App() {
         const newFolders = [newFolder, ...foldersData];
         setFoldersData(newFolders);
         
-        console.log(`✅ Folder ${newFolder.uid} created successfully`);
         openSuccessSnackbar(`Folder "${newFolder.name}" created successfully`, 2000);
         return newFolder;
       } else {
@@ -442,23 +490,19 @@ function App() {
       
       setSettingsData(collections);
       setFoldersData(folders);
-      
-      console.log(`🔄 Data refreshed: ${collections.length} collections, ${folders.length} folders`);
     } catch (error) {
       console.error('Error refreshing data:', error);
     }
   };
 
   // Updated to use new storage system with performance improvements
-  const loadCollectionsFromStorage = async () => {
+  const loadCollectionsFromStorage = async (updateFlags = null) => {
     // Prevent multiple simultaneous loads
     if (dataLoading) {
-      console.log('⏳ Data loading already in progress, skipping...');
       return;
     }
     
     if (dataLoaded && settingsData?.length > 0) {
-      console.log('✅ Data already loaded, skipping...');
       return;
     }
     
@@ -475,17 +519,20 @@ function App() {
         return;
       }
       
-      // Quick check for extension updates - batch storage reads
-      const updateData = await browser.storage.local.get([
-        'extensionUpdated', 'previousVersion', 'updateTimestamp'
-      ]);
-      
-      extensionUpdated = updateData.extensionUpdated;
-      previousVersion = updateData.previousVersion;
+      // Use passed flags or fetch them
+      if (updateFlags) {
+        extensionUpdated = updateFlags.extensionUpdated;
+        previousVersion = updateFlags.previousVersion;
+      } else {
+        // Fallback: fetch if not provided
+        const updateData = await browser.storage.local.get([
+          'extensionUpdated', 'previousVersion', 'updateTimestamp'
+        ]);
+        extensionUpdated = updateData.extensionUpdated;
+        previousVersion = updateData.previousVersion;
+      }
       
       if (extensionUpdated) {
-        console.log(`🔄 Extension was updated from ${previousVersion} - running post-update migration check`);
-        
         // Clear the update flag
         await browser.storage.local.remove(['extensionUpdated', 'updateTimestamp', 'previousVersion']);
       }
@@ -495,27 +542,29 @@ function App() {
       
       // Check if migration is already running
       if (migrationInProgress) {
-        console.log('⏳ Migration already in progress, skipping data loading...');
         return;
       }
 
-      // Run storage system migration first (this is separate from data migrations)
-      console.log('🚀 Starting storage system migration to indexed format...');
-      const storageeMigrationResult = await migrateLegacyStorage();
+      // Phase 1: Only run storage migration if needed (extension update OR first-time migration)
+      const { [STORAGE_KEYS.STORAGE_VERSION]: storageVersion } = await browser.storage.local.get(STORAGE_KEYS.STORAGE_VERSION);
       
-      if (storageeMigrationResult.success && storageeMigrationResult.migrated) {
-        console.log(`✅ Storage migration completed for ${storageeMigrationResult.count} collections`);
-        openSuccessSnackbar(`Upgraded storage system for ${storageeMigrationResult.count} collections - faster performance!`);
-      } else if (storageeMigrationResult.success) {
-        console.log('✅ Storage system already up to date');
-      } else {
-        console.warn('⚠️ Storage migration failed, using legacy system');
+      // Only run storage migration if:
+      // 1. Extension was updated, OR
+      // 2. Storage version is outdated/missing (first-time migration)
+      const needsStorageMigration = extensionUpdated || !storageVersion || storageVersion < CURRENT_STORAGE_VERSION;
+      
+      if (needsStorageMigration) {
+        const storageeMigrationResult = await migrateLegacyStorage();
+        
+        if (storageeMigrationResult.success && storageeMigrationResult.migrated) {
+          openSuccessSnackbar(`Upgraded storage system for ${storageeMigrationResult.count} collections - faster performance!`);
+        } else if (!storageeMigrationResult.success) {
+          console.warn('⚠️ Storage migration failed, using legacy system');
+        }
       }
 
       // Only run data migration during extension updates
       if (extensionUpdated) {
-        console.log('🔄 Extension update detected - running data migration system...');
-        
         // Try to initialize data migration system
         const migrationReady = await initializeMigrationSystem();
         
@@ -524,8 +573,6 @@ function App() {
           const migrationAssessment = await assessMigrationNeeds();
           
           if (migrationAssessment.migrationNeeded) {
-            console.log('🚀 Data migration needed, executing...', migrationAssessment);
-            
             setMigrationInProgress(true);
             
             try {
@@ -538,10 +585,8 @@ function App() {
               const migrationResult = await executeMigration();
               
               if (migrationResult.success && !migrationResult.skipped) {
-                console.log('✅ Data migration completed successfully');
                 openSuccessSnackbar('Extension updated and data migrated successfully!');
               } else if (migrationResult.skipped) {
-                console.log('⏭️ Data migration was skipped (already completed or in progress)');
                 openSuccessSnackbar('Extension updated successfully');
               } else {
                 console.error('❌ Data migration failed:', migrationResult.error);
@@ -551,15 +596,12 @@ function App() {
               setMigrationInProgress(false);
             }
           } else {
-            console.log('✅ Extension updated - no data migration required');
             openSuccessSnackbar('Extension updated successfully');
           }
         } else {
-          console.log('⚠️ Data migration system not available - using legacy data loading');
           openSuccessSnackbar(`Extension updated from ${previousVersion} - data loading in compatibility mode`);
         }
       } else {
-        console.log('✅ Regular app startup - no data migration needed');
         await loadDataWithNewSystem();
       }
       
@@ -613,8 +655,6 @@ function App() {
 
   // Legacy data loading (fallback)
   const loadDataLegacy = async () => {
-    console.log('📄 Loading collections using legacy storage system...');
-    
     const { tabsArray } = await browser.storage.local.get('tabsArray');
     let newCollections = [];
     
@@ -645,7 +685,6 @@ function App() {
       
       // Save cleaned collections back to storage if we removed anything
       if (cleanedCollections.length !== tabsArray.length) {
-        console.log('Cleaned up collections from', tabsArray.length, 'to', cleanedCollections.length);
         await browser.storage.local.set({ tabsArray: cleanedCollections });
         
         // Also clear any folder storage
@@ -656,13 +695,10 @@ function App() {
     }
     
     setSettingsData(newCollections);
-    console.log(`✅ Loaded ${newCollections.length} collections using legacy storage`);
   };
 
   // Emergency cleanup function - updated to work with new system
   const emergencyCleanup = async () => {
-    console.log('EMERGENCY CLEANUP: Removing all folder data and fixing collections...');
-    
     // Remove all folder storage
     await browser.storage.local.remove('foldersArray');
     
@@ -683,13 +719,10 @@ function App() {
       });
       
       const success = await batchUpdateCollections(cleanedCollections);
-      if (success) {
-        console.log('EMERGENCY CLEANUP: Fixed', cleanedCollections.length, 'collections using new storage');
-      } else {
+      if (!success) {
         throw new Error('Batch update failed');
       }
     } catch (error) {
-      console.log('EMERGENCY CLEANUP: Falling back to legacy cleanup');
       // Fallback to legacy cleanup
       const { tabsArray } = await browser.storage.local.get('tabsArray');
       if (tabsArray && tabsArray.length > 0) {
@@ -707,20 +740,16 @@ function App() {
         });
         
         await browser.storage.local.set({ tabsArray: cleanedCollections });
-        console.log('EMERGENCY CLEANUP: Fixed', cleanedCollections.length, 'collections using legacy storage');
       }
     }
     
     // Reload data
     await loadCollectionsFromStorage();
-    console.log('EMERGENCY CLEANUP: Complete!');
   };
   
   // Emergency storage cleanup - updated to work with new system
   const emergencyStorageCleanup = async () => {
     try {
-      console.log('🚨 EMERGENCY STORAGE CLEANUP: Starting...');
-      
       // Remove all backup data to free space
       const keysToRemove = [
         'autoBackups',
@@ -741,13 +770,10 @@ function App() {
       
       keysToRemove.push(...backupKeys);
       
-      console.log(`🧹 Removing ${keysToRemove.length} keys:`, keysToRemove);
-      
       if (keysToRemove.length > 0) {
         await browser.storage.local.remove(keysToRemove);
       }
       
-      console.log('✅ Emergency storage cleanup complete!');
       openSuccessSnackbar('Emergency cleanup completed - freed storage space');
       
       // Update storage stats
@@ -764,8 +790,6 @@ function App() {
 
   // Emergency recovery function using new migration system
   const emergencyRecovery = async () => {
-    console.log('🚨 EMERGENCY RECOVERY: Attempting to restore from latest backup...');
-    
     try {
       // Try to initialize migration system if not already available
       if (!migrationSystemAvailable) {
@@ -781,10 +805,8 @@ function App() {
       if (success) {
         // Reload data after recovery
         await loadCollectionsFromStorage();
-        console.log('✅ EMERGENCY RECOVERY: Successfully restored data!');
         openSuccessSnackbar('Emergency recovery completed - data restored from backup');
       } else {
-        console.log('❌ EMERGENCY RECOVERY: No valid backups found');
         openErrorSnackbar('Emergency recovery failed - no valid backups available');
       }
     } catch (error) {
@@ -862,8 +884,6 @@ function App() {
       
       // New function to test storage performance
       window.testStoragePerformance = async () => {
-        console.log('🏃‍♂️ Testing storage performance...');
-        
         const startTime = performance.now();
         const collections = await loadAllCollections({ metadataOnly: true });
         const metadataTime = performance.now() - startTime;
@@ -879,7 +899,6 @@ function App() {
           avgFull: `${(fullTime / 10).toFixed(2)}ms per collection`
         };
         
-        console.log('🚀 Storage Performance Results:');
         console.table(results);
         return results;
       };
@@ -919,18 +938,13 @@ function App() {
       
       window.cleanupBackups = async () => {
         try {
-          console.log('🧹 Starting backup cleanup...');
-          
           const result = await browser.runtime.sendMessage({ 
             type: 'cleanupBackups' 
           });
           
           if (result) {
-            console.log('✅ Backup cleanup completed successfully');
             // Show updated sizes
             await window.checkBackupSizes();
-          } else {
-            console.log('❌ Backup cleanup failed');
           }
           
           return result;
@@ -956,16 +970,7 @@ function App() {
         }
       };
       
-      console.log('🚨 Emergency functions available:');
-      console.log('  - window.emergencyCleanup() - Fix collections and remove folders');
-      console.log('  - window.emergencyStorageCleanup() - Remove large backup data');
-      console.log('  - window.emergencyRecovery() - Full data recovery');
-      console.log('  - window.getStorageStats() - Show storage breakdown');
-      console.log('  - window.getMigrationStatus() - Check migration completion status');
-      console.log('  - window.testStoragePerformance() - Test new storage performance');
-      console.log('  - window.checkBackupSizes() - Analyze backup storage usage');
-      console.log('  - window.cleanupBackups() - Clean up large backup files');
-      console.log('  - window.showBackupContents() - Show backup metadata');
+      // Emergency functions available in console for debugging
     }
   }, []);
 
@@ -991,18 +996,22 @@ function App() {
       // Initialize TimeAgo locale once for the entire app
       TimeAgo.addDefaultLocale(en);
       
-      // Critical path: Load data first for faster perceived performance
-      await Promise.all([
-        applyTheme(),
-        getSelectedSort(),
-        getSelectedViewMode(),
-        loadCollectionsFromStorage() // Start loading immediately
-      ]);
+      // Phase 2: Batch all initial storage reads
+      const updateFlags = await loadInitialSettings();
+      
+      // Phase 3: Defer data loading until after initial render
+      // This allows the popup window to open immediately
+      setTimeout(async () => {
+        await loadCollectionsFromStorage(updateFlags);
+      }, 0);
       
       // Defer non-critical operations until after initial render
       setTimeout(async () => {
         await removeInactiveWindowsFromAutoUpdate();
-        await checkSyncStatus();
+        // Phase 4: Defer sync check further - show UI first
+        setTimeout(async () => {
+          await checkSyncStatus();
+        }, 1000);
       }, 100);
     };
     
@@ -1104,6 +1113,7 @@ function App() {
         addCollection={addCollection}
         onDataUpdate={refreshDataAfterFolderOperation}
         updateFolders={updateFolders}
+        triggerSync={triggerSync}
         viewMode={viewMode}
         hasActiveFilters={hasActiveFilters}
         lightningEffectUid={lightningEffectUid}

@@ -247,10 +247,6 @@ function ExpandedCollectionData(props) {
                 const firstNonPinnedIndex = getFirstNonPinnedIndex(newTabs);
                 const adjustedNewIndex = Math.max(newIndex, firstNonPinnedIndex);
                 
-                if (adjustedNewIndex !== newIndex) {
-                    console.log('📌 Adjusted drop position to respect pinned tabs:', newIndex, '→', adjustedNewIndex);
-                }
-                
                 // Get the dragged tab info BEFORE moving
                 const draggedTab = newTabs[oldIndex];
                 
@@ -270,13 +266,6 @@ function ExpandedCollectionData(props) {
                     }
                     
                     isMovingWithinSameGroup = adjustedTargetIndex >= minGroupIndex && adjustedTargetIndex <= maxGroupIndex;
-                    console.log('📍 Group boundary check:', {
-                        groupUid: draggedTab.groupUid,
-                        minGroupIndex,
-                        maxGroupIndex,
-                        adjustedTargetIndex,
-                        isMovingWithinSameGroup
-                    });
                 }
                 
                 // Perform the move
@@ -319,7 +308,6 @@ function ExpandedCollectionData(props) {
             if (tabsInOriginalGroup.length === 0) {
                 // Remove the empty group
                 newChromeGroups = newChromeGroups.filter(group => group.uid !== originalGroupUid);
-                console.log('🗑️ Deleted empty group:', originalGroupUid);
             }
         }
 
@@ -330,23 +318,46 @@ function ExpandedCollectionData(props) {
         props.updateCollection(currentCollection, false); // Drag-and-drop operation - no lightning effect
     };
 
-    // Get tab IDs for sortable context
-    const tabIds = useMemo(() => {
-        return props.collection.tabs.map(tab => tab.uid);
-    }, [props.collection.tabs]);
+    // Helper function to escape regex special characters
+    const escapeRegex = (string) => {
+        return string.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    };
 
-    // Organize tabs for inline rendering (maintain original order)
+    // Filter tabs based on search term
+    const filteredTabs = useMemo(() => {
+        if (!props.search || !props.search.trim()) {
+            // No search - return all tabs
+            return props.collection.tabs;
+        }
+        
+        const searchRegex = new RegExp(escapeRegex(props.search), 'i');
+        return props.collection.tabs.filter(tab => 
+            tab.title?.match(searchRegex) || 
+            tab.url?.match(searchRegex)
+        );
+    }, [props.search, props.collection.tabs]);
+
+    // Get tab IDs for sortable context (use filtered tabs when search is active)
+    const tabIds = useMemo(() => {
+        const tabsToUse = (props.search && props.search.trim()) ? filteredTabs : props.collection.tabs;
+        return tabsToUse.map(tab => tab.uid);
+    }, [props.collection.tabs, filteredTabs, props.search]);
+
+    // Organize tabs for inline rendering (maintain original order, but only show filtered tabs)
     const organizedTabs = useMemo(() => {
         const result = [];
         const processedGroups = new Set();
         
-        props.collection.tabs.forEach((tab, index) => {
+        // Use filtered tabs when search is active, otherwise use all tabs
+        const tabsToOrganize = (props.search && props.search.trim()) ? filteredTabs : props.collection.tabs;
+        
+        tabsToOrganize.forEach((tab, index) => {
             if (tab.groupUid && !processedGroups.has(tab.groupUid)) {
-                // First occurrence of this group - collect all tabs for this group
-                const groupTabs = props.collection.tabs.filter(t => t.groupUid === tab.groupUid);
+                // First occurrence of this group - collect all filtered tabs for this group
+                const groupTabs = tabsToOrganize.filter(t => t.groupUid === tab.groupUid);
                 const group = groupFromId(tab.groupUid);
                 
-                if (group) {
+                if (group && groupTabs.length > 0) {
                     result.push({
                         type: 'group',
                         groupUid: tab.groupUid,
@@ -366,7 +377,7 @@ function ExpandedCollectionData(props) {
         });
         
         return result;
-    }, [props.collection.tabs, props.collection.chromeGroups]);
+    }, [props.collection.tabs, props.collection.chromeGroups, filteredTabs, props.search]);
 
     const _groupsAreSimilar = (group1, group2) => {
         return group1 && group2 && group1.name === group2.name && group1.color === group2.color;
@@ -453,7 +464,7 @@ function ExpandedCollectionData(props) {
                         onPointerDown={(e) => e.stopPropagation()}
                     >
                         <div className="button-icon">
-                            {isHighlighted ? <MdSelectAll size="16" /> : <MdTab size="16" />}
+                            {isHighlighted ? <MdSelectAll size="14" /> : <MdTab size="14" />}
                         </div>
                         <span className="button-text">
                             {isHighlighted ? 'Add Selected Tabs' : 'Add Current Tab'}
@@ -474,7 +485,7 @@ function ExpandedCollectionData(props) {
                         onPointerDown={(e) => e.stopPropagation()}
                     >
                         <div className="button-icon">
-                            <MdWindow size="16" />
+                            <MdWindow size="14" />
                         </div>
                         <span className="button-text">Add All Tabs</span>
                     </button>
@@ -496,9 +507,18 @@ function ExpandedCollectionData(props) {
             >
 
                 
+                {/* Search indicator message */}
+                {props.search && props.search.trim() && filteredTabs.length > 0 ? (
+                    <div className="search-results-indicator" onClick={(e) => e.stopPropagation()}>
+                        <span className="search-results-text">
+                            Showing {filteredTabs.length} of {props.collection.tabs.length} tab{filteredTabs.length !== 1 ? 's' : ''} matching "{props.search}"
+                        </span>
+                    </div>
+                ) : null}
+                
                 {/* Tabs in Original Order */}
                 <div className="tabs-section">
-                    {organizedTabs.map((item, index) => {
+                    {organizedTabs.length > 0 ? organizedTabs.map((item, index) => {
                         if (item.type === 'group') {
                             return (
                                 <GroupContainer
@@ -518,6 +538,7 @@ function ExpandedCollectionData(props) {
                                             collection={props.collection}
                                             group={item.group}
                                             disableDrag={tab.pinned}
+                                            search={props.search}
                                         />
                                     ))}
                                 </GroupContainer>
@@ -533,11 +554,18 @@ function ExpandedCollectionData(props) {
                                         collection={props.collection}
                                         group={null}
                                         disableDrag={item.tab.pinned}
+                                        search={props.search}
                                     />
                                 </div>
                             );
                         }
-                    })}
+                    }) : (
+                        props.search && props.search.trim() ? (
+                            <div className="no-matching-tabs-message" onClick={(e) => e.stopPropagation()}>
+                                <p>No tabs match "{props.search}" in this collection.</p>
+                            </div>
+                        ) : null
+                    )}
                 </div>
             </SortableContext>
             

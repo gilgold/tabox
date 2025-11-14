@@ -48,6 +48,7 @@ function SortableTabRow(props) {
                 collection={props.collection}
                 group={props.group}
                 isDragging={isDragging}
+                search={props.search}
             />
         </div>
     );

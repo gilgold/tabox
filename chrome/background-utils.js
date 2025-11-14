@@ -310,7 +310,7 @@ const saveSingleFolderBG = async (folder, forceUpdateTimestamp = false) => {
             [STORAGE_KEYS.FOLDERS_INDEX]: foldersIndex
         });
         
-        console.log(`Background: Saved folder ${folder.uid} (${folderSize} bytes, ${collectionCount} collections)`);
+        console.log(`📁 Background: Saved folder ${folder.uid} "${folder.name}" (${collectionCount} collections)`);
         return true;
         
     } catch (error) {
@@ -347,6 +347,31 @@ const loadAllFoldersBG = async () => {
     } catch (error) {
         console.error('Background: Failed to load folders:', error);
         return [];
+    }
+};
+
+// Update all folders from sync data
+const updateAllFoldersBG = async (folders) => {
+    try {
+        if (!folders || folders.length === 0) {
+            console.log('📁 Background: No folders to update');
+            return true;
+        }
+        
+        console.log(`📁 Background: Updating ${folders.length} folders...`);
+        
+        // Update each folder individually using new system
+        const savePromises = folders.map(folder => saveSingleFolderBG(folder));
+        const results = await Promise.all(savePromises);
+        
+        const successCount = results.filter(Boolean).length;
+        console.log(`📁 Background: Updated ${successCount}/${folders.length} folders`);
+        
+        return successCount === folders.length;
+        
+    } catch (error) {
+        console.error('📁 Background: Failed to update folders:', error);
+        return false;
     }
 };
 
@@ -442,6 +467,24 @@ function validateCollectionData(data) {
                 valid: false, 
                 error: `Collection at index ${i} is missing required fields (uid, name, tabs)` 
             };
+        }
+    }
+    
+    // Validate folders if present (optional, since older versions don't have folders)
+    if (data.foldersArray !== undefined) {
+        if (!Array.isArray(data.foldersArray)) {
+            return { valid: false, error: 'foldersArray exists but is not an array' };
+        }
+        
+        // Validate each folder
+        for (let i = 0; i < data.foldersArray.length; i++) {
+            const folder = data.foldersArray[i];
+            if (!folder.uid || !folder.name) {
+                return { 
+                    valid: false, 
+                    error: `Folder at index ${i} is missing required fields (uid, name)` 
+                };
+            }
         }
     }
     
@@ -950,8 +993,9 @@ async function updateRemote(token, collections = null) {
             body: JSON.stringify(dataToSync)
         };
         
-        logSyncOperation('info', 'Syncing collections to cloud', { 
-            count: dataToSync.tabsArray.length,
+        logSyncOperation('info', 'Syncing data to cloud', { 
+            collections: dataToSync.tabsArray.length,
+            folders: dataToSync.foldersArray?.length || 0,
             version: dataToSync.syncVersion || 'legacy'
         });
         
@@ -1006,7 +1050,9 @@ async function _loadSettingsFile(token, fileId) {
         }
         
         logSyncOperation('success', 'Successfully loaded and validated sync file', { 
-            collectionCount: data.tabsArray?.length || 0,
+            collections: data.tabsArray?.length || 0,
+            folders: data.foldersArray?.length || 0,
+            hasFoldersArray: !!data.foldersArray,
             timestamp: data.timestamp,
             syncVersion: data.syncVersion || 'legacy'
         });
@@ -1528,11 +1574,12 @@ const migrateIncomingSyncData = async (data) => {
                 type: 'collection'
             }));
             
-            // Update both storage systems for compatibility
+            // v3.5 didn't have folders, so no need to sync them (they'll be preserved locally)
             const success = await updateAllCollectionsBG(normalizedCollections);
             
             if (success) {
                 console.log(`✅ Successfully migrated ${normalizedCollections.length} collections from v3.5 to v4.0 storage`);
+                console.log('ℹ️ v3.5 sync data has no folders - local folders preserved');
                 return normalizedCollections;
             } else {
                 console.error('❌ Failed to migrate v3.5 collections to v4.0 storage');
@@ -1547,14 +1594,33 @@ const migrateIncomingSyncData = async (data) => {
                 return [];
             }
             
-            // Already v4.0 format, but ensure both storages are updated
-            const success = await updateAllCollectionsBG(data.tabsArray);
+            // Update collections
+            console.log(`📦 Updating ${data.tabsArray.length} collections to storage...`);
+            const collectionsSuccess = await updateAllCollectionsBG(data.tabsArray);
+            console.log(`📦 Collections update result: ${collectionsSuccess}`);
             
-            if (success) {
-                console.log(`✅ Updated ${data.tabsArray.length} collections in indexed storage`);
+            // Update folders if they exist in the sync data
+            let foldersSuccess = true;
+            if (data.foldersArray && Array.isArray(data.foldersArray) && data.foldersArray.length > 0) {
+                console.log(`📁 Background: Syncing ${data.foldersArray.length} folders from Google Drive...`);
+                console.log('📁 Folder data:', data.foldersArray);
+                foldersSuccess = await updateAllFoldersBG(data.foldersArray);
+                console.log(`📁 Folders update result: ${foldersSuccess}`);
+            } else {
+                console.log('ℹ️ No folders in sync data - local folders preserved');
+                console.log('📁 Debug - data.foldersArray:', data.foldersArray);
+            }
+            
+            if (collectionsSuccess && foldersSuccess) {
+                console.log(`✅ Updated ${data.tabsArray.length} collections and ${data.foldersArray?.length || 0} folders in indexed storage`);
+                console.log('💾 Waiting for storage writes to commit...');
+                // Ensure storage writes are fully committed
+                await new Promise(resolve => setTimeout(resolve, 150));
+                console.log('💾 Storage should be committed now, returning collections array');
                 return data.tabsArray;
             } else {
-                console.error('❌ Failed to update v4.0 collections in indexed storage');
+                console.error('❌ Failed to update data in indexed storage');
+                console.error(`Collections success: ${collectionsSuccess}, Folders success: ${foldersSuccess}`);
                 return false;
             }
         } else {
@@ -1575,11 +1641,13 @@ const migrateIncomingSyncData = async (data) => {
 const prepareSyncDataForUpload = async (collections) => {
     try {
         const tabsArray = collections || await loadAllCollectionsBG(true);
+        const foldersArray = await loadAllFoldersBG();
         
-        // v4.0 enhanced sync format with version detection
+        // v4.0 enhanced sync format with version detection and folders support
         const syncData = {
             timestamp: Date.now(),
             tabsArray: tabsArray,
+            foldersArray: foldersArray,  // NEW: Include folders in sync
             syncVersion: SYNC_VERSION,
             storageVersion: 2,
             extensionVersion: (typeof chrome !== 'undefined' && chrome.runtime) ? 
@@ -1588,7 +1656,7 @@ const prepareSyncDataForUpload = async (collections) => {
         
         // Only log for debug mode
         if (globalThis.DEBUG_STORAGE) {
-            console.log(`📤 Preparing sync data for upload: v${syncData.syncVersion} with ${tabsArray.length} collections`);
+            console.log(`📤 Preparing sync data for upload: v${syncData.syncVersion} with ${tabsArray.length} collections and ${foldersArray.length} folders`);
         }
         return syncData;
         
@@ -1597,7 +1665,8 @@ const prepareSyncDataForUpload = async (collections) => {
         // Fallback to legacy format for compatibility
         return {
             timestamp: Date.now(),
-            tabsArray: collections || []
+            tabsArray: collections || [],
+            foldersArray: []  // Include empty folders array for compatibility
         };
     }
 };
