@@ -456,7 +456,7 @@ class MigrationCoordinator {
       
       // Clean up any folder artifacts (safety measure)
       const cleanedCollection = { ...collection };
-      delete cleanedCollection.parentFolderId;
+      delete cleanedCollection.parentId;
       if (cleanedCollection.type === 'folder') {
         return null; // Skip folder items
       }

@@ -219,10 +219,21 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
                 
                 // Then add all collections to the folder (skip context menu updates and state updates to prevent race conditions)
                 const addedCollections = [];
+                const failedCollections = [];
                 for (const collection of collections) {
                     collection.parentId = createdFolder.uid;
-                    await addCollection(collection, true, true); // Skip context menu update and state update
-                    addedCollections.push(collection);
+                    const success = await addCollection(collection, true, true); // Skip context menu update and state update
+                    if (success) {
+                        addedCollections.push(collection);
+                    } else {
+                        failedCollections.push(collection);
+                        console.error(`Failed to add collection "${collection.name}" to folder`);
+                    }
+                }
+                
+                // Report if any collections failed to save
+                if (failedCollections.length > 0) {
+                    console.error(`Failed to save ${failedCollections.length} out of ${collections.length} collections to folder`);
                 }
                 
                 // Update folder collection count after all collections are added

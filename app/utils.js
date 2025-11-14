@@ -16,7 +16,6 @@ export function applyUid(item) {
   // Applies a unique id to all tabs and groups in a TaboxCollection
   // Using shared generateUid function for consistency
   if (!item || !('tabs' in item) || item.tabs.length === 0) return item;
-  console.log('applying uid to collection', item.name);
   let tabs = [...item.tabs];
   let chromeGroups = item.chromeGroups ? [...item.chromeGroups] : [];
   tabs.forEach((tab) => {
@@ -36,6 +35,12 @@ export function applyUid(item) {
   // Preserve the original collection UID if it exists
   if (item.uid) {
     newCollection.uid = item.uid;
+  }
+  
+  // Preserve the parentId if it exists (for folder-collection relationships)
+  // parentId can be null (root level) or a string (folder UID)
+  if (item.parentId !== undefined) {
+    newCollection.parentId = item.parentId;
   }
   
   return newCollection;

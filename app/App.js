@@ -411,47 +411,63 @@ function App() {
         if (isLoggedIn && !skipStateUpdate) {
           _update();
         }
+        
+        // Auto-update tracking logic (only for successful saves)
+        const { chkAutoUpdateOnNewCollection } = await browser.storage.local.get('chkAutoUpdateOnNewCollection');
+        if (!chkAutoUpdateOnNewCollection) return true;
+        setTimeout(async () => {
+          let { collectionsToTrack } = (await browser.storage.local.get('collectionsToTrack')) || [];
+          let window;
+          try {
+            window = await browser.windows.getLastFocused({ windowTypes: ['normal'] });
+          } catch (error) {
+            return;
+          }
+          const index = collectionsToTrack.findIndex(c => c.collectionUid === newCollection.uid);
+          if (index !== undefined && index > -1) {
+              collectionsToTrack[index].windowId = window.id;
+          } else {
+              collectionsToTrack.push({
+                  collectionUid: newCollection.uid,
+                  windowId: window.id
+              });
+          }
+          await browser.storage.local.set({ collectionsToTrack });
+          setListKey(Math.random().toString(36));
+        }, 1000);
+        
+        return true;
       } else {
         console.error(`❌ Failed to add collection ${newCollection.uid}`);
-        // Fallback to legacy system
-        if (!skipStateUpdate) {
+        // Fallback to legacy system - always attempt fallback even if skipStateUpdate is true
+        // We just won't update React state, but we should still try to save the data
+        try {
           const newList = settingsData ? [newCollection, ...settingsData] : [newCollection];
-          setHighlightedCollectionUid(newCollection.uid);
+          if (!skipStateUpdate) {
+            setHighlightedCollectionUid(newCollection.uid);
+          }
           await updateRemoteData(newList);
+          return true;
+        } catch (fallbackError) {
+          console.error('Fallback save also failed:', fallbackError);
+          return false;
         }
       }
-      
-      // Auto-update tracking logic (unchanged)
-      const { chkAutoUpdateOnNewCollection } = await browser.storage.local.get('chkAutoUpdateOnNewCollection');
-      if (!chkAutoUpdateOnNewCollection) return;
-      setTimeout(async () => {
-        let { collectionsToTrack } = (await browser.storage.local.get('collectionsToTrack')) || [];
-        let window;
-        try {
-          window = await browser.windows.getLastFocused({ windowTypes: ['normal'] });
-        } catch (error) {
-          console.log('Failed to get last focused window for auto-update tracking:', error.message);
-          return;
-        }
-        const index = collectionsToTrack.findIndex(c => c.collectionUid === newCollection.uid);
-        if (index !== undefined && index > -1) {
-            collectionsToTrack[index].windowId = window.id;
-        } else {
-            collectionsToTrack.push({
-                collectionUid: newCollection.uid,
-                windowId: window.id
-            });
-        }
-        await browser.storage.local.set({ collectionsToTrack });
-        setListKey(Math.random().toString(36));
-      }, 1000);
       
     } catch (error) {
       console.error('Error adding collection:', error);
       // Fallback to legacy system
-      const newList = settingsData ? [newCollection, ...settingsData] : [newCollection];
-      setHighlightedCollectionUid(newCollection.uid);
-      await updateRemoteData(newList);
+      try {
+        const newList = settingsData ? [newCollection, ...settingsData] : [newCollection];
+        if (!skipStateUpdate) {
+          setHighlightedCollectionUid(newCollection.uid);
+        }
+        await updateRemoteData(newList);
+        return true;
+      } catch (fallbackError) {
+        console.error('Fallback save also failed:', fallbackError);
+        return false;
+      }
     }
   }
 
@@ -672,7 +688,7 @@ function App() {
         
         // Clean up folder-related fields if they exist
         const cleanedCollection = { ...collection };
-        delete cleanedCollection.parentFolderId;
+        delete cleanedCollection.parentId;
         if (cleanedCollection.type === 'folder') {
           console.warn('Skipping folder item:', cleanedCollection.uid);
           return;
@@ -711,7 +727,7 @@ function App() {
       collections.forEach((collection) => {
         if (collection.uid && !seenUids.has(collection.uid) && collection.type !== 'folder') {
           const cleaned = { ...collection };
-          delete cleaned.parentFolderId;
+          delete cleaned.parentId;
           cleaned.type = 'collection';
           cleanedCollections.push(cleaned);
           seenUids.add(collection.uid);
@@ -732,7 +748,7 @@ function App() {
         tabsArray.forEach((collection) => {
           if (collection.uid && !seenUids.has(collection.uid) && collection.type !== 'folder') {
             const cleaned = { ...collection };
-            delete cleaned.parentFolderId;
+            delete cleaned.parentId;
             cleaned.type = 'collection';
             cleanedCollections.push(cleaned);
             seenUids.add(collection.uid);
