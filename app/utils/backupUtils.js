@@ -23,7 +23,6 @@ const BACKUP_KEYS = {
  */
 export const createBackup = async (backupType, reason, customData = null) => {
   try {
-    console.log(`🛡️ Creating ${backupType} backup: ${reason}`);
     
     // Get data to backup
     const dataToBackup = customData || await getAllStorageData();
@@ -32,7 +31,6 @@ export const createBackup = async (backupType, reason, customData = null) => {
     const dataSize = JSON.stringify(dataToBackup).length;
     const dataSizeMB = dataSize / (1024 * 1024);
     
-    console.log(`📊 Data size to backup: ${dataSizeMB.toFixed(2)}MB`);
     
     // If data is over 5MB, create a minimal backup instead
     if (dataSizeMB > 5) {
@@ -81,7 +79,6 @@ export const createBackup = async (backupType, reason, customData = null) => {
     const success = await safeStorageSet({ [backupKey]: backup });
     
     if (success) {
-      console.log(`✅ Backup created successfully: ${backupKey} (${(backup.dataSize / 1024).toFixed(1)}KB)`);
       
       // Update backup index
       await updateBackupIndex(backupKey, backup);
@@ -102,7 +99,6 @@ export const createBackup = async (backupType, reason, customData = null) => {
     
     // If backup fails due to size, try minimal backup
     if (error.message.includes('QUOTA_BYTES_PER_ITEM') || error.message.includes('QUOTA_BYTES')) {
-      console.log('🔄 Backup failed due to size, attempting minimal backup...');
       return await createMinimalBackup(backupType, reason, customData || await getAllStorageData());
     }
     
@@ -119,7 +115,6 @@ export const createBackup = async (backupType, reason, customData = null) => {
  */
 const createMinimalBackup = async (backupType, reason, fullData) => {
   try {
-    console.log(`🔧 Creating minimal ${backupType} backup: ${reason}`);
     
     // Extract only essential data
     const essentialData = {
@@ -131,7 +126,6 @@ const createMinimalBackup = async (backupType, reason, fullData) => {
     };
     
     const dataSize = JSON.stringify(essentialData).length;
-    console.log(`📊 Minimal backup size: ${(dataSize / 1024).toFixed(1)}KB`);
     
     const backup = {
       id: generateBackupId(),
@@ -148,7 +142,6 @@ const createMinimalBackup = async (backupType, reason, fullData) => {
     const success = await safeStorageSet({ [backupKey]: backup });
     
     if (success) {
-      console.log(`✅ Minimal backup created: ${backupKey} (${(dataSize / 1024).toFixed(1)}KB)`);
       return {
         id: backup.id,
         key: backupKey,
@@ -207,7 +200,6 @@ export const createEmergencyBackup = async (operation) => {
  */
 export const restoreFromBackup = async (backupKey, validate = true) => {
   try {
-    console.log(`🔄 Restoring from backup: ${backupKey}`);
     
     // Load backup
     const backupData = await safeStorageGet(backupKey);
@@ -229,8 +221,6 @@ export const restoreFromBackup = async (backupKey, validate = true) => {
     const success = await safeStorageSet(backup.data);
     
     if (success) {
-      console.log(`✅ Successfully restored from backup: ${backupKey}`);
-      console.log(`📊 Restored ${backup.dataReport.collections} collections`);
       return true;
     } else {
       throw new Error('Failed to restore backup data');
@@ -290,7 +280,6 @@ export const getAvailableBackups = async (backupType = null) => {
  */
 export const cleanupOldBackups = async (maxBackups = 10, maxAge = 30 * 24 * 60 * 60 * 1000) => {
   try {
-    console.log('🧹 Cleaning up old backups...');
     
     const allBackups = await getAvailableBackups();
     const now = Date.now();
@@ -320,13 +309,11 @@ export const cleanupOldBackups = async (maxBackups = 10, maxAge = 30 * 24 * 60 *
           const success = await safeStorageRemove(backup.key);
           if (success) {
             cleanedCount++;
-            console.log(`🗑️ Cleaned up old backup: ${backup.key}`);
           }
         }
       }
     }
     
-    console.log(`✅ Cleanup complete: ${cleanedCount} backups removed`);
     return cleanedCount;
     
   } catch (error) {
@@ -360,7 +347,6 @@ export const createRollbackChain = async (operationId, steps) => {
     });
     
     if (success) {
-      console.log(`🔗 Created rollback chain: ${chainId}`);
       return chainId;
     } else {
       throw new Error('Failed to create rollback chain');
@@ -409,7 +395,6 @@ export const addToRollbackChain = async (chainId, stepIndex, backupInfo) => {
  */
 export const executeRollback = async (chainId, rollbackToStep = -1) => {
   try {
-    console.log(`🔙 Executing rollback: ${chainId} to step ${rollbackToStep}`);
     
     const chainKey = `${BACKUP_KEYS.ROLLBACK_CHAIN}_${chainId}`;
     const chainData = await safeStorageGet(chainKey);
@@ -441,7 +426,6 @@ export const executeRollback = async (chainId, rollbackToStep = -1) => {
     const success = await restoreFromBackup(backupToRestore.key, true);
     
     if (success) {
-      console.log(`✅ Rollback completed successfully`);
       
       // Mark chain as rolled back
       chain.rolledBack = true;

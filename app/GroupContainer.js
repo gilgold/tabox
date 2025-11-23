@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { MdExpandMore, MdExpandLess, MdFolder, MdDragIndicator } from 'react-icons/md';
+import React, { useState, useEffect } from 'react';
+import { MdExpandMore, MdExpandLess, MdDragIndicator } from 'react-icons/md';
+import { PiTabs } from 'react-icons/pi';
 import { AutoSaveTextbox } from './AutoSaveTextbox';
 import ColorPicker from './ColorPicker';
 import DeleteWithConfirmationButton from './DeleteWithConfirmationButton';
@@ -15,9 +16,22 @@ function GroupContainer({
     onSaveGroupName, 
     onDeleteGroup,
     isExpanded = true,
-    onToggleExpanded 
+    onToggleExpanded,
+    isDragging = false,
+    dragAttributes = {},
+    dragListeners = {}
 }) {
-    const [localExpanded, setLocalExpanded] = useState(isExpanded);
+    // When dragging, always show collapsed
+    const [localExpanded, setLocalExpanded] = useState(isDragging ? false : isExpanded);
+    
+    // Update expanded state when dragging changes
+    useEffect(() => {
+        if (isDragging) {
+            setLocalExpanded(false);
+        } else {
+            setLocalExpanded(isExpanded);
+        }
+    }, [isDragging, isExpanded]);
     
     const toggleExpanded = () => {
         const newExpanded = !localExpanded;
@@ -137,7 +151,7 @@ function GroupContainer({
 
     const iconStyle = {
         color: groupColor,
-        fontSize: '18px',
+        fontSize: '22px',
         flexShrink: 0,
     };
 
@@ -200,18 +214,34 @@ function GroupContainer({
         <div style={containerStyle} className="group-container">
             <DroppableGroupHeader group={group}>
                 <div style={headerStyle} onClick={(e) => {
-                    // Only toggle if not clicking on interactive elements
+                    // Only toggle if not clicking on interactive elements or drag handle
                     if (!e.target.closest('.autosave-wrapper') && 
                         !e.target.closest('.auto-save-textbox') && 
                         !e.target.closest('.color-picker') && 
                         !e.target.closest('.colorPickerWrapper') &&
-                        !e.target.closest('.group-actions')) {
+                        !e.target.closest('.group-actions') &&
+                        !e.target.closest('.group-drag-handle')) {
                         e.stopPropagation(); // Prevent collection from closing
                         toggleExpanded();
                     }
                 }}>
                     <div style={titleSectionStyle}>
-                        <MdFolder style={iconStyle} />
+                        {/* Drag handle for group */}
+                        <div 
+                            className="group-drag-handle" 
+                            style={{ 
+                                cursor: isDragging ? 'grabbing' : 'grab',
+                                display: 'flex',
+                                alignItems: 'center',
+                                padding: '4px',
+                                marginRight: '4px'
+                            }}
+                            {...dragAttributes}
+                            {...dragListeners}
+                        >
+                            <MdDragIndicator size="16px" color="var(--text-color)" />
+                        </div>
+                        <PiTabs style={iconStyle} />
                         <div style={groupInfoStyle}>
                             <div style={groupTitleStyle}>
                                 <AutoSaveTextbox

@@ -48,7 +48,6 @@ export const performMigrationHealthCheck = async () => {
       results.recommendations.push('Migration system has minor issues but should function');
     }
     
-    console.log('🏥 Migration Health Check Results:', results);
     return results;
     
   } catch (error) {
@@ -73,7 +72,6 @@ const testStorageUtils = async () => {
     );
     
     if (!hasBrowserAPI) {
-      console.log('Storage test skipped - not in browser extension context');
       return 'warning'; // Not failed, just not available
     }
     
@@ -151,7 +149,6 @@ const testBackupSystem = async () => {
     );
     
     if (!hasBrowserAPI) {
-      console.log('Backup test skipped - not in browser extension context');
       return 'warning'; // Not failed, just not available
     }
     
@@ -188,7 +185,6 @@ const testMigrationCoordinator = async () => {
     );
     
     if (!hasBrowserAPI) {
-      console.log('Migration coordinator test skipped - not in browser extension context');
       return 'warning'; // Not failed, just not available
     }
     

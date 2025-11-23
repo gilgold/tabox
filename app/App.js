@@ -1,6 +1,6 @@
 /* eslint-disable no-useless-escape */
 import './App.css';
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import Header from './Header';
 import AddNewTextbox from './AddNewTextbox';
 import CollectionList from './CollectionList';
@@ -28,6 +28,7 @@ import { CollectionListOptions } from './CollectionListOptions';
 // New indexed storage utilities
 import {
     loadAllCollections,
+    loadMultipleCollections,
     loadSingleCollection,
     saveSingleCollection,
     deleteSingleCollection,
@@ -45,6 +46,139 @@ import {
 import { createFolder } from './utils/folderOperations';
 
 // Migration system imports - wrapped in try/catch for compatibility
+const PERF_NAMESPACE = 'tabox:popup';
+const PERF_MEASURE_PREFIX = `${PERF_NAMESPACE}:measure:`;
+
+const makeMarkName = (label) => `${PERF_NAMESPACE}:${label}`;
+
+const markPerformancePoint = (label) => {
+  if (typeof performance === 'undefined' || typeof performance.mark !== 'function') {
+    return;
+  }
+
+  try {
+    performance.mark(makeMarkName(label));
+  } catch (error) {
+    console.warn(`Performance mark failed for ${label}`, error);
+  }
+};
+
+const measurePerformanceSegment = (label, startLabel, endLabel) => {
+  if (typeof performance === 'undefined' || typeof performance.measure !== 'function') {
+    return null;
+  }
+
+  try {
+    const measureName = `${PERF_MEASURE_PREFIX}${label}`;
+    return performance.measure(measureName, makeMarkName(startLabel), makeMarkName(endLabel));
+  } catch (error) {
+    console.warn(`Performance measure failed for ${label}`, error);
+    return null;
+  }
+};
+
+const logPerformanceSummary = () => {
+  if (typeof performance === 'undefined' || typeof performance.getEntriesByType !== 'function') {
+    return;
+  }
+
+  const measures = performance
+    .getEntriesByType('measure')
+    .filter((entry) => entry.name.startsWith(PERF_MEASURE_PREFIX))
+    .map((entry) => ({
+      segment: entry.name.replace(PERF_MEASURE_PREFIX, ''),
+      duration: `${entry.duration.toFixed(2)}ms`,
+    }));
+
+  if (!measures.length) {
+    console.info('[Tabox] No popup performance measures recorded yet.');
+    return;
+  }
+
+  console.groupCollapsed('[Tabox] Popup performance summary');
+  console.table(measures);
+  console.groupEnd();
+};
+
+const shouldAutoLogPerformance = () => {
+  if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV !== 'production') {
+    return true;
+  }
+
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  try {
+    return window.localStorage?.getItem('TABOX_DEBUG_PERF') === '1';
+  } catch (error) {
+    console.warn('Unable to read TABOX_DEBUG_PERF flag', error);
+    return false;
+  }
+};
+
+const INITIAL_COLLECTION_BATCH_SIZE = 20;
+const HYDRATION_BATCH_SIZE = 50;
+const MIGRATION_SESSION_KEY = 'tabox:migrationChecked';
+
+const runWhenIdle = () => {
+  return new Promise((resolve) => {
+    if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+      window.requestIdleCallback(() => resolve());
+      return;
+    }
+
+    setTimeout(resolve, 32);
+  });
+};
+
+const hasSessionMigrationCheck = () => {
+  if (typeof window === 'undefined' || typeof window.sessionStorage === 'undefined') {
+    return false;
+  }
+
+  try {
+    return window.sessionStorage.getItem(MIGRATION_SESSION_KEY) === '1';
+  } catch (error) {
+    console.warn('Unable to read migration session flag', error);
+    return false;
+  }
+};
+
+const markSessionMigrationComplete = () => {
+  if (typeof window === 'undefined' || typeof window.sessionStorage === 'undefined') {
+    return;
+  }
+
+  try {
+    window.sessionStorage.setItem(MIGRATION_SESSION_KEY, '1');
+  } catch (error) {
+    console.warn('Unable to persist migration session flag', error);
+  }
+};
+
+const shouldExposeDebugUtilities = () => {
+  if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV !== 'production') {
+    return true;
+  }
+
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  try {
+    return window.localStorage?.getItem('TABOX_ENABLE_DEBUG_UTILS') === '1';
+  } catch (error) {
+    console.warn('Unable to read TABOX_ENABLE_DEBUG_UTILS flag', error);
+    return false;
+  }
+};
+
+if (typeof window !== 'undefined') {
+  markPerformancePoint('start');
+  window.__TABOX_LOG_POPUP_PERF__ = logPerformanceSummary;
+}
+
 let migrationSystemAvailable = false;
 let assessMigrationNeeds, executeMigration, isDataSafe;
 
@@ -62,6 +196,9 @@ function App() {
   const [sortValue, setSortValue] = useState(null);
   const [viewMode, setViewMode] = useState('list'); // 'list' or 'grid'
   const [filters, setFilters] = useState({ recentlyOpenedActual: false, color: null });
+  
+  // Mount tracking to prevent memory leaks
+  const isMountedRef = useRef(true);
 
   // Track if migration is currently running
   const [migrationInProgress, setMigrationInProgress] = useState(false);
@@ -80,6 +217,17 @@ function App() {
 
   // Folders state management
   const [foldersData, setFoldersData] = useState([]);
+  const [performanceDataReady, setPerformanceDataReady] = useState(false);
+  const [performanceSummaryLogged, setPerformanceSummaryLogged] = useState(false);
+  const performanceMarksRef = useRef({ critical: false, data: false });
+  const metadataUidOrderRef = useRef([]);
+  const markDataHydrationComplete = useCallback(() => {
+    if (!performanceMarksRef.current.data) {
+      markPerformancePoint('data-ready');
+      performanceMarksRef.current.data = true;
+    }
+    setPerformanceDataReady(true);
+  }, [setPerformanceDataReady]);
   
   // Update folders with proper order persistence
   const updateFolders = async (newFolders) => {
@@ -185,6 +333,11 @@ function App() {
     // Set view mode
     setViewMode(initialData.collectionViewMode || 'list');
     
+    if (!performanceMarksRef.current.critical) {
+      markPerformancePoint('critical-ready');
+      performanceMarksRef.current.critical = true;
+    }
+    
     // Return update flags for migration check
     return {
       extensionUpdated: initialData.extensionUpdated,
@@ -195,14 +348,18 @@ function App() {
   const checkSyncStatus = async () => {
     // Phase 4: Show cached status immediately
     const { googleUser, googleRefreshToken } = await browser.storage.local.get(['googleUser', 'googleRefreshToken']);
-    setIsLoggedIn(!!googleUser); // Show cached status
+    if (isMountedRef.current) {
+      setIsLoggedIn(!!googleUser); // Show cached status
+    }
     
     // Then check actual status in background
     if (!googleRefreshToken) return;
     
     browser.runtime.sendMessage({ type: 'checkSyncStatus' }).then(async (response) => {
-      setIsLoggedIn(response === null ? false : response);
-      if (response) await applyDataFromServer();
+      if (isMountedRef.current) {
+        setIsLoggedIn(response === null ? false : response);
+        if (response) await applyDataFromServer();
+      }
     });
   }
 
@@ -231,9 +388,17 @@ function App() {
             // Add a small delay to ensure storage writes are committed
             await new Promise(resolve => setTimeout(resolve, 100));
             
+            // Load user's sort preferences
+            const { currentSortValue, currentSortAscending } = await browser.storage.local.get(['currentSortValue', 'currentSortAscending']);
+            const sortValue = currentSortValue || 'DATE';
+            const sortAscending = currentSortAscending !== undefined ? currentSortAscending : true;
+            const sortFieldMap = { 'DATE': 'lastUpdated', 'NAME': 'name', 'COLOR': 'color' };
+            const sortBy = sortFieldMap[sortValue] || 'lastUpdated';
+            const sortOrder = sortAscending ? 'asc' : 'desc';
+            
             // Reload both collections and folders from storage after sync
             const [updatedCollections, updatedFolders] = await Promise.all([
-              loadAllCollections({ metadataOnly: false }),
+              loadAllCollections({ metadataOnly: false, sortBy, sortOrder }),
               loadAllFolders({ metadataOnly: false })
             ]);
             
@@ -244,22 +409,8 @@ function App() {
             console.error('❌ Failed to save server data');
           }
         } else if (response === 'no_update_needed') {
-          // Even if no update is needed, ensure UI is fully loaded from storage
-          // This handles the case where folders might have been synced in the background
-          const [updatedCollections, updatedFolders] = await Promise.all([
-            loadAllCollections({ metadataOnly: false }),
-            loadAllFolders({ metadataOnly: false })
-          ]);
-          
-          // Always update state to ensure folders are included
-          if (updatedCollections.length > 0) {
-            setSettingsData(updatedCollections);
-          }
-          if (updatedFolders.length > 0 || foldersData.length === 0) {
-            // Update folders if we found any, or if UI currently has none
-            setFoldersData(updatedFolders);
-          }
-          
+          // Don't reload data if sync says nothing changed
+          // The data is already loaded correctly in loadDataWithNewSystem
           setLastSyncTime(Date.now());
         } else {
           setSettingsData([]);
@@ -416,7 +567,8 @@ function App() {
         const { chkAutoUpdateOnNewCollection } = await browser.storage.local.get('chkAutoUpdateOnNewCollection');
         if (!chkAutoUpdateOnNewCollection) return true;
         setTimeout(async () => {
-          let { collectionsToTrack } = (await browser.storage.local.get('collectionsToTrack')) || [];
+          const storageResult = await browser.storage.local.get('collectionsToTrack');
+          let collectionsToTrack = storageResult.collectionsToTrack || [];
           let window;
           try {
             window = await browser.windows.getLastFocused({ windowTypes: ['normal'] });
@@ -498,9 +650,17 @@ function App() {
   // Function to refresh both collections and folders data
   const refreshDataAfterFolderOperation = async () => {
     try {
+      // Load user's sort preferences
+      const { currentSortValue, currentSortAscending } = await browser.storage.local.get(['currentSortValue', 'currentSortAscending']);
+      const sortValue = currentSortValue || 'DATE';
+      const sortAscending = currentSortAscending !== undefined ? currentSortAscending : true;
+      const sortFieldMap = { 'DATE': 'lastUpdated', 'NAME': 'name', 'COLOR': 'color' };
+      const sortBy = sortFieldMap[sortValue] || 'lastUpdated';
+      const sortOrder = sortAscending ? 'asc' : 'desc';
+      
       // Reload both collections and folders to reflect changes
       const [collections, folders] = await Promise.all([
-        loadAllCollections({ metadataOnly: false }),
+        loadAllCollections({ metadataOnly: false, sortBy, sortOrder }),
         loadAllFolders({ metadataOnly: false })
       ]);
       
@@ -510,6 +670,69 @@ function App() {
       console.error('Error refreshing data:', error);
     }
   };
+  
+  // Lightweight function to update a single folder in state (for UI-only changes like collapsed state)
+  const updateSingleFolderInState = (updatedFolder) => {
+    setFoldersData(prevFolders => 
+      prevFolders.map(f => f.uid === updatedFolder.uid ? updatedFolder : f)
+    );
+  };
+
+  const hydrateCollectionsInBatches = useCallback(async (metadataList, startIndex = 0) => {
+    if (!metadataList || metadataList.length === 0) {
+      setDataLoaded(true);
+      markDataHydrationComplete();
+      return;
+    }
+
+    const metadataLookup = new Map(metadataList.map((item) => [item.uid, item]));
+    let currentIndex = Math.max(startIndex, 0);
+
+    if (currentIndex >= metadataList.length) {
+      setDataLoaded(true);
+      markDataHydrationComplete();
+      return;
+    }
+
+    while (currentIndex < metadataList.length) {
+      const chunk = metadataList.slice(currentIndex, currentIndex + HYDRATION_BATCH_SIZE);
+      const chunkUids = chunk.map((item) => item.uid).filter(Boolean);
+
+      if (chunkUids.length) {
+        const chunkDataMap = await loadMultipleCollections(chunkUids);
+
+        setSettingsData((previousCollections = []) => {
+          const collectionMap = new Map();
+
+          previousCollections.forEach((collection) => {
+            if (collection?.uid) {
+              collectionMap.set(collection.uid, collection);
+            }
+          });
+
+          chunkUids.forEach((uid) => {
+            if (chunkDataMap[uid]) {
+              const fallbackOrder = metadataLookup.get(uid)?.order;
+              collectionMap.set(uid, {
+                ...chunkDataMap[uid],
+                order: chunkDataMap[uid].order ?? fallbackOrder,
+              });
+            }
+          });
+
+          return metadataUidOrderRef.current
+            .map((uid) => collectionMap.get(uid))
+            .filter(Boolean);
+        });
+      }
+
+      currentIndex += HYDRATION_BATCH_SIZE;
+      await runWhenIdle();
+    }
+
+    setDataLoaded(true);
+    markDataHydrationComplete();
+  }, [markDataHydrationComplete, setSettingsData, loadMultipleCollections]);
 
   // Updated to use new storage system with performance improvements
   const loadCollectionsFromStorage = async (updateFlags = null) => {
@@ -523,6 +746,7 @@ function App() {
     }
     
     setDataLoading(true);
+    const migrationAlreadyChecked = migrationChecked || hasSessionMigrationCheck();
     
     try {
       // Check for extension updates and run migrations safely
@@ -530,7 +754,7 @@ function App() {
       let previousVersion = null;
       
       // Prevent duplicate migration checks
-      if (migrationChecked) {
+      if (migrationAlreadyChecked) {
         await loadDataWithNewSystem();
         return;
       }
@@ -555,6 +779,7 @@ function App() {
       
       // Mark migration as checked
       setMigrationChecked(true);
+      markSessionMigrationComplete();
       
       // Check if migration is already running
       if (migrationInProgress) {
@@ -617,9 +842,9 @@ function App() {
         } else {
           openSuccessSnackbar(`Extension updated from ${previousVersion} - data loading in compatibility mode`);
         }
-      } else {
-        await loadDataWithNewSystem();
       }
+
+      await loadDataWithNewSystem();
       
     } catch (migrationError) {
       console.error('❌ Migration check/execution failed:', migrationError);
@@ -638,12 +863,25 @@ function App() {
   // Optimized data loading function
   const loadDataWithNewSystem = async () => {
     try {
-      // Load both collections and folders in parallel
-      const [collections, folders] = await Promise.all([
+      // Load user's sort preferences to respect their saved choice
+      const { currentSortValue, currentSortAscending } = await browser.storage.local.get(['currentSortValue', 'currentSortAscending']);
+      const sortValue = currentSortValue || 'DATE';
+      const sortAscending = currentSortAscending !== undefined ? currentSortAscending : true;
+      
+      // Map user sort preference to storage field name
+      const sortFieldMap = {
+        'DATE': 'lastUpdated',
+        'NAME': 'name',
+        'COLOR': 'color'
+      };
+      const sortBy = sortFieldMap[sortValue] || 'lastUpdated';
+      const sortOrder = sortAscending ? 'asc' : 'desc';
+      
+      const [metadata, folders] = await Promise.all([
         loadAllCollections({
-          metadataOnly: false,
-          sortBy: 'lastUpdated',
-          sortOrder: 'desc'
+          metadataOnly: true,
+          sortBy,
+          sortOrder
         }),
         loadAllFolders({
           metadataOnly: false,
@@ -651,11 +889,68 @@ function App() {
           sortOrder: 'asc'
         })
       ]);
-      
-      // Set data immediately - all collections have UIDs since v3
-      setSettingsData(collections);
+
+      metadataUidOrderRef.current = metadata.map((item) => item.uid);
+
+      const initialBatchSize = metadata.length > 0 ? Math.min(INITIAL_COLLECTION_BATCH_SIZE, metadata.length) : 0;
+      let initialCollections = [];
+
+      if (initialBatchSize > 0) {
+        initialCollections = await loadAllCollections({
+          metadataOnly: false,
+          sortBy,
+          sortOrder,
+          limit: initialBatchSize
+        });
+      }
+
+      setSettingsData(initialCollections);
       setFoldersData(folders);
-      setDataLoaded(true);
+
+      await hydrateCollectionsInBatches(metadata, initialBatchSize);
+      
+      // Debug function to check what's in storage
+      window.checkStorageData = async () => {
+        const allCollections = await loadAllCollections({ metadataOnly: false });
+        
+        // Check raw storage
+        const index = await loadCollectionsIndex();
+        
+        // Check legacy storage
+        const { tabsArray } = await browser.storage.local.get('tabsArray');
+      };
+      
+      // Recovery function to restore tabs from legacy storage
+      window.recoverTabsFromLegacy = async () => {
+        const { tabsArray } = await browser.storage.local.get('tabsArray');
+        
+        if (!tabsArray || tabsArray.length === 0) {
+          console.error('❌ No legacy data found to recover from');
+          return;
+        }
+        
+        // Re-migrate from legacy
+        const success = await batchUpdateCollections(tabsArray);
+        
+        if (success) {
+          // Reload data
+          await loadDataWithNewSystem();
+        } else {
+          console.error('❌ Failed to recover tabs');
+        }
+      };
+      
+      // Debug function to clear all order fields
+      window.clearAllOrderFieldsNow = async () => {
+        const allCollections = await loadAllCollections({ metadataOnly: false });
+        const cleaned = allCollections.map(c => ({
+          ...c,
+          order: null  // Explicitly set to null to clear
+        }));
+        await batchUpdateCollections(cleaned);
+        // Reload with current sort preferences
+        await loadDataWithNewSystem();
+      };
       
 
       
@@ -711,6 +1006,8 @@ function App() {
     }
     
     setSettingsData(newCollections);
+    setDataLoaded(true);
+    markDataHydrationComplete();
   };
 
   // Emergency cleanup function - updated to work with new system
@@ -833,162 +1130,153 @@ function App() {
 
   // Make emergency functions available in console
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.emergencyCleanup = emergencyCleanup;
-      window.emergencyRecovery = emergencyRecovery;
-      window.emergencyStorageCleanup = emergencyStorageCleanup;
-      
-      // Enhanced storage stats with new system
-      window.getStorageStats = async () => {
-        const stats = await getNewStorageStats();
-        if (stats) {
-          console.log('📊 New Storage System Stats:');
-          console.log(`Collections: ${stats.collections}`);
-          console.log(`Total Tabs: ${stats.totalTabs}`);
-          console.log(`Storage Size: ${(stats.totalSize / 1024).toFixed(1)}KB`);
-          console.log(`Has Legacy Data: ${stats.hasLegacyData}`);
-          if (stats.hasLegacyData) {
-            console.log(`Legacy Size: ${(stats.legacySize / 1024).toFixed(1)}KB`);
-          }
-          console.log(`Storage Version: ${stats.storageVersion}`);
-          if (stats.error) {
-            console.warn(`⚠️ Stats Error: ${stats.error}`);
-          }
-        } else {
-          console.error('❌ Failed to get storage stats - returned null');
-        }
-        
-        // Also get browser storage stats
-        const data = await browser.storage.local.get();
-        const dataString = JSON.stringify(data);
-        const browserStats = {
-          totalSize: dataString.length,
-          totalSizeMB: (dataString.length / (1024 * 1024)).toFixed(2),
-          itemCount: Object.keys(data).length,
-          items: Object.keys(data).map(key => ({
-            key,
-            sizeMB: (JSON.stringify(data[key]).length / (1024 * 1024)).toFixed(2)
-          })).sort((a, b) => parseFloat(b.sizeMB) - parseFloat(a.sizeMB))
-        };
-        console.table(browserStats.items);
-        return { newSystem: stats, browser: browserStats };
-      };
-      
-      // Migration status checker
-      window.getMigrationStatus = async () => {
-        try {
-          const data = await browser.storage.local.get(['migration_history', 'tabox_schema_version', 'tabox_storage_version']);
-          const manifest = (typeof chrome !== 'undefined' && chrome.runtime) ? 
-            chrome.runtime.getManifest() : 
-            { version: 'unknown' };
-          
-          const status = {
-            currentAppVersion: manifest.version,
-            schemaVersion: data.tabox_schema_version || 'not set',
-            storageVersion: data.tabox_storage_version || 'legacy',
-            migrationHistory: data.migration_history || 'no history',
-            extensionContext: typeof chrome !== 'undefined' ? 'extension' : 'standalone'
-          };
-          
-          console.log('📊 Migration Status:', status);
-          return status;
-        } catch (error) {
-          console.error('Error getting migration status:', error);
-          return { error: error.message };
-        }
-      };
-      
-      // New function to test storage performance
-      window.testStoragePerformance = async () => {
-        const startTime = performance.now();
-        const collections = await loadAllCollections({ metadataOnly: true });
-        const metadataTime = performance.now() - startTime;
-        
-        const fullStartTime = performance.now();
-        const fullCollections = await loadAllCollections({ metadataOnly: false, limit: 10 });
-        const fullTime = performance.now() - fullStartTime;
-        
-        const results = {
-          metadataOnly: `${metadataTime.toFixed(2)}ms for ${collections.length} collections`,
-          fullLoad: `${fullTime.toFixed(2)}ms for 10 collections`,
-          avgMetadata: `${(metadataTime / collections.length).toFixed(2)}ms per collection`,
-          avgFull: `${(fullTime / 10).toFixed(2)}ms per collection`
-        };
-        
-        console.table(results);
-        return results;
-      };
-      
-      // Backup management utilities
-      window.checkBackupSizes = async () => {
-        try {
-          const { preSyncBackups = [], autoBackups = [] } = await browser.storage.local.get(['preSyncBackups', 'autoBackups']);
-          const preSyncSize = JSON.stringify(preSyncBackups).length;
-          const autoBackupSize = JSON.stringify(autoBackups).length;
-          const totalSize = preSyncSize + autoBackupSize;
-          
-          console.log(`📊 Backup Storage Analysis:`);
-          console.log(`  PreSync Backups: ${preSyncBackups.length} backups, ${(preSyncSize/1024).toFixed(1)}KB`);
-          console.log(`  Auto Backups: ${autoBackups.length} backups, ${(autoBackupSize/1024).toFixed(1)}KB`);
-          console.log(`  Total Backup Storage: ${(totalSize/1024).toFixed(1)}KB`);
-          
-          if (totalSize > 2 * 1024 * 1024) { // > 2MB
-            console.log(`⚠️  Backup storage is large (${(totalSize/1024/1024).toFixed(1)}MB). Consider running window.cleanupBackups()`);
-          } else {
-            console.log(`✅ Backup storage is within optimal limits`);
-          }
-          
-          return { 
-            preSyncBackups: preSyncBackups.length,
-            autoBackups: autoBackups.length,
-            preSyncSize, 
-            autoBackupSize, 
-            totalSize,
-            totalSizeMB: totalSize / 1024 / 1024
-          };
-        } catch (error) {
-          console.error('Error checking backup sizes:', error);
-          return null;
-        }
-      };
-      
-      window.cleanupBackups = async () => {
-        try {
-          const result = await browser.runtime.sendMessage({ 
-            type: 'cleanupBackups' 
-          });
-          
-          if (result) {
-            // Show updated sizes
-            await window.checkBackupSizes();
-          }
-          
-          return result;
-        } catch (error) {
-          console.error('Error during backup cleanup:', error);
-          return false;
-        }
-      };
-      
-      window.showBackupContents = async () => {
-        try {
-          const { preSyncBackups = [] } = await browser.storage.local.get(['preSyncBackups']);
-          console.log('📦 PreSync Backup Contents:');
-          preSyncBackups.forEach((backup, index) => {
-            console.log(`  Backup ${index + 1}: ${backup.label} (${new Date(backup.timestamp).toLocaleString()})`);
-            console.log(`    Collections: ${backup.collectionCount || backup.tabsArray?.length || 0}`);
-            console.log(`    Size: ${(JSON.stringify(backup).length/1024).toFixed(1)}KB`);
-          });
-          return preSyncBackups;
-        } catch (error) {
-          console.error('Error showing backup contents:', error);
-          return [];
-        }
-      };
-      
-      // Emergency functions available in console for debugging
+    if (typeof window === 'undefined' || !shouldExposeDebugUtilities()) {
+      return;
     }
+
+    window.emergencyCleanup = emergencyCleanup;
+    window.emergencyRecovery = emergencyRecovery;
+    window.emergencyStorageCleanup = emergencyStorageCleanup;
+    
+    // Enhanced storage stats with new system
+    window.getStorageStats = async () => {
+      const stats = await getNewStorageStats();
+      if (stats) {
+        if (stats.error) {
+          console.warn(`⚠️ Stats Error: ${stats.error}`);
+        }
+      } else {
+        console.error('❌ Failed to get storage stats - returned null');
+      }
+      
+      // Also get browser storage stats
+      const data = await browser.storage.local.get();
+      const dataString = JSON.stringify(data);
+      const browserStats = {
+        totalSize: dataString.length,
+        totalSizeMB: (dataString.length / (1024 * 1024)).toFixed(2),
+        itemCount: Object.keys(data).length,
+        items: Object.keys(data).map(key => ({
+          key,
+          sizeMB: (JSON.stringify(data[key]).length / (1024 * 1024)).toFixed(2)
+        })).sort((a, b) => parseFloat(b.sizeMB) - parseFloat(a.sizeMB))
+      };
+      console.table(browserStats.items);
+      return { newSystem: stats, browser: browserStats };
+    };
+    
+    // Migration status checker
+    window.getMigrationStatus = async () => {
+      try {
+        const data = await browser.storage.local.get(['migration_history', 'tabox_schema_version', 'tabox_storage_version']);
+        const manifest = (typeof chrome !== 'undefined' && chrome.runtime) ? 
+          chrome.runtime.getManifest() : 
+          { version: 'unknown' };
+        
+        const status = {
+          currentAppVersion: manifest.version,
+          schemaVersion: data.tabox_schema_version || 'not set',
+          storageVersion: data.tabox_storage_version || 'legacy',
+          migrationHistory: data.migration_history || 'no history',
+          extensionContext: typeof chrome !== 'undefined' ? 'extension' : 'standalone'
+        };
+        
+        return status;
+      } catch (error) {
+        console.error('Error getting migration status:', error);
+        return { error: error.message };
+      }
+    };
+    
+    // New function to test storage performance
+    window.testStoragePerformance = async () => {
+      const startTime = performance.now();
+      const collections = await loadAllCollections({ metadataOnly: true });
+      const metadataTime = performance.now() - startTime;
+      
+      const fullStartTime = performance.now();
+      const fullCollections = await loadAllCollections({ metadataOnly: false, limit: 10 });
+      const fullTime = performance.now() - fullStartTime;
+      
+      const results = {
+        metadataOnly: `${metadataTime.toFixed(2)}ms for ${collections.length} collections`,
+        fullLoad: `${fullTime.toFixed(2)}ms for 10 collections`,
+        avgMetadata: `${(metadataTime / collections.length).toFixed(2)}ms per collection`,
+        avgFull: `${(fullTime / 10).toFixed(2)}ms per collection`
+      };
+      
+      console.table(results);
+      return results;
+    };
+    
+    // Backup management utilities
+    window.checkBackupSizes = async () => {
+      try {
+        const { preSyncBackups = [], autoBackups = [] } = await browser.storage.local.get(['preSyncBackups', 'autoBackups']);
+        const preSyncSize = JSON.stringify(preSyncBackups).length;
+        const autoBackupSize = JSON.stringify(autoBackups).length;
+        const totalSize = preSyncSize + autoBackupSize;
+        
+        return { 
+          preSyncBackups: preSyncBackups.length,
+          autoBackups: autoBackups.length,
+          preSyncSize, 
+          autoBackupSize, 
+          totalSize,
+          totalSizeMB: totalSize / 1024 / 1024
+        };
+      } catch (error) {
+        console.error('Error checking backup sizes:', error);
+        return null;
+      }
+    };
+    
+    window.cleanupBackups = async () => {
+      try {
+        const result = await browser.runtime.sendMessage({ 
+          type: 'cleanupBackups' 
+        });
+        
+        if (result) {
+          // Show updated sizes
+          await window.checkBackupSizes();
+        }
+        
+        return result;
+      } catch (error) {
+        console.error('Error during backup cleanup:', error);
+        return false;
+      }
+    };
+    
+    window.showBackupContents = async () => {
+      try {
+        const { preSyncBackups = [] } = await browser.storage.local.get(['preSyncBackups']);
+        return preSyncBackups;
+      } catch (error) {
+        console.error('Error showing backup contents:', error);
+        return [];
+      }
+    };
+    
+    // Emergency functions available in console for debugging
   }, []);
+
+  useEffect(() => {
+    if (!performanceDataReady || performanceSummaryLogged) {
+      return;
+    }
+
+    measurePerformanceSegment('time-to-critical', 'start', 'critical-ready');
+    measurePerformanceSegment('time-to-data', 'start', 'data-ready');
+    measurePerformanceSegment('critical-to-data', 'critical-ready', 'data-ready');
+
+    if (shouldAutoLogPerformance()) {
+      logPerformanceSummary();
+    }
+
+    setPerformanceSummaryLogged(true);
+  }, [performanceDataReady, performanceSummaryLogged]);
 
   const getSelectedSort = async () => {
     const { currentSortValue } = await browser.storage.local.get('currentSortValue');
@@ -1008,6 +1296,9 @@ function App() {
   }, [isLoggedIn, dataLoaded, dataLoading]);
 
   useEffect(() => {
+    let isMounted = true;
+    const timeouts = [];
+    
     const initializeApp = async () => {
       // Initialize TimeAgo locale once for the entire app
       TimeAgo.addDefaultLocale(en);
@@ -1017,21 +1308,36 @@ function App() {
       
       // Phase 3: Defer data loading until after initial render
       // This allows the popup window to open immediately
-      setTimeout(async () => {
-        await loadCollectionsFromStorage(updateFlags);
+      const timeout1 = setTimeout(async () => {
+        if (isMounted) {
+          await loadCollectionsFromStorage(updateFlags);
+        }
       }, 0);
+      timeouts.push(timeout1);
       
       // Defer non-critical operations until after initial render
-      setTimeout(async () => {
-        await removeInactiveWindowsFromAutoUpdate();
-        // Phase 4: Defer sync check further - show UI first
-        setTimeout(async () => {
-          await checkSyncStatus();
-        }, 1000);
+      const timeout2 = setTimeout(async () => {
+        if (isMounted) {
+          await removeInactiveWindowsFromAutoUpdate();
+          // Phase 4: Defer sync check further - show UI first
+          const timeout3 = setTimeout(async () => {
+            if (isMounted) {
+              await checkSyncStatus();
+            }
+          }, 1000);
+          timeouts.push(timeout3);
+        }
       }, 100);
+      timeouts.push(timeout2);
     };
     
     initializeApp();
+    
+    // Cleanup function to prevent memory leaks
+    return () => {
+      isMounted = false;
+      timeouts.forEach(timeout => clearTimeout(timeout));
+    };
   }, []); // Only run once on mount
 
   const escapeRegex = string => {
@@ -1084,6 +1390,7 @@ function App() {
       });
     }
     
+    
     return filteredCollections;
   }, [
     search,
@@ -1093,6 +1400,13 @@ function App() {
 
   const handleFiltersChange = useCallback((newFilters) => {
     setFilters(newFilters);
+  }, []);
+
+  // Cleanup effect to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
   }, []);
 
   return <div className="App">
@@ -1128,6 +1442,7 @@ function App() {
         removeCollection={removeCollection}
         addCollection={addCollection}
         onDataUpdate={refreshDataAfterFolderOperation}
+        onFolderStateChange={updateSingleFolderInState}
         updateFolders={updateFolders}
         triggerSync={triggerSync}
         viewMode={viewMode}

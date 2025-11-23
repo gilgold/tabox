@@ -7,14 +7,16 @@ import { browser } from '../static/globals';
 import SortableTabRow from './SortableTabRow';
 import TabRow from './TabRow';
 import GroupContainer from './GroupContainer';
+import SortableGroupContainer from './SortableGroupContainer';
 import { SnackBarWithUndo } from './SnackBarWithUndo';
 import { AiOutlineFolderAdd } from 'react-icons/ai';
 import { MdTab, MdSelectAll, MdWindow } from 'react-icons/md';
 import { UNDO_TIME } from './constants';
+import { useSetRecoilState, useRecoilValue } from 'recoil';
+import { draggingTabState, draggingGroupState } from './atoms/animationsState';
 import {
     DndContext,
     closestCenter,
-    closestCorners,
     PointerSensor,
     useSensor,
     useSensors,
@@ -32,6 +34,14 @@ function ExpandedCollectionData(props) {
     const [openSnackbar, closeSnackbar] = useSnackbar({ style: SnackbarStyle.SUCCESS, closeStyle: { display: 'none' } });
     const [isHighlighted, setIsHighlighted] = useState(false);
     const [activeTab, setActiveTab] = useState(null);
+    const [activeGroup, setActiveGroup] = useState(null);
+    const setDraggingTab = useSetRecoilState(draggingTabState);
+    const draggingTab = useRecoilValue(draggingTabState);
+    const setDraggingGroup = useSetRecoilState(draggingGroupState);
+    const draggingGroup = useRecoilValue(draggingGroupState);
+    
+    // Track which groups are expanded (by default, all groups start collapsed)
+    const [expandedGroupUids, setExpandedGroupUids] = useState(new Set());
 
 
     // Set up drag and drop sensors
@@ -102,21 +112,190 @@ function ExpandedCollectionData(props) {
         currentCollection.chromeGroups = [...currentCollection.chromeGroups].filter(cg => cg.uid !== groupUid);
         currentCollection.lastUpdated = Date.now();
         props.updateCollection(currentCollection, true); // Manual group deletion - trigger lightning effect
+        // Also remove from expanded groups if it was expanded
+        setExpandedGroupUids(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(groupUid);
+            return newSet;
+        });
     }
+    
+    const handleToggleGroupExpanded = (groupUid, isExpanded) => {
+        setExpandedGroupUids(prev => {
+            const newSet = new Set(prev);
+            if (isExpanded) {
+                newSet.add(groupUid);
+            } else {
+                newSet.delete(groupUid);
+            }
+            return newSet;
+        });
+    };
+
+    // Track mouse position during drag for cross-context drop detection (tabs)
+    useEffect(() => {
+        if (!draggingTab) return;
+        
+        const handleMouseMove = (e) => {
+            if (draggingTab) {
+                setDraggingTab({
+                    ...draggingTab,
+                    lastMouseX: e.clientX,
+                    lastMouseY: e.clientY
+                });
+            }
+        };
+        
+        document.addEventListener('mousemove', handleMouseMove);
+        return () => {
+            document.removeEventListener('mousemove', handleMouseMove);
+        };
+    }, [draggingTab, setDraggingTab]);
+
+    // Track mouse position during drag for cross-context drop detection (groups)
+    useEffect(() => {
+        if (!draggingGroup) return;
+        
+        const handleMouseMove = (e) => {
+            if (draggingGroup) {
+                setDraggingGroup({
+                    ...draggingGroup,
+                    lastMouseX: e.clientX,
+                    lastMouseY: e.clientY
+                });
+            }
+        };
+        
+        document.addEventListener('mousemove', handleMouseMove);
+        return () => {
+            document.removeEventListener('mousemove', handleMouseMove);
+        };
+    }, [draggingGroup, setDraggingGroup]);
 
     // Drag and Drop Handlers
     const handleDragStart = (event) => {
+        // Check if dragging a tab
         const tab = props.collection.tabs.find((item) => item.uid === event.active.id);
+        if (tab) {
+            setActiveTab(tab);
+            // Track tab drag globally for cross-collection drag and drop
+            setDraggingTab({
+                tab: tab,
+                sourceCollection: props.collection,
+                lastMouseX: 0,
+                lastMouseY: 0
+            });
+            return;
+        }
 
-        setActiveTab(tab);
+        // Check if dragging a group
+        const group = props.collection.chromeGroups.find((g) => g.uid === event.active.id);
+        if (group) {
+            const groupTabs = props.collection.tabs.filter(t => t.groupUid === group.uid);
+            setActiveGroup({ group, tabs: groupTabs });
+            // Track group drag globally for cross-collection drag and drop
+            setDraggingGroup({
+                group: group,
+                tabs: groupTabs,
+                sourceCollection: props.collection,
+                lastMouseX: 0,
+                lastMouseY: 0
+            });
+        }
     };
 
-    const handleDragEnd = (event) => {
+    const handleDragEnd = async (event) => {
         const { active, over } = event;
         
+        // Check if dragging a group
+        const draggedGroup = props.collection.chromeGroups.find((g) => g.uid === active.id);
+        if (draggedGroup) {
+            // Group drag - handle separately
+            setActiveGroup(null);
+            // Don't clear draggingGroup here - let CollectionList handle it after processing the drop
+            
+            if (!over || active.id === over.id) {
+                // If not dropped on anything, clear the drag state
+                if (!draggingGroup || draggingGroup.sourceCollection.uid !== props.collection.uid) {
+                    setDraggingGroup(null);
+                }
+                return;
+            }
+
+            // Handle group reordering within collection
+            // Prevent dropping groups on group headers (groups cannot be nested)
+            // But allow dropping on group containers for reordering
+            
+            // First check if dropped on a group header (DroppableGroupHeader) - prevent nesting
+            if (over.id && over.id.startsWith('group-')) {
+                // Dropped on a group header (DroppableGroupHeader) - prevent this (groups cannot be nested)
+                setDraggingGroup(null);
+                return;
+            }
+            
+            // Check if dropped on another group container (for reordering)
+            // Use over.data.current first as it's more reliable than over.id
+            let targetGroup = null;
+            if (over.data?.current?.type === 'group' && over.data.current.group) {
+                // Dropped directly on group container
+                targetGroup = over.data.current.group;
+            } else {
+                // Fallback: check by uid match
+                targetGroup = props.collection.chromeGroups.find(g => g.uid === over.id);
+            }
+            
+            if (targetGroup && targetGroup.uid !== draggedGroup.uid) {
+                if (moveGroupRelativeToGroup(draggedGroup.uid, targetGroup.uid)) {
+                    return;
+                }
+            }
+            
+            // Check if dropped on a tab - insert group before/after that tab's group or before ungrouped tab
+            // Use over.data.current first as it's more reliable
+            let targetTab = null;
+            if (over.data?.current?.type === 'tab' && over.data.current.tab) {
+                // Dropped directly on tab
+                targetTab = over.data.current.tab;
+            } else {
+                // Fallback: check by uid match
+                targetTab = props.collection.tabs.find(t => t.uid === over.id);
+            }
+            
+            if (targetTab) {
+                if (targetTab.groupUid) {
+                    if (targetTab.groupUid === draggedGroup.uid) {
+                        setDraggingGroup(null);
+                        return;
+                    }
+
+                    if (moveGroupRelativeToGroup(draggedGroup.uid, targetTab.groupUid)) {
+                        return;
+                    }
+                } else {
+                    if (moveGroupRelativeToUngroupedTab(draggedGroup.uid, targetTab.uid)) {
+                        return;
+                    }
+                }
+            }
+            
+            // If no explicit target, snap group to end to avoid jumping to top
+            moveGroupToEnd(draggedGroup.uid);
+            return;
+        }
+        
+        // Check if tab was dropped on a collection (cross-collection drop)
+        // Since tabs are in a different DndContext, we need to manually detect this
+        // The drop detection will be handled by a global mouseup listener in CollectionList
+        // We just need to keep the draggingTab state until the drop is processed
+        
         setActiveTab(null); // Clear active tab state
+        // Don't clear draggingTab here - let CollectionList handle it after processing the drop
         
         if (!over || active.id === over.id) {
+            // If not dropped on anything, clear the drag state
+            if (!draggingTab || draggingTab.sourceCollection.uid !== props.collection.uid) {
+                setDraggingTab(null);
+            }
             return;
         }
 
@@ -316,6 +495,9 @@ function ExpandedCollectionData(props) {
         currentCollection.chromeGroups = newChromeGroups;
         currentCollection.lastUpdated = Date.now();
         props.updateCollection(currentCollection, false); // Drag-and-drop operation - no lightning effect
+        
+        // Clear drag state after successful move within collection
+        setDraggingTab(null);
     };
 
     // Helper function to escape regex special characters
@@ -336,12 +518,6 @@ function ExpandedCollectionData(props) {
             tab.url?.match(searchRegex)
         );
     }, [props.search, props.collection.tabs]);
-
-    // Get tab IDs for sortable context (use filtered tabs when search is active)
-    const tabIds = useMemo(() => {
-        const tabsToUse = (props.search && props.search.trim()) ? filteredTabs : props.collection.tabs;
-        return tabsToUse.map(tab => tab.uid);
-    }, [props.collection.tabs, filteredTabs, props.search]);
 
     // Organize tabs for inline rendering (maintain original order, but only show filtered tabs)
     const organizedTabs = useMemo(() => {
@@ -378,6 +554,228 @@ function ExpandedCollectionData(props) {
         
         return result;
     }, [props.collection.tabs, props.collection.chromeGroups, filteredTabs, props.search]);
+
+    // Get sortable items - includes groups, ungrouped tabs, AND tabs inside groups
+    // Tabs inside groups need to be sortable for reordering within groups
+    // But we'll use custom collision detection to ignore them when dragging groups
+    const sortableItems = useMemo(() => {
+        const items = [];
+        
+        // Add groups and ungrouped tabs from organizedTabs
+        organizedTabs.forEach(item => {
+            if (item.type === 'group') {
+                items.push(item.groupUid);
+                // Also add tabs inside this group so they're sortable
+                item.tabs.forEach(tab => {
+                    if (!tab.pinned) {
+                        items.push(tab.uid);
+                    }
+                });
+            } else if (item.type === 'tab' && !item.tab.pinned) {
+                items.push(item.tab.uid);
+            }
+        });
+        
+        return items;
+    }, [organizedTabs]);
+    
+    // Custom collision detection that filters tabs inside groups when dragging groups
+    const customCollisionDetection = useMemo(() => {
+        return (args) => {
+            const { active } = args;
+            
+            // Check if we're dragging a group
+            const isDraggingGroup = props.collection.chromeGroups.some(g => g.uid === active?.id);
+            
+            if (isDraggingGroup) {
+                // When dragging a group, filter out tabs inside groups from collision detection
+                // Only consider groups and ungrouped tabs
+                const filteredArgs = {
+                    ...args,
+                    droppableContainers: args.droppableContainers.filter(container => {
+                        const containerId = container.id;
+                        // Keep groups
+                        if (props.collection.chromeGroups.some(g => g.uid === containerId)) {
+                            return true;
+                        }
+                        // Keep ungrouped tabs (tabs without groupUid)
+                        const tab = props.collection.tabs.find(t => t.uid === containerId);
+                        if (tab && !tab.groupUid) {
+                            return true;
+                        }
+                        // Filter out tabs inside groups
+                        return false;
+                    })
+                };
+                return closestCenter(filteredArgs);
+            }
+            
+            // For tab drags, use normal collision detection
+            return closestCenter(args);
+        };
+    }, [props.collection.chromeGroups, props.collection.tabs]);
+
+    // Helper utilities for managing the visual layout of groups and tabs
+    const buildGroupTabLayout = () => {
+        const layout = [];
+        const groupMap = new Map();
+        const groupTabsMap = new Map();
+        const processedGroups = new Set();
+
+        props.collection.chromeGroups.forEach(group => {
+            groupMap.set(group.uid, group);
+        });
+
+        props.collection.tabs.forEach(tab => {
+            if (tab.groupUid) {
+                if (!groupTabsMap.has(tab.groupUid)) {
+                    groupTabsMap.set(tab.groupUid, []);
+                }
+                groupTabsMap.get(tab.groupUid).push(tab);
+            }
+        });
+
+        props.collection.tabs.forEach(tab => {
+            if (tab.groupUid) {
+                if (!processedGroups.has(tab.groupUid)) {
+                    layout.push({
+                        type: 'group',
+                        groupUid: tab.groupUid,
+                        group: groupMap.get(tab.groupUid) || null,
+                        tabs: groupTabsMap.get(tab.groupUid) || []
+                    });
+                    processedGroups.add(tab.groupUid);
+                }
+            } else {
+                layout.push({
+                    type: 'tab',
+                    tab
+                });
+            }
+        });
+
+        // Include groups with no current tabs
+        props.collection.chromeGroups.forEach(group => {
+            if (!processedGroups.has(group.uid)) {
+                layout.push({
+                    type: 'group',
+                    groupUid: group.uid,
+                    group,
+                    tabs: groupTabsMap.get(group.uid) || []
+                });
+            }
+        });
+
+        return { layout, groupMap };
+    };
+
+    const commitLayoutChanges = (layout, groupMap) => {
+        const newTabs = [];
+        const newGroupOrder = [];
+
+        layout.forEach(item => {
+            if (item.type === 'group') {
+                if (item.tabs && item.tabs.length) {
+                    newTabs.push(...item.tabs);
+                }
+                const groupRef = groupMap.get(item.groupUid) || item.group;
+                if (groupRef && !newGroupOrder.find(g => g.uid === groupRef.uid)) {
+                    newGroupOrder.push(groupRef);
+                }
+            } else if (item.type === 'tab') {
+                newTabs.push(item.tab);
+            }
+        });
+
+        // Ensure all groups remain represented, even if they currently have no tabs
+        props.collection.chromeGroups.forEach(group => {
+            if (!newGroupOrder.find(g => g.uid === group.uid)) {
+                newGroupOrder.push(group);
+            }
+        });
+
+        const updatedCollection = {
+            ...props.collection,
+            chromeGroups: newGroupOrder,
+            tabs: newTabs,
+            lastUpdated: Date.now()
+        };
+
+        props.updateCollection(updatedCollection, false);
+        setDraggingGroup(null);
+    };
+
+    const moveGroupRelativeToGroup = (draggedGroupUid, targetGroupUid) => {
+        if (!targetGroupUid || draggedGroupUid === targetGroupUid) {
+            return false;
+        }
+
+        const { layout, groupMap } = buildGroupTabLayout();
+        const draggedLayoutIndex = layout.findIndex(item => item.type === 'group' && item.groupUid === draggedGroupUid);
+        const targetLayoutIndex = layout.findIndex(item => item.type === 'group' && item.groupUid === targetGroupUid);
+
+        if (draggedLayoutIndex === -1 || targetLayoutIndex === -1) {
+            return false;
+        }
+
+        const isMovingDown = targetLayoutIndex > draggedLayoutIndex;
+        const [removedEntry] = layout.splice(draggedLayoutIndex, 1);
+        const targetIndexAfterRemoval = layout.findIndex(item => item.type === 'group' && item.groupUid === targetGroupUid);
+        let insertIndex = targetIndexAfterRemoval === -1 ? layout.length : targetIndexAfterRemoval;
+
+        if (isMovingDown) {
+            insertIndex += 1;
+        }
+
+        layout.splice(insertIndex, 0, removedEntry);
+        commitLayoutChanges(layout, groupMap);
+        return true;
+    };
+
+    const moveGroupRelativeToUngroupedTab = (draggedGroupUid, targetTabUid) => {
+        const { layout, groupMap } = buildGroupTabLayout();
+        const draggedLayoutIndex = layout.findIndex(item => item.type === 'group' && item.groupUid === draggedGroupUid);
+        const targetLayoutIndex = layout.findIndex(item => item.type === 'tab' && item.tab.uid === targetTabUid);
+
+        if (draggedLayoutIndex === -1 || targetLayoutIndex === -1) {
+            return false;
+        }
+
+        const isMovingDown = targetLayoutIndex > draggedLayoutIndex;
+        const [removedEntry] = layout.splice(draggedLayoutIndex, 1);
+        const targetIndexAfterRemoval = layout.findIndex(item => item.type === 'tab' && item.tab.uid === targetTabUid);
+
+        if (targetIndexAfterRemoval === -1) {
+            // Target tab disappeared unexpectedly; reinsert group at end to avoid loss
+            layout.push(removedEntry);
+            commitLayoutChanges(layout, groupMap);
+            return false;
+        }
+
+        let insertIndex = targetIndexAfterRemoval;
+
+        if (isMovingDown) {
+            insertIndex = targetIndexAfterRemoval + 1;
+        }
+
+        layout.splice(insertIndex, 0, removedEntry);
+        commitLayoutChanges(layout, groupMap);
+        return true;
+    };
+
+    const moveGroupToEnd = (draggedGroupUid) => {
+        const { layout, groupMap } = buildGroupTabLayout();
+        const draggedLayoutIndex = layout.findIndex(item => item.type === 'group' && item.groupUid === draggedGroupUid);
+
+        if (draggedLayoutIndex === -1) {
+            return false;
+        }
+
+        const [removedEntry] = layout.splice(draggedLayoutIndex, 1);
+        layout.push(removedEntry);
+        commitLayoutChanges(layout, groupMap);
+        return true;
+    };
 
     const _groupsAreSimilar = (group1, group2) => {
         return group1 && group2 && group1.name === group2.name && group1.color === group2.color;
@@ -495,14 +893,14 @@ function ExpandedCollectionData(props) {
         
         <DndContext
             sensors={sensors}
-            collisionDetection={closestCorners}
+            collisionDetection={customCollisionDetection}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
             measuring={measuring}
             modifiers={[]}
         >
             <SortableContext
-                items={tabIds}
+                items={sortableItems}
                 strategy={verticalListSortingStrategy}
             >
 
@@ -521,31 +919,58 @@ function ExpandedCollectionData(props) {
                     {organizedTabs.length > 0 ? organizedTabs.map((item, index) => {
                         if (item.type === 'group') {
                             return (
-                                <GroupContainer
-                                    key={`group-container-${item.groupUid}`}
+                                <SortableGroupContainer
+                                    key={`sortable-group-container-${item.groupUid}`}
                                     group={item.group}
                                     tabs={item.tabs}
+                                    collection={props.collection}
                                     onSaveGroupColor={handleSaveGroupColor}
                                     onSaveGroupName={saveGroupName}
                                     onDeleteGroup={_handleDeleteGroup}
-                                    isExpanded={true}
+                                    isExpanded={expandedGroupUids.has(item.groupUid)}
+                                    onToggleExpanded={handleToggleGroupExpanded}
+                                    disableDrag={false}
                                 >
-                                    {item.tabs.map(tab => (
-                                        <SortableTabRow
-                                            key={`sortable-tab-row-${tab.uid}-grouped`}
-                                            tab={tab}
-                                            updateCollection={props.updateCollection}
-                                            collection={props.collection}
-                                            group={item.group}
-                                            disableDrag={tab.pinned}
-                                            search={props.search}
-                                        />
-                                    ))}
-                                </GroupContainer>
+                                    {item.tabs.map(tab => 
+                                        tab.pinned ? (
+                                            // Pinned tabs are not sortable
+                                            <div key={`pinned-tab-row-${tab.uid}-grouped`}>
+                                                <TabRow
+                                                    tab={tab}
+                                                    updateCollection={props.updateCollection}
+                                                    collection={props.collection}
+                                                    group={item.group}
+                                                    search={props.search}
+                                                />
+                                            </div>
+                                        ) : (
+                                            <SortableTabRow
+                                                key={`sortable-tab-row-${tab.uid}-grouped`}
+                                                tab={tab}
+                                                updateCollection={props.updateCollection}
+                                                collection={props.collection}
+                                                group={item.group}
+                                                disableDrag={false}
+                                                search={props.search}
+                                            />
+                                        )
+                                    )}
+                                </SortableGroupContainer>
                             );
                         } else {
                             // Individual ungrouped tab
-                            return (
+                            return item.tab.pinned ? (
+                                // Pinned tabs are not sortable
+                                <div key={`pinned-tab-${item.tab.uid}`} className="ungrouped-tab-wrapper">
+                                    <TabRow
+                                        tab={item.tab}
+                                        updateCollection={props.updateCollection}
+                                        collection={props.collection}
+                                        group={null}
+                                        search={props.search}
+                                    />
+                                </div>
+                            ) : (
                                 <div key={`ungrouped-tab-${item.tab.uid}`} className="ungrouped-tab-wrapper">
                                     <SortableTabRow
                                         key={`sortable-tab-row-${item.tab.uid}-ungrouped`}
@@ -553,7 +978,7 @@ function ExpandedCollectionData(props) {
                                         updateCollection={props.updateCollection}
                                         collection={props.collection}
                                         group={null}
-                                        disableDrag={item.tab.pinned}
+                                        disableDrag={false}
                                         search={props.search}
                                     />
                                 </div>
@@ -574,14 +999,33 @@ function ExpandedCollectionData(props) {
                     adjustScale={false}
                     dropAnimation={null}
                 >
-                    {activeTab ? (
-                                            <div style={{
-                        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.3)',
-                        borderRadius: '8px',
-                        overflow: 'hidden',
-                        cursor: 'grabbing',
-                        zIndex: 999999
-                    }}>
+                    {activeGroup ? (
+                        <div style={{
+                            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.3)',
+                            borderRadius: '8px',
+                            overflow: 'hidden',
+                            cursor: 'grabbing',
+                            zIndex: 999999,
+                            width: '400px'
+                        }}>
+                            <GroupContainer
+                                group={activeGroup.group}
+                                tabs={activeGroup.tabs}
+                                onSaveGroupColor={() => {}}
+                                onSaveGroupName={() => {}}
+                                onDeleteGroup={() => {}}
+                                isExpanded={false}
+                                isDragging={true}
+                            />
+                        </div>
+                    ) : activeTab ? (
+                        <div style={{
+                            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.3)',
+                            borderRadius: '8px',
+                            overflow: 'hidden',
+                            cursor: 'grabbing',
+                            zIndex: 999999
+                        }}>
                             <TabRow 
                                 tab={activeTab}
                                 updateCollection={props.updateCollection}

@@ -115,12 +115,24 @@ export function CollectionListOptions(props) {
             try {
                 // Load saved preferences - use props.selected if available, otherwise load from storage
                 const selectedValue = props.selected || await browser.storage.local.get('currentSortValue').then(result => result.currentSortValue);
-                const { chkOpenNewWindow, collectionViewMode } = await browser.storage.local.get(['chkOpenNewWindow', 'collectionViewMode']);
+                const { chkOpenNewWindow, collectionViewMode, currentSortAscending } = await browser.storage.local.get(['chkOpenNewWindow', 'collectionViewMode', 'currentSortAscending']);
                 
                 // Only update state if component is still mounted
                 if (isMountedRef.current) {
                     if (selectedValue) {
                         setSortType(selectedValue);
+                    }
+                    // Load ascending/descending preference
+                    // Handle both boolean and string values (for backward compatibility)
+                    if (currentSortAscending !== undefined) {
+                        // Convert string "true"/"false" to boolean if needed
+                        const sortAscendingValue = typeof currentSortAscending === 'string' 
+                            ? currentSortAscending === 'true' 
+                            : currentSortAscending;
+                        setSortAscending(sortAscendingValue);
+                    } else {
+                        // Default to ascending if not set
+                        setSortAscending(true);
                     }
                     setOpenInNewWindow(chkOpenNewWindow || false);
                     const loadedViewMode = collectionViewMode || 'list';
@@ -154,18 +166,52 @@ export function CollectionListOptions(props) {
 
     const handleSort = async (sortBy, ascending = sortAscending) => {
         if (!settingsData || settingsData.length === 0) return;
-        let newSettingsData = [...settingsData];
         
-        // Apply sort
-        newSettingsData.sort(SortType[sortBy]);
+        // CRITICAL: Load ALL collections from storage to ensure we clear order from all of them
+        // This includes collections in folders, not just root-level collections
+        const { loadAllCollections, batchUpdateCollections } = await import('./utils/storageUtils');
         
-        // Reverse if descending
-        if (!ascending) {
-            newSettingsData.reverse();
-        }
+        // Map sort type to storage field name
+        const sortFieldMap = {
+            'DATE': 'lastUpdated',
+            'NAME': 'name',
+            'COLOR': 'color'
+        };
+        const sortByField = sortFieldMap[sortBy] || 'lastUpdated';
+        const sortOrder = ascending ? 'asc' : 'desc';
         
-        await props.updateRemoteData(newSettingsData);
-        await browser.storage.local.set({ currentSortValue: sortBy });
+        // Load all collections WITHOUT sort params first to get them all (order might affect sorting)
+        const allCollectionsFromStorage = await loadAllCollections({ 
+            metadataOnly: false,
+            sortBy: sortByField,
+            sortOrder: sortOrder
+        });
+        
+        // Set order to null for ALL collections (including those in folders)
+        // This explicitly signals to batchUpdateCollections to clear the order field
+        // which allows user-selected sorting to take precedence over manual drag-and-drop ordering
+        const allCollectionsWithClearedOrder = allCollectionsFromStorage.map(collection => ({
+            ...collection,
+            order: null  // Explicitly set to null to clear manual ordering
+        }));
+        
+        // Save ALL collections with order=null to storage (will remove order field from index and collection data)
+        await batchUpdateCollections(allCollectionsWithClearedOrder);
+        
+        // Reload collections with the sort preferences to ensure they're in the correct order
+        // This ensures that after clearing order fields, collections are sorted by the user's preference
+        const reloadedCollections = await loadAllCollections({
+            metadataOnly: false,
+            sortBy: sortByField,
+            sortOrder: sortOrder
+        });
+        
+        // Update UI with reloaded collections (they should already be sorted correctly)
+        const cleanedData = reloadedCollections.map(({ order, ...rest }) => rest);
+        await props.updateRemoteData(cleanedData);
+        
+        // Save both sort type AND direction
+        await browser.storage.local.set({ currentSortValue: sortBy, currentSortAscending: ascending });
     };
 
     const handleSortTypeChange = async (selectedOption) => {
@@ -534,8 +580,10 @@ export function CollectionListOptions(props) {
                         <button
                             className="toolbar-button"
                             onClick={toggleSortDirection}
+                            title={sortAscending ? "Ascending (A→Z, Oldest→Newest)" : "Descending (Z→A, Newest→Oldest)"}
                         >
-                            {sortAscending ? <MdArrowUpward size={ICON_SIZE} /> : <MdArrowDownward size={ICON_SIZE} />}
+                            {/* Inverted: Up arrow for descending (higher values first), Down arrow for ascending (lower values first) */}
+                            {sortAscending ? <MdArrowDownward size={ICON_SIZE} /> : <MdArrowUpward size={ICON_SIZE} />}
                         </button>
                     </div>
                 </div>

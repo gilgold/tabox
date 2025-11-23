@@ -3,11 +3,12 @@
     display: inline-flex;
     align-items: center;
     min-width: 120px;
-    max-width: 200px;
+    max-width: 130px;
     height: 28px;
     background: transparent;
     border-radius: 6px;
     transition: all 0.2s ease;
+    overflow: hidden;
 }
 
 .autosave-wrapper:hover {
@@ -55,9 +56,11 @@
     color: var(--text-color);
     text-overflow: ellipsis;
     overflow: hidden;
+    overflow-x: hidden;
     white-space: nowrap;
     outline: none;
     transition: all 0.2s ease;
+    box-sizing: border-box;
 }
 
 .autosave-textbox::placeholder {

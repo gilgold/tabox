@@ -14,7 +14,7 @@ export const STORAGE_KEYS = {
     STORAGE_VERSION: 'tabox_storage_version'
 };
 
-export const CURRENT_STORAGE_VERSION = 2;
+export const CURRENT_STORAGE_VERSION = 3;
 
 // Simple UID generator (same logic throughout the app)
 export const generateUid = () => {

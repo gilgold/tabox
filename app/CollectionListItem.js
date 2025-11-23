@@ -5,7 +5,7 @@ import ContextMenu from './ContextMenu';
 import { createCollectionMenuItems } from './utils/contextMenuItems';
 import TimeAgo from 'javascript-time-ago';
 import { useSetRecoilState, useRecoilValue } from 'recoil';
-import { deletingCollectionUidsState, highlightedCollectionUidState } from './atoms/animationsState';
+import { deletingCollectionUidsState, highlightedCollectionUidState, draggingTabState, draggingGroupState } from './atoms/animationsState';
 
 import { useSnackbar } from 'react-simple-snackbar';
 import { SnackbarStyle } from './model/SnackbarTypes';
@@ -15,16 +15,27 @@ import { AutoSaveTextbox } from './AutoSaveTextbox';
 import ColorPicker from './ColorPicker';
 import { useCollectionOperations } from './useCollectionOperations';
 import { browser } from '../static/globals';
+import DroppableCollection from './DroppableCollection';
 
 function CollectionListItem(props) {
     const deletingCollectionUids = useRecoilValue(deletingCollectionUidsState);
     const setDeletingCollectionUids = useSetRecoilState(deletingCollectionUidsState);
     const highlightedCollectionUid = useRecoilValue(highlightedCollectionUidState);
     const setHighlightedCollectionUid = useSetRecoilState(highlightedCollectionUidState);
+    const draggingTab = useRecoilValue(draggingTabState);
+    const draggingGroup = useRecoilValue(draggingGroupState);
     const [collectionName, setCollectionName] = useState(props.collection.name);
     const [isExpanded, setExpanded] = useState(false);
     const [isAutoUpdate, setIsAutoUpdate] = useState(false);
     const mountedRef = useRef(true);
+    
+    // Prevent expansion when dragging a tab or group (unless it's from this collection)
+    const isDraggingTab = draggingTab !== null;
+    const isDraggingGroup = draggingGroup !== null;
+    const isDraggingItem = isDraggingTab || isDraggingGroup;
+    const isDraggingTabFromThisCollection = draggingTab?.sourceCollection?.uid === props.collection.uid;
+    const isDraggingGroupFromThisCollection = draggingGroup?.sourceCollection?.uid === props.collection.uid;
+    const isDraggingFromThisCollection = isDraggingTabFromThisCollection || isDraggingGroupFromThisCollection;
 
 
     const [openSnackbar] = useSnackbar({ style: collectionName === '' ? SnackbarStyle.ERROR : SnackbarStyle.SUCCESS });
@@ -118,6 +129,10 @@ function CollectionListItem(props) {
 
     const _handleRowClick = (e) => {
         e.stopPropagation();
+        // Prevent expansion when dragging a tab or group from another collection
+        if (isDraggingItem && !isDraggingFromThisCollection) {
+            return;
+        }
         _handleExpandWithNameReset();
     };
 
@@ -212,15 +227,16 @@ function CollectionListItem(props) {
     }, [props.search, props.collection.name]);
 
     return (
-        <div 
-            onClick={_handleRowClick} 
-            className={`row setting_row collection-list-item ${isExpanded ? 'expanded' : ''} ${isAutoUpdate && 'active-auto-tracking'} ${isHighlighted ? 'collection-item-highlight' : ''} ${isDeleting ? 'collection-item-deleting' : ''} ${props.lightningEffect ? 'lightning-effect' : ''}`} 
-            style={{ 
-                ...style, 
-                border: '2px solid var(--setting-row-border-color)'
-            }}
-            data-in-folder={props.isInFolder ? 'true' : 'false'}
-        >
+        <DroppableCollection collection={props.collection}>
+            <div 
+                onClick={_handleRowClick} 
+                className={`row setting_row collection-list-item ${isExpanded ? 'expanded' : ''} ${isAutoUpdate && 'active-auto-tracking'} ${isHighlighted ? 'collection-item-highlight' : ''} ${isDeleting ? 'collection-item-deleting' : ''} ${props.lightningEffect ? 'lightning-effect' : ''}`} 
+                style={{ 
+                    ...style, 
+                    border: '2px solid var(--setting-row-border-color)'
+                }}
+                data-in-folder={props.isInFolder ? 'true' : 'false'}
+            >
             <div className="collection-row-main">
                 <div
                     className="column handle"
@@ -278,7 +294,7 @@ function CollectionListItem(props) {
                         </span>
                         <span className="collection-separator"> • </span>
                         <span>
-                            {props.collection.tabs.length} tab{props.collection.tabs.length > 1 ? 's' : ''} {totalGroups > 0 && '(' + totalGroups + ' group' + (totalGroups > 1 ? 's' : '') + ')'}
+                            {props.collection.tabs?.length || 0} tab{(props.collection.tabs?.length || 0) > 1 ? 's' : ''} {totalGroups > 0 && '(' + totalGroups + ' group' + (totalGroups > 1 ? 's' : '') + ')'}
                         </span>
                     </div>
                 </div>
@@ -321,7 +337,8 @@ function CollectionListItem(props) {
                         search={props.search} />
                 </div>
             ) : null}
-        </div>);
+        </div>
+        </DroppableCollection>);
 }
 
 export default CollectionListItem;

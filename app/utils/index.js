@@ -102,14 +102,12 @@ export const getMigrationStatus = async () => {
  */
 export const emergencyDataRecovery = async () => {
   try {
-    console.log('🚨 Starting emergency data recovery...');
     
     // Get available backups
     const { getAvailableBackups, restoreFromBackup } = await import('./backupUtils.js');
     const backups = await getAvailableBackups();
     
     if (backups.length === 0) {
-      console.log('❌ No backups available for recovery');
       return false;
     }
     
@@ -117,17 +115,13 @@ export const emergencyDataRecovery = async () => {
     const recentBackup = backups.find(backup => backup.collections > 0);
     
     if (!recentBackup) {
-      console.log('❌ No valid backups found with collections');
       return false;
     }
     
-    console.log(`🔄 Restoring from backup: ${recentBackup.key}`);
     const success = await restoreFromBackup(recentBackup.key);
     
     if (success) {
-      console.log('✅ Emergency recovery completed successfully');
     } else {
-      console.log('❌ Emergency recovery failed');
     }
     
     return success;

@@ -16,10 +16,14 @@ import ReactTooltip from 'react-tooltip';
 function SaveHighlightedOnlyLabel({ saveMode, windowCount }) {
     const [totalHighlighted, setTotalHighlighted] = useState(0);
 
-    useEffect(async () => {
-        const windowId = await browser.windows.WINDOW_ID_CURRENT;
-        const total = (await browser.tabs.query({ highlighted: true, windowId: windowId })).length;
-        setTotalHighlighted(total);
+    useEffect(() => {
+        const fetchHighlightedCount = async () => {
+            const windowId = await browser.windows.WINDOW_ID_CURRENT;
+            const total = (await browser.tabs.query({ highlighted: true, windowId: windowId })).length;
+            setTotalHighlighted(total);
+        };
+        
+        fetchHighlightedCount();
     }, [])
 
     // Show for "all" mode or when highlighted tabs > 1 in "current" mode
@@ -196,7 +200,6 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
     };
 
     const handleSave = async () => {
-        console.log("add new collection", collectionName, "mode:", saveMode);
         if (collectionName.trim() === '') {
             openSnackbar('Please enter a name for the collection', 2000);
             return;
@@ -253,7 +256,6 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
                     scrollToCollectionsAndHighlight(addedCollections[0].uid);
                 }
                 
-                console.log(`✅ Created folder with ${collections.length} collections`);
             } else {
                 // Save current window as collection (existing behavior)
                 const newItem = await getCurrentTabsAndGroups(collectionName);

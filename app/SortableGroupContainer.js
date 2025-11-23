@@ -1,9 +1,9 @@
 import React from 'react';
-import { CSS } from '@dnd-kit/utilities';
-import TabRow from './TabRow';
 import { useSortable, defaultAnimateLayoutChanges } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import GroupContainer from './GroupContainer';
 
-function SortableTabRow(props) {
+function SortableGroupContainer(props) {
     const {
         attributes,
         listeners,
@@ -11,18 +11,19 @@ function SortableTabRow(props) {
         transform,
         transition,
         isDragging,
-        isOver,
     } = useSortable({
-        id: props.tab.uid,
+        id: props.group.uid,
         disabled: props.disableDrag,
         data: {
-            type: 'tab',
-            tab: props.tab,
-            originalGroup: props.group
+            type: 'group',
+            group: props.group,
+            tabs: props.tabs,
+            sourceCollection: props.collection
         },
         // Only animate layout changes when this specific item is being dragged
+        // This prevents other groups from being displaced during drag
         animateLayoutChanges: (args) => {
-            const { wasDragging, isDragging } = args;
+            const { isSorting, wasDragging, isDragging } = args;
             
             // If currently dragging this item, don't animate (it's hidden)
             if (isDragging) {
@@ -34,7 +35,8 @@ function SortableTabRow(props) {
                 return true;
             }
             
-            // For all other items, don't animate to prevent displacement
+            // For all other items (not currently dragging, not previously dragged),
+            // don't animate to prevent displacement
             return false;
         }
     });
@@ -43,34 +45,25 @@ function SortableTabRow(props) {
         transform: CSS.Transform.toString(transform),
         transition,
         // Hide the original item when dragging (DragOverlay shows it instead)
+        // This prevents visual displacement of other groups
         opacity: isDragging ? 0 : 1,
         visibility: isDragging ? 'hidden' : 'visible',
         zIndex: isDragging ? 1000 : 'auto',
     };
 
-    // Handle group drop zone styling
-    const dropZoneStyle = isOver ? {
-        backgroundColor: 'rgba(var(--primary-color-rgb, 52, 152, 219), 0.1)',
-        borderRadius: '4px'
-    } : {};
-
     return (
         <div 
             ref={setNodeRef} 
-            style={{ ...style, ...dropZoneStyle }}
-            {...attributes}
-            {...listeners}
+            style={style}
         >
-            <TabRow 
-                tab={props.tab}
-                updateCollection={props.updateCollection}
-                collection={props.collection}
-                group={props.group}
+            <GroupContainer
+                {...props}
                 isDragging={isDragging}
-                search={props.search}
+                dragAttributes={attributes}
+                dragListeners={listeners}
             />
         </div>
     );
 }
 
-export default SortableTabRow; 
+export default SortableGroupContainer;

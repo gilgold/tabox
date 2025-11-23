@@ -6,13 +6,14 @@ import ContextMenu from './ContextMenu';
 import { createCollectionMenuItems } from './utils/contextMenuItems';
 import TimeAgo from 'javascript-time-ago';
 import { useSetRecoilState, useRecoilValue } from 'recoil';
-import { highlightedCollectionUidState, deletingCollectionUidsState } from './atoms/animationsState';
+import { highlightedCollectionUidState, deletingCollectionUidsState, draggingTabState } from './atoms/animationsState';
 
 import { getColorValue } from './utils/colorMigration';
 import ColorPicker from './ColorPicker';
 import { useCollectionOperations } from './useCollectionOperations';
 import { browser } from '../static/globals';
 import './CollectionTile.css';
+import DroppableCollection from './DroppableCollection';
 
 function CollectionTile(props) {
     const highlightedCollectionUid = useRecoilValue(highlightedCollectionUidState);
@@ -127,15 +128,16 @@ function CollectionTile(props) {
     }, [props.collection.lastOpened]);
 
     return (
-        <div
-            className={`collection-tile ${props.activeId === props.collection.uid ? 'dragging' : ''} ${isAutoUpdate ? 'active-auto-tracking' : ''} ${isHighlighted ? 'new-tile-highlight' : ''} ${isDeleting ? 'new-tile-deleting' : ''} ${props.lightningEffect ? 'lightning-effect' : ''}`}
-            style={{
-                ...(props.collection.color && props.collection.color !== 'default' && props.collection.color !== 'var(--setting-row-border-color)' && { borderColor: getColorValue(props.collection.color) })
-            }}
-            onClick={_handleTileClick}
-            {...props.dragAttributes}
-            {...props.dragListeners}
-        >
+        <DroppableCollection collection={props.collection}>
+            <div
+                className={`collection-tile ${props.activeId === props.collection.uid ? 'dragging' : ''} ${isAutoUpdate ? 'active-auto-tracking' : ''} ${isHighlighted ? 'new-tile-highlight' : ''} ${isDeleting ? 'new-tile-deleting' : ''} ${props.lightningEffect ? 'lightning-effect' : ''}`}
+                style={{
+                    ...(props.collection.color && props.collection.color !== 'default' && props.collection.color !== 'var(--setting-row-border-color)' && { borderColor: getColorValue(props.collection.color) })
+                }}
+                onClick={_handleTileClick}
+                {...props.dragAttributes}
+                {...props.dragListeners}
+            >
 
             {/* Collection name */}
             <div className="tile-header">
@@ -234,6 +236,7 @@ function CollectionTile(props) {
                 />
             </div>
         </div>
+        </DroppableCollection>
     );
 }
 

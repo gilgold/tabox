@@ -21,6 +21,7 @@ function FolderContainer({
     folder,
     children,
     onFolderUpdate,
+    onFolderStateChange,
     onFolderDelete,
     updateRemoteData,
     dragAttributes,
@@ -140,6 +141,12 @@ function FolderContainer({
         const newCollapsed = await handleToggleCollapsed();
         if (isMountedRef.current) {
             setLocalExpanded(!newCollapsed);
+            // Use lightweight state update for UI-only changes (collapsed state)
+            // This prevents unnecessary reloads of all data
+            if (onFolderStateChange) {
+                const updatedFolder = { ...folder, collapsed: newCollapsed };
+                onFolderStateChange(updatedFolder);
+            }
         }
     };
 
@@ -199,7 +206,7 @@ function FolderContainer({
         padding: '2px 5px', // Reduced folder padding
         borderRadius: '8px',
         background: 'var(--setting-row-bg-color)',
-        border: '1px solid var(--setting-row-border-color)',
+        border: '1px solid var(--folder-border-color, var(--setting-row-border-color))',
         width: '99%', // Match collection row width
         opacity: isDragging ? 0.6 : isDeleting ? 0 : 1,
         transform: isDragging ? 'scale(1.02)' : isDeleting ? 'translateX(-100px)' : 'translateX(0)',
@@ -233,12 +240,7 @@ function FolderContainer({
     
     // Debug logging for drag conflicts
     if (somethingElseBeingDragged) {
-        console.log('🚫 Folder drag disabled - something else being dragged:', {
-            folder: folder.name,
-            activeId: active.id,
-            folderId: folder.uid,
-            activeType: active.data?.current?.itemType || 'unknown'
-        });
+        // Drag disabled when something else is being dragged
     }
     
     const dragHandleStyle = {
@@ -266,6 +268,16 @@ function FolderContainer({
         transition: 'color 0.2s ease'
     }), [folderColor]);
 
+    const iconContainerStyle = {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '28px',
+        width: '28px',
+        flexShrink: 0,
+        marginLeft: '-15px' // Reduce gap between drag handle and icon
+    };
+
     const folderInfoStyle = {
         display: 'flex',
         flexDirection: 'column',
@@ -276,7 +288,7 @@ function FolderContainer({
         display: 'flex',
         alignItems: 'center',
         gap: '8px',
-        marginBottom: '2px'
+        marginTop: '2px'
     };
 
     const folderStatsStyle = {
@@ -383,14 +395,10 @@ function FolderContainer({
                 return false;
             }
 
-            console.log(`🗑️ Checking folder ${folder.name} (${folder.uid}) for deletion`);
-
             // Check if folder has collections
             const collectionsIndex = await loadCollectionsIndex();
             const collectionsInFolder = Object.entries(collectionsIndex)
                 .filter(([, meta]) => meta && meta.parentId === folder.uid);
-            
-            console.log(`📊 Found ${collectionsInFolder.length} collections in folder`);
             
             if (collectionsInFolder.length > 0) {
                 // Show confirmation modal (only if component is still mounted)
@@ -401,7 +409,6 @@ function FolderContainer({
                 return false;
             } else {
                 // Empty folder - delete with animation
-                console.log(`🗑️ Deleting empty folder: ${folder.name}`);
                 return await performAnimatedDeletion(false);
             }
         } catch (error) {
@@ -429,18 +436,10 @@ function FolderContainer({
         await new Promise(resolve => setTimeout(resolve, 300));
         
         try {
-            if (deleteCollections) {
-                console.log(`🔥 Force deleting folder ${folder.name} and deleting ${modalCollectionCount} collections`);
-            } else {
-                console.log(`🔥 Force deleting folder ${folder.name} and moving ${modalCollectionCount} collections to root`);
-            }
-            
             // Force delete with animation and the deleteCollections option
             const result = await performAnimatedDeletion(true, deleteCollections);
             
-            if (result) {
-                console.log(`✅ Successfully deleted folder ${folder.name}`);
-            } else {
+            if (!result) {
                 console.error(`❌ Failed to delete folder ${folder.name}`);
             }
             
@@ -504,11 +503,8 @@ function FolderContainer({
             const collectionsToOpen = await getFolderCollections(folder.uid);
 
             if (collectionsToOpen.length === 0) {
-                console.log(`No collections to open in folder: ${folder.name}`);
                 return;
             }
-
-            console.log(`🎬 Opening ${collectionsToOpen.length} collections from folder: ${folder.name}`);
 
             const openedCollections = [];
             const failedCollections = [];
@@ -560,7 +556,6 @@ function FolderContainer({
                     };
                     await browser.runtime.sendMessage(msg);
                     
-                    console.log(`✅ Opened collection: ${collection.name}`);
                     openedCollections.push({ ...collection, lastOpened: Date.now() });
                 } catch (error) {
                     console.error(`❌ Failed to open collection ${collection.name}:`, error);
@@ -569,22 +564,12 @@ function FolderContainer({
             }
 
             if (openedCollections.length > 0) {
-                console.log(`💾 Batch saving ${openedCollections.length} collections to preserve parentId`);
                 try {
                     const { batchUpdateCollections } = await import('./utils/storageUtils');
-                    const success = await batchUpdateCollections(openedCollections);
-                    if (success) {
-                        console.log(`✅ Successfully batch saved ${openedCollections.length} collections`);
-                    }
+                    await batchUpdateCollections(openedCollections);
                 } catch (batchSaveError) {
                     console.error('Error batch saving collections:', batchSaveError);
                 }
-            }
-
-            if (failedCollections.length > 0) {
-                console.warn(`⚠️ Finished opening folder with ${failedCollections.length} errors:`, failedCollections);
-            } else {
-                console.log(`✅ Successfully opened ${openedCollections.length} collections from folder ${folder.name}`);
             }
 
         } catch (error) {
@@ -651,22 +636,43 @@ function FolderContainer({
                         <MdDragIndicator />
                     </div>
                     
-                    {localExpanded ? (
-                        <MdFolderOpen style={iconStyle} />
-                    ) : (
-                        <MdFolder style={iconStyle} />
-                    )}
+                    <div style={iconContainerStyle}>
+                        {localExpanded ? (
+                            <MdFolderOpen style={iconStyle} />
+                        ) : (
+                            <MdFolder style={iconStyle} />
+                        )}
+                    </div>
                     
                     <div style={folderInfoStyle}>
                         <div style={folderTitleStyle}>
-                            <AutoSaveTextbox
-                                initValue={folder.name || 'New Folder'}
-                                item={folder}
-                                action={handleSaveFolderName}
-                                className="folder-title-input"
-                                placeholder="Folder name..."
-                                maxLength={50}
-                            />
+                            {localExpanded ? (
+                                <AutoSaveTextbox
+                                    initValue={folder.name || 'New Folder'}
+                                    item={folder}
+                                    action={handleSaveFolderName}
+                                    className="folder-title-input"
+                                    placeholder="Folder name..."
+                                    maxLength={50}
+                                />
+                            ) : (
+                                <div style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    height: '28px',
+                                    minWidth: '120px',
+                                    maxWidth: '200px'
+                                }}>
+                                    <span style={{
+                                        fontSize: '13px',
+                                        fontWeight: '500',
+                                        color: 'var(--text-color)',
+                                        userSelect: 'none'
+                                    }}>
+                                        {folder.name || 'New Folder'}
+                                    </span>
+                                </div>
+                            )}
                             <span style={folderStatsStyle}>
                                 {collectionCount} collection{collectionCount !== 1 ? 's' : ''}
                             </span>

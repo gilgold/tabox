@@ -22,6 +22,8 @@
     overflow: hidden;
     user-select: none;
     /* Removed automatic animation - now controlled by separate class */
+    will-change: transform, box-shadow;
+    contain: layout paint;
 }
 
 /* Controlled entrance animation - only applied when needed */
@@ -40,30 +42,16 @@
     cursor: grabbing;
 }
 
-/* Modern Liquid Glass Hover Effect for Tiles */
 .collection-tile:hover {
-    /* Enhanced Lift Effect */
-    transform: translateY(-4px) scale(1.02);
-    
-    /* Liquid Glass Shadow */
-    box-shadow: 
-        0 8px 32px rgba(0, 0, 0, 0.15),
-        0 4px 16px rgba(0, 0, 0, 0.1),
-        inset 0 1px 0 rgba(255, 255, 255, 0.2);
-    
-    /* Modern Border Glow */
-    border: 3px solid rgba(255, 255, 255, 0.3);
-    backdrop-filter: blur(1px);
-    -webkit-backdrop-filter: blur(1px);
+    transform: translateY(-3px) scale(1.01);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+    border: 3px solid rgba(255, 255, 255, 0.25);
 }
 
 /* Dark Mode Tile Hover */
 [data-theme="dark"] .collection-tile:hover {
-    border: 3px solid rgba(255, 255, 255, 0.15);
-    box-shadow: 
-        0 8px 32px rgba(0, 0, 0, 0.3),
-        0 4px 16px rgba(0, 0, 0, 0.2),
-        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    border: 3px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 6px 26px rgba(0, 0, 0, 0.35);
 }
 
 /* Enhanced Tile Content Opacity on Hover */
@@ -78,6 +66,16 @@
 .collection-tile.dragging {
     opacity: 0.8;
     z-index: 1000;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .collection-tile {
+        transition: none;
+    }
+
+    .collection-tile:hover {
+        transform: none;
+    }
 }
 
 

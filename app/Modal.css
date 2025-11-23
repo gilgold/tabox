@@ -57,12 +57,16 @@
     max-width: 90vw;
     
     /* Light Theme Liquid Glass Background */
-    background: linear-gradient(
-        135deg,
-        rgba(255, 255, 255, 0.75) 0%,
-        rgba(255, 255, 255, 0.60) 50%,
-        rgba(255, 255, 255, 0.78) 100%
-    );
+    background:
+        radial-gradient(circle at 15% 20%, rgba(133, 212, 247, 0.55) 0%, rgba(133, 212, 247, 0) 45%),
+        radial-gradient(circle at 82% 8%, rgba(255, 187, 210, 0.4) 0%, rgba(255, 187, 210, 0) 40%),
+        radial-gradient(circle at 70% 90%, rgba(167, 231, 203, 0.35) 0%, rgba(167, 231, 203, 0) 42%),
+        linear-gradient(
+            135deg,
+            rgba(255, 255, 255, 0.97) 0%,
+            rgba(247, 250, 255, 0.99) 35%,
+            rgba(255, 252, 245, 1) 100%
+        );
     backdrop-filter: blur(40px) saturate(200%) brightness(110%);
     -webkit-backdrop-filter: blur(40px) saturate(200%) brightness(110%);
     

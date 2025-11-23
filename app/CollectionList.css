@@ -24,6 +24,21 @@
 	animation: gridFadeIn 0.3s ease-out 0.1s forwards;
 }
 
+.collections-virtual-spacer {
+	width: 100%;
+	pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.setting_row {
+		transition: none;
+	}
+
+	.setting_row:hover:not(.expanded) {
+		transform: none;
+	}
+}
+
 @keyframes gridFadeIn {
 	0% {
 		opacity: 0;
@@ -38,6 +53,7 @@
 .collection-list {
 	opacity: 0;
 	animation: listFadeIn 0.3s ease-out 0.1s forwards;
+	contain: layout paint;
 }
 
 @keyframes listFadeIn {
@@ -66,6 +82,8 @@
 	position: relative;
 	overflow: hidden;
 	box-sizing: border-box;
+	will-change: transform, box-shadow;
+	contain: layout paint;
 }
 
 .setting_row.expanded {
@@ -85,63 +103,17 @@
 
 /* Enhanced Modern Liquid Glass Hover Effect for List Items - but not for expanded items */
 .setting_row:hover:not(.expanded) {
-	/* Enhanced Liquid Glass Effect */
-	background: rgba(255, 255, 255, 0.25);
-	backdrop-filter: blur(12px) saturate(150%);
-	-webkit-backdrop-filter: blur(12px) saturate(150%);
-	border: 1px solid rgba(255, 255, 255, 0.4);
-	
-	/* Dramatic Lift and Scale */
-	transform: translateY(-3px);
-	
-	/* Enhanced Shadow System */
-	box-shadow: 
-		0 8px 32px rgba(0, 0, 0, 0.15),
-		0 4px 16px rgba(0, 0, 0, 0.1),
-		0 2px 8px rgba(0, 0, 0, 0.08),
-		inset 0 1px 0 rgba(255, 255, 255, 0.3),
-		inset 0 -1px 0 rgba(255, 255, 255, 0.1);
-	
-	/* Subtle Glow Effect */
-	position: relative;
-}
-
-.setting_row:hover:not(.expanded)::before {
-	content: '';
-	position: absolute;
-	top: 0;
-	left: 0;
-	right: 0;
-	bottom: 0;
-	background: linear-gradient(
-		135deg,
-		rgba(255, 255, 255, 0.1) 0%,
-		rgba(255, 255, 255, 0.05) 50%,
-		rgba(255, 255, 255, 0.1) 100%
-	);
-	pointer-events: none;
-	z-index: 1;
+	background: rgba(255, 255, 255, 0.18);
+	border: 1px solid rgba(255, 255, 255, 0.28);
+	transform: translateY(-2px);
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
 }
 
 /* Enhanced Dark Mode List Item Hover */
 [data-theme="dark"] .setting_row:hover:not(.expanded) {
-	background: rgba(255, 255, 255, 0.08);
-	border: 1px solid rgba(255, 255, 255, 0.25);
-	box-shadow: 
-		0 8px 32px rgba(0, 0, 0, 0.4),
-		0 4px 16px rgba(0, 0, 0, 0.25),
-		0 2px 8px rgba(0, 0, 0, 0.15),
-		inset 0 1px 0 rgba(255, 255, 255, 0.15),
-		inset 0 -1px 0 rgba(255, 255, 255, 0.08);
-}
-
-[data-theme="dark"] .setting_row:hover:not(.expanded)::before {
-	background: linear-gradient(
-		135deg,
-		rgba(255, 255, 255, 0.08) 0%,
-		rgba(255, 255, 255, 0.03) 50%,
-		rgba(255, 255, 255, 0.08) 100%
-	);
+	background: rgba(255, 255, 255, 0.07);
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
 }
 
 /* List item highlight animation (uses same style as tile highlight) */
@@ -222,7 +194,8 @@
 	overflow: hidden;
 	text-overflow: ellipsis;
 	display: inline-block;
-	width: 100%;
+	flex: 0 1 auto;
+	min-width: 0;
 }
 
 /* Ensure search match highlight is visible inside truncate_box */
@@ -261,7 +234,7 @@
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	flex-wrap: wrap;
+	flex-wrap: nowrap;
 }
 
 .recently-opened-indicator {
@@ -865,6 +838,13 @@
 	margin-right: 10px;
 }
 
+.tab-title-wrapper {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	width: 100%;
+}
+
 .single-tab-title {
 	text-overflow: ellipsis;
 	overflow: hidden;
@@ -878,6 +858,22 @@
 .single-tab-title .search-match-text {
 	white-space: nowrap;
 	display: inline;
+}
+
+.tab-url-preview {
+	font-size: 0.7em;
+	color: var(--text-color);
+	opacity: 0.7;
+	text-overflow: ellipsis;
+	overflow: hidden;
+	white-space: nowrap;
+	display: block;
+	font-family: monospace;
+}
+
+.tab-url-preview .search-match-text {
+	opacity: 1;
+	font-weight: 600;
 }
 
 .tab-property {
@@ -1561,6 +1557,19 @@
 @keyframes dropIndicatorPulse {
 	0%, 100% { opacity: 0.8; transform: scaleY(1); }
 	50% { opacity: 1; transform: scaleY(1.2); }
+}
+
+/* Folder container base + hover state */
+.folder-container {
+	--folder-border-color: var(--setting-row-border-color);
+}
+
+.folder-container:hover {
+	--folder-border-color: var(--primary-color);
+}
+
+[data-theme="dark"] .folder-container:hover {
+	--folder-border-color: var(--primary-color);
 }
 
 /* Additional drop zone indicators specifically for folder operations */

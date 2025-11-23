@@ -25,15 +25,6 @@ function DroppableFolderContent({ folder, children }) {
                                     (active?.data?.current?.isInFolder ? active?.data?.current?.parentId : null);
     const isDraggingFromSameFolder = draggedCollectionParentId === folder.uid;
     
-    // Debug logging when debugging is enabled
-    if (window.DEBUG_FOLDER_DRAG && isDraggingCollection && isOver) {
-        console.log(`🔍 Folder content drop zone: ${folder.name}`, {
-            draggedParentId: draggedCollectionParentId,
-            folderUid: folder.uid,
-            isDraggingFromSameFolder,
-            shouldShowDropZone
-        });
-    }
     
     const isExpanded = !folder.collapsed;
     

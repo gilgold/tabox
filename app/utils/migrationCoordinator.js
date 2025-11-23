@@ -51,9 +51,9 @@ const MIGRATION_CONFIG = {
   // Migration paths
   MIGRATION_PATHS: {
     '3.0': ['enhanced_to_current'],
-    '3.5': ['folders_initialization'], // Add folder system support
-    '3.5-color-migration-needed': ['color_migration', 'folders_initialization'], // Color migration + folder support
-    '4.0': [], // Already current, no migration needed
+    '3.5': ['folders_initialization', 'timestamp_migration'], // Add folder system support + timestamp migration
+    '3.5-color-migration-needed': ['color_migration', 'folders_initialization', 'timestamp_migration'], // Color migration + folder support + timestamps
+    '4.0': ['timestamp_migration'], // Add timestamp migration for v4.0 → v4.0.1
     'unknown': ['enhanced_to_current'] // Safe fallback
   }
 };
@@ -74,7 +74,6 @@ class MigrationCoordinator {
    */
   async assessMigrationNeeds() {
     try {
-      console.log('🔍 Assessing migration needs...');
       
       const currentData = await getAllStorageData();
       const detection = detectAndValidateFormat(currentData);
@@ -88,11 +87,9 @@ class MigrationCoordinator {
       const needsColorMigration = this.needsColorMigration(currentData);
       
       if (migrationHistory.completedVersions && migrationHistory.completedVersions.includes(currentAppVersion)) {
-        console.log(`✅ Migration already completed for version ${currentAppVersion}`);
         
         // Even if version migration is complete, check if color migration is needed
         if (needsColorMigration) {
-          console.log(`🎨 Color migration needed despite version being marked as migrated`);
           return {
             currentVersion,
             detectedFormat: detection.format,
@@ -187,7 +184,6 @@ class MigrationCoordinator {
     // Check for existing migration lock
     const migrationLock = await this.checkMigrationLock();
     if (migrationLock && !force) {
-      console.log('⏳ Migration already in progress or recently completed, skipping...');
       return {
         success: true,
         message: 'Migration skipped - already in progress or recently completed',
@@ -196,7 +192,6 @@ class MigrationCoordinator {
     }
 
     if (this.isRunning) {
-      console.log('⏳ Migration already running in this instance, skipping...');
       return {
         success: true,
         message: 'Migration already running in this instance',
@@ -210,14 +205,11 @@ class MigrationCoordinator {
       // Set migration lock
       await this.setMigrationLock();
       
-      console.log('🚀 Starting migration process...');
-      console.log('⚠️ Migration in progress - sync operations should be avoided during this time');
 
       // Assess migration needs
       const assessment = await this.assessMigrationNeeds();
       
       if (!assessment.migrationNeeded && !force) {
-        console.log('✅ No migration needed');
         return {
           success: true,
           message: 'No migration required',
@@ -248,7 +240,6 @@ class MigrationCoordinator {
         // Cleanup old backups (but be careful about size)
         await this.cleanupOldBackupsSafely();
         
-        console.log('✅ Migration completed successfully');
         return {
           success: true,
           message: 'Migration completed successfully',
@@ -312,15 +303,15 @@ class MigrationCoordinator {
         const step = migrationPath[i];
         this.currentOperation = `Step ${i + 1}/${migrationPath.length}: ${step}`;
         
-        console.log(`🔄 Executing migration step: ${step}`);
         
         // Create backup before this step (skip for safe migrations to save space)
         let backupInfo;
-        if (step === 'color_migration' || step === 'folders_initialization') {
+        if (step === 'color_migration' || step === 'folders_initialization' || step === 'timestamp_migration') {
           const skipReason = step === 'color_migration' ? 
             'Color migration is safe operation' : 
-            'Folder initialization is safe operation (no data changes)';
-          console.log(`🎨 Skipping backup for ${step} (safe operation)`);
+            step === 'folders_initialization' ? 
+            'Folder initialization is safe operation (no data changes)' :
+            'Timestamp migration is safe operation (only adds missing timestamps)';
           backupInfo = {
             id: `${step}_no_backup`,
             key: `${step}_no_backup`,
@@ -342,30 +333,24 @@ class MigrationCoordinator {
         await addToRollbackChain(this.rollbackChainId, i, backupInfo);
         
         // Execute the step within an atomic transaction
-        console.log(`🔧 Starting atomic transaction for step: ${step}`);
         
         const stepResult = await atomicStorageTransaction(async () => {
-          console.log(`🎯 Executing step inside transaction: ${step}`);
           
           try {
             const transformedData = await this.executeStep(step, currentData);
-            console.log(`🔄 Step ${step} transformation completed`);
             
             // Validate transformed data
             if (!isDataSafe(transformedData)) {
               throw new Error(`Step ${step} produced invalid data`);
             }
-            console.log(`✅ Step ${step} data validation passed`);
             
             // Store transformed data (with size optimization)
             const transformedDataSize = JSON.stringify(transformedData).length / (1024 * 1024);
             if (transformedDataSize > 5) {
               console.warn(`⚠️ Large migration data (${transformedDataSize.toFixed(2)}MB) - storing with optimization`);
             }
-            console.log(`💾 Storing transformed data for step ${step} (${transformedDataSize.toFixed(2)}MB)`);
             
             await safeStorageSet(transformedData);
-            console.log(`✅ Step ${step} data stored successfully`);
             
             return transformedData;
             
@@ -375,7 +360,6 @@ class MigrationCoordinator {
           }
         });
 
-        console.log(`🔍 Atomic transaction result for step ${step}:`, stepResult !== false ? 'SUCCESS' : 'FAILED');
         
         if (stepResult === false) {
           console.error(`❌ Migration step ${step} failed - atomic transaction returned false`);
@@ -386,7 +370,6 @@ class MigrationCoordinator {
         currentData = await getAllStorageData();
         currentVersion = this.getTargetVersionForStep(step);
         
-        console.log(`✅ Step ${step} completed successfully`);
       }
 
       return { success: true };
@@ -404,25 +387,23 @@ class MigrationCoordinator {
    * @returns {Promise<object>} Transformed data
    */
   async executeStep(step, data) {
-    console.log(`🔧 Executing migration step: ${step}`);
     
     try {
       switch (step) {
         case 'enhanced_to_current':
-          console.log('📋 Executing enhanced_to_current migration...');
           return await this.migrateEnhancedToCurrent(data);
           
         case 'color_migration':
-          console.log('🎨 Executing color_migration...');
           return await this.migrateColorsOnly(data);
           
         case 'current_to_document':
-          console.log('📄 Executing current_to_document migration...');
           return await this.migrateCurrentToDocument(data);
           
         case 'folders_initialization':
-          console.log('📁 Executing folders_initialization migration...');
           return await this.migrateFoldersInitialization(data);
+          
+        case 'timestamp_migration':
+          return await this.migrateTimestamps(data);
           
         default:
           throw new Error(`Unknown migration step: ${step}`);
@@ -440,7 +421,6 @@ class MigrationCoordinator {
    * @returns {Promise<object>} Current format data
    */
   async migrateEnhancedToCurrent(data) {
-    console.log('🔄 Migrating enhanced format to current format...');
     
     // Import color migration utilities
     const { migrateAllCollectionColors } = await import('./colorMigration.js');
@@ -472,7 +452,6 @@ class MigrationCoordinator {
     }).filter(Boolean); // Remove null entries (folders)
     
     // Migrate colors from old hex codes to new color names
-    console.log('🎨 Migrating collection colors to new named system...');
     const colorMigratedCollections = migrateAllCollectionColors(enhancedCollections);
     
     // Add backup systems and enhanced metadata
@@ -495,8 +474,6 @@ class MigrationCoordinator {
    */
   async migrateColorsOnly(data) {
     try {
-      console.log('🎨 Migrating colors to new named color system...');
-      console.log(`📊 Input data has ${data.tabsArray?.length || 0} collections`);
       
       if (!data.tabsArray || !Array.isArray(data.tabsArray)) {
         console.warn('⚠️ No tabsArray found in data - returning data unchanged');
@@ -509,14 +486,10 @@ class MigrationCoordinator {
       }
       
       // Import color migration utilities
-      console.log('📦 Importing color migration utilities...');
       const { migrateAllCollectionColors } = await import('./colorMigration.js');
-      console.log('✅ Color migration utilities imported successfully');
       
       // Migrate colors in all collections
-      console.log('🔄 Starting collection color migration...');
       const colorMigratedCollections = migrateAllCollectionColors(data.tabsArray);
-      console.log('✅ Collection color migration completed');
       
       const result = {
         ...data,
@@ -526,10 +499,6 @@ class MigrationCoordinator {
         colorMigrationTimestamp: Date.now()
       };
       
-      console.log('🎯 Color migration result:');
-      console.log(`  - Collections processed: ${colorMigratedCollections.length}`);
-      console.log(`  - Color system version: ${result.colorSystemVersion}`);
-      console.log(`  - Migration timestamp: ${new Date(result.colorMigrationTimestamp).toISOString()}`);
       
       return result;
       
@@ -546,7 +515,6 @@ class MigrationCoordinator {
    * @returns {Promise<object>} Document format data
    */
   async migrateCurrentToDocument(data) {
-    console.log('🔄 Migrating current format to document format...');
     
     const collections = {};
     const collectionsIndex = [];
@@ -616,8 +584,6 @@ class MigrationCoordinator {
    */
   async migrateFoldersInitialization(data) {
     try {
-      console.log('📁 Initializing folder system for v4.0...');
-      console.log(`📊 Input data has ${data.tabsArray?.length || 0} collections`);
       
       if (!data.tabsArray || !Array.isArray(data.tabsArray)) {
         console.warn('⚠️ No tabsArray found in data - returning data with folder system initialized');
@@ -631,11 +597,9 @@ class MigrationCoordinator {
       }
       
       // Initialize empty folders index
-      console.log('📂 Initializing empty folders index...');
       const foldersIndex = {};
       
       // Ensure all collections have parentId field (should be null initially)
-      console.log('🔄 Ensuring collections have parentId field...');
       const updatedCollections = data.tabsArray.map(collection => ({
         ...collection,
         parentId: collection.parentId || null // Preserve existing parentId, default to null
@@ -650,11 +614,6 @@ class MigrationCoordinator {
         folderSystemInitTimestamp: Date.now()
       };
       
-      console.log('🎯 Folder system initialization result:');
-      console.log(`  - Collections processed: ${updatedCollections.length}`);
-      console.log(`  - Folders initialized: ${Object.keys(foldersIndex).length}`);
-      console.log(`  - Folder system version: ${result.folderSystemVersion}`);
-      console.log(`  - Init timestamp: ${new Date(result.folderSystemInitTimestamp).toISOString()}`);
       
       return result;
       
@@ -662,6 +621,78 @@ class MigrationCoordinator {
       console.error('❌ Folder system initialization failed:', error);
       console.error('Error details:', error.stack);
       throw new Error(`Folder system initialization failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Migrate v2 to v3: Populate lastUpdated timestamps for collections and folders
+   * @param {object} data - v2 format data
+   * @returns {Promise<object>} v3 format data with timestamps
+   */
+  async migrateTimestamps(data) {
+    try {
+      
+      let migratedCollections = 0;
+      let migratedFolders = 0;
+      
+      // Migrate collections
+      if (data.tabsArray && Array.isArray(data.tabsArray)) {
+        
+        data.tabsArray = data.tabsArray.map(collection => {
+          // Only add lastUpdated if it doesn't exist
+          if (collection.lastUpdated === null || collection.lastUpdated === undefined) {
+            // Use createdOn as fallback, or current time if that's missing too
+            const fallbackTime = collection.createdOn || Date.now();
+            migratedCollections++;
+            
+            return {
+              ...collection,
+              lastUpdated: fallbackTime,
+              // Ensure lastOpened exists (defaults to null)
+              lastOpened: collection.lastOpened !== null && collection.lastOpened !== undefined ? collection.lastOpened : null
+            };
+          }
+          
+          // Just ensure lastOpened exists for collections that already have lastUpdated
+          return {
+            ...collection,
+            lastOpened: collection.lastOpened !== null && collection.lastOpened !== undefined ? collection.lastOpened : null
+          };
+        });
+      }
+      
+      // Migrate folders (from folders_index if it exists)
+      if (data.folders_index && typeof data.folders_index === 'object') {
+        
+        // Update each folder in the index
+        Object.keys(data.folders_index).forEach(folderUid => {
+          const folder = data.folders_index[folderUid];
+          if (folder && (folder.lastUpdated === null || folder.lastUpdated === undefined)) {
+            const fallbackTime = folder.createdOn || Date.now();
+            data.folders_index[folderUid] = {
+              ...folder,
+              lastUpdated: fallbackTime
+            };
+            migratedFolders++;
+          }
+        });
+      }
+      
+      // Update storage version marker
+      const result = {
+        ...data,
+        storageVersion: 3,
+        timestampMigrationCompleted: true,
+        timestampMigrationTimestamp: Date.now()
+      };
+      
+      
+      return result;
+      
+    } catch (error) {
+      console.error('❌ Timestamp migration failed:', error);
+      console.error('Error details:', error.stack);
+      throw new Error(`Timestamp migration failed: ${error.message}`);
     }
   }
 
@@ -727,14 +758,11 @@ class MigrationCoordinator {
    * @returns {boolean} True if color migration is needed
    */
   needsColorMigration(data) {
-    console.log('🔍 Checking if color migration is needed...');
     
     if (!data.tabsArray || !Array.isArray(data.tabsArray)) {
-      console.log('📝 No tabsArray found - no color migration needed');
       return false;
     }
 
-    console.log(`📊 Checking ${data.tabsArray.length} collections for old colors`);
     
     let foundOldColors = false;
     let checkedCollections = 0;
@@ -747,22 +775,18 @@ class MigrationCoordinator {
       // Check main collection color
       if (collection.color) {
         colorsFound++;
-        console.log(`🎨 Checking collection "${collection.name}" color: ${collection.color}`);
         
         if (collection.color.startsWith('#')) {
           // If it's a hex code that's not in our new palette values, it needs migration
           const isNewColor = Object.values(COLOR_PALETTE).includes(collection.color);
           if (!isNewColor) {
-            console.log(`🎨 Found old color needing migration: ${collection.color} in collection "${collection.name}"`);
             foundOldColors = true;
             return true;
           } else {
-            console.log(`✅ Color ${collection.color} is already in new palette`);
           }
         } else {
           // Check if it's an unknown color name that's not in our palette
           if (!COLOR_PALETTE[collection.color] && !collection.color.startsWith('var(--')) {
-            console.log(`🎨 Found unknown color name needing migration: ${collection.color} in collection "${collection.name}"`);
             foundOldColors = true;
             return true;
           }
@@ -773,17 +797,14 @@ class MigrationCoordinator {
       if (collection.chromeGroups && Array.isArray(collection.chromeGroups)) {
         return collection.chromeGroups.some(group => {
           if (group.color) {
-            console.log(`🎨 Checking group color: ${group.color} in collection "${collection.name}"`);
             
             if (group.color.startsWith('#')) {
               const isNewColor = Object.values(COLOR_PALETTE).includes(group.color);
               if (!isNewColor) {
-                console.log(`🎨 Found old group color needing migration: ${group.color} in collection "${collection.name}"`);
                 foundOldColors = true;
                 return true;
               }
             } else if (!COLOR_PALETTE[group.color] && !group.color.startsWith('var(--')) {
-              console.log(`🎨 Found unknown group color name needing migration: ${group.color} in collection "${collection.name}"`);
               foundOldColors = true;
               return true;
             }
@@ -795,10 +816,6 @@ class MigrationCoordinator {
       return false;
     });
 
-    console.log(`📊 Color migration check complete:`);
-    console.log(`  - Collections checked: ${checkedCollections}`);
-    console.log(`  - Colors found: ${colorsFound}`);
-    console.log(`  - Migration needed: ${needsMigration ? 'YES' : 'NO'}`);
     
     return needsMigration;
   }
@@ -823,7 +840,8 @@ class MigrationCoordinator {
       'enhanced_to_current': '3.5',
       'color_migration': '3.5',
       'current_to_document': '4.0',
-      'folders_initialization': '4.0'
+      'folders_initialization': '4.0',
+      'timestamp_migration': '4.0' // v3 storage version, still app version 4.0
     };
     
     return stepVersionMap[step] || MIGRATION_CONFIG.CURRENT_VERSION;
@@ -875,7 +893,6 @@ class MigrationCoordinator {
       const isStale = lockAge > (30 * 60 * 1000); // 30 minutes
       
       if (isStale) {
-        console.log('🔓 Clearing stale migration lock');
         await this.clearMigrationLock();
         return false;
       }
@@ -922,13 +939,11 @@ class MigrationCoordinator {
    */
   async cleanupOldBackupsSafely() {
     try {
-      console.log('🧹 Starting safe backup cleanup...');
       
       // Get current storage stats first
       const stats = await getStorageStats();
       const currentSizeMB = parseFloat(stats.totalSizeMB);
       
-      console.log(`📊 Current storage: ${currentSizeMB}MB`);
       
       // If storage is over 8MB, be more aggressive with cleanup
       const maxBackups = currentSizeMB > 8 ? 2 : 5;
@@ -938,7 +953,6 @@ class MigrationCoordinator {
       
       // Check final size
       const finalStats = await getStorageStats();
-      console.log(`📊 After cleanup: ${finalStats.totalSizeMB}MB`);
       
     } catch (error) {
       console.error('Safe backup cleanup failed:', error);
@@ -989,7 +1003,6 @@ class MigrationCoordinator {
       }
       
       await safeStorageSet({ migration_history: history });
-      console.log(`✅ Marked migration completed for version ${currentAppVersion}`);
       
     } catch (error) {
       console.error('Error marking migration completed:', error);

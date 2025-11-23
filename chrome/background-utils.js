@@ -73,7 +73,6 @@ const saveSingleCollectionBG = async (collection, forceUpdateTimestamp = false) 
         const preservedParentId = collection.parentId !== undefined ? collection.parentId : 
                                   (existingCollection?.parentId !== undefined ? existingCollection.parentId : null);
         
-        console.log(`🔍 BG SAVE: ${collection.name} - incoming parentId: ${collection.parentId}, existing: ${existingCollection?.parentId}, preserved: ${preservedParentId}`);
         
         // Save collection data
         await browser.storage.local.set({
@@ -114,7 +113,6 @@ const saveSingleCollectionBG = async (collection, forceUpdateTimestamp = false) 
         });
         
         if (globalThis.DEBUG_STORAGE) {
-            console.log(`Background: Saved collection ${collection.uid} (${collectionSize} bytes)`);
         }
         return true;
         
@@ -147,7 +145,6 @@ const loadAllCollectionsBG = async (useNewStorageFirst = true) => {
                 
                 // Only log if debug mode is explicitly enabled
                 if (globalThis.DEBUG_STORAGE) {
-                    console.log(`Background: Loaded ${collections.length} collections from indexed storage`);
                 }
                 return collections;
             }
@@ -155,7 +152,6 @@ const loadAllCollectionsBG = async (useNewStorageFirst = true) => {
         
         // Fallback to legacy storage
         if (globalThis.DEBUG_STORAGE) {
-            console.log('Background: Falling back to legacy tabsArray storage');
         }
         const { [STORAGE_KEYS.LEGACY_TABS_ARRAY]: tabsArray } = await browser.storage.local.get(STORAGE_KEYS.LEGACY_TABS_ARRAY);
         return tabsArray || [];
@@ -167,8 +163,13 @@ const loadAllCollectionsBG = async (useNewStorageFirst = true) => {
 };
 
 // Throttled legacy storage sync (prevent excessive updates)
+// BACKWARDS COMPATIBILITY: Keep tabsArray updated for v3.6 compatibility
+// v3.6 relies on tabsArray in local storage - if it's missing, it shows 0 collections
+// and can sync empty data to Google Drive, wiping out all data
 let legacySyncTimeout = null;
+let legacySyncEnabled = true; // MUST be enabled for v3.6 backwards compatibility
 const syncLegacyStorageThrottled = async () => {
+    if (!legacySyncEnabled) return; // Skip if lazy sync is disabled
     if (legacySyncTimeout) return; // Already scheduled
     
     legacySyncTimeout = setTimeout(async () => {
@@ -178,7 +179,8 @@ const syncLegacyStorageThrottled = async () => {
                 [STORAGE_KEYS.LEGACY_TABS_ARRAY]: collections,
                 localTimestamp: Date.now() 
             });
-            console.log('Background: Throttled legacy storage sync completed');
+            if (globalThis.DEBUG_STORAGE) {
+            }
         } catch (error) {
             console.error('Background: Failed to sync legacy storage:', error);
         } finally {
@@ -187,32 +189,138 @@ const syncLegacyStorageThrottled = async () => {
     }, 5000); // Sync legacy storage at most once every 5 seconds
 };
 
-// Update entire collections array with backward compatibility
+// Enable legacy storage sync (for backwards compatibility or backup operations)
+const enableLegacyStorageSync = () => {
+    legacySyncEnabled = true;
+};
+
+// Disable legacy storage sync (default for performance)
+const disableLegacyStorageSync = () => {
+    legacySyncEnabled = false;
+};
+
+// Force immediate legacy storage sync (for backup/export operations)
+const forceLegacyStorageSync = async () => {
+    try {
+        const collections = await loadAllCollectionsBG(true);
+        await browser.storage.local.set({ 
+            [STORAGE_KEYS.LEGACY_TABS_ARRAY]: collections,
+            localTimestamp: Date.now() 
+        });
+        if (globalThis.DEBUG_STORAGE) {
+        }
+        return true;
+    } catch (error) {
+        console.error('Background: Failed to force sync legacy storage:', error);
+        return false;
+    }
+};
+
+// Helper function to batch write collections with chunking
+const batchWriteCollections = async (updates, chunkSize = 50) => {
+    const keys = Object.keys(updates);
+    const totalChunks = Math.ceil(keys.length / chunkSize);
+    
+    for (let i = 0; i < totalChunks; i++) {
+        const chunkKeys = keys.slice(i * chunkSize, (i + 1) * chunkSize);
+        const chunkUpdates = {};
+        
+        chunkKeys.forEach(key => {
+            chunkUpdates[key] = updates[key];
+        });
+        
+        try {
+            await browser.storage.local.set(chunkUpdates);
+            
+            // Small delay between chunks to avoid quota issues
+            if (i < totalChunks - 1) {
+                await new Promise(resolve => setTimeout(resolve, 50));
+            }
+        } catch (error) {
+            if (error.message && error.message.includes('QUOTA_EXCEEDED')) {
+                console.error(`Quota exceeded at chunk ${i + 1}/${totalChunks}, reducing chunk size`);
+                // Retry with smaller chunks
+                const smallerChunkSize = Math.floor(chunkSize / 2);
+                if (smallerChunkSize > 0) {
+                    return await batchWriteCollections(updates, smallerChunkSize);
+                }
+            }
+            throw error;
+        }
+    }
+    
+    return true;
+};
+
+// Update entire collections array with backward compatibility (OPTIMIZED with batching)
 const updateAllCollectionsBG = async (collections) => {
     try {
         // Try to use new indexed storage first
         const index = await loadCollectionsIndexBG();
-        const hasIndexedStorage = Object.keys(index).length > 0;
+        const hasIndexedStorage = Object.keys(index).length > 0 || collections.length > 0;
         
         if (hasIndexedStorage) {
-            // Update each collection individually using new system
-            const savePromises = collections.map(collection => saveSingleCollectionBG(collection));
-            const results = await Promise.all(savePromises);
+            // OPTIMIZATION: Batch all updates into a single write operation
+            const now = Date.now();
+            const updates = {};
+            const newIndex = { ...index };
             
-            const successCount = results.filter(Boolean).length;
-            if (globalThis.DEBUG_STORAGE || successCount !== collections.length) {
-                console.log(`Background: Updated ${successCount}/${collections.length} collections using indexed storage`);
+            // Prepare all updates
+            for (const collection of collections) {
+                if (!collection.uid) {
+                    console.error('Collection missing UID, skipping:', collection.name);
+                    continue;
+                }
+                
+                const collectionKey = `${STORAGE_KEYS.COLLECTION_PREFIX}${collection.uid}`;
+                const lastUpdated = collection.lastUpdated !== null && collection.lastUpdated !== undefined ? collection.lastUpdated : now;
+                
+                // Prepare collection data
+                updates[collectionKey] = {
+                    uid: collection.uid,
+                    name: collection.name,
+                    tabs: collection.tabs || [],
+                    color: collection.color,
+                    createdOn: collection.createdOn || now,
+                    lastUpdated: lastUpdated,
+                    lastOpened: collection.lastOpened !== null && collection.lastOpened !== undefined ? collection.lastOpened : null,
+                    chromeGroups: collection.chromeGroups || [],
+                    parentId: collection.parentId !== undefined ? collection.parentId : null,
+                    ...collection
+                };
+                
+                // Update index entry
+                const collectionSize = JSON.stringify(updates[collectionKey]).length;
+                newIndex[collection.uid] = {
+                    name: collection.name,
+                    type: 'collection',
+                    tabCount: collection.tabs ? collection.tabs.length : 0,
+                    lastUpdated: lastUpdated,
+                    lastOpened: collection.lastOpened !== null && collection.lastOpened !== undefined ? collection.lastOpened : null,
+                    createdOn: collection.createdOn || now,
+                    color: collection.color || 'default',
+                    size: collectionSize,
+                    parentId: collection.parentId !== undefined ? collection.parentId : null
+                };
             }
             
-            if (successCount === collections.length) {
-                // Schedule throttled legacy storage sync (non-blocking)
-                syncLegacyStorageThrottled();
-                return true;
+            // OPTIMIZATION: Single batched write with chunking for Chrome limits
+            await batchWriteCollections(updates, 50);
+            
+            // Update index in a single write
+            await browser.storage.local.set({
+                [STORAGE_KEYS.COLLECTIONS_INDEX]: newIndex
+            });
+            
+            if (globalThis.DEBUG_STORAGE) {
             }
+            
+            // Schedule throttled legacy storage sync (non-blocking)
+            syncLegacyStorageThrottled();
+            return true;
         }
         
         // Fallback to legacy storage
-        console.log('Background: Falling back to legacy storage update');
         await browser.storage.local.set({ 
             [STORAGE_KEYS.LEGACY_TABS_ARRAY]: collections,
             localTimestamp: Date.now() 
@@ -310,7 +418,6 @@ const saveSingleFolderBG = async (folder, forceUpdateTimestamp = false) => {
             [STORAGE_KEYS.FOLDERS_INDEX]: foldersIndex
         });
         
-        console.log(`📁 Background: Saved folder ${folder.uid} "${folder.name}" (${collectionCount} collections)`);
         return true;
         
     } catch (error) {
@@ -341,7 +448,6 @@ const loadAllFoldersBG = async () => {
             }
         });
         
-        console.log(`Background: Loaded ${folders.length} folders from indexed storage`);
         return folders;
         
     } catch (error) {
@@ -354,18 +460,15 @@ const loadAllFoldersBG = async () => {
 const updateAllFoldersBG = async (folders) => {
     try {
         if (!folders || folders.length === 0) {
-            console.log('📁 Background: No folders to update');
             return true;
         }
         
-        console.log(`📁 Background: Updating ${folders.length} folders...`);
         
         // Update each folder individually using new system
         const savePromises = folders.map(folder => saveSingleFolderBG(folder));
         const results = await Promise.all(savePromises);
         
         const successCount = results.filter(Boolean).length;
-        console.log(`📁 Background: Updated ${successCount}/${folders.length} folders`);
         
         return successCount === folders.length;
         
@@ -379,8 +482,8 @@ let lastValidated = 0;
 let syncLock = false; // Prevent concurrent sync operations
 let syncQueue = []; // Queue pending sync operations
 
-// Enhanced error handling with retry logic
-async function handleRequest(url, options = null, maxRetries = 5, delay = 1000) {
+// Enhanced error handling with retry logic (OPTIMIZED: reduced retries from 5 to 3)
+async function handleRequest(url, options = null, maxRetries = 3, delay = 1000) {
     let lastError;
     
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -388,7 +491,9 @@ async function handleRequest(url, options = null, maxRetries = 5, delay = 1000) 
             const response = await fetch(url, options);
             if (response.ok) {
                 const data = await response.json();
-                logSyncOperation('success', `Request successful: ${url}`, { attempt: attempt + 1 });
+                if (attempt > 0) {
+                    logSyncOperation('success', `Request successful after ${attempt + 1} attempts: ${url}`);
+                }
                 return data;
             } else {
                 lastError = new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -407,9 +512,10 @@ async function handleRequest(url, options = null, maxRetries = 5, delay = 1000) 
             });
         }
         
-        // Wait before retry (exponential backoff)
+        // Wait before retry (exponential backoff, capped at 4 seconds)
         if (attempt < maxRetries) {
-            await new Promise(resolve => setTimeout(resolve, delay * Math.pow(2, attempt)));
+            const backoffDelay = Math.min(delay * Math.pow(2, attempt), 4000);
+            await new Promise(resolve => setTimeout(resolve, backoffDelay));
         }
     }
     
@@ -445,7 +551,7 @@ function logSyncOperation(level, message, data = {}) {
     });
 }
 
-// Validate collection data structure
+// Validate collection data structure (optimized to avoid unnecessary JSON.stringify)
 function validateCollectionData(data) {
     if (!data || typeof data !== 'object') {
         return { valid: false, error: 'Data is not an object' };
@@ -459,7 +565,7 @@ function validateCollectionData(data) {
         return { valid: false, error: 'timestamp is not a number' };
     }
     
-    // Validate each collection
+    // Validate each collection (lightweight validation, no JSON.stringify)
     for (let i = 0; i < data.tabsArray.length; i++) {
         const collection = data.tabsArray[i];
         if (!collection.uid || !collection.name || !Array.isArray(collection.tabs)) {
@@ -476,7 +582,7 @@ function validateCollectionData(data) {
             return { valid: false, error: 'foldersArray exists but is not an array' };
         }
         
-        // Validate each folder
+        // Validate each folder (lightweight validation)
         for (let i = 0; i < data.foldersArray.length; i++) {
             const folder = data.foldersArray[i];
             if (!folder.uid || !folder.name) {
@@ -546,7 +652,6 @@ async function createPreSyncBackup(label = 'pre-sync') {
         await browser.storage.local.set({ preSyncBackups });
         
         if (globalThis.DEBUG_STORAGE) {
-            console.log(`📦 Created compact backup: ${label} (${(backupSize/1024).toFixed(1)}KB, ${preSyncBackups.length} total)`);
         }
         
         return true;
@@ -581,7 +686,6 @@ function releaseSyncLock(operation = 'unknown') {
 
 // Update collection UIDs to ensure uniqueness
 function updateCollectionsUids(collections) {
-    console.log('checking collections UIDs');
     if (!collections || !Array.isArray(collections)) { 
         console.warn('updateCollectionsUids: Invalid collections input, returning empty array');
         return []; 
@@ -719,7 +823,6 @@ async function getNewAccessToken() {
             body: JSON.stringify(requestBody)
         }
         
-        console.log('Getting new token using refresh token');
         logSyncOperation('info', 'Requesting new access token with refresh token');
         
         // Use direct fetch instead of handleRequest to avoid unnecessary retries
@@ -806,7 +909,6 @@ async function getAuthToken() {
     const { googleToken, tokenExpiryTime } = await browser.storage.local.get(['googleToken', 'tokenExpiryTime']);
     
     if (!googleToken) {
-        console.log('No stored token, getting new one');
         return await getNewAccessToken();
     }
     
@@ -815,7 +917,6 @@ async function getAuthToken() {
     const fiveMinutes = 5 * 60 * 1000;
     
     if (tokenExpiryTime && now >= (tokenExpiryTime - fiveMinutes)) {
-        console.log('Token expired or expires soon, proactively refreshing');
         return await getNewAccessToken();
     }
     
@@ -825,7 +926,6 @@ async function getAuthToken() {
     }
     
     if (globalThis.DEBUG_STORAGE) {
-        console.log('Validating existing token');
     }
     const isValid = await validateToken(googleToken);
     lastValidated = Date.now();
@@ -834,7 +934,6 @@ async function getAuthToken() {
         return googleToken;
     }
     
-    console.log('Token validation failed, refreshing token');
     return await getNewAccessToken();
 }
 
@@ -853,7 +952,6 @@ async function getGoogleUser(token) {
         },
         'contentType': 'json'
     };
-    console.log('getting google user info from server')
     const response = await handleRequest(
         `https://www.googleapis.com/drive/v3/about?alt=json&fields=user&prettyPrint=false&key=${googleApiKey}`,
         init)
@@ -876,7 +974,6 @@ async function getOrCreateSyncFile(token) {
     if (syncFileId) {
         return;
     }
-    console.log('searching for sync file on server')
     const url = "https://www.googleapis.com/drive/v3/files/?corpora=user&spaces=appDataFolder&fields=files(id)&q=name='appSettings.json'&pageSize=1&orderBy=modifiedByMeTime desc";
     const response = await handleRequest(url, {
         mode: 'cors',
@@ -889,10 +986,8 @@ async function getOrCreateSyncFile(token) {
     });
     if (response) {
         if (response.files.length === 0) {
-            console.log('no sync file found, creating new one')
             await _createNewSyncFile(token);
         } else {
-            console.log('Found sync file in Google Drive')
             await browser.storage.sync.set({ syncFileId: response.files[0].id });
         }
         return true;
@@ -925,7 +1020,6 @@ async function _createNewSyncFile(token) {
         },
         body: form
     };
-    console.log('creating new sync file with data from storage')
     const response = await handleRequest('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', init);
     if (response) {
         await browser.storage.sync.set({ syncFileId: response.id });
@@ -944,7 +1038,6 @@ async function _getServerFileTimestamp(token, fileId) {
         },
         'contentType': 'json'
     };
-    console.log('getting sync file timestamp from server');
     const response = await handleRequest(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, init)
     if (response.timestamp === undefined) {
         const response = await handleRequest(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=json&fields=modifiedByMeTime`, init);
@@ -1003,8 +1096,11 @@ async function updateRemote(token, collections = null) {
         const response = await handleRequest(url, init);
         
         if (response !== false) {
-            // Only update local timestamp after successful remote update
-            await browser.storage.local.set({ localTimestamp: dataToSync.timestamp });
+            // Only update local timestamp and lastSyncTimestamp after successful remote update
+            await browser.storage.local.set({ 
+                localTimestamp: dataToSync.timestamp,
+                lastSyncTimestamp: dataToSync.timestamp // Store for incremental sync tracking
+            });
             logSyncOperation('success', 'Cloud sync completed');
             return response;
         } else {
@@ -1272,7 +1368,6 @@ async function updateCollection(collection, windowId) {
             window = await browser.windows.get(windowId, { populate: true, windowTypes: ['normal'] });
             delete window.tabs;
         } catch (windowError) {
-            console.log('Window no longer exists during updateCollection:', windowId);
             // Return null to indicate the update failed due to missing window
             return null;
         }
@@ -1422,13 +1517,11 @@ const cleanupLargeBackups = async () => {
         const autoBackupSize = JSON.stringify(autoBackups).length;
         const totalBackupSize = preSyncSize + autoBackupSize;
         
-        console.log(`🧹 Backup storage check: PreSync=${(preSyncSize/1024).toFixed(1)}KB, Auto=${(autoBackupSize/1024).toFixed(1)}KB, Total=${(totalBackupSize/1024).toFixed(1)}KB`);
         
         let cleaned = false;
         
         // Clean up oversized preSyncBackups (convert old full backups to metadata)
         if (preSyncSize > 500 * 1024) { // > 500KB
-            console.log('🧹 Converting large pre-sync backups to metadata-only...');
             const cleanedPreSync = preSyncBackups.map(backup => {
                 if (backup.tabsArray && backup.tabsArray[0] && backup.tabsArray[0].tabs) {
                     // This is an old full backup, convert to metadata
@@ -1460,7 +1553,6 @@ const cleanupLargeBackups = async () => {
         
         // Clean up oversized autoBackups
         if (autoBackupSize > 1.5 * 1024 * 1024) { // > 1.5MB
-            console.log('🧹 Reducing auto-backup count...');
             const cleanedAutoBackups = autoBackups.slice(0, 2); // Keep only 2 most recent
             await browser.storage.local.set({ autoBackups: cleanedAutoBackups });
             cleaned = true;
@@ -1470,7 +1562,6 @@ const cleanupLargeBackups = async () => {
             // Recalculate after cleanup
             const { preSyncBackups: newPreSync = [], autoBackups: newAuto = [] } = await browser.storage.local.get(['preSyncBackups', 'autoBackups']);
             const newTotal = JSON.stringify(newPreSync).length + JSON.stringify(newAuto).length;
-            console.log(`✅ Backup cleanup completed. New total: ${(newTotal/1024).toFixed(1)}KB (saved ${((totalBackupSize - newTotal)/1024).toFixed(1)}KB)`);
         }
         
         return totalBackupSize;
@@ -1484,21 +1575,15 @@ const cleanupLargeBackups = async () => {
 if (typeof globalThis !== 'undefined') {
     globalThis.enableStorageDebug = () => {
         globalThis.DEBUG_STORAGE = true;
-        console.log('🔍 Storage debug logging enabled');
     };
     globalThis.disableStorageDebug = () => {
         globalThis.DEBUG_STORAGE = false;
-        console.log('🔇 Storage debug logging disabled');
     };
     globalThis.cleanupBackups = cleanupLargeBackups;
     globalThis.checkBackupSizes = async () => {
         const { preSyncBackups = [], autoBackups = [] } = await browser.storage.local.get(['preSyncBackups', 'autoBackups']);
         const preSyncSize = JSON.stringify(preSyncBackups).length;
         const autoBackupSize = JSON.stringify(autoBackups).length;
-        console.log(`📊 Backup Sizes:`);
-        console.log(`  PreSync: ${preSyncBackups.length} backups, ${(preSyncSize/1024).toFixed(1)}KB`);
-        console.log(`  Auto: ${autoBackups.length} backups, ${(autoBackupSize/1024).toFixed(1)}KB`);
-        console.log(`  Total: ${((preSyncSize + autoBackupSize)/1024).toFixed(1)}KB`);
         return { preSyncSize, autoBackupSize, totalSize: preSyncSize + autoBackupSize };
     };
 }
@@ -1509,7 +1594,7 @@ const LEGACY_SYNC_VERSION = '3.5';
 
 /**
  * Enhanced sync data format with version detection
- * v4.0 format: { timestamp, tabsArray, syncVersion: '4.0', storageVersion: 2 }
+ * v4.0 format: { timestamp, tabsArray, syncVersion: '4.0', storageVersion: 3 }
  * v3.5 format: { timestamp, tabsArray } (no syncVersion field)
  */
 
@@ -1550,10 +1635,8 @@ const migrateIncomingSyncData = async (data) => {
             return false;
         }
         
-        console.log(`🔄 Processing sync data from version ${detection.version}`);
         
         if (detection.version === LEGACY_SYNC_VERSION) {
-            console.log('📦 Migrating v3.5 sync data to v4.0 indexed storage...');
             
             // Validate tabsArray exists and is an array
             if (!data.tabsArray || !Array.isArray(data.tabsArray)) {
@@ -1562,31 +1645,33 @@ const migrateIncomingSyncData = async (data) => {
             }
             
             // Ensure all collections have required fields for v4.0
-            const normalizedCollections = data.tabsArray.map(collection => ({
-                ...collection,
-                uid: collection.uid || ((crypto && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)),
-                name: collection.name || 'Untitled Collection',
-                tabs: collection.tabs || [],
-                createdOn: collection.createdOn || Date.now(),
-                lastUpdated: collection.lastUpdated !== null && collection.lastUpdated !== undefined ? collection.lastUpdated : Date.now(),
-                lastOpened: collection.lastOpened || null, // Default to null for synced collections
-                color: collection.color || 'default',
-                type: 'collection'
-            }));
+            // BACKWARDS COMPATIBILITY: Fallback to createdOn if lastUpdated is missing
+            const normalizedCollections = data.tabsArray.map(collection => {
+                const fallbackTimestamp = collection.createdOn || Date.now();
+                return {
+                    ...collection,
+                    uid: collection.uid || ((crypto && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)),
+                    name: collection.name || 'Untitled Collection',
+                    tabs: collection.tabs || [],
+                    createdOn: collection.createdOn || Date.now(),
+                    // BACKWARDS COMPATIBILITY: Use createdOn as fallback if lastUpdated is missing
+                    lastUpdated: collection.lastUpdated !== null && collection.lastUpdated !== undefined ? collection.lastUpdated : fallbackTimestamp,
+                    lastOpened: collection.lastOpened || null, // Default to null for synced collections
+                    color: collection.color || 'default',
+                    type: 'collection'
+                };
+            });
             
             // v3.5 didn't have folders, so no need to sync them (they'll be preserved locally)
             const success = await updateAllCollectionsBG(normalizedCollections);
             
             if (success) {
-                console.log(`✅ Successfully migrated ${normalizedCollections.length} collections from v3.5 to v4.0 storage`);
-                console.log('ℹ️ v3.5 sync data has no folders - local folders preserved');
                 return normalizedCollections;
             } else {
                 console.error('❌ Failed to migrate v3.5 collections to v4.0 storage');
                 return false;
             }
         } else if (detection.version === SYNC_VERSION) {
-            console.log('✅ v4.0 sync data detected - updating indexed storage');
             
             // Validate tabsArray exists and is an array
             if (!data.tabsArray || !Array.isArray(data.tabsArray)) {
@@ -1594,29 +1679,41 @@ const migrateIncomingSyncData = async (data) => {
                 return [];
             }
             
+            // BACKWARDS COMPATIBILITY: Ensure all collections have lastUpdated timestamps
+            const normalizedCollections = data.tabsArray.map(collection => {
+                const fallbackTimestamp = collection.createdOn || Date.now();
+                return {
+                    ...collection,
+                    // Ensure lastUpdated exists, fallback to createdOn
+                    lastUpdated: collection.lastUpdated !== null && collection.lastUpdated !== undefined ? collection.lastUpdated : fallbackTimestamp,
+                    lastOpened: collection.lastOpened !== null && collection.lastOpened !== undefined ? collection.lastOpened : null
+                };
+            });
+            
             // Update collections
-            console.log(`📦 Updating ${data.tabsArray.length} collections to storage...`);
-            const collectionsSuccess = await updateAllCollectionsBG(data.tabsArray);
-            console.log(`📦 Collections update result: ${collectionsSuccess}`);
+            const collectionsSuccess = await updateAllCollectionsBG(normalizedCollections);
             
             // Update folders if they exist in the sync data
             let foldersSuccess = true;
             if (data.foldersArray && Array.isArray(data.foldersArray) && data.foldersArray.length > 0) {
-                console.log(`📁 Background: Syncing ${data.foldersArray.length} folders from Google Drive...`);
-                console.log('📁 Folder data:', data.foldersArray);
-                foldersSuccess = await updateAllFoldersBG(data.foldersArray);
-                console.log(`📁 Folders update result: ${foldersSuccess}`);
+                
+                // BACKWARDS COMPATIBILITY: Ensure all folders have lastUpdated timestamps
+                const normalizedFolders = data.foldersArray.map(folder => {
+                    const fallbackTimestamp = folder.createdOn || Date.now();
+                    return {
+                        ...folder,
+                        // Ensure lastUpdated exists, fallback to createdOn
+                        lastUpdated: folder.lastUpdated !== null && folder.lastUpdated !== undefined ? folder.lastUpdated : fallbackTimestamp
+                    };
+                });
+                
+                foldersSuccess = await updateAllFoldersBG(normalizedFolders);
             } else {
-                console.log('ℹ️ No folders in sync data - local folders preserved');
-                console.log('📁 Debug - data.foldersArray:', data.foldersArray);
             }
             
             if (collectionsSuccess && foldersSuccess) {
-                console.log(`✅ Updated ${data.tabsArray.length} collections and ${data.foldersArray?.length || 0} folders in indexed storage`);
-                console.log('💾 Waiting for storage writes to commit...');
                 // Ensure storage writes are fully committed
                 await new Promise(resolve => setTimeout(resolve, 150));
-                console.log('💾 Storage should be committed now, returning collections array');
                 return data.tabsArray;
             } else {
                 console.error('❌ Failed to update data in indexed storage');
@@ -1637,26 +1734,123 @@ const migrateIncomingSyncData = async (data) => {
     }
 };
 
-// Enhanced data preparation for upload with version info
-const prepareSyncDataForUpload = async (collections) => {
+// Load collections by UIDs (for incremental sync)
+const loadCollectionsByUids = async (uids) => {
     try {
-        const tabsArray = collections || await loadAllCollectionsBG(true);
-        const foldersArray = await loadAllFoldersBG();
+        if (!uids || uids.length === 0) {
+            return [];
+        }
+        
+        const keys = uids.map(uid => `${STORAGE_KEYS.COLLECTION_PREFIX}${uid}`);
+        const results = await browser.storage.local.get(keys);
+        
+        const collections = [];
+        uids.forEach(uid => {
+            const key = `${STORAGE_KEYS.COLLECTION_PREFIX}${uid}`;
+            if (results[key]) {
+                collections.push(results[key]);
+            }
+        });
+        
+        return collections;
+    } catch (error) {
+        console.error('Background: Failed to load collections by UIDs:', error);
+        return [];
+    }
+};
+
+// Enhanced data preparation for upload with version info
+// BACKWARDS COMPATIBILITY: Incremental sync disabled by default for v3.6 compatibility
+// v3.6 cannot understand incremental sync - it treats partial data as the full dataset
+// This would cause v3.6 to delete all collections not included in the incremental sync
+const prepareSyncDataForUpload = async (collections, useIncrementalSync = false) => {
+    try {
+        let tabsArray;
+        let foldersArray;
+        
+        if (collections) {
+            // Collections explicitly provided
+            tabsArray = collections;
+            foldersArray = await loadAllFoldersBG();
+        } else if (useIncrementalSync) {
+            // OPTIMIZATION: Incremental sync - only load changed collections
+            const { lastSyncTimestamp = 0 } = await browser.storage.local.get('lastSyncTimestamp');
+            
+            if (lastSyncTimestamp > 0) {
+                // Load only collections changed since last sync
+                const collectionsIndex = await loadCollectionsIndexBG();
+                const changedCollectionUids = Object.keys(collectionsIndex).filter(uid => {
+                    const meta = collectionsIndex[uid];
+                    const updated = meta.lastUpdated || meta.createdOn || 0;
+                    return updated > lastSyncTimestamp;
+                });
+                
+                if (changedCollectionUids.length > 0) {
+                    tabsArray = await loadCollectionsByUids(changedCollectionUids);
+                } else {
+                    // Still need to send current timestamp to indicate sync happened
+                    tabsArray = [];
+                }
+                
+                // Check folders too
+                const foldersIndex = await loadFoldersIndexBG();
+                const changedFolderUids = Object.keys(foldersIndex).filter(uid => {
+                    const meta = foldersIndex[uid];
+                    const updated = meta.lastUpdated || meta.createdOn || 0;
+                    return updated > lastSyncTimestamp;
+                });
+                
+                if (changedFolderUids.length > 0) {
+                    // Load changed folders (would need a loadFoldersByUids function)
+                    foldersArray = await loadAllFoldersBG(); // For now, load all folders
+                } else {
+                    foldersArray = [];
+                }
+                
+                // Mark this as incremental sync data
+                const syncData = {
+                    timestamp: Date.now(),
+                    tabsArray: tabsArray,
+                    foldersArray: foldersArray,
+                    syncVersion: SYNC_VERSION,
+                    storageVersion: 3,
+                    extensionVersion: (typeof chrome !== 'undefined' && chrome.runtime) ? 
+                        chrome.runtime.getManifest().version : '4.0',
+                    isIncrementalSync: true,
+                    lastSyncTimestamp: lastSyncTimestamp,
+                    changedCollectionCount: tabsArray.length,
+                    changedFolderCount: foldersArray.length
+                };
+                
+                if (globalThis.DEBUG_STORAGE) {
+                }
+                
+                return syncData;
+            } else {
+                // First sync, do full sync
+                tabsArray = await loadAllCollectionsBG(true);
+                foldersArray = await loadAllFoldersBG();
+            }
+        } else {
+            // Full sync (default for v3.6 backwards compatibility)
+            tabsArray = await loadAllCollectionsBG(true);
+            foldersArray = await loadAllFoldersBG();
+        }
         
         // v4.0 enhanced sync format with version detection and folders support
         const syncData = {
             timestamp: Date.now(),
             tabsArray: tabsArray,
-            foldersArray: foldersArray,  // NEW: Include folders in sync
+            foldersArray: foldersArray,
             syncVersion: SYNC_VERSION,
-            storageVersion: 2,
+            storageVersion: 3,
             extensionVersion: (typeof chrome !== 'undefined' && chrome.runtime) ? 
-                chrome.runtime.getManifest().version : '4.0'
+                chrome.runtime.getManifest().version : '4.0',
+            isIncrementalSync: false
         };
         
         // Only log for debug mode
         if (globalThis.DEBUG_STORAGE) {
-            console.log(`📤 Preparing sync data for upload: v${syncData.syncVersion} with ${tabsArray.length} collections and ${foldersArray.length} folders`);
         }
         return syncData;
         
@@ -1666,7 +1860,10 @@ const prepareSyncDataForUpload = async (collections) => {
         return {
             timestamp: Date.now(),
             tabsArray: collections || [],
-            foldersArray: []  // Include empty folders array for compatibility
+            foldersArray: [],
+            syncVersion: SYNC_VERSION,
+            storageVersion: 3,
+            isIncrementalSync: false
         };
     }
 };

@@ -24,7 +24,11 @@
   --gradient-orange: #FF8C42;
   --tile-color: #f0f0f0;
   --primary-hover-bg: rgba(22, 152, 226, 0.15);
-  --bg-gradient: linear-gradient(to bottom, #b9d8ff, #d3e9ff, #ffffff, #fafcfe, #fafcfe, #fafcfe, #fafcfe, #fafcfe, #ffffff);
+  --bg-gradient:
+    radial-gradient(circle at 12% 18%, rgba(116, 210, 255, 0.35) 0%, rgba(116, 210, 255, 0) 45%),
+    radial-gradient(circle at 85% 8%, rgba(255, 198, 178, 0.35) 0%, rgba(255, 198, 178, 0) 40%),
+    radial-gradient(circle at 70% 90%, rgba(183, 236, 203, 0.35) 0%, rgba(183, 236, 203, 0) 45%),
+    linear-gradient(145deg, #fefefe 0%, #f8fbff 40%, #fff9f2 100%);
 }
 [data-theme="dark"] {
   --primary-color: #3A77D8;

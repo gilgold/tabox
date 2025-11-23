@@ -276,36 +276,112 @@ export const saveSingleCollection = async (collection, forceUpdateTimestamp = fa
         // Only update lastUpdated if explicitly requested or if it's missing
         const lastUpdated = forceUpdateTimestamp ? now : (collection.lastUpdated !== null && collection.lastUpdated !== undefined ? collection.lastUpdated : now);
         
+        // Load index to determine existing metadata
+        const index = await loadCollectionsIndex();
+        const isExistingCollection = !!index[collection.uid];
+        const targetParentId = collection.parentId || null;
+        
+        // Check if tabs or chromeGroups are missing (partial update)
+        // This prevents overwriting full collections with metadata-only objects
+        let existingCollection = null;
+        if (collection.tabs === undefined || collection.chromeGroups === undefined) {
+            existingCollection = await loadSingleCollection(collection.uid);
+        }
+        
+        const tabsToSave = collection.tabs !== undefined ? collection.tabs : (existingCollection?.tabs || []);
+        const groupsToSave = collection.chromeGroups !== undefined ? collection.chromeGroups : (existingCollection?.chromeGroups || []);
+        
+        let resolvedOrder;
+        
+        if (!isExistingCollection) {
+            // For brand new collections, insert them at the top (order 0) and shift siblings down.
+            const siblingEntries = [];
+            for (const uid in index) {
+                if (uid === collection.uid) continue;
+                if ((index[uid].parentId || null) === targetParentId) {
+                    const normalizedOrder = index[uid].order !== undefined ? index[uid].order : Number.MAX_SAFE_INTEGER;
+                    siblingEntries.push({
+                        uid,
+                        normalizedOrder
+                    });
+                }
+            }
+            
+            // Sort siblings by their existing order (undefined orders go last)
+            siblingEntries.sort((a, b) => a.normalizedOrder - b.normalizedOrder);
+            
+            if (siblingEntries.length > 0) {
+                const siblingKeys = siblingEntries.map(entry => `${STORAGE_KEYS.COLLECTION_PREFIX}${entry.uid}`);
+                const siblingData = await browser.storage.local.get(siblingKeys);
+                const updatedRecords = {};
+                
+                siblingEntries.forEach((entry, indexPosition) => {
+                    const newOrderValue = indexPosition + 1; // Start from 1 so new collection can take 0
+                    index[entry.uid].order = newOrderValue;
+                    const recordKey = `${STORAGE_KEYS.COLLECTION_PREFIX}${entry.uid}`;
+                    const record = siblingData[recordKey];
+                    if (record) {
+                        updatedRecords[recordKey] = {
+                            ...record,
+                            order: newOrderValue
+                        };
+                    }
+                });
+                
+                if (Object.keys(updatedRecords).length > 0) {
+                    await browser.storage.local.set(updatedRecords);
+                }
+            }
+            
+            resolvedOrder = 0;
+        } else if (collection.order !== undefined) {
+            resolvedOrder = collection.order;
+        } else {
+            resolvedOrder = index[collection.uid]?.order;
+        }
+        
+        if (resolvedOrder === undefined || resolvedOrder === null) {
+            resolvedOrder = 999999;
+        }
+        
+        const collectionToSave = {
+            ...collection,
+            tabs: tabsToSave,
+            chromeGroups: groupsToSave,
+            order: resolvedOrder
+        };
+        
         // Save collection data
         await browser.storage.local.set({
             [collectionKey]: {
-                uid: collection.uid,
-                name: collection.name,
-                tabs: collection.tabs || [],
-                color: collection.color,
-                createdOn: collection.createdOn || now,
+                uid: collectionToSave.uid,
+                name: collectionToSave.name,
+                tabs: collectionToSave.tabs,
+                color: collectionToSave.color,
+                createdOn: collectionToSave.createdOn || now,
                 lastUpdated: lastUpdated,
-                lastOpened: collection.lastOpened !== null && collection.lastOpened !== undefined ? collection.lastOpened : null,
-                chromeGroups: collection.chromeGroups || [],
+                lastOpened: collectionToSave.lastOpened !== null && collectionToSave.lastOpened !== undefined ? collectionToSave.lastOpened : null,
+                chromeGroups: collectionToSave.chromeGroups,
                 // Store any other collection properties
-                ...collection
+                ...collectionToSave,
+                order: resolvedOrder
             }
         });
         
-        // Update index
-        const index = await loadCollectionsIndex();
-        const collectionSize = JSON.stringify(collection).length;
+        // Update index for the new/updated collection
+        const collectionSize = JSON.stringify(collectionToSave).length;
         
         index[collection.uid] = {
-            name: collection.name,
+            name: collectionToSave.name,
             type: 'collection',
-            tabCount: collection.tabs ? collection.tabs.length : 0,
+            tabCount: collectionToSave.tabs ? collectionToSave.tabs.length : 0,
             lastUpdated: lastUpdated,
-            lastOpened: collection.lastOpened || null,
-            createdOn: collection.createdOn || now,
-            color: collection.color || 'default',
+            lastOpened: collectionToSave.lastOpened || null,
+            createdOn: collectionToSave.createdOn || now,
+            color: collectionToSave.color || 'default',
             size: collectionSize,
-            parentId: collection.parentId || null
+            parentId: collectionToSave.parentId || null,
+            order: resolvedOrder
         };
         
         await browser.storage.local.set({
@@ -347,6 +423,57 @@ export const deleteSingleCollection = async (uid) => {
 };
 
 /**
+ * Check if migration needs repair by validating that collections have their tabs data
+ */
+const checkIfMigrationNeedsRepair = async (existingIndex, tabsArray) => {
+    try {
+        // If no legacy data exists, we can't repair - assume migration is fine
+        if (!tabsArray || tabsArray.length === 0) {
+            return false;
+        }
+        
+        // Check if legacy storage has more collections with tabs than the index reports
+        const legacyCollectionsWithTabs = tabsArray.filter(c => c.tabs && c.tabs.length > 0);
+        const indexCollectionsWithTabs = Object.values(existingIndex).filter(meta => meta.tabCount > 0);
+        
+        // If legacy has significantly more collections with tabs, we need to repair
+        if (legacyCollectionsWithTabs.length > indexCollectionsWithTabs.length) {
+            return true;
+        }
+        
+        // Spot-check a few collections to ensure tabs are actually in storage
+        const uidsToCheck = Object.keys(existingIndex).slice(0, 3);
+        for (const uid of uidsToCheck) {
+            const collectionKey = `${STORAGE_KEYS.COLLECTION_PREFIX}${uid}`;
+            const result = await browser.storage.local.get(collectionKey);
+            const collection = result[collectionKey];
+            
+            // If collection exists in index but not in storage, or has no tabs array, we need repair
+            if (!collection || !collection.tabs) {
+                return true;
+            }
+            
+            // If index says it should have tabs but storage has empty array, check legacy
+            const indexMeta = existingIndex[uid];
+            if (indexMeta.tabCount > 0 && collection.tabs.length === 0) {
+                const legacyCollection = tabsArray.find(c => c.uid === uid);
+                if (legacyCollection && legacyCollection.tabs && legacyCollection.tabs.length > 0) {
+                    return true;
+                }
+            }
+        }
+        
+        // Migration appears valid
+        return false;
+        
+    } catch (error) {
+        console.error('Error checking migration repair needs:', error);
+        // If we can't check, assume repair is needed to be safe
+        return true;
+    }
+};
+
+/**
  * Migrate legacy tabsArray to new indexed structure
  */
 export const migrateLegacyStorage = async () => {
@@ -362,9 +489,18 @@ export const migrateLegacyStorage = async () => {
         const existingIndex = storageData[STORAGE_KEYS.COLLECTIONS_INDEX];
         const tabsArray = storageData[STORAGE_KEYS.LEGACY_TABS_ARRAY];
         
-        // If version is current AND index exists, we're done
+        // CRITICAL FIX: Validate that existing index has valid data with tabs
         if (version >= CURRENT_STORAGE_VERSION && existingIndex && Object.keys(existingIndex).length > 0) {
-            return { success: true, migrated: false };
+            // Check if we need to repair broken migration (missing tabs)
+            const needsRepair = await checkIfMigrationNeedsRepair(existingIndex, tabsArray);
+            
+            if (needsRepair) {
+                console.warn('⚠️ Detected incomplete migration - repairing data...');
+                // Continue with re-migration below
+            } else {
+                // Migration is valid, we're done
+                return { success: true, migrated: false };
+            }
         }
         
         // If version is current but no index exists, and no legacy data, initialize empty
@@ -393,6 +529,13 @@ export const migrateLegacyStorage = async () => {
                 [STORAGE_KEYS.STORAGE_VERSION]: CURRENT_STORAGE_VERSION
             });
             return { success: true, migrated: false };
+        }
+        
+        // Check if this is a repair operation
+        const isRepair = existingIndex && Object.keys(existingIndex).length > 0;
+        
+        if (isRepair) {
+        } else {
         }
         
         const index = {};
@@ -457,10 +600,18 @@ export const migrateLegacyStorage = async () => {
         // Keep legacy data for safety (can be cleaned up later)
         // We don't remove tabsArray immediately in case rollback is needed
         
+        const totalTabs = Object.values(index).reduce((sum, meta) => sum + meta.tabCount, 0);
+        
+        if (isRepair) {
+        } else {
+        }
+        
         return { 
             success: true, 
-            migrated: true, 
-            count: Object.keys(index).length 
+            migrated: true,
+            repaired: isRepair,
+            count: Object.keys(index).length,
+            totalTabs
         };
         
     } catch (error) {
@@ -499,14 +650,58 @@ export const loadAllCollections = async (options = {}) => {
         }
         
         // Sort collections by metadata
+        // Always prioritize order field if available (for manual ordering), otherwise use sortBy
         const sortedUids = Object.keys(index).sort((a, b) => {
+            const aParentId = index[a].parentId || null;
+            const bParentId = index[b].parentId || null;
+            
+            // First, group by parentId (collections in same folder or both root)
+            if (aParentId !== bParentId) {
+                // Different groups - maintain stable grouping (collections in folders come first in UI, but we'll let UI handle grouping)
+                // For now, just ensure stable sort by comparing parentId
+                if (aParentId === null && bParentId !== null) return 1; // Root collections after folder collections
+                if (aParentId !== null && bParentId === null) return -1; // Folder collections before root collections
+                // Both in different folders - sort by parentId for stability
+                return aParentId.localeCompare(bParentId);
+            }
+            
+            // Same group (both root or both in same folder) - sort by order if BOTH have it, otherwise use sortBy
+            const aHasOrder = index[a].order !== undefined && index[a].order !== null;
+            const bHasOrder = index[b].order !== undefined && index[b].order !== null;
+            
+            // Only use order-based sorting if BOTH collections have order fields
+            // If any collection doesn't have order, use user-defined sorting (sortBy/sortOrder)
+            // This ensures that when user sorts (which clears order fields), the sort preference is respected
+            if (aHasOrder && bHasOrder) {
+                // Both have order - use order for sorting within the group (ascending: lower order = first)
+                const orderDiff = index[a].order - index[b].order;
+                return orderDiff;
+            }
+            
+            // If either collection doesn't have order, ignore order fields and use sortBy/sortOrder
+            // This allows user-defined sorting to work even if some collections still have order from drag-and-drop
             const aVal = index[a][sortBy];
             const bVal = index[b][sortBy];
             
-            if (sortOrder === 'desc') {
-                return bVal - aVal;
+            // Handle both numeric and string comparisons
+            if (sortBy === 'name' || sortBy === 'color') {
+                // String comparison
+                const aStr = (aVal || '').toString().toLowerCase();
+                const bStr = (bVal || '').toString().toLowerCase();
+                if (sortOrder === 'desc') {
+                    return bStr.localeCompare(aStr);
+                } else {
+                    return aStr.localeCompare(bStr);
+                }
             } else {
-                return aVal - bVal;
+                // Numeric comparison (for lastUpdated, createdOn, etc.)
+                const aNum = aVal || 0;
+                const bNum = bVal || 0;
+                if (sortOrder === 'desc') {
+                    return bNum - aNum;
+                } else {
+                    return aNum - bNum;
+                }
             }
         });
         
@@ -525,13 +720,24 @@ export const loadAllCollections = async (options = {}) => {
         const collections = await loadMultipleCollections(uidsToLoad);
         
         // Combine with metadata and return in sorted order
+        // Ensure order field matches index: if index has order, use it; if index doesn't have order, remove it from collection
         return uidsToLoad.map(uid => {
             const collection = collections[uid];
             if (!collection) {
                 console.warn(`Collection ${uid} found in index but not in storage`);
                 return null;
             }
-            return collection;
+            // If index has order, use it; if index doesn't have order, explicitly remove it from collection
+            if (index[uid]?.order !== undefined) {
+                return {
+                    ...collection,
+                    order: index[uid].order
+                };
+            } else {
+                // Index doesn't have order - remove it from collection data to ensure user sorting takes precedence
+                const { order, ...collectionWithoutOrder } = collection;
+                return collectionWithoutOrder;
+            }
         }).filter(Boolean);
         
     } catch (error) {
@@ -564,9 +770,6 @@ export const getNewStorageStats = async () => {
         
         // Only debug log if values are unexpected
         if (stats.collections === 0 && globalThis.DEBUG_STORAGE) {
-            console.log('🔍 Debug - Index:', index);
-            console.log('🔍 Debug - Legacy data found:', Boolean(legacyData));
-            console.log('🔍 Debug - Version result:', versionResult);
         }
         
         return stats;
@@ -608,22 +811,49 @@ export const batchUpdateCollections = async (collections) => {
         const index = await loadCollectionsIndex();
         const now = Date.now();
         
+        // Identify collections with missing data (partial/metadata-only updates)
+        // This prevents overwriting full collections with partial data during batch operations
+        const incompleteCollections = collections.filter(c => c.tabs === undefined || c.chromeGroups === undefined);
+        let existingData = {};
+        
+        if (incompleteCollections.length > 0) {
+            const uids = incompleteCollections.map(c => c.uid).filter(Boolean);
+            if (uids.length > 0) {
+                existingData = await loadMultipleCollections(uids);
+            }
+        }
+        
         // Prepare all updates
         collections.forEach(collection => {
             if (!collection.uid) return;
             
             const collectionKey = `${STORAGE_KEYS.COLLECTION_PREFIX}${collection.uid}`;
-            const collectionSize = JSON.stringify(collection).length;
+            
+            // Prepare collection data for storage - remove order field if it's null
+            const collectionForStorage = { ...collection };
+            if (collectionForStorage.order === null) {
+                delete collectionForStorage.order;
+            }
+            
+            // Preserve tabs and chromeGroups if missing in update
+            const existing = existingData[collection.uid];
+            const tabsToSave = collection.tabs !== undefined ? collection.tabs : (existing?.tabs || []);
+            const groupsToSave = collection.chromeGroups !== undefined ? collection.chromeGroups : (existing?.chromeGroups || []);
+            
+            collectionForStorage.tabs = tabsToSave;
+            collectionForStorage.chromeGroups = groupsToSave;
+            
+            const collectionSize = JSON.stringify(collectionForStorage).length;
             
             // Add to batch update - preserve existing lastUpdated and lastOpened timestamps
             updates[collectionKey] = {
-                ...collection,
-                lastUpdated: collection.lastUpdated !== null && collection.lastUpdated !== undefined ? collection.lastUpdated : now,
-                lastOpened: collection.lastOpened !== null && collection.lastOpened !== undefined ? collection.lastOpened : null
+                ...collectionForStorage,
+                lastUpdated: collectionForStorage.lastUpdated !== null && collectionForStorage.lastUpdated !== undefined ? collectionForStorage.lastUpdated : now,
+                lastOpened: collectionForStorage.lastOpened !== null && collectionForStorage.lastOpened !== undefined ? collectionForStorage.lastOpened : null
             };
             
             // Update index - preserve existing lastUpdated and lastOpened timestamps
-            index[collection.uid] = {
+            const indexEntry = {
                 name: collection.name,
                 type: 'collection',
                 tabCount: collection.tabs ? collection.tabs.length : 0,
@@ -634,6 +864,34 @@ export const batchUpdateCollections = async (collections) => {
                 size: collectionSize,
                 parentId: collection.parentId || null
             };
+            
+            // Handle order field:
+            // - If collection has order explicitly set (including 0), use it
+            // - If collection has order set to null, it means "clear the order" - explicitly delete it from index
+            // - If collection has order undefined, check if it exists in current index and preserve it
+            if (collection.order !== undefined && collection.order !== null) {
+                // Explicit order value provided
+                indexEntry.order = collection.order;
+            } else if (collection.order === null) {
+                // Explicitly clearing order - ensure it's removed from index
+                // Don't add order to indexEntry, and explicitly delete it from existing index entry if present
+            } else {
+                // order is undefined - preserve existing order if any
+                const existingOrder = index[collection.uid]?.order;
+                if (existingOrder !== undefined && existingOrder !== null) {
+                    indexEntry.order = existingOrder;
+                }
+                // If no existing order, don't add one (allows user sorting to take effect)
+            }
+            
+            // Update index entry - replacing the old entry with the new one
+            // If order was null, the new entry won't have order, effectively removing it
+            index[collection.uid] = indexEntry;
+            
+            // Explicitly delete order from index if it was set to null (safety check)
+            if (collection.order === null && index[collection.uid].order !== undefined) {
+                delete index[collection.uid].order;
+            }
         });
         
         // Add index to batch update
@@ -851,7 +1109,6 @@ export const deleteSingleFolder = async (uid) => {
             [STORAGE_KEYS.FOLDERS_INDEX]: foldersIndex
         });
         
-        console.log(`Deleted folder ${uid}`);
         return true;
         
     } catch (error) {
@@ -920,6 +1177,47 @@ export const updateFoldersOrder = async (folders) => {
         
     } catch (error) {
         console.error('Failed to update folder order:', error);
+        return false;
+    }
+};
+
+/**
+ * Update collection order for a list of collections
+ * Similar to updateFoldersOrder but for collections
+ */
+export const updateCollectionsOrder = async (collections) => {
+    try {
+        const collectionsIndex = await loadCollectionsIndex();
+        
+        // Update order for each collection in the index
+        collections.forEach((collection, index) => {
+            if (collectionsIndex[collection.uid]) {
+                collectionsIndex[collection.uid].order = index;
+                collectionsIndex[collection.uid].lastUpdated = Date.now();
+            }
+        });
+        
+        // Save updated index
+        await browser.storage.local.set({
+            [STORAGE_KEYS.COLLECTIONS_INDEX]: collectionsIndex
+        });
+        
+        // Also update the individual collection records
+        const updatePromises = collections.map(async (collection, index) => {
+            const fullCollection = await loadSingleCollection(collection.uid);
+            if (fullCollection) {
+                fullCollection.order = index;
+                fullCollection.lastUpdated = Date.now();
+                await saveSingleCollection(fullCollection, false); // Don't force timestamp since we're setting it
+            }
+        });
+        
+        await Promise.all(updatePromises);
+        
+        return true;
+        
+    } catch (error) {
+        console.error('Failed to update collection order:', error);
         return false;
     }
 }; 

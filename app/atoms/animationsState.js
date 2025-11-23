@@ -11,3 +11,15 @@ export const deletingCollectionUidsState = atom({
     key: 'deletingCollectionUidsState',
     default: new Set(),
 });
+
+// Track when a tab is being dragged (for cross-collection drag and drop)
+export const draggingTabState = atom({
+    key: 'draggingTabState',
+    default: null, // { tab, sourceCollection }
+});
+
+// Track when a group is being dragged (for cross-collection drag and drop)
+export const draggingGroupState = atom({
+    key: 'draggingGroupState',
+    default: null, // { group, tabs, sourceCollection }
+});

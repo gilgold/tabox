@@ -115,6 +115,7 @@ async function setInitialOptions() {
     localTimestamp,
     chkEnableTabDiscard,
     currentSortValue,
+    currentSortAscending,
   } = await browser.storage.local.get([
     'tabsArray',
     'chkOpenNewWindow',
@@ -122,6 +123,7 @@ async function setInitialOptions() {
     'localTimestamp',
     'chkEnableTabDiscard',
     'currentSortValue',
+    'currentSortAscending',
   ]);
   if (tabsArray === undefined || tabsArray == {}) {
     await browser.storage.local.set({ tabsArray: [] });
@@ -140,6 +142,9 @@ async function setInitialOptions() {
   }
   if (currentSortValue === undefined || currentSortValue == {}) {
     await browser.storage.local.set({ currentSortValue: 'DATE' });
+  }
+  if (currentSortAscending === undefined) {
+    await browser.storage.local.set({ currentSortAscending: true });
   }
 }
 
@@ -837,7 +842,6 @@ try {
         await browser.windows.update(request.windowId, { focused: true });
         return Promise.resolve(true);
       } catch (error) {
-        console.log('Failed to focus window, it may have been closed:', request.windowId);
         // Clean up tracking for this window
         const { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack');
         if (collectionsToTrack && collectionsToTrack.length > 0) {
@@ -869,7 +873,6 @@ try {
       // 🚀 NEW: Load from indexed storage
       const tabsArray = await loadAllCollectionsBG(true);
       if (!tabsArray || tabsArray.length === 0 || index > tabsArray.length - 1) return;
-      console.log(`opening collection with keyboard shortcut: '${tabsArray[index].name}'`);
       
       let window;
       const { chkOpenNewWindow } = await browser.storage.local.get('chkOpenNewWindow');
@@ -931,11 +934,9 @@ try {
     
     // Handle migration for updates
     if (reason === "update") {
-      console.log(`🔄 Extension updated from ${previousVersion} to ${currentVersion}`);
       
       // Only set update flag if version actually changed
       if (previousVersion !== currentVersion) {
-        console.log(`📦 Version change detected: ${previousVersion} → ${currentVersion}`);
         
         // Create version backup (existing behavior)
         // 🚀 NEW: Load from indexed storage
@@ -952,7 +953,6 @@ try {
         
         // Migration will be handled by the main app on next startup
         // This ensures migrations run in the proper context with full access to utilities
-        console.log('🔄 Extension updated - migration will be handled when app opens');
         
         // Set a flag to indicate an update occurred
         await browser.storage.local.set({ 
@@ -962,10 +962,8 @@ try {
           currentVersion: currentVersion
         });
       } else {
-        console.log('📦 Extension reinstalled with same version - no migration needed');
       }
     } else if (reason === "install") {
-      console.log(`🎉 Extension installed: version ${currentVersion}`);
       // Mark as fresh install - no migration needed
       await browser.storage.local.set({ 
         extensionInstalled: true,

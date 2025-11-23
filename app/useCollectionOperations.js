@@ -160,7 +160,6 @@ export function useCollectionOperations({
                 try {
                     currentWindowId = (await browser.windows.get(browser.windows.WINDOW_ID_CURRENT)).id;
                 } catch (error) {
-                    console.log('Failed to get current window for tracking:', error.message);
                     return; // Exit early if we can't get the current window
                 }
 

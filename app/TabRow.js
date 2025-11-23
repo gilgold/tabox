@@ -13,6 +13,88 @@ const TabRow = memo(({ tab, updateCollection, collection, group = null, isDraggi
         return string.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
     };
 
+    // Helper function to format and truncate URL
+    const formatUrl = useCallback((url, searchTerm = null, maxLength = 80) => {
+        if (!url) return '';
+        
+        // If there's a search term and it matches the URL, highlight it
+        if (searchTerm) {
+            const searchRegex = new RegExp(escapeRegex(searchTerm), 'i');
+            const match = url.match(searchRegex);
+            
+            if (match) {
+                const matchIndex = match.index;
+                const matchLength = match[0].length;
+                const matchEnd = matchIndex + matchLength;
+                
+                // If URL is short enough, show full URL with highlighting
+                if (url.length <= maxLength) {
+                    const escapedSearch = escapeRegex(searchTerm);
+                    const highlightRegex = new RegExp(`(${escapedSearch})`, 'gi');
+                    const parts = url.split(highlightRegex);
+                    
+                    return parts.map((part, index) => {
+                        if (part.toLowerCase() === searchTerm.toLowerCase()) {
+                            return (
+                                <span key={`url-match-${index}-${part}`} className="search-match-text">
+                                    {part}
+                                </span>
+                            );
+                        }
+                        return part ? <span key={`url-text-${index}-${part}`}>{part}</span> : null;
+                    }).filter(Boolean);
+                }
+                
+                // URL is long - truncate around the match
+                const matchText = url.substring(matchIndex, matchEnd);
+                const availableSpace = Math.max(0, maxLength - matchLength - 2);
+                const beforeLength = Math.floor(availableSpace / 2);
+                const afterLength = availableSpace - beforeLength;
+                
+                const beforeText = matchIndex > 0 ? url.substring(Math.max(0, matchIndex - beforeLength), matchIndex) : '';
+                const afterText = matchEnd < url.length ? url.substring(matchEnd, Math.min(url.length, matchEnd + afterLength)) : '';
+                
+                const parts = [];
+                
+                if (matchIndex > beforeLength) {
+                    parts.push(<span key="url-ellipsis-before">…</span>);
+                }
+                if (beforeText) {
+                    parts.push(<span key="url-before">{beforeText}</span>);
+                }
+                parts.push(
+                    <span key="url-match" className="search-match-text">
+                        {matchText}
+                    </span>
+                );
+                if (afterText) {
+                    parts.push(<span key="url-after">{afterText}</span>);
+                }
+                if (matchEnd + afterLength < url.length) {
+                    parts.push(<span key="url-ellipsis-after">…</span>);
+                }
+                
+                return parts;
+            }
+        }
+        
+        // No search or no match - just truncate from the start
+        if (url.length <= maxLength) {
+            return url;
+        }
+        
+        // Truncate with ellipsis at the end
+        return url.substring(0, maxLength) + '…';
+    }, []);
+
+    // Format URL for display (always shown)
+    const formattedUrl = useMemo(() => {
+        if (!tab.url) return null;
+        
+        const searchTerm = search?.trim() || null;
+        return formatUrl(tab.url, searchTerm);
+    }, [tab.url, search, formatUrl]);
+
     // Helper function to highlight matching text in tab title
     const highlightMatchInTitle = useMemo(() => {
         if (!search || !search.trim() || !tab.title) {
@@ -133,9 +215,16 @@ const TabRow = memo(({ tab, updateCollection, collection, group = null, isDraggi
                     />
                 </div>
                 <div className="column single-tab-title-col">
-                    <span className="single-tab-title" title={tab.title}>
-                        {highlightMatchInTitle !== null ? highlightMatchInTitle : tab.title}
-                    </span>
+                    <div className="tab-title-wrapper">
+                        <span className="single-tab-title" title={tab.title}>
+                            {highlightMatchInTitle !== null ? highlightMatchInTitle : tab.title}
+                        </span>
+                        {formattedUrl && (
+                            <span className="tab-url-preview" title={tab.url}>
+                                {formattedUrl}
+                            </span>
+                        )}
+                    </div>
                 </div>
                 <div className="column actions-col">
                     <button 

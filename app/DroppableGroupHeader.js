@@ -1,7 +1,12 @@
 import React from 'react';
 import { useDroppable } from '@dnd-kit/core';
+import { useRecoilValue } from 'recoil';
+import { draggingGroupState } from './atoms/animationsState';
 
 function DroppableGroupHeader({ group, children }) {
+    const draggingGroup = useRecoilValue(draggingGroupState);
+    const isDraggingGroup = !!draggingGroup;
+    
     const {
         isOver,
         setNodeRef,
@@ -10,16 +15,20 @@ function DroppableGroupHeader({ group, children }) {
         data: {
             type: 'group',
             group: group
-        }
+        },
+        disabled: isDraggingGroup, // Disable drop zone when dragging a group
     });
 
+    // Only show drop zone if not dragging a group (groups cannot be nested)
+    const showDropZone = isOver && !isDraggingGroup;
+    
     const style = {
-        backgroundColor: isOver ? 'rgba(var(--primary-color-rgb, 52, 152, 219), 0.15)' : 'transparent',
-        border: isOver ? '2px dashed var(--primary-color)' : '2px dashed transparent',
+        backgroundColor: showDropZone ? 'rgba(var(--primary-color-rgb, 52, 152, 219), 0.15)' : 'transparent',
+        border: showDropZone ? '2px dashed var(--primary-color)' : '2px dashed transparent',
         borderRadius: '6px',
         transition: 'all 0.2s ease',
-        padding: isOver ? '6px' : '0px',
-        margin: isOver ? '4px 0' : '0px',
+        padding: showDropZone ? '6px' : '0px',
+        margin: showDropZone ? '4px 0' : '0px',
         position: 'relative',
     };
 
@@ -42,7 +51,7 @@ function DroppableGroupHeader({ group, children }) {
 
     return (
         <div ref={setNodeRef} style={style}>
-            {isOver && (
+            {showDropZone && (
                 <div style={labelStyle}>
                     📁 Add to {group.title}
                 </div>

@@ -73,7 +73,6 @@ export const migrateColor = (oldColor) => {
     // Check if it's a legacy hex code that needs migration
     const newColorName = LEGACY_COLOR_MAPPING[oldColor];
     if (newColorName) {
-        console.log(`🎨 Migrating color: ${oldColor} → ${newColorName} (${COLOR_PALETTE[newColorName]})`);
         return newColorName;
     }
     
@@ -81,7 +80,6 @@ export const migrateColor = (oldColor) => {
     if (oldColor.startsWith('#')) {
         const closestColor = findClosestColor(oldColor);
         if (closestColor) {
-            console.log(`🎨 Mapping unknown color: ${oldColor} → ${closestColor} (${COLOR_PALETTE[closestColor]})`);
             return closestColor;
         }
     }
@@ -126,7 +124,6 @@ export const migrateCollectionColors = (collection) => {
     }
     
     if (colorsMigrated) {
-        console.log(`🎨 Migrated colors for collection: ${collection.name}`);
     }
     
     return migratedCollection;
@@ -153,7 +150,6 @@ export const migrateAllCollectionColors = (collections) => {
     });
     
     if (totalMigrations > 0) {
-        console.log(`🎨 Color migration complete: ${totalMigrations} collections updated`);
     }
     
     return migratedCollections;
