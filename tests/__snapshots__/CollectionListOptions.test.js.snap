@@ -1,27 +1,22 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
 exports[`Collection List Options tests CollectionListOptions renders correctly 1`] = `
-Array [
+<div>
   <div
-    className="collections-toolbar"
+    class="collections-toolbar"
   >
     <div
-      className="toolbar-left"
+      class="toolbar-left"
     >
       <div
-        className="sort-controls"
+        class="sort-controls"
       >
         <svg
-          className="sort-icon"
+          class="sort-icon"
           fill="currentColor"
           height="1em"
           stroke="currentColor"
-          strokeWidth="0"
-          style={
-            Object {
-              "color": undefined,
-            }
-          }
+          stroke-width="0"
           viewBox="0 0 24 24"
           width="1em"
           xmlns="http://www.w3.org/2000/svg"
@@ -35,44 +30,36 @@ Array [
           />
         </svg>
         <div
-          className="sort-type-select css-b62m3t-container"
-          onKeyDown={[Function]}
+          class="sort-type-select css-b62m3t-container"
         >
           <span
-            className="css-1f43avz-a11yText-A11yText"
+            class="css-1f43avz-a11yText-A11yText"
             id="react-select-2-live-region"
           />
           <span
             aria-atomic="false"
             aria-live="polite"
             aria-relevant="additions text"
-            className="css-1f43avz-a11yText-A11yText"
+            class="css-1f43avz-a11yText-A11yText"
             role="log"
           />
           <div
-            className="react-select__control css-18br1kc-control"
-            onMouseDown={[Function]}
-            onTouchEnd={[Function]}
+            class="react-select__control css-18br1kc-control"
           >
             <div
-              className="react-select__value-container react-select__value-container--has-value css-4ed9hr"
+              class="react-select__value-container react-select__value-container--has-value css-4ed9hr"
             >
               <div
-                className="custom-select-single-value"
+                class="custom-select-single-value"
               >
                 <svg
-                  className="option-icon"
+                  class="option-icon"
                   fill="currentColor"
-                  height={16}
+                  height="16"
                   stroke="currentColor"
-                  strokeWidth="0"
-                  style={
-                    Object {
-                      "color": undefined,
-                    }
-                  }
+                  stroke-width="0"
                   viewBox="0 0 24 24"
-                  width={16}
+                  width="16"
                   xmlns="http://www.w3.org/2000/svg"
                 >
                   <path
@@ -87,7 +74,7 @@ Array [
                   />
                 </svg>
                 <span
-                  className="option-label"
+                  class="option-label"
                 >
                   Date
                 </span>
@@ -95,40 +82,34 @@ Array [
               <input
                 aria-activedescendant=""
                 aria-autocomplete="list"
-                aria-expanded={false}
-                aria-haspopup={true}
-                aria-readonly={true}
-                className="css-1s80ejz-dummyInput-DummyInput"
-                disabled={false}
+                aria-expanded="false"
+                aria-haspopup="true"
+                aria-readonly="true"
+                class="css-1s80ejz-dummyInput-DummyInput"
                 id="react-select-2-input"
-                inputMode="none"
-                onBlur={[Function]}
-                onChange={[Function]}
-                onFocus={[Function]}
+                inputmode="none"
                 role="combobox"
-                tabIndex={0}
+                tabindex="0"
                 value=""
               />
             </div>
             <div
-              className="react-select__indicators css-1wy0on6"
+              class="react-select__indicators css-1wy0on6"
             >
               <span
-                className="react-select__indicator-separator css-1hyfx7x"
+                class="react-select__indicator-separator css-1hyfx7x"
               />
               <div
                 aria-hidden="true"
-                className="react-select__indicator react-select__dropdown-indicator css-je05im-indicatorContainer"
-                onMouseDown={[Function]}
-                onTouchEnd={[Function]}
+                class="react-select__indicator react-select__dropdown-indicator css-je05im-indicatorContainer"
               >
                 <svg
                   aria-hidden="true"
-                  className="css-tj5bde-Svg"
+                  class="css-tj5bde-Svg"
                   focusable="false"
-                  height={20}
+                  height="20"
                   viewBox="0 0 20 20"
-                  width={20}
+                  width="20"
                 >
                   <path
                     d="M4.516 7.548c0.436-0.446 1.043-0.481 1.576 0l3.908 3.747 3.908-3.747c0.533-0.481 1.141-0.446 1.574 0 0.436 0.445 0.408 1.197 0 1.615-0.406 0.418-4.695 4.502-4.695 4.502-0.217 0.223-0.502 0.335-0.787 0.335s-0.57-0.112-0.789-0.335c0 0-4.287-4.084-4.695-4.502s-0.436-1.17 0-1.615z"
@@ -139,21 +120,16 @@ Array [
           </div>
         </div>
         <button
-          className="toolbar-button"
-          onClick={[Function]}
+          class="toolbar-button"
+          title="Ascending (A→Z, Oldest→Newest)"
         >
           <svg
             fill="currentColor"
-            height={18}
+            height="18"
             stroke="currentColor"
-            strokeWidth="0"
-            style={
-              Object {
-                "color": undefined,
-              }
-            }
+            stroke-width="0"
             viewBox="0 0 24 24"
-            width={18}
+            width="18"
             xmlns="http://www.w3.org/2000/svg"
           >
             <path
@@ -161,33 +137,28 @@ Array [
               fill="none"
             />
             <path
-              d="m4 12 1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z"
+              d="m20 12-1.41-1.41L13 16.17V4h-2v12.17l-5.58-5.59L4 12l8 8 8-8z"
             />
           </svg>
         </button>
       </div>
     </div>
     <div
-      className="toolbar-center"
+      class="toolbar-center"
     >
       <div
-        className="collection-filter"
+        class="collection-filter"
       >
         <div
-          className="filter-icon"
+          class="filter-icon"
         >
           <svg
             fill="currentColor"
-            height={16}
+            height="16"
             stroke="currentColor"
-            strokeWidth="0"
-            style={
-              Object {
-                "color": undefined,
-              }
-            }
+            stroke-width="0"
             viewBox="0 0 24 24"
-            width={16}
+            width="16"
             xmlns="http://www.w3.org/2000/svg"
           >
             <path
@@ -200,26 +171,21 @@ Array [
           </svg>
         </div>
         <div
-          className="filter-controls"
+          class="filter-controls"
         >
           <button
-            className="filter-button opened-filter "
-            data-class="small-tooltip"
-            data-tip="Show collections opened in the last 3 hours"
-            onClick={[Function]}
+            class="filter-button opened-filter "
+            data-tooltip-class-name="small-tooltip"
+            data-tooltip-content="Show collections opened in the last 3 hours"
+            data-tooltip-id="main-tooltip"
           >
             <svg
               fill="currentColor"
-              height={14}
+              height="14"
               stroke="currentColor"
-              strokeWidth="0"
-              style={
-                Object {
-                  "color": undefined,
-                }
-              }
+              stroke-width="0"
               viewBox="0 0 24 24"
-              width={14}
+              width="14"
               xmlns="http://www.w3.org/2000/svg"
             >
               <path
@@ -231,27 +197,22 @@ Array [
               />
             </svg>
             <span
-              className="filter-label"
+              class="filter-label"
             >
               Opened
             </span>
           </button>
           <div
-            className="color-filter-wrapper"
+            class="color-filter-wrapper"
           >
             <svg
-              className="color-filter-icon"
+              class="color-filter-icon"
               fill="currentColor"
-              height={16}
+              height="16"
               stroke="currentColor"
-              strokeWidth="0"
-              style={
-                Object {
-                  "color": undefined,
-                }
-              }
+              stroke-width="0"
               viewBox="0 0 24 24"
-              width={16}
+              width="16"
               xmlns="http://www.w3.org/2000/svg"
             >
               <path
@@ -263,22 +224,16 @@ Array [
               />
             </svg>
             <div
-              className="modern-color-picker-wrapper small"
-              data-tip="Filter by collection color"
-              data-tip-disable={false}
-              onClick={[Function]}
+              class="modern-color-picker-wrapper small"
+              data-tooltip-content="Filter by collection color"
+              data-tooltip-hidden="false"
+              data-tooltip-id="main-tooltip"
             >
               <div
-                className="modern-color-picker "
-                onClick={[Function]}
+                class="modern-color-picker "
               >
                 <div
-                  className="current-color-preview"
-                  style={
-                    Object {
-                      "backgroundColor": "var(--setting-row-border-color)",
-                    }
-                  }
+                  class="current-color-preview"
                 />
               </div>
             </div>
@@ -287,26 +242,21 @@ Array [
       </div>
     </div>
     <div
-      className="toolbar-right"
+      class="toolbar-right"
     >
       <button
-        className="toolbar-toggle-button "
-        data-class="small-tooltip"
-        data-tip="Open collections in current window"
-        onClick={[Function]}
+        class="toolbar-toggle-button "
+        data-tooltip-class-name="small-tooltip"
+        data-tooltip-content="Open collections in current window"
+        data-tooltip-id="main-tooltip"
       >
         <svg
           fill="currentColor"
-          height={18}
+          height="18"
           stroke="currentColor"
-          strokeWidth="0"
-          style={
-            Object {
-              "color": undefined,
-            }
-          }
+          stroke-width="0"
           viewBox="0 0 24 24"
-          width={18}
+          width="18"
           xmlns="http://www.w3.org/2000/svg"
         >
           <path
@@ -319,23 +269,18 @@ Array [
         </svg>
       </button>
       <button
-        className="toolbar-button"
-        data-class="small-tooltip"
-        data-tip="Create new folder"
-        onClick={[Function]}
+        class="toolbar-button"
+        data-tooltip-class-name="small-tooltip"
+        data-tooltip-content="Create new folder"
+        data-tooltip-id="main-tooltip"
       >
         <svg
           fill="currentColor"
-          height={18}
+          height="18"
           stroke="currentColor"
-          strokeWidth="0"
-          style={
-            Object {
-              "color": undefined,
-            }
-          }
+          stroke-width="0"
           viewBox="0 0 24 24"
-          width={18}
+          width="18"
           xmlns="http://www.w3.org/2000/svg"
         >
           <path
@@ -348,23 +293,18 @@ Array [
         </svg>
       </button>
       <button
-        className="toolbar-button"
-        data-class="small-tooltip"
-        data-tip="Switch to grid view"
-        onClick={[Function]}
+        class="toolbar-button"
+        data-tooltip-class-name="small-tooltip"
+        data-tooltip-content="Switch to grid view"
+        data-tooltip-id="main-tooltip"
       >
         <svg
           fill="currentColor"
-          height={18}
+          height="18"
           stroke="currentColor"
-          strokeWidth="0"
-          style={
-            Object {
-              "color": undefined,
-            }
-          }
+          stroke-width="0"
           viewBox="0 0 256 256"
-          width={18}
+          width="18"
           xmlns="http://www.w3.org/2000/svg"
         >
           <path
@@ -373,24 +313,19 @@ Array [
         </svg>
       </button>
       <button
-        className="toolbar-button"
-        data-class="small-tooltip"
-        data-tip="Restore previous session"
-        disabled={true}
-        onClick={[Function]}
+        class="toolbar-button"
+        data-tooltip-class-name="small-tooltip"
+        data-tooltip-content="Restore previous session"
+        data-tooltip-id="main-tooltip"
+        disabled=""
       >
         <svg
           fill="currentColor"
-          height={18}
+          height="18"
           stroke="currentColor"
-          strokeWidth="0"
-          style={
-            Object {
-              "color": undefined,
-            }
-          }
+          stroke-width="0"
           viewBox="0 0 24 24"
-          width={18}
+          width="18"
           xmlns="http://www.w3.org/2000/svg"
         >
           <path
@@ -403,25 +338,20 @@ Array [
         </svg>
       </button>
       <button
-        className="toolbar-button"
-        data-class="small-tooltip"
-        data-tip="Import collections or folders"
-        onClick={[Function]}
+        class="toolbar-button"
+        data-tooltip-class-name="small-tooltip"
+        data-tooltip-content="Import collections or folders"
+        data-tooltip-id="main-tooltip"
       >
         <svg
           fill="none"
-          height={18}
+          height="18"
           stroke="currentColor"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="2"
-          style={
-            Object {
-              "color": undefined,
-            }
-          }
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
           viewBox="0 0 24 24"
-          width={18}
+          width="18"
           xmlns="http://www.w3.org/2000/svg"
         >
           <path
@@ -433,16 +363,11 @@ Array [
         </svg>
       </button>
     </div>
-  </div>,
+  </div>
   <input
     accept=".txt"
-    onChange={[Function]}
-    style={
-      Object {
-        "display": "none",
-      }
-    }
+    style="display: none;"
     type="file"
-  />,
-]
+  />
+</div>
 `;

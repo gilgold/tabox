@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useDroppable, useDndContext } from '@dnd-kit/core';
-import { useRecoilValue } from 'recoil';
+import { useAtomValue } from 'jotai';
 import { draggingTabState, draggingGroupState } from './atoms/animationsState';
 
 function DroppableCollection({ collection, children }) {
-    const draggingTab = useRecoilValue(draggingTabState);
-    const draggingGroup = useRecoilValue(draggingGroupState);
+    const draggingTab = useAtomValue(draggingTabState);
+    const draggingGroup = useAtomValue(draggingGroupState);
     const isDraggingTab = draggingTab !== null;
     const isDraggingGroup = draggingGroup !== null;
     const isDraggingItem = isDraggingTab || isDraggingGroup;

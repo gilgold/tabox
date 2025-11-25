@@ -1,16 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useSetRecoilState } from 'recoil';
+import { useSetAtom } from 'jotai';
 import './AddNewTextbox.css';
 import { searchState } from './atoms/globalAppSettingsState';
 import { highlightedCollectionUidState } from './atoms/animationsState';
 import { getCurrentTabsAndGroups, getAllWindowsTabsAndGroups } from './utils';
 import { browser } from '../static/globals';
-import { useSnackbar } from 'react-simple-snackbar';
-import { SnackbarStyle } from './model/SnackbarTypes';
+import { showErrorToast } from './toastHelpers';
 import { IoClose } from 'react-icons/io5';
 import { HiOutlineDesktopComputer, HiCollection } from 'react-icons/hi';
-
-import ReactTooltip from 'react-tooltip';
 
 
 function SaveHighlightedOnlyLabel({ saveMode, windowCount }) {
@@ -49,10 +46,6 @@ function SaveHighlightedOnlyLabel({ saveMode, windowCount }) {
 function WindowChoiceToggle({ saveMode, setSaveMode, windowCount }) {
     const isDisabled = windowCount <= 1;
 
-    useEffect(() => {
-        ReactTooltip.rebuild();
-    }, [isDisabled]);
-
     const handleCurrentClick = () => {
         if (!isDisabled) {
             setSaveMode('current');
@@ -66,14 +59,14 @@ function WindowChoiceToggle({ saveMode, setSaveMode, windowCount }) {
     };
 
     return (
-        <div data-class="small-tooltip" data-tip={isDisabled ? "Only available when multiple Chrome windows are open" : ""} className={`window-choice-toggle ${isDisabled ? 'disabled' : ''} ${saveMode === 'current' ? 'current-active' : 'all-active'}`}>
+        <div data-tooltip-class-name="small-tooltip" data-tooltip-id="main-tooltip" data-tooltip-content={isDisabled ? "Only available when multiple Chrome windows are open" : ""} className={`window-choice-toggle ${isDisabled ? 'disabled' : ''} ${saveMode === 'current' ? 'current-active' : 'all-active'}`}>
             <button 
                 type="button"
                 className={`mode-toggle-btn ${saveMode === 'current' ? 'active' : ''} ${isDisabled ? 'disabled' : ''}`}
                 onClick={handleCurrentClick}
                 disabled={isDisabled}
-                data-tip={isDisabled ? "Only one window open" : "Save current window as collection"}
-                data-class="small-tooltip"
+                data-tooltip-id="main-tooltip" data-tooltip-content={isDisabled ? "Only one window open" : "Save current window as collection"}
+                data-tooltip-class-name="small-tooltip"
             >
                 <HiOutlineDesktopComputer />
             </button>
@@ -82,8 +75,8 @@ function WindowChoiceToggle({ saveMode, setSaveMode, windowCount }) {
                 className={`mode-toggle-btn ${saveMode === 'all' ? 'active' : ''} ${isDisabled ? 'disabled' : ''}`}
                 onClick={handleAllClick}
                 disabled={isDisabled}
-                data-tip={isDisabled ? "Only one window open" : "Save all windows as folder"}
-                data-class="small-tooltip"
+                data-tooltip-id="main-tooltip" data-tooltip-content={isDisabled ? "Only one window open" : "Save all windows as folder"}
+                data-tooltip-class-name="small-tooltip"
             >
                 <HiCollection />
             </button>
@@ -103,9 +96,8 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
     const [collectionName, setName] = useState("");
     const [disabled, setDisabled] = useState(false);
     const [inputRef, setInputFocus] = useFocus();
-    const [openSnackbar] = useSnackbar({ style: SnackbarStyle.ERROR });
-    const setSearch = useSetRecoilState(searchState);
-    const setHighlightedCollectionUid = useSetRecoilState(highlightedCollectionUidState);
+    const setSearch = useSetAtom(searchState);
+    const setHighlightedCollectionUid = useSetAtom(highlightedCollectionUidState);
     const [hideClear, setHideClear] = useState(true);
     const [saveMode, setSaveMode] = useState('current'); // 'current' or 'all'
     const [windowCount, setWindowCount] = useState(1);
@@ -201,7 +193,7 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
 
     const handleSave = async () => {
         if (collectionName.trim() === '') {
-            openSnackbar('Please enter a name for the collection', 2000);
+            showErrorToast('Please enter a name for the collection');
             return;
         }
         
@@ -254,6 +246,9 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
                 // Scroll to top and highlight first collection in the folder
                 if (addedCollections.length > 0) {
                     scrollToCollectionsAndHighlight(addedCollections[0].uid);
+                    // Show success toast
+                    const { showSuccessToast } = await import('./toastHelpers');
+                    showSuccessToast(`Folder created with ${addedCollections.length} collection${addedCollections.length > 1 ? 's' : ''}`);
                 }
                 
             } else {
@@ -268,10 +263,14 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
                 
                 // Scroll to top and highlight the new collection
                 scrollToCollectionsAndHighlight(newItem.uid);
+                
+                // Show success toast
+                const { showSuccessToast } = await import('./toastHelpers');
+                showSuccessToast(`Collection "${collectionName}" created successfully`);
             }
         } catch (error) {
             console.error('Error saving:', error);
-            openSnackbar(`Failed to save: ${error.message}`, 3000);
+            showErrorToast(`Failed to save: ${error.message}`);
         }
         
         setTimeout(() => setDisabled(false), 1000);

@@ -125,7 +125,7 @@ function ContextMenu({
             <span 
                 ref={menuButtonRef}
                 className="action-icon menu-icon"
-                data-tip={tooltip}
+                data-tooltip-id="main-tooltip" data-tooltip-content={tooltip}
                 onClick={handleMenuClick}
             >
                 <MdOutlineMoreHoriz />

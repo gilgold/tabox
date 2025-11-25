@@ -63,6 +63,18 @@ body, html, * {
   transition: background-color .2s ease-in;
 }
 * { box-sizing:border-box; }
+
+/* Respect user's motion preferences for accessibility and performance */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 body {
   padding:0;
   margin:0;
@@ -154,7 +166,7 @@ body > div[style*="position: fixed"][style*="bottom"] > div[style*="background"]
 .__react_component_tooltip,
 .react-tooltip,
 [class*="tooltip"],
-div[data-tip],
+div[data-tooltip-content],
 div[data-place] {
 	z-index: 1000000 !important;
 }
@@ -188,4 +200,76 @@ div[style*="position: fixed"][style*="z-index"] {
 /* Target any fixed positioned elements that might be the drawer */
 body > div[style*="position: fixed"] {
 	z-index: 999999 !important;
+}
+
+/* ========================================
+   PERFORMANCE MODE - Reduces visual effects to lower CPU usage
+   ======================================== */
+/* When Performance Mode is enabled, disable expensive visual effects 
+   to reduce CPU usage and improve battery life on laptops */
+
+/* Performance mode active - no visual indicator needed */
+
+/* Disable ALL infinite animations in performance mode */
+html.performance-mode *,
+html.performance-mode *::before,
+html.performance-mode *::after {
+    animation-iteration-count: 1 !important;
+}
+
+/* Specifically disable tracking pulse animations */
+html.performance-mode .active-tracking-indicator,
+html.performance-mode .active-auto-tracking .tile-footer,
+html.performance-mode .folder-tracking-indicator {
+    animation: none !important;
+    background: linear-gradient(90deg, rgba(139, 93, 255, 0.3), rgba(22, 152, 226, 0.3)) !important;
+}
+
+/* Reduce backdrop-filter blur intensity (major performance impact) */
+html.performance-mode .collection-item,
+html.performance-mode .collection-tile,
+html.performance-mode .folder-header,
+html.performance-mode .collapsible-header,
+html.performance-mode * {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+/* Disable gradient animations */
+html.performance-mode .tabox-gradient,
+html.performance-mode .tabox-gradient:hover {
+    animation: none !important;
+}
+
+/* Simplify all shadows */
+html.performance-mode *:hover {
+    box-shadow: none !important;
+}
+
+/* Disable rotation animation on sync icon */
+html.performance-mode .rotate,
+html.performance-mode #syncImg {
+    animation: none !important;
+    transform: none !important;
+}
+
+/* Disable drop indicator pulse animation */
+html.performance-mode .drop-indicator-top,
+html.performance-mode .drop-indicator-bottom,
+html.performance-mode .folder-drop-indicator {
+    animation: none !important;
+}
+
+/* Simplify all transitions - major performance impact */
+html.performance-mode *,
+html.performance-mode *::before,
+html.performance-mode *::after {
+    transition: none !important;
+}
+
+/* Keep essential animations but make them instant */
+html.performance-mode .highlight-new-collection,
+html.performance-mode .highlight-new-tile,
+html.performance-mode .deleting-animation {
+    animation-duration: 0.1s !important;
 }

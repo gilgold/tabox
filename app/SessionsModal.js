@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Activity } from 'react';
 import './Modal.css';
 import { CgBrowser } from 'react-icons/cg';
 import { SlClose } from 'react-icons/sl';
@@ -10,7 +10,7 @@ const buildCollectionTitle = (tabs, chromeGroups) => {
     return `${tabs.length} tab${tabs.length > 1 ? 's' : ''} ${totalGroups > 0 ? `(${totalGroups} group${totalGroups > 1 ? 's' : ''})` : '' }`;
 }
 
-export const SessionsModal = ({ sessions, onClose, addCollection }) => {
+export const SessionsModal = ({ isOpen, sessions, onClose, addCollection }) => {
 
     const timeAgo = new TimeAgo('en-US');
 
@@ -29,7 +29,8 @@ export const SessionsModal = ({ sessions, onClose, addCollection }) => {
     }
 
     return (
-        <div className='modal-card'>
+        <Activity mode={isOpen ? 'visible' : 'hidden'}>
+            <div className='modal-card'>
             <div className='modal-card-wrapper session-card-wrapper'>
                 <div className='modal-close-button'><SlClose size={'25px'} onClick={onClose} /></div>
                 <div className='modal-card-content'>
@@ -69,5 +70,6 @@ export const SessionsModal = ({ sessions, onClose, addCollection }) => {
                 </div>
             </div>
         </div >
+        </Activity>
     );
 }

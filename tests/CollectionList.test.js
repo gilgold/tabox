@@ -1,16 +1,15 @@
 import React from 'react';
-import renderer from 'react-test-renderer';
+import { render } from '@testing-library/react';
 import CollectionList from '../app/CollectionList';
-import { RecoilRoot } from 'recoil';
+import { Provider } from 'jotai';
 
 describe('Collection List tests', () => {
   test('Collection List renders correctly', () => {
-    const component = renderer.create(
-      <RecoilRoot>
+    const { container } = render(
+      <Provider>
         <CollectionList />
-      </RecoilRoot>,
+      </Provider>,
     );
-    let tree = component.toJSON();
-    expect(tree).toMatchSnapshot();
+    expect(container).toMatchSnapshot();
   });
 });

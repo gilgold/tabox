@@ -9,6 +9,8 @@
 
 .collection-tile {
     width: var(--tile-size);
+    min-width: var(--tile-size);
+    max-width: var(--tile-size);
     height: var(--tile-size);
     background-color: var(--tile-color);
     border: 3px solid var(--tile-color);
@@ -24,6 +26,7 @@
     /* Removed automatic animation - now controlled by separate class */
     will-change: transform, box-shadow;
     contain: layout paint;
+    justify-self: center;
 }
 
 /* Controlled entrance animation - only applied when needed */

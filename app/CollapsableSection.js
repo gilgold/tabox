@@ -56,7 +56,7 @@ function CollapsableSection({
             <div 
                 className={`section-header collapsible-header ${className}`}
                 onClick={toggleCollapsed}
-                data-tip={isCollapsed ? expandTooltip : collapseTooltip}
+                data-tooltip-id="main-tooltip" data-tooltip-content={isCollapsed ? expandTooltip : collapseTooltip}
             >
                 <div className="section-header-content">
                     {isCollapsed ? <MdExpandMore size={18} /> : <MdExpandLess size={18} />}

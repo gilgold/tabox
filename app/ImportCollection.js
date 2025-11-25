@@ -1,20 +1,18 @@
 import React from 'react'
 import { applyUid } from './utils'
 import './ImportCollection.css';
-import { useRecoilValue, useSetRecoilState } from 'recoil';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { settingsDataState } from './atoms/globalAppSettingsState';
 import { highlightedCollectionUidState } from './atoms/animationsState';
-import { useSnackbar } from 'react-simple-snackbar';
-import { SnackbarStyle } from './model/SnackbarTypes';
+import { showSuccessToast, showErrorToast } from './toastHelpers';
+
 import { FaFileImport } from 'react-icons/fa';
 
 
 function ImportCollection(props) {
 
-    const settingsData = useRecoilValue(settingsDataState);
-    const setHighlightedCollectionUid = useSetRecoilState(highlightedCollectionUidState);
-    const [openSnackbar, ] = useSnackbar({ style: SnackbarStyle.ERROR });
-    const [openSuccessSnackbar, ] = useSnackbar({ style: SnackbarStyle.SUCCESS });
+    const settingsData = useAtomValue(settingsDataState);
+    const setHighlightedCollectionUid = useSetAtom(highlightedCollectionUidState);
 
     const generateUID = () => {
         return (crypto && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
@@ -53,7 +51,7 @@ function ImportCollection(props) {
     const handleFileSelection = async (event) => {
         const file = event.target.files[0];
         if (!event.target.value.endsWith('.txt')) {
-            openSnackbar('Invalid file: Please select a .txt file', 4000);
+            showErrorToast('Invalid file: Please select a .txt file');
             event.target.value = '';
             return;
         }
@@ -65,7 +63,7 @@ function ImportCollection(props) {
             // More flexible JSON validation
             const trimmedResult = result.trim();
             if (!trimmedResult.startsWith('{') && !trimmedResult.startsWith('[')) {
-                openSnackbar('Invalid File: File does not contain valid JSON data', 4000);
+                showErrorToast('Invalid File: File does not contain valid JSON data');
                 event.target.value = '';
                 return;
             }

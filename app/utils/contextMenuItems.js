@@ -62,7 +62,9 @@ export const createFolderMenuItems = ({
     onExport,
     onDelete,
     onToggleExpand,
-    isExpanded = false
+    onStopTracking,
+    isExpanded = false,
+    hasTrackedCollections = false
 }) => [
     {
         id: 'export',
@@ -79,6 +81,14 @@ export const createFolderMenuItems = ({
         action: onToggleExpand,
         className: '',
         condition: true
+    },
+    {
+        id: 'stop-tracking-folder',
+        text: 'Stop Auto Tracking Folder',
+        icon: <FaStop size={ICON_SIZE} />,
+        action: onStopTracking,
+        className: '',
+        condition: hasTrackedCollections
     },
     {
         id: 'delete',

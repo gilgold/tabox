@@ -1,10 +1,19 @@
-import * as Snackbar from 'react-simple-snackbar';
 import ReactDOM from 'react-dom';
+import toast from 'react-hot-toast';
 
 if (!chrome.runtime.id) chrome.runtime.id = "tabox-test";
-const openSnackbarMock = jest.fn()
-const closeSnackbarMock = jest.fn()
-jest.spyOn(Snackbar, 'useSnackbar').mockImplementation(() => [openSnackbarMock, closeSnackbarMock])
+
+// Mock react-hot-toast for testing
+jest.mock('react-hot-toast', () => ({
+    __esModule: true,
+    default: {
+        success: jest.fn(),
+        error: jest.fn(),
+        custom: jest.fn(),
+        dismiss: jest.fn(),
+    },
+    Toaster: () => null,
+}));
 
 // Mock ReactDOM.createPortal to render portals inline for testing
 jest.spyOn(ReactDOM, 'createPortal').mockImplementation((element, node) => element);

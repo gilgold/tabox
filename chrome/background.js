@@ -148,19 +148,46 @@ async function setInitialOptions() {
   }
 }
 
+// Badge update throttling to prevent excessive updates
+let badgeUpdateTimeout = null;
+let lastBadgeUpdate = 0;
+const BADGE_UPDATE_THROTTLE = 1000; // Update at most once per second
+
 async function handleBadge() {
+  // Throttle badge updates to reduce CPU usage
+  const now = Date.now();
+  if (now - lastBadgeUpdate < BADGE_UPDATE_THROTTLE) {
+    // Schedule a deferred update if not already scheduled
+    if (!badgeUpdateTimeout) {
+      badgeUpdateTimeout = setTimeout(() => {
+        badgeUpdateTimeout = null;
+        handleBadge();
+      }, BADGE_UPDATE_THROTTLE);
+    }
+    return;
+  }
+  
+  lastBadgeUpdate = now;
+  
   const { chkShowBadge } = await browser.storage.local.get('chkShowBadge');
   if (!chkShowBadge) {
     browser.action.setBadgeText({ text: '' });
     return;
   }
+  
+  try {
   const tabCount = (await browser.tabs.query({ windowId: browser.windows.WINDOW_ID_CURRENT })).length;
   let badgeColor;
   if (tabCount <= 20) badgeColor = '#07A361';
-  if (tabCount > 20 && tabCount <= 50) badgeColor = '#DF9402';
-  if (tabCount > 50) badgeColor = '#DB392F';
+    else if (tabCount > 20 && tabCount <= 50) badgeColor = '#DF9402';
+    else badgeColor = '#DB392F';
+    
   browser.action.setBadgeBackgroundColor({ color: badgeColor });
   browser.action.setBadgeText({ text: tabCount.toString() });
+  } catch (error) {
+    // Silently handle errors (e.g., no current window)
+    browser.action.setBadgeText({ text: '' });
+  }
 }
 
 // Helper function to detect if collection content has changed
@@ -921,9 +948,11 @@ try {
     if (hasAlarm) {
       await browser.alarms.clear(AUTO_BACKUP_ALARM);
     }
+    // Create backup alarm - runs every 60 minutes (1 hour) instead of every 6 seconds
+    // This prevents excessive CPU usage while idle
     browser.alarms.create(AUTO_BACKUP_ALARM, {
-      delayInMinutes: 0.1,
-      periodInMinutes: 0.1
+      delayInMinutes: 1, // Start after 1 minute
+      periodInMinutes: 60 // Run every 60 minutes (1 hour)
     })
   }
 
@@ -988,38 +1017,44 @@ try {
   })
 
   const handleAutoBackup = async () => {
-    let { autoBackups } = await browser.storage.local.get('autoBackups');
-    // 🚀 NEW: Load from indexed storage
+    // Early exit: Check if backup is needed before expensive operations
+    const { autoBackups, localTimestamp } = await browser.storage.local.get(['autoBackups', 'localTimestamp']);
+    
+    // Skip if no data changes since last backup
+    if (autoBackups && autoBackups.length > 0 && autoBackups[0].timestamp === localTimestamp) {
+      return; // No changes detected, skip backup
+    }
+    
+    // 🚀 NEW: Load from indexed storage only when backup is actually needed
     const tabsArray = await loadAllCollectionsBG(true);
-    const { localTimestamp } = await browser.storage.local.get('localTimestamp');
-    if (autoBackups === undefined) {
-      autoBackups = [];
+    
+    if (!tabsArray || tabsArray.length === 0) {
+      return; // No collections to backup
     }
-    if ((tabsArray && tabsArray.length === 0) || (autoBackups.length > 0 && autoBackups[0].timestamp === localTimestamp)) {
-      return;
-    }
+    
+    const finalAutoBackups = autoBackups || [];
     const backupObj = {
       timestamp: localTimestamp || Date.now(),
       tabsArray
     }
-    autoBackups.unshift(backupObj);
+    finalAutoBackups.unshift(backupObj);
     
     // Aggressive auto-backup limits to save storage and memory
     const MAX_AUTO_BACKUPS = 2; // Reduced from 3 for memory optimization
     const MAX_AUTO_BACKUP_SIZE = 1.5 * 1024 * 1024; // 1.5MB limit
     
-    if (autoBackups.length > MAX_AUTO_BACKUPS) {
-      autoBackups = autoBackups.slice(0, MAX_AUTO_BACKUPS);
+    if (finalAutoBackups.length > MAX_AUTO_BACKUPS) {
+      finalAutoBackups.splice(MAX_AUTO_BACKUPS); // More efficient than slice for truncation
     }
     
     // Check size and remove oldest if needed
-    let totalSize = autoBackups.reduce((sum, backup) => sum + JSON.stringify(backup).length, 0);
-    while (totalSize > MAX_AUTO_BACKUP_SIZE && autoBackups.length > 1) {
-      autoBackups.pop();
-      totalSize = autoBackups.reduce((sum, backup) => sum + JSON.stringify(backup).length, 0);
+    let totalSize = finalAutoBackups.reduce((sum, backup) => sum + JSON.stringify(backup).length, 0);
+    while (totalSize > MAX_AUTO_BACKUP_SIZE && finalAutoBackups.length > 1) {
+      finalAutoBackups.pop();
+      totalSize = finalAutoBackups.reduce((sum, backup) => sum + JSON.stringify(backup).length, 0);
     }
     
-    await browser.storage.local.set({ autoBackups });
+    await browser.storage.local.set({ autoBackups: finalAutoBackups });
   }
 
   browser.alarms.onAlarm.addListener(async (alarm) => {
@@ -1098,6 +1133,7 @@ try {
     throttleSessionSave(true); // Throttled session save
     debounceAutoUpdate(tabGroup.windowId, 2000, true); // Debounced auto-update with context menu rebuild
   });
+
 } catch (e) {
   console.error(e)
 }

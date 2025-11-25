@@ -1,9 +1,7 @@
 import React from 'react';
 import { FaTrash, FaRegCheckCircle } from 'react-icons/fa';
 import { downloadTextFile, getCurrentTabsAndGroups, generateCopyName, applyUid } from './utils';
-import { useSnackbar } from 'react-simple-snackbar';
-import { SnackbarStyle } from './model/SnackbarTypes';
-import { SnackBarWithUndo } from './SnackBarWithUndo';
+import { showUndoToast, showSuccessToast } from './toastHelpers';
 import { UNDO_TIME } from './constants';
 import { browser } from '../static/globals';
 import TaboxCollection from './model/TaboxCollection';
@@ -22,14 +20,6 @@ export function useCollectionOperations({
     addCollection,
     onDataUpdate
 }) {
-    const [openUpdateSnackbar, closeUpdateSnackbar] = useSnackbar({ 
-        style: SnackbarStyle.SUCCESS, 
-        closeStyle: { display: 'none' } 
-    });
-    const [openDeleteSnackbar, closeDeleteSnackbar] = useSnackbar({ 
-        style: SnackbarStyle.SUCCESS, 
-        closeStyle: { display: 'none' } 
-    });
 
     const _handleDelete = async () => {
         // 🚀 NEW: Load current collections from NEW STORAGE for undo
@@ -73,18 +63,20 @@ export function useCollectionOperations({
             }
         }, 400); // Animation duration (was 600ms, now 400ms)
 
-        // Show undo snackbar
-        openDeleteSnackbar(
-            <SnackBarWithUndo
-                icon={<FaTrash />}
-                message={`Collection deleted successfully`}
-                collectionName={collection.name}
-                updateRemoteData={updateRemoteData}
-                collections={previousCollections}
-                closeSnackbar={closeDeleteSnackbar}
-                undoBackgroundColor={SnackbarStyle.SUCCESS.backgroundColor}
-                duration={UNDO_TIME}
-            />, UNDO_TIME * 1000);
+        // Show undo toast
+        showUndoToast(
+            <FaTrash />,
+            'Collection deleted successfully',
+            collection.name,
+            async () => {
+                // Undo delete by restoring previous collections
+                await updateRemoteData(previousCollections);
+                if (onDataUpdate) {
+                    await onDataUpdate();
+                }
+            },
+            UNDO_TIME
+        );
     };
 
     const _handleDuplicate = async () => {
@@ -180,17 +172,19 @@ export function useCollectionOperations({
         newItem.lastUpdated = Date.now(); // Set current time as last updated
         await updateCollection(newItem, true); // Pass true for manual update to trigger lightning effect
         
-        openUpdateSnackbar(
-            <SnackBarWithUndo
-                icon={<FaRegCheckCircle />}
-                message={`Collection updated ${chkEnableAutoUpdate && chkManualUpdateLinkCollection ? 'and linked to window' : ''} successfully`}
-                collectionName={collection.name}
-                updateRemoteData={updateRemoteData}
-                collections={previousCollections}
-                closeSnackbar={closeUpdateSnackbar}
-                undoBackgroundColor={SnackbarStyle.SUCCESS.backgroundColor}
-                duration={UNDO_TIME}
-            />, UNDO_TIME * 1000);
+        showUndoToast(
+            <FaRegCheckCircle />,
+            `Collection updated ${chkEnableAutoUpdate && chkManualUpdateLinkCollection ? 'and linked to window' : ''} successfully`,
+            collection.name,
+            async () => {
+                // Undo update by restoring previous collections
+                await updateRemoteData(previousCollections);
+                if (onDataUpdate) {
+                    await onDataUpdate();
+                }
+            },
+            UNDO_TIME
+        );
     };
 
     const _handleOpenTabs = async () => {

@@ -19,11 +19,11 @@ const DeleteWithConfirmationButton = (props) => {
     }
 
     return <div className="slider-wrapper" onClick={(e) => e.stopPropagation()}>
-        <div data-tip={confirmOpen ? 'Cancel' : `Delete group '${props.group.title}'`} className="del" onClick={(e) => { e.stopPropagation(); toggleSlideConfirm(e); }}>
+        <div data-tooltip-id="main-tooltip" data-tooltip-content={confirmOpen ? 'Cancel' : `Delete group '${props.group.title}'`} className="del" onClick={(e) => { e.stopPropagation(); toggleSlideConfirm(e); }}>
             <MdDeleteForever color="#B64A4A" size="18px" />
         </div>
         <div className={`slider ${confirmOpen ? 'slider-open' : null}`}>
-            <button className="slider-button" disabled={confirmDisabled} data-tip="Delete this group and all its tabs?" data-class="small-tooltip" onClick={(e) => { e.stopPropagation(); handleDelete(e); }}>Delete</button>
+            <button className="slider-button" disabled={confirmDisabled} data-tooltip-id="main-tooltip" data-tooltip-content="Delete this group and all its tabs?" data-tooltip-class-name="small-tooltip" onClick={(e) => { e.stopPropagation(); handleDelete(e); }}>Delete</button>
         </div>
     </div>
 }

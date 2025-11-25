@@ -3,8 +3,12 @@ import { FaUndoAlt } from 'react-icons/fa';
 
 export const UndoButton = (props) => {
     const handleUndo = async () => {
-        props.updateRemoteData(props.collections);
+        if (props.undoAction) {
+            await props.undoAction();
+        }
+        if (props.closeSnackbar) {
         props.closeSnackbar();
+        }
     }
 
     return <button 

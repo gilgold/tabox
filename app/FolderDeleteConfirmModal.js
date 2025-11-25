@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Activity } from 'react';
 import Modal from 'react-modal';
 import { MdWarning, MdClose } from 'react-icons/md';
 import './Modal.css';
@@ -64,7 +64,8 @@ function FolderDeleteConfirmModal({
             shouldCloseOnOverlayClick={true}
             shouldCloseOnEsc={true}
         >
-            <div className="delete-confirm-modal-content">
+            <Activity mode={isOpen ? 'visible' : 'hidden'}>
+                <div className="delete-confirm-modal-content">
                 {/* Header */}
                 <div className="delete-confirm-modal-header">
                     <div className="delete-confirm-modal-title">
@@ -151,6 +152,7 @@ function FolderDeleteConfirmModal({
                     Press <kbd>Enter</kbd> to delete or <kbd>Esc</kbd> to cancel
                 </div>
             </div>
+            </Activity>
         </Modal>
     );
 }

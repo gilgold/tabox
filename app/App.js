@@ -1,11 +1,12 @@
 /* eslint-disable no-useless-escape */
 import './App.css';
+import 'react-tooltip/dist/react-tooltip.css';
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import Header from './Header';
 import AddNewTextbox from './AddNewTextbox';
 import CollectionList from './CollectionList';
 import Footer from './Footer';
-import { useRecoilState, useSetRecoilState, useRecoilValue } from 'recoil';
+import { useAtom, useSetAtom, useAtomValue } from 'jotai';
 import { highlightedCollectionUidState } from './atoms/animationsState';
 import {
     settingsDataState,
@@ -15,14 +16,14 @@ import {
     lastSyncTimeState,
     searchState,
     listKeyState,
+    trackingStateVersion,
 } from './atoms/globalAppSettingsState';
 
 import { browser } from '../static/globals';
 import TimeAgo from 'javascript-time-ago';
 import en from 'javascript-time-ago/locale/en';
-import { useSnackbar } from 'react-simple-snackbar';
-import { SnackbarStyle } from './model/SnackbarTypes';
-import ReactTooltip from 'react-tooltip';
+import { showSuccessToast, showErrorToast } from './toastHelpers';
+import { Tooltip } from 'react-tooltip';
 import { CollectionListOptions } from './CollectionListOptions';
 
 // New indexed storage utilities
@@ -183,19 +184,20 @@ let migrationSystemAvailable = false;
 let assessMigrationNeeds, executeMigration, isDataSafe;
 
 function App() {
-  const [settingsData, setSettingsData] = useRecoilState(settingsDataState);
-  const setHighlightedCollectionUid = useSetRecoilState(highlightedCollectionUidState);
-  const [themeMode, setThemeMode] = useRecoilState(themeState);
-  const [isLoggedIn, setIsLoggedIn] = useRecoilState(isLoggedInState);
-  const setSyncInProgress = useSetRecoilState(syncInProgressState);
-  const setLastSyncTime = useSetRecoilState(lastSyncTimeState);
-  const [openSuccessSnackbar] = useSnackbar({ style: SnackbarStyle.SUCCESS });
-  const [openErrorSnackbar] = useSnackbar({ style: SnackbarStyle.ERROR });
-  const search = useRecoilValue(searchState);
-  const [listKey, setListKey] = useRecoilState(listKeyState);
+  const [settingsData, setSettingsData] = useAtom(settingsDataState);
+  const setHighlightedCollectionUid = useSetAtom(highlightedCollectionUidState);
+  const [themeMode, setThemeMode] = useAtom(themeState);
+  const [isLoggedIn, setIsLoggedIn] = useAtom(isLoggedInState);
+  const setSyncInProgress = useSetAtom(syncInProgressState);
+  const setLastSyncTime = useSetAtom(lastSyncTimeState);
+  const search = useAtomValue(searchState);
+  const [listKey, setListKey] = useAtom(listKeyState);
   const [sortValue, setSortValue] = useState(null);
   const [viewMode, setViewMode] = useState('list'); // 'list' or 'grid'
   const [filters, setFilters] = useState({ recentlyOpenedActual: false, color: null });
+  
+  // Global tracking state version - incremented when tracking changes
+  const [trackingVersion, setTrackingVersion] = useAtom(trackingStateVersion);
   
   // Mount tracking to prevent memory leaks
   const isMountedRef = useRef(true);
@@ -221,6 +223,7 @@ function App() {
   const [performanceSummaryLogged, setPerformanceSummaryLogged] = useState(false);
   const performanceMarksRef = useRef({ critical: false, data: false });
   const metadataUidOrderRef = useRef([]);
+  
   const markDataHydrationComplete = useCallback(() => {
     if (!performanceMarksRef.current.data) {
       markPerformancePoint('data-ready');
@@ -357,7 +360,8 @@ function App() {
     
     browser.runtime.sendMessage({ type: 'checkSyncStatus' }).then(async (response) => {
       if (isMountedRef.current) {
-        setIsLoggedIn(response === null ? false : response);
+        // Convert response to boolean to prevent object reference re-renders
+        setIsLoggedIn(response ? true : false);
         if (response) await applyDataFromServer();
       }
     });
@@ -367,7 +371,7 @@ function App() {
     await browser.storage.local.remove('googleToken');
     await browser.storage.local.remove('googleUser');
     setIsLoggedIn(false);
-    openErrorSnackbar('Error syncing data, please enable sync again', 6000);
+    showErrorToast('Error syncing data, please enable sync again');
   }
 
   const logout = async () => {
@@ -633,16 +637,16 @@ function App() {
         const newFolders = [newFolder, ...foldersData];
         setFoldersData(newFolders);
         
-        openSuccessSnackbar(`Folder "${newFolder.name}" created successfully`, 2000);
+        showSuccessToast(`Folder "${newFolder.name}" created successfully`);
         return newFolder;
       } else {
         console.error(`❌ Failed to create folder: ${name}`);
-        openErrorSnackbar(`Failed to create folder`, 2000);
+        showErrorToast(`Failed to create folder`);
         return null;
       }
     } catch (error) {
       console.error('Error creating folder:', error);
-      openErrorSnackbar(`Failed to create folder: ${error.message}`, 3000);
+      showErrorToast(`Failed to create folder: ${error.message}`);
       return null;
     }
   };
@@ -798,7 +802,7 @@ function App() {
         const storageeMigrationResult = await migrateLegacyStorage();
         
         if (storageeMigrationResult.success && storageeMigrationResult.migrated) {
-          openSuccessSnackbar(`Upgraded storage system for ${storageeMigrationResult.count} collections - faster performance!`);
+          showSuccessToast(`Upgraded storage system for ${storageeMigrationResult.count} collections - faster performance!`);
         } else if (!storageeMigrationResult.success) {
           console.warn('⚠️ Storage migration failed, using legacy system');
         }
@@ -819,28 +823,28 @@ function App() {
             try {
               // Show user feedback for migration
               if (migrationAssessment.collections > 10) {
-                openSuccessSnackbar(`Migrating ${migrationAssessment.collections} collections to new format...`);
+                showSuccessToast(`Migrating ${migrationAssessment.collections} collections to new format...`);
               }
               
               // Execute migration (emergency backup is handled internally now)
               const migrationResult = await executeMigration();
               
               if (migrationResult.success && !migrationResult.skipped) {
-                openSuccessSnackbar('Extension updated and data migrated successfully!');
+                showSuccessToast('Extension updated and data migrated successfully!');
               } else if (migrationResult.skipped) {
-                openSuccessSnackbar('Extension updated successfully');
+                showSuccessToast('Extension updated successfully');
               } else {
                 console.error('❌ Data migration failed:', migrationResult.error);
-                openErrorSnackbar('Extension updated but data migration failed - your data has been preserved');
+                showErrorToast('Extension updated but data migration failed - your data has been preserved');
               }
             } finally {
               setMigrationInProgress(false);
             }
           } else {
-            openSuccessSnackbar('Extension updated successfully');
+            showSuccessToast('Extension updated successfully');
           }
         } else {
-          openSuccessSnackbar(`Extension updated from ${previousVersion} - data loading in compatibility mode`);
+          showSuccessToast(`Extension updated from ${previousVersion} - data loading in compatibility mode`);
         }
       }
 
@@ -849,9 +853,9 @@ function App() {
     } catch (migrationError) {
       console.error('❌ Migration check/execution failed:', migrationError);
       if (extensionUpdated) {
-        openErrorSnackbar(`Extension updated but migration failed - continuing with existing data`);
+        showErrorToast(`Extension updated but migration failed - continuing with existing data`);
       } else {
-        openErrorSnackbar('Migration check failed - extension will continue with existing data');
+        showErrorToast('Migration check failed - extension will continue with existing data');
       }
       // Continue with loading - don't break the app
       await loadDataWithNewSystem();
@@ -908,51 +912,6 @@ function App() {
       setFoldersData(folders);
 
       await hydrateCollectionsInBatches(metadata, initialBatchSize);
-      
-      // Debug function to check what's in storage
-      window.checkStorageData = async () => {
-        const allCollections = await loadAllCollections({ metadataOnly: false });
-        
-        // Check raw storage
-        const index = await loadCollectionsIndex();
-        
-        // Check legacy storage
-        const { tabsArray } = await browser.storage.local.get('tabsArray');
-      };
-      
-      // Recovery function to restore tabs from legacy storage
-      window.recoverTabsFromLegacy = async () => {
-        const { tabsArray } = await browser.storage.local.get('tabsArray');
-        
-        if (!tabsArray || tabsArray.length === 0) {
-          console.error('❌ No legacy data found to recover from');
-          return;
-        }
-        
-        // Re-migrate from legacy
-        const success = await batchUpdateCollections(tabsArray);
-        
-        if (success) {
-          // Reload data
-          await loadDataWithNewSystem();
-        } else {
-          console.error('❌ Failed to recover tabs');
-        }
-      };
-      
-      // Debug function to clear all order fields
-      window.clearAllOrderFieldsNow = async () => {
-        const allCollections = await loadAllCollections({ metadataOnly: false });
-        const cleaned = allCollections.map(c => ({
-          ...c,
-          order: null  // Explicitly set to null to clear
-        }));
-        await batchUpdateCollections(cleaned);
-        // Reload with current sort preferences
-        await loadDataWithNewSystem();
-      };
-      
-
       
     } catch (error) {
       console.error('❌ Failed to load data with new system, falling back to legacy:', error);
@@ -1087,7 +1046,7 @@ function App() {
         await browser.storage.local.remove(keysToRemove);
       }
       
-      openSuccessSnackbar('Emergency cleanup completed - freed storage space');
+      showSuccessToast('Emergency cleanup completed - freed storage space');
       
       // Update storage stats
       const newStats = await getNewStorageStats();
@@ -1118,13 +1077,13 @@ function App() {
       if (success) {
         // Reload data after recovery
         await loadCollectionsFromStorage();
-        openSuccessSnackbar('Emergency recovery completed - data restored from backup');
+        showSuccessToast('Emergency recovery completed - data restored from backup');
       } else {
-        openErrorSnackbar('Emergency recovery failed - no valid backups available');
+        showErrorToast('Emergency recovery failed - no valid backups available');
       }
     } catch (error) {
       console.error('💥 EMERGENCY RECOVERY: Failed:', error);
-      openErrorSnackbar('Emergency recovery failed - migration system not available');
+      showErrorToast('Emergency recovery failed - migration system not available');
     }
   };
 
@@ -1340,6 +1299,24 @@ function App() {
     };
   }, []); // Only run once on mount
 
+  // PERFORMANCE FIX: Single global storage listener for tracking changes
+  // This replaces individual listeners in every collection/folder component
+  // Reduces 50+ listeners to just 1 listener
+  useEffect(() => {
+    const handleStorageChange = (changes, areaName) => {
+      if (areaName === 'local' && (changes.collectionsToTrack || changes.chkEnableAutoUpdate)) {
+        // Increment version to trigger re-checks in child components
+        setTrackingVersion(prev => prev + 1);
+      }
+    };
+    
+    browser.storage.onChanged.addListener(handleStorageChange);
+    
+    return () => {
+      browser.storage.onChanged.removeListener(handleStorageChange);
+    };
+  }, []); // Only run once on mount
+
   const escapeRegex = string => {
     return string.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
   }
@@ -1410,14 +1387,13 @@ function App() {
   }, []);
 
   return <div className="App">
-    <ReactTooltip
-      event={'mouseover'}
-      eventOff={'click mouseout'}
+    <Tooltip
+      id="main-tooltip"
       delayShow={200}
-      type={themeMode === 'light' ? 'dark' : 'light'}
+      variant={themeMode === 'light' ? 'dark' : 'light'}
       place="bottom"
-      effect="solid"
-      offset={{ top: 5 }} />
+      style={{ zIndex: 99999 }}
+    />
     <Header
       applyDataFromServer={applyDataFromServer}
       updateRemoteData={updateRemoteData}

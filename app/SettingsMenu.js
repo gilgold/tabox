@@ -1,14 +1,12 @@
-import React, { useEffect, useState, lazy, Suspense } from 'react'
+import React, { useEffect, useState, lazy, Suspense, useEffectEvent } from 'react'
 import ReactDOM from 'react-dom'
 import './SettingsMenu.css';
 import Switch from './Switch';
 import { themeState, isLoggedInState, listKeyState } from './atoms/globalAppSettingsState';
-import { useRecoilValue, useSetRecoilState, useRecoilState } from 'recoil';
+import { useAtomValue, useSetAtom, useAtom } from 'jotai';
 import { browser } from '../static/globals';
 import Modal from 'react-modal';
-import { useSnackbar } from 'react-simple-snackbar';
-import { SnackbarStyle } from './model/SnackbarTypes';
-import { SnackBarWithUndo } from './SnackBarWithUndo';
+import { showUndoToast } from './toastHelpers';
 import { UNDO_TIME } from './constants';
 import { downloadTextFile } from './utils';
 
@@ -22,9 +20,10 @@ import { FaRegCheckCircle } from 'react-icons/fa';
 import { IoMoon, IoSunny } from 'react-icons/io5';
 
 export default function SettingsMenu(props) {
-    const [themeMode, setThemeMode] = useRecoilState(themeState);
+    const [themeMode, setThemeMode] = useAtom(themeState);
     const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(false);
     const [badgeEnabled, setBadgeEnabled] = useState(false);
+    const [performanceModeEnabled, setPerformanceModeEnabled] = useState(false);
     const [isSyncDebugModalOpen, setIsSyncDebugModalOpen] = useState(false);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     
@@ -38,25 +37,39 @@ export default function SettingsMenu(props) {
         backup: true
     });
     
-    const [openSnackbar, closeSnackbar] = useSnackbar({ 
-        style: SnackbarStyle.SUCCESS, 
-        closeStyle: { display: 'none' } 
-    });
-    const isLoggedIn = useRecoilValue(isLoggedInState);
-    const setListKey = useSetRecoilState(listKeyState);
+    const isLoggedIn = useAtomValue(isLoggedInState);
+    const setListKey = useSetAtom(listKeyState);
 
-    useEffect(async () => {
-        const { chkEnableAutoUpdate } = await browser.storage.local.get(['chkEnableAutoUpdate']);
+    // Use Effect Event for initialization logic
+    const onMount = useEffectEvent(async () => {
+        const { chkEnableAutoUpdate, chkPerformanceMode } = await browser.storage.local.get(['chkEnableAutoUpdate', 'chkPerformanceMode']);
         setAutoUpdateEnabled(chkEnableAutoUpdate || false);
+        setPerformanceModeEnabled(chkPerformanceMode || false);
         
         // Initialize dark mode switch state based on current theme
         const { theme } = await browser.storage.local.get('theme');
         const isDarkMode = theme === 'dark';
         await browser.storage.local.set({ darkModeToggle: isDarkMode });
+        
+        // Apply performance mode class to document if enabled
+        if (chkPerformanceMode === true) {
+            document.documentElement.classList.add('performance-mode');
+        } else {
+            document.documentElement.classList.remove('performance-mode');
+        }
+    });
+
+    // Use Effect Event for badge updates
+    const onBadgeChange = useEffectEvent(async () => {
+        await browser.runtime.sendMessage({ type: 'updateBadge' });
+    });
+
+    useEffect(() => {
+        onMount();
     }, []);
 
-    useEffect(async () => {
-        await browser.runtime.sendMessage({ type: 'updateBadge' });
+    useEffect(() => {
+        onBadgeChange();
     }, [badgeEnabled]);
 
     // Dark mode toggle handler
@@ -73,17 +86,16 @@ export default function SettingsMenu(props) {
     };
 
     const showRecoverySuccess = (previousCollections) => {
-        openSnackbar(
-            <SnackBarWithUndo
-                icon={<FaRegCheckCircle />}
-                message={`Successfully recovered from backup`}
-                collectionName="Collections"
-                updateRemoteData={props.updateRemoteData}
-                collections={previousCollections}
-                closeSnackbar={closeSnackbar}
-                undoBackgroundColor={SnackbarStyle.SUCCESS.backgroundColor}
-                duration={UNDO_TIME}
-            />, UNDO_TIME * 1000);
+        showUndoToast(
+            <FaRegCheckCircle />,
+            'Successfully recovered from backup',
+            'Collections',
+            async () => {
+                // Undo recovery by restoring previous collections
+                await props.updateRemoteData(previousCollections);
+            },
+            UNDO_TIME
+        );
     };
 
     const handleSyncDebug = () => {
@@ -139,6 +151,24 @@ export default function SettingsMenu(props) {
     const handleShowBadge = async () => {
         setTimeout(async () => {
             setBadgeEnabled(!badgeEnabled);
+        }, 100);
+    }
+
+    const handlePerformanceMode = async () => {
+        // Wait a bit for Switch component to update storage
+        setTimeout(async () => {
+            // Read the NEW value from storage (Switch component just updated it)
+            const { chkPerformanceMode } = await browser.storage.local.get('chkPerformanceMode');
+            const isEnabled = chkPerformanceMode === true;
+            
+            setPerformanceModeEnabled(isEnabled);
+            
+            // Apply/remove performance mode class to document
+            if (isEnabled) {
+                document.documentElement.classList.add('performance-mode');
+            } else {
+                document.documentElement.classList.remove('performance-mode');
+            }
         }, 100);
     }
 
@@ -205,6 +235,16 @@ export default function SettingsMenu(props) {
                                                 textOff={<span>Tab counter badge <strong>Disabled</strong></span>}
                                             />
                                         </div>
+                                        <div className="setting-item">
+                                            <Switch
+                                                id="chkPerformanceMode"
+                                                onMouseUp={handlePerformanceMode}
+                                                data-tooltip-id="main-tooltip" 
+                                                data-tooltip-content="Reduces visual effects and animations to lower CPU usage and improve battery life"
+                                                textOn={<span>⚡ Performance Mode: <strong>Enabled</strong></span>}
+                                                textOff={<span>✨ Performance Mode: <strong>Disabled</strong></span>}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
 
@@ -248,7 +288,7 @@ export default function SettingsMenu(props) {
                                         <div className="setting-item">
                                             <Switch 
                                                 id="chkEnableTabDiscard"
-                                                data-tip="Smart tab loading delays non-essential tabs to improve performance.<br>Automatically avoids deferring media, auth, development, and collaboration sites.<br>Tabs load instantly when you switch to them."
+                                                data-tooltip-id="main-tooltip" data-tooltip-content="Smart tab loading delays non-essential tabs to improve performance.<br>Automatically avoids deferring media, auth, development, and collaboration sites.<br>Tabs load instantly when you switch to them."
                                                 textOn={<span>Smart tab loading: <strong>Enabled</strong></span>}
                                                 textOff={<span>Smart tab loading: <strong>Disabled</strong></span>}
                                             />
@@ -269,7 +309,7 @@ export default function SettingsMenu(props) {
                                         <div className="setting-item">
                                             <Switch 
                                                 id="chkColEditIgnoreDuplicateTabs"
-                                                data-tip="A tab is considered 'duplicate' <br />if it has the exact same URL as another tab"
+                                                data-tooltip-id="main-tooltip" data-tooltip-content="A tab is considered 'duplicate' <br />if it has the exact same URL as another tab"
                                                 textOn={<span>If a tab exists in the collection, <strong>do not add it</strong></span>}
                                                 textOff={<span>If a tab exists in the collection, <strong>add it anyway</strong></span>}
                                             />
@@ -277,7 +317,7 @@ export default function SettingsMenu(props) {
                                         <div className="setting-item">
                                             <Switch 
                                                 id="chkColEditIgnoreDuplicateGroups"
-                                                data-tip="A group is considered 'duplicate' <br />if it has the exact same name and color as another group"
+                                                data-tooltip-id="main-tooltip" data-tooltip-content="A group is considered 'duplicate' <br />if it has the exact same name and color as another group"
                                                 textOn={<span>If a group already exists, <strong>append tabs to it</strong></span>}
                                                 textOff={<span>If a group already exists, <strong>add as a new group</strong></span>}
                                             />
@@ -299,8 +339,8 @@ export default function SettingsMenu(props) {
                                             <Switch 
                                                 id="chkEnableAutoUpdate"
                                                 onMouseUp={handleAutoUpdate}
-                                                data-multiline={true}
-                                                data-tip="When opening a collection, track changes<br />to the window and update the collection in the background."
+                                               
+                                                data-tooltip-id="main-tooltip" data-tooltip-content="When opening a collection, track changes<br />to the window and update the collection in the background."
                                                 textOn={<span>Auto updating collections: <strong>Enabled</strong></span>}
                                                 textOff={<span>Auto updating collections: <strong>Disabled</strong></span>}
                                             />
@@ -308,9 +348,9 @@ export default function SettingsMenu(props) {
                                         <div className="setting-item">
                                             <Switch 
                                                 id="chkAutoUpdateOnNewCollection"
-                                                data-multiline={true}
+                                               
                                                 disabled={!autoUpdateEnabled}
-                                                data-tip="When adding a new collection, start auto updating<br /> it with changes in the current window."
+                                                data-tooltip-id="main-tooltip" data-tooltip-content="When adding a new collection, start auto updating<br /> it with changes in the current window."
                                                 textOn={<span>Auto update new collections: <strong>Enabled</strong></span>}
                                                 textOff={<span>Auto update new collections: <strong>Disabled</strong></span>}
                                             />
@@ -318,9 +358,9 @@ export default function SettingsMenu(props) {
                                         <div className="setting-item">
                                             <Switch 
                                                 id="chkManualUpdateLinkCollection"
-                                                data-multiline={true}
+                                               
                                                 disabled={!autoUpdateEnabled}
-                                                data-tip="When clicking the 'Update' button, this will link<br /> the collection to the window, making it 'active'."
+                                                data-tooltip-id="main-tooltip" data-tooltip-content="When clicking the 'Update' button, this will link<br /> the collection to the window, making it 'active'."
                                                 textOn={<span>Click on &#39;Update&#39; sets active: <strong>Enabled</strong></span>}
                                                 textOff={<span>Click on &#39;Update&#39; sets active: <strong>Disabled</strong></span>}
                                             />
@@ -364,6 +404,7 @@ export default function SettingsMenu(props) {
             >
                 <Suspense fallback={<div style={{padding: '20px', textAlign: 'center'}}>Loading...</div>}>
                     <SyncDebugModal 
+                        isOpen={isSyncDebugModalOpen}
                         onClose={closeSyncDebugModal}
                         applyDataFromServer={props.applyDataFromServer}
                         updateRemoteData={props.updateRemoteData}

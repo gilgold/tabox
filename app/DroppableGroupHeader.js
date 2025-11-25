@@ -1,10 +1,10 @@
 import React from 'react';
 import { useDroppable } from '@dnd-kit/core';
-import { useRecoilValue } from 'recoil';
+import { useAtomValue } from 'jotai';
 import { draggingGroupState } from './atoms/animationsState';
 
 function DroppableGroupHeader({ group, children }) {
-    const draggingGroup = useRecoilValue(draggingGroupState);
+    const draggingGroup = useAtomValue(draggingGroupState);
     const isDraggingGroup = !!draggingGroup;
     
     const {

@@ -1,40 +1,44 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react'
+import React, { useState, useEffect, lazy, Suspense, useEffectEvent } from 'react'
 import './Header.css';
 import { 
     isLoggedInState, 
 } from './atoms/globalAppSettingsState';
-import { useRecoilState } from 'recoil';
+import { useAtom } from 'jotai';
 import { browser } from '../static/globals';
-import { useSnackbar } from 'react-simple-snackbar';
-import { SnackbarStyle } from './model/SnackbarTypes';
+import { showSuccessToast, showErrorToast } from './toastHelpers';
+
 
 // Lazy load SettingsMenu to reduce initial bundle size
 const SettingsMenu = lazy(() => import('./SettingsMenu'));
 
 function LoginSection(props) {
 
-    const [isLoggedIn, setIsLoggedIn] = useRecoilState(isLoggedInState);
+    const [isLoggedIn, setIsLoggedIn] = useAtom(isLoggedInState);
     const [googleUser, setGoogleUser] = useState();
-    const [openSnackbar, ] = useSnackbar({ style: SnackbarStyle.SUCCESS });
 
-    useEffect(async () => {
+    // Use Effect Event for loading Google user data
+    const loadGoogleUser = useEffectEvent(async () => {
         const { googleUser } = await browser.storage.local.get('googleUser');
         if (isLoggedIn && googleUser) {
             setGoogleUser(googleUser);
         }
+    });
+
+    useEffect(() => {
+        loadGoogleUser();
     }, [isLoggedIn])
  
     const handleClick = async () => {
         if (isLoggedIn) {
             await props.logout();
             setGoogleUser(null);
-            openSnackbar('Sync has been disabled', 3000)
+            showSuccessToast('Sync has been disabled')
         } else {
             browser.runtime.sendMessage({ type: 'login' }).then(async (response) => {
                 if (response === false) return;
                 setGoogleUser(response);
                 setIsLoggedIn(true);
-                openSnackbar('Sync is now enabled!', 3000);
+                showSuccessToast('Sync is now enabled!');
             });
         }
     }

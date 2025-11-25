@@ -1,5 +1,5 @@
 import React from 'react'
-import { useRecoilValue } from 'recoil';
+import { useAtomValue } from 'jotai';
 import { syncInProgressState, isLoggedInState, lastSyncTimeState } from './atoms/globalAppSettingsState';
 import './Footer.css';
 import { browser } from '../static/globals';
@@ -9,11 +9,12 @@ import { FaFacebook } from 'react-icons/fa';
 import { MdSync } from 'react-icons/md';
 
 function SyncLabel() {
-  const syncInProgress = useRecoilValue(syncInProgressState);
-  const isLoggedIn = useRecoilValue(isLoggedInState);
-  const lastSyncTime = useRecoilValue(lastSyncTimeState);
+  const syncInProgress = useAtomValue(syncInProgressState);
+  const isLoggedIn = useAtomValue(isLoggedInState);
+  const lastSyncTime = useAtomValue(lastSyncTimeState);
 
-  const msg = syncInProgress ? 'syncing...' : <ReactTimeAgo date={lastSyncTime ?? Date.now()} locale="en-US" timeStyle="round"/>
+  // Disable live updates to prevent continuous re-renders (CPU usage)
+  const msg = syncInProgress ? 'syncing...' : <ReactTimeAgo date={lastSyncTime ?? Date.now()} locale="en-US" timeStyle="round" tick={false} />
 
   return <span id="last_sync">
     <MdSync 

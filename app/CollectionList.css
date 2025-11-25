@@ -19,9 +19,11 @@
 .collection-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(var(--tile-size), 1fr));
-    overflow-y: auto;
+	gap: 0;
+	overflow-y: auto;
 	opacity: 0;
 	animation: gridFadeIn 0.3s ease-out 0.1s forwards;
+	padding: 8px;
 }
 
 .collections-virtual-spacer {
@@ -1386,7 +1388,8 @@
 	height: 100%;
 	background: var(--active-auto-update-gradient);
 	background-size: 300% 100%;
-	animation: flowBackground 4s ease-in-out infinite !important;
+	/* Use a simpler opacity pulse instead of background-position animation for better performance */
+	animation: activeTrackingPulse 3s ease-in-out infinite !important;
 	z-index: 1;
 	pointer-events: none;
 	border-radius: inherit;
@@ -1399,7 +1402,18 @@
 .active-auto-tracking:hover::after {
 	animation-play-state: paused !important;
 }
-  
+
+/* GPU-accelerated opacity pulse - much more performant than background-position */
+@keyframes activeTrackingPulse {
+	0%, 100% {
+		opacity: 0.6;
+	}
+	50% {
+		opacity: 0.85;
+	}
+}
+
+/* Legacy flowBackground kept for any other uses, but optimized */
 @keyframes flowBackground {
 	0% {
 		background-position: 0% 50%;
@@ -1427,33 +1441,24 @@
 	border-radius: 50%;
 	background: radial-gradient(circle, rgba(139, 93, 255, 0.9), rgba(22, 152, 226, 0.8));
 	transform: translate(-50%, -50%);
-	animation: smokeRise 3s ease-in-out infinite;
+	/* Simplified pulse animation using only opacity for better performance */
+	animation: folderTrackingPulse 3s ease-in-out infinite;
 	box-shadow: 0 0 8px rgba(139, 93, 255, 0.5);
 }
 
-.folder-tracking-smoke::before,
-.folder-tracking-smoke::after {
-	content: '';
-	position: absolute;
-	width: 6px;
-	height: 6px;
-	border-radius: 50%;
-}
+/* Removed complex pseudo-element animations to reduce CPU usage */
+/* Static visual cues are sufficient for tracking indication */
 
-.folder-tracking-smoke::before {
-	top: -3px;
-	left: -2px;
-	background: radial-gradient(circle, rgba(255, 140, 66, 0.8), rgba(139, 93, 255, 0.6));
-	animation: smokeParticle1 3s ease-in-out infinite 0.5s;
-	box-shadow: 0 0 6px rgba(255, 140, 66, 0.4);
-}
-
-.folder-tracking-smoke::after {
-	top: -2px;
-	right: -2px;
-	background: radial-gradient(circle, rgba(22, 152, 226, 0.8), rgba(255, 140, 66, 0.6));
-	animation: smokeParticle2 3s ease-in-out infinite 1s;
-	box-shadow: 0 0 6px rgba(22, 152, 226, 0.4);
+/* Optimized folder tracking indicator - simplified for better performance */
+@keyframes folderTrackingPulse {
+	0%, 100% {
+		opacity: 0.7;
+		transform: translate(-50%, -50%) scale(0.9);
+	}
+	50% {
+		opacity: 1;
+		transform: translate(-50%, -50%) scale(1.1);
+	}
 }
 
 @keyframes smokeRise {
@@ -1645,6 +1650,16 @@
 }
 
 /* Collection List Grid/List Layout */
+
+/* Collections section wrapper - use display: contents to make it transparent to grid layout */
+.collections-section-grid {
+	display: contents;
+}
+
+.collections-section-list {
+	display: block;
+	width: 100%;
+}
 
 /* Custom Scrollbar Styles for Collection List/Grid */
 /* Standard scrollbar for Firefox */
@@ -1911,29 +1926,29 @@
 	padding: 8px; /* Add extra left padding for breathing room */
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(var(--tile-size), 1fr));
-	gap: calc(var(--tile-size) * 0.1);
+	gap: 0;
 }
 
 .grid-view .folder-collections-container .collection-tile {
-	margin: 0; /* Remove margin since grid gap handles spacing */
-	max-width: none; /* Remove width constraint for proper grid behavior */
+	justify-self: center;
 }
 
 /* Grid view folder styling */
 .grid-view .folder-placeholder {
 	grid-column: 1 / -1; /* Span full width in grid */
-	margin: 8px calc(var(--tile-size) * 0.1);
+	margin: 0;
 }
 
 /* Make folder containers span full width in grid view */
 .grid-view .sortable-folder-wrapper {
 	grid-column: 1 / -1; /* Span all columns */
+	margin: 0 0 4px 0 !important; /* Reduce space between folder rows in grid view */
 }
 
 /* Ensure folder containers inside the wrapper take full width */
 .grid-view .sortable-folder-wrapper .folder-container {
 	width: 100%;
-	margin: 3px 0; /* Match collection row margins even in grid view */
+	margin: 0; /* No extra margin in grid view */
 }
 
 /* Grid mode folder styling - make it look like a row, not a tile */

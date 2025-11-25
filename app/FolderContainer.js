@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import ReactTooltip from 'react-tooltip';
 import { MdExpandMore, MdExpandLess, MdFolder, MdFolderOpen, MdDragIndicator, MdDelete, MdPlayArrow } from 'react-icons/md';
 import { CiExport } from 'react-icons/ci';
+import { FaStop } from 'react-icons/fa6';
 import { AutoSaveTextbox } from './AutoSaveTextbox';
 import ColorPicker from './ColorPicker';
 import ContextMenu from './ContextMenu';
@@ -13,6 +13,8 @@ import { downloadTextFile } from './utils';
 import { browser } from '../static/globals';
 import { useDndContext } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { useAtomValue } from 'jotai';
+import { trackingStateVersion } from './atoms/globalAppSettingsState';
 
 // Lazy load rarely-used modal
 const FolderDeleteConfirmModal = lazy(() => import('./FolderDeleteConfirmModal'));
@@ -111,11 +113,59 @@ function FolderContainer({
             }
         };
     }, [folder.uid]); // Re-check when folder changes
-
-    // Rebuild tooltips when tracking state changes
+    
+    // PERFORMANCE FIX: Watch global tracking version instead of individual storage listener
+    // This prevents having N storage listeners (one per folder)
+    const trackingVersion = useAtomValue(trackingStateVersion);
     useEffect(() => {
-        ReactTooltip.rebuild();
-    }, [hasTrackedCollections]);
+        let isMounted = true;
+        
+        const recheckTrackedCollections = async () => {
+                    try {
+                        const { chkEnableAutoUpdate } = await browser.storage.local.get('chkEnableAutoUpdate');
+                        const { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack');
+                        
+                if (!isMounted || !isMountedRef.current) return;
+                        
+                        if (!chkEnableAutoUpdate || !collectionsToTrack || collectionsToTrack.length === 0) {
+                    if (isMounted && isMountedRef.current) {
+                                setHasTrackedCollections(false);
+                            }
+                            return;
+                        }
+                        
+                        const collectionsIndex = await loadCollectionsIndex();
+                        
+                if (!isMounted || !isMountedRef.current) return;
+                        
+                        const collectionsInFolder = Object.entries(collectionsIndex)
+                            .filter(([, meta]) => meta && meta.parentId === folder.uid)
+                            .map(([uid]) => uid);
+                        
+                        const trackedUids = collectionsToTrack.map(c => c.collectionUid);
+                        const hasTracked = collectionsInFolder.some(uid => 
+                            trackedUids.includes(uid)
+                        );
+                        
+                if (isMounted && isMountedRef.current) {
+                            setHasTrackedCollections(hasTracked);
+                        }
+                    } catch (error) {
+                        console.error('Error checking tracked collections in folder:', error);
+                if (isMounted && isMountedRef.current) {
+                            setHasTrackedCollections(false);
+                        }
+                    }
+                };
+                
+        recheckTrackedCollections();
+        
+        return () => {
+            isMounted = false;
+        };
+    }, [trackingVersion, folder.uid]);
+
+    // Tooltip v5 automatically handles tooltip updates
     
     // Cleanup function to mark component as unmounted
     useEffect(() => {
@@ -577,6 +627,39 @@ function FolderContainer({
         }
     };
 
+    const handleStopTrackingFolder = async () => {
+        try {
+            // Get all collections in this folder
+            const { getFolderCollections } = await import('./utils/folderOperations');
+            const folderCollections = await getFolderCollections(folder.uid);
+            
+            if (folderCollections.length === 0) {
+                return;
+            }
+
+            // Get currently tracked collections
+            const { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack');
+            if (!collectionsToTrack || collectionsToTrack.length === 0) {
+                return;
+            }
+
+            // Get UIDs of collections in this folder
+            const folderCollectionUids = folderCollections.map(c => c.uid);
+            
+            // Filter out any tracked collections that are in this folder
+            const updatedCollectionsToTrack = collectionsToTrack.filter(tracked => 
+                !folderCollectionUids.includes(tracked.collectionUid)
+            );
+
+            // Save the updated tracking list
+            await browser.storage.local.set({ collectionsToTrack: updatedCollectionsToTrack });
+            
+            console.log(`✅ Stopped auto-tracking for ${folderCollections.length} collection(s) in folder "${folder.name}"`);
+        } catch (error) {
+            console.error('Error stopping folder tracking:', error);
+        }
+    };
+
     return (
         <>
             <div 
@@ -699,8 +782,8 @@ function FolderContainer({
                         {hasTrackedCollections ? (
                             <div 
                                 className="folder-tracking-indicator"
-                                data-tip="This folder contains auto-updating collections"
-                                data-class="small-tooltip"
+                                data-tooltip-id="main-tooltip" data-tooltip-content="This folder contains auto-updating collections"
+                                data-tooltip-class-name="small-tooltip"
                                 style={{
                                     display: 'flex',
                                     alignItems: 'center',
@@ -734,8 +817,8 @@ function FolderContainer({
                                     opacity: 0.7
                                 }}
                                 onClick={handlePlayFolder}
-                                data-tip={`Open ${collectionCount} collection${collectionCount !== 1 ? 's' : ''} in this folder`}
-                                data-class="small-tooltip"
+                                data-tooltip-id="main-tooltip" data-tooltip-content={`Open ${collectionCount} collection${collectionCount !== 1 ? 's' : ''} in this folder`}
+                                data-tooltip-class-name="small-tooltip"
                                 onMouseEnter={(e) => {
                                     e.target.style.opacity = '1';
                                     e.target.style.backgroundColor = 'var(--setting-row-hover-bg)';
@@ -761,6 +844,14 @@ function FolderContainer({
                                 action: handleExportFolder,
                                 className: '',
                                 condition: true
+                            },
+                            {
+                                id: 'stop-tracking-folder',
+                                text: 'Stop Auto Tracking Folder',
+                                icon: <FaStop size={16} />,
+                                action: handleStopTrackingFolder,
+                                className: '',
+                                condition: hasTrackedCollections
                             },
                             {
                                 id: 'delete',

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { useRecoilValue, useSetRecoilState } from 'recoil';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { settingsDataState } from './atoms/globalAppSettingsState';
 import { highlightedCollectionUidState } from './atoms/animationsState';
 import './CollectionListOptions.css';
@@ -22,8 +22,8 @@ import {
 import { TbFileImport } from 'react-icons/tb';
 import Modal from 'react-modal';
 import { CollectionFilter } from './CollectionFilter';
-import { useSnackbar } from 'react-simple-snackbar';
-import { SnackbarStyle } from './model/SnackbarTypes';
+import { showSuccessToast, showErrorToast } from './toastHelpers';
+
 import { applyUid } from './utils';
 
 // Lazy load rarely-used modals for better performance
@@ -64,8 +64,8 @@ const CustomSingleValue = (props) => {
 };
 
 export function CollectionListOptions(props) {
-    const settingsData = useRecoilValue(settingsDataState);
-    const setHighlightedCollectionUid = useSetRecoilState(highlightedCollectionUidState);
+    const settingsData = useAtomValue(settingsDataState);
+    const setHighlightedCollectionUid = useSetAtom(highlightedCollectionUidState);
     const [sortType, setSortType] = useState('DATE');
     const [sortAscending, setSortAscending] = useState(true);
     const [openInNewWindow, setOpenInNewWindow] = useState(false);
@@ -75,8 +75,6 @@ export function CollectionListOptions(props) {
     const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
     const isMountedRef = useRef(true);
     const fileInputRef = useRef(null);
-    const [openSnackbar] = useSnackbar({ style: SnackbarStyle.ERROR });
-    const [openSuccessSnackbar] = useSnackbar({ style: SnackbarStyle.SUCCESS });
 
     // Custom styles for React Select - only for padding/height fixes
     const customStyles = {
@@ -320,7 +318,7 @@ export function CollectionListOptions(props) {
     const handleFileSelection = async (event) => {
         const file = event.target.files[0];
         if (!event.target.value.endsWith('.txt')) {
-            openSnackbar('Invalid file: Please select a .txt file', 4000);
+            showErrorToast('Invalid file: Please select a .txt file');
             event.target.value = '';
             return;
         }
@@ -332,7 +330,7 @@ export function CollectionListOptions(props) {
             // More flexible JSON validation
             const trimmedResult = result.trim();
             if (!trimmedResult.startsWith('{') && !trimmedResult.startsWith('[')) {
-                openSnackbar('Invalid File: File does not contain valid JSON data', 4000);
+                showErrorToast('Invalid File: File does not contain valid JSON data');
                 event.target.value = '';
                 return;
             }
@@ -596,24 +594,24 @@ export function CollectionListOptions(props) {
                     <button
                         className={`toolbar-toggle-button ${openInNewWindow ? 'active' : ''}`}
                         onClick={toggleNewWindow}
-                        data-tip={openInNewWindow ? "Open collections in new window" : "Open collections in current window"}
-                        data-class="small-tooltip"
+                        data-tooltip-id="main-tooltip" data-tooltip-content={openInNewWindow ? "Open collections in new window" : "Open collections in current window"}
+                        data-tooltip-class-name="small-tooltip"
                     >
                         <MdOpenInNew size={ICON_SIZE} />
                     </button>
                     <button
                         className="toolbar-button"
                         onClick={handleCreateFolder}
-                        data-tip="Create new folder"
-                        data-class="small-tooltip"
+                        data-tooltip-id="main-tooltip" data-tooltip-content="Create new folder"
+                        data-tooltip-class-name="small-tooltip"
                     >
                         <MdCreateNewFolder size={ICON_SIZE} />
                     </button>
                     <button
                         className="toolbar-button"
                         onClick={toggleViewMode}
-                        data-tip={viewMode === 'list' ? "Switch to grid view" : "Switch to list view"}
-                        data-class="small-tooltip"
+                        data-tooltip-id="main-tooltip" data-tooltip-content={viewMode === 'list' ? "Switch to grid view" : "Switch to list view"}
+                        data-tooltip-class-name="small-tooltip"
                     >
                         {viewMode === 'list' ? <PiGridNineFill size={ICON_SIZE} /> : <MdViewList size={ICON_SIZE} />}
                     </button>
@@ -621,16 +619,16 @@ export function CollectionListOptions(props) {
                         className="toolbar-button"
                         onClick={handleRestoreSession}
                         disabled={sessionList.length === 0}
-                        data-tip="Restore previous session"
-                        data-class="small-tooltip"
+                        data-tooltip-id="main-tooltip" data-tooltip-content="Restore previous session"
+                        data-tooltip-class-name="small-tooltip"
                     >
                         <MdHistory size={ICON_SIZE} />
                     </button>
                     <button
                         className="toolbar-button"
                         onClick={handleImportClick}
-                        data-tip="Import collections or folders"
-                        data-class="small-tooltip"
+                        data-tooltip-id="main-tooltip" data-tooltip-content="Import collections or folders"
+                        data-tooltip-class-name="small-tooltip"
                     >
                         <TbFileImport size={ICON_SIZE} />
                     </button>
@@ -656,6 +654,7 @@ export function CollectionListOptions(props) {
             >
                 <Suspense fallback={<div style={{padding: '20px', textAlign: 'center'}}>Loading...</div>}>
                     <SessionsModal
+                        isOpen={isSessionModalOpen}
                         sessions={sessionList}
                         addCollection={props.addCollection}
                         onClose={closeSessionModal}

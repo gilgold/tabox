@@ -26,10 +26,7 @@ function SortableCollectionTile(props) {
         transform: CSS.Transform.toString(transform),
         transition,
         opacity: isDragging ? 0.5 : 1,
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: '20px',
+        marginBottom: '8px',
     };
 
     return (

@@ -229,7 +229,7 @@ const TabRow = memo(({ tab, updateCollection, collection, group = null, isDraggi
                 <div className="column actions-col">
                     <button 
                         className="action-button" 
-                        data-tip="Open this tab" 
+                        data-tooltip-id="main-tooltip" data-tooltip-content="Open this tab" 
                         onClick={(e) => { 
                             e.stopPropagation(); 
                             handleOpenTab(tab); 
@@ -239,7 +239,7 @@ const TabRow = memo(({ tab, updateCollection, collection, group = null, isDraggi
                     </button>
                     <button 
                         className="action-button del-tab" 
-                        data-tip="Delete this tab" 
+                        data-tooltip-id="main-tooltip" data-tooltip-content="Delete this tab" 
                         onClick={(e) => { 
                             e.stopPropagation(); 
                             handleTabDelete(); 

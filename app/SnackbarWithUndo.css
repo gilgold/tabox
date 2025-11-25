@@ -14,7 +14,11 @@
     z-index: 100000 !important;
     position: relative;
     
-    /* Ultra-compact Liquid Glass Styling - background set dynamically in component */
+    /* Ultra-compact Liquid Glass Styling with solid background */
+    background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
+    padding: 12px 16px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     overflow: hidden;
     box-sizing: border-box;
     
@@ -57,7 +61,8 @@
 .snackbar-extended-col {
     flex: 1;
     justify-content: center;
-    margin: 0 6px;
+    margin: 0 12px;
+    padding: 0 4px;
     min-width: 0; /* Allow text to wrap */
 }
 
@@ -180,7 +185,55 @@
         inset 0 0.5px 2px rgba(0, 0, 0, 0.1);
 }
 
-/* Ultra-compact countdown timer */
-.snackbar-buttons-wrapper > div:last-child {
-    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.12));
+/* Circular countdown progress on close button */
+.snackbar-close-button {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Inherits width: 24px and height: 24px from .snackbar-button */
+    padding: 0;
+}
+
+.countdown-circle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 24px;
+    height: 24px;
+    transform: translate(-50%, -50%) rotate(-90deg);
+    pointer-events: none;
+    z-index: 1;
+}
+
+.countdown-circle-bg {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.3);
+    stroke-width: 2;
+}
+
+.countdown-circle-progress {
+    fill: none;
+    stroke: #ffffff;
+    stroke-width: 2;
+    stroke-dasharray: 69.12; /* 2πr where r = 11 (24/2 - 1) */
+    stroke-dashoffset: 0;
+    stroke-linecap: round;
+    transition: none; /* Ensure no other transitions interfere */
+}
+
+/* CSS-only countdown animation */
+@keyframes countdown {
+    from {
+        stroke-dashoffset: 0;
+    }
+    to {
+        stroke-dashoffset: 69.12;
+    }
+}
+
+.close-icon {
+    position: relative;
+    z-index: 3;
+    pointer-events: none;
 }

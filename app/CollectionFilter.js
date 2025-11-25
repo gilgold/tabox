@@ -10,8 +10,8 @@ function RecentlyOpenedFilter({ isActive, onToggle }) {
         <button
             className={`filter-button opened-filter ${isActive ? 'active' : ''}`}
             onClick={onToggle}
-            data-tip="Show collections opened in the last 3 hours"
-            data-class="small-tooltip"
+            data-tooltip-id="main-tooltip" data-tooltip-content="Show collections opened in the last 3 hours"
+            data-tooltip-class-name="small-tooltip"
         >
             <MdOpenInBrowser size={14} /><span className="filter-label">Opened</span>
         </button>
@@ -47,8 +47,8 @@ function ClearFiltersButton({ hasActiveFilters, onClear }) {
         <button
             className="clear-filters-button"
             onClick={onClear}
-            data-tip="Clear all filters"
-            data-class="small-tooltip"
+            data-tooltip-id="main-tooltip" data-tooltip-content="Clear all filters"
+            data-tooltip-class-name="small-tooltip"
         >
             <MdClear size={14} />
         </button>

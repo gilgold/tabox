@@ -1,12 +1,13 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useEffectEvent } from 'react';
 import { MdCenterFocusWeak } from 'react-icons/md';
 import { FaTrash, FaPlay } from 'react-icons/fa';
 
 import ContextMenu from './ContextMenu';
 import { createCollectionMenuItems } from './utils/contextMenuItems';
 import TimeAgo from 'javascript-time-ago';
-import { useSetRecoilState, useRecoilValue } from 'recoil';
+import { useSetAtom, useAtomValue } from 'jotai';
 import { highlightedCollectionUidState, deletingCollectionUidsState, draggingTabState } from './atoms/animationsState';
+import { trackingStateVersion } from './atoms/globalAppSettingsState';
 
 import { getColorValue } from './utils/colorMigration';
 import ColorPicker from './ColorPicker';
@@ -16,10 +17,10 @@ import './CollectionTile.css';
 import DroppableCollection from './DroppableCollection';
 
 function CollectionTile(props) {
-    const highlightedCollectionUid = useRecoilValue(highlightedCollectionUidState);
-    const setHighlightedCollectionUid = useSetRecoilState(highlightedCollectionUidState);
-    const deletingCollectionUids = useRecoilValue(deletingCollectionUidsState);
-    const setDeletingCollectionUids = useSetRecoilState(deletingCollectionUidsState);
+    const highlightedCollectionUid = useAtomValue(highlightedCollectionUidState);
+    const setHighlightedCollectionUid = useSetAtom(highlightedCollectionUidState);
+    const deletingCollectionUids = useAtomValue(deletingCollectionUidsState);
+    const setDeletingCollectionUids = useSetAtom(deletingCollectionUidsState);
     const [collectionName, setCollectionName] = useState(props.collection.name);
     const [isAutoUpdate, setIsAutoUpdate] = useState(false);
     const mountedRef = useRef(true);
@@ -70,18 +71,28 @@ function CollectionTile(props) {
         };
     }, []);
 
+    // Use Effect Event for checking auto-update status
+    const checkAutoUpdate = useEffectEvent(async () => {
+        const { chkEnableAutoUpdate } = await browser.storage.local.get('chkEnableAutoUpdate');
+        let { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack');
+        collectionsToTrack = collectionsToTrack || [];
+        const isTracking = collectionsToTrack.some(c => c.collectionUid === props.collection.uid);
+        if (mountedRef.current) {
+            setIsAutoUpdate(chkEnableAutoUpdate && isTracking);
+        }
+    });
+
+    // Check auto-update status on mount and when collection UID changes
     useEffect(() => {
-        const checkAutoUpdate = async () => {
-            const { chkEnableAutoUpdate } = await browser.storage.local.get('chkEnableAutoUpdate');
-            let { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack');
-            collectionsToTrack = collectionsToTrack || [];
-            const isTracking = collectionsToTrack.some(c => c.collectionUid === props.collection.uid);
-            if (mountedRef.current) {
-                setIsAutoUpdate(chkEnableAutoUpdate && isTracking);
-            }
-        };
         checkAutoUpdate();
     }, [props.collection.uid]);
+    
+    // PERFORMANCE FIX: Watch global tracking version instead of individual storage listener
+    // This prevents having N storage listeners (one per collection)
+    const trackingVersion = useAtomValue(trackingStateVersion);
+    useEffect(() => {
+                checkAutoUpdate();
+    }, [trackingVersion]);
 
     const _handleTileClick = (e) => {
         // Prevent tile click if clicking on interactive elements
@@ -189,8 +200,8 @@ function CollectionTile(props) {
                     onClick={(e) => { e.stopPropagation(); _handleOpenTabs(); }}
                     onMouseDown={(e) => e.stopPropagation()}
                     onPointerDown={(e) => e.stopPropagation()}
-                    data-tip={isAutoUpdate ? "Focus collection window" : "Open collection tabs"}
-                    data-class="small-tooltip"
+                    data-tooltip-id="main-tooltip" data-tooltip-content={isAutoUpdate ? "Focus collection window" : "Open collection tabs"}
+                    data-tooltip-class-name="small-tooltip"
                 >
                     {isAutoUpdate ? <MdCenterFocusWeak /> : <FaPlay />}
                 </button>
@@ -212,8 +223,8 @@ function CollectionTile(props) {
                     onClick={(e) => { e.stopPropagation(); _handleDelete(); }}
                     onMouseDown={(e) => e.stopPropagation()}
                     onPointerDown={(e) => e.stopPropagation()}
-                    data-tip="Delete collection"
-                    data-class="small-tooltip"
+                    data-tooltip-id="main-tooltip" data-tooltip-content="Delete collection"
+                    data-tooltip-class-name="small-tooltip"
                 >
                     <FaTrash />
                 </button>

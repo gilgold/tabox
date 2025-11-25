@@ -53,7 +53,7 @@ You can revoke access at `myaccount.google.com/permissions`. To delete synced da
   - `storage.local` for local data.
   - `storage.sync` for storing minimal sync metadata (e.g., the Drive file ID) across Chrome profiles if your Chrome Sync is enabled.
   - Extension update delivery by the Chrome Web Store.
-- **Open‑source UI/utilities**: React, dnd-kit, Recoil, and similar client-side libraries that run entirely within the extension. These libraries do not, by themselves, send your data to external services.
+- **Open‑source UI/utilities**: React, dnd-kit, Jotai, and similar client-side libraries that run entirely within the extension. These libraries do not, by themselves, send your data to external services.
 
 ### Permissions we request and why
 

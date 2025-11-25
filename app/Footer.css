@@ -210,11 +210,17 @@ footer svg {
 	background-clip: text;
 	-webkit-text-fill-color: transparent;
 	background-size: 300% 300%;
-	animation: liquidGradientShift 4s ease-in-out infinite;
+	/* Animation removed to reduce idle CPU usage - static gradient still looks great */
+	background-position: 50% 50%;
 	font-size: 1em;
 	line-height: 1;
 	font-weight: 700;
 	letter-spacing: 0.5px;
+}
+
+/* Only animate on hover for interactive feedback without idle CPU cost */
+.tabox-gradient:hover {
+	animation: liquidGradientShift 4s ease-in-out infinite;
 }
 
 @keyframes liquidGradientShift {

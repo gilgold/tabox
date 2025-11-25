@@ -1,14 +1,15 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useEffectEvent } from 'react';
 import { MdDragIndicator, MdCenterFocusWeak } from 'react-icons/md';
 import { FaPlay } from 'react-icons/fa';
 import ContextMenu from './ContextMenu';
 import { createCollectionMenuItems } from './utils/contextMenuItems';
 import TimeAgo from 'javascript-time-ago';
-import { useSetRecoilState, useRecoilValue } from 'recoil';
+import { useSetAtom, useAtomValue } from 'jotai';
 import { deletingCollectionUidsState, highlightedCollectionUidState, draggingTabState, draggingGroupState } from './atoms/animationsState';
+import { trackingStateVersion } from './atoms/globalAppSettingsState';
 
-import { useSnackbar } from 'react-simple-snackbar';
-import { SnackbarStyle } from './model/SnackbarTypes';
+import { showSuccessToast, showErrorToast } from './toastHelpers';
+
 import { getBorderColor } from './utils/colorUtils';
 import ExpandedCollectionData from './ExpandedCollectionData';
 import { AutoSaveTextbox } from './AutoSaveTextbox';
@@ -18,12 +19,12 @@ import { browser } from '../static/globals';
 import DroppableCollection from './DroppableCollection';
 
 function CollectionListItem(props) {
-    const deletingCollectionUids = useRecoilValue(deletingCollectionUidsState);
-    const setDeletingCollectionUids = useSetRecoilState(deletingCollectionUidsState);
-    const highlightedCollectionUid = useRecoilValue(highlightedCollectionUidState);
-    const setHighlightedCollectionUid = useSetRecoilState(highlightedCollectionUidState);
-    const draggingTab = useRecoilValue(draggingTabState);
-    const draggingGroup = useRecoilValue(draggingGroupState);
+    const deletingCollectionUids = useAtomValue(deletingCollectionUidsState);
+    const setDeletingCollectionUids = useSetAtom(deletingCollectionUidsState);
+    const highlightedCollectionUid = useAtomValue(highlightedCollectionUidState);
+    const setHighlightedCollectionUid = useSetAtom(highlightedCollectionUidState);
+    const draggingTab = useAtomValue(draggingTabState);
+    const draggingGroup = useAtomValue(draggingGroupState);
     const [collectionName, setCollectionName] = useState(props.collection.name);
     const [isExpanded, setExpanded] = useState(false);
     const [isAutoUpdate, setIsAutoUpdate] = useState(false);
@@ -38,7 +39,6 @@ function CollectionListItem(props) {
     const isDraggingFromThisCollection = isDraggingTabFromThisCollection || isDraggingGroupFromThisCollection;
 
 
-    const [openSnackbar] = useSnackbar({ style: collectionName === '' ? SnackbarStyle.ERROR : SnackbarStyle.SUCCESS });
 
     // Check if this item should be highlighted (new UID-based system)
     const isHighlighted = highlightedCollectionUid === props.collection.uid;
@@ -88,16 +88,34 @@ function CollectionListItem(props) {
         }
     }, [isHighlighted, setHighlightedCollectionUid]);
 
-    useEffect(async () => {
+    // Use Effect Event for loading auto-update status
+    const loadAutoUpdateStatus = useEffectEvent(async () => {
         const { chkEnableAutoUpdate } = await browser.storage.local.get('chkEnableAutoUpdate');
         const { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack');
-        if (!collectionsToTrack || collectionsToTrack == {}) return;
+        if (!collectionsToTrack || collectionsToTrack == {}) {
+            if (mountedRef.current) {
+                setIsAutoUpdate(false);
+            }
+            return;
+        }
         const activeCollections = collectionsToTrack.map(c => c.collectionUid);
         const collectionIsActive = activeCollections.includes(props.collection.uid);
         if (mountedRef.current) {
             setIsAutoUpdate(chkEnableAutoUpdate && collectionIsActive);
         }
-    }, [props.collection]);
+    });
+
+    // Check auto-update status on mount and when collection changes
+    useEffect(() => {
+        loadAutoUpdateStatus();
+    }, [props.collection.uid]); // Use UID instead of full object for more stable dependency
+    
+    // PERFORMANCE FIX: Watch global tracking version instead of individual storage listener
+    // This prevents having N storage listeners (one per collection)
+    const trackingVersion = useAtomValue(trackingStateVersion);
+    useEffect(() => {
+                loadAutoUpdateStatus();
+    }, [trackingVersion]);
 
     const handleSaveCollectionColor = async (color) => {
         let newCollectionItem = { ...props.collection };
@@ -116,7 +134,7 @@ function CollectionListItem(props) {
     const handleCollectionNameChange = (val) => {
         setCollectionName(val.trim());
         if (val.trim() === "") {
-            openSnackbar("Please enter a name for the collection", 4000);
+            showErrorToast("Please enter a name for the collection");
             setCollectionName(props.collection.name);
             return;
         }
@@ -124,7 +142,7 @@ function CollectionListItem(props) {
         currentCollection.name = val;
         currentCollection.lastUpdated = Date.now();
         props.updateCollection(currentCollection, true); // Manual name change - trigger lightning effect
-        openSnackbar(`Collection name updated to '${val}'!`, 5000);
+        showSuccessToast(`Collection name updated to '${val}'!`);
     }
 
     const _handleRowClick = (e) => {
@@ -302,7 +320,7 @@ function CollectionListItem(props) {
             <div className="column right_items">
                 <button
                     className="open-tabs-icon"
-                    data-tip={isAutoUpdate ? "Focus collection window" : "Open collection tabs"}
+                    data-tooltip-id="main-tooltip" data-tooltip-content={isAutoUpdate ? "Focus collection window" : "Open collection tabs"}
                     onClick={async (e) => {
                         e.stopPropagation();
                         if (isAutoUpdate) {

@@ -119,9 +119,9 @@ export const AutoSaveTextbox = (props) => {
                 onChange={handleOnChange} 
                 onClick={(e) => e.stopPropagation()}
                 onFocus={(e) => e.stopPropagation()}
-                data-multiline={true} 
-                data-tip="Click to edit • Auto-saves as you type" 
-                data-class="small-tooltip"
+                
+                data-tooltip-id="main-tooltip" data-tooltip-content="Click to edit • Auto-saves as you type" 
+                data-tooltip-class-name="small-tooltip"
                 value={value} />
             {saved ? (
                 <svg key={`saved-${saved}`} className="checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">

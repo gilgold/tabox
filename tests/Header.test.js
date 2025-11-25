@@ -1,16 +1,15 @@
 import React from 'react';
-import renderer from 'react-test-renderer';
+import { render } from '@testing-library/react';
 import Header from '../app/Header';
-import { RecoilRoot } from 'recoil';
+import { Provider } from 'jotai';
 
 describe('Header -- Sync disabled', () => {
   test('Header renders correctly - sync disabled', () => {
-    const component = renderer.create(
-      <RecoilRoot>
+    const { container } = render(
+      <Provider>
         <Header />
-      </RecoilRoot>,
+      </Provider>,
     );
-    let tree = component.toJSON();
-    expect(tree).toMatchSnapshot();
+    expect(container).toMatchSnapshot();
   });
 });

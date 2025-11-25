@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { Popover } from 'react-tiny-popover';
-import ReactTooltip from 'react-tooltip';
 import { COLOR_PALETTE } from './utils/colorMigration';
 
 function ColorPicker(props) {
@@ -42,8 +41,6 @@ function ColorPicker(props) {
     }, [props.currentColor]);
 
     useEffect(() => {
-        // Rebuild tooltips when component mounts to detect new color picker tooltips
-        ReactTooltip.rebuild();
         return () => {
             // Safely close picker only if component is still mounted
             try {
@@ -97,7 +94,7 @@ function ColorPicker(props) {
                                 backgroundColor: colorValue,
                                 '--color-value': colorValue 
                             }}
-                            data-tip={colorName.replace('-', ' ')}
+                            data-tooltip-id="main-tooltip" data-tooltip-content={colorName.replace('-', ' ')}
                             data-for="color-tooltip">
                             {index === selectedColorCircle && (
                                 <div className="selection-indicator">
@@ -111,7 +108,7 @@ function ColorPicker(props) {
                 </div>
             </div>}
     >
-        <div onClick={handleClick} className={`modern-color-picker-wrapper ${size}`} data-tip-disable={showPicker} data-tip={props.tooltip}>
+        <div onClick={handleClick} className={`modern-color-picker-wrapper ${size}`} data-tooltip-hidden={showPicker} data-tooltip-id="main-tooltip" data-tooltip-content={props.tooltip}>
             <div className={`modern-color-picker ${showPicker ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); handleClick(e); }}>
                 <div className="current-color-preview" style={{ backgroundColor: color }} />
             </div>

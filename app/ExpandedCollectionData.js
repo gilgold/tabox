@@ -1,7 +1,6 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useEffectEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { useSnackbar } from 'react-simple-snackbar';
-import { SnackbarStyle } from './model/SnackbarTypes';
+import { showUndoToast } from './toastHelpers';
 import { getCurrentTabsAndGroups } from './utils';
 import { browser } from '../static/globals';
 import SortableTabRow from './SortableTabRow';
@@ -12,7 +11,7 @@ import { SnackBarWithUndo } from './SnackBarWithUndo';
 import { AiOutlineFolderAdd } from 'react-icons/ai';
 import { MdTab, MdSelectAll, MdWindow } from 'react-icons/md';
 import { UNDO_TIME } from './constants';
-import { useSetRecoilState, useRecoilValue } from 'recoil';
+import { useSetAtom, useAtomValue } from 'jotai';
 import { draggingTabState, draggingGroupState } from './atoms/animationsState';
 import {
     DndContext,
@@ -31,14 +30,13 @@ import {
 
 
 function ExpandedCollectionData(props) {
-    const [openSnackbar, closeSnackbar] = useSnackbar({ style: SnackbarStyle.SUCCESS, closeStyle: { display: 'none' } });
     const [isHighlighted, setIsHighlighted] = useState(false);
     const [activeTab, setActiveTab] = useState(null);
     const [activeGroup, setActiveGroup] = useState(null);
-    const setDraggingTab = useSetRecoilState(draggingTabState);
-    const draggingTab = useRecoilValue(draggingTabState);
-    const setDraggingGroup = useSetRecoilState(draggingGroupState);
-    const draggingGroup = useRecoilValue(draggingGroupState);
+    const setDraggingTab = useSetAtom(draggingTabState);
+    const draggingTab = useAtomValue(draggingTabState);
+    const setDraggingGroup = useSetAtom(draggingGroupState);
+    const draggingGroup = useAtomValue(draggingGroupState);
     
     // Track which groups are expanded (by default, all groups start collapsed)
     const [expandedGroupUids, setExpandedGroupUids] = useState(new Set());
@@ -63,8 +61,13 @@ function ExpandedCollectionData(props) {
         },
     };
 
-    useEffect(async () => {
+    // Use Effect Event for checking highlighted tabs
+    const checkHighlighted = useEffectEvent(async () => {
         setIsHighlighted((await browser.tabs.query({ highlighted: true, currentWindow: true })).length > 1);
+    });
+
+    useEffect(() => {
+        checkHighlighted();
     }, [])
 
     const groupFromId = (_id, groups = props.collection.chromeGroups) => {
@@ -822,17 +825,16 @@ function ExpandedCollectionData(props) {
         currentCollection.chromeGroups = [...currentCollection.chromeGroups, ...newCollectionGroups];
         currentCollection.lastUpdated = Date.now();
         props.updateCollection(currentCollection, true); // Manual collection tabs update - trigger lightning effect
-        openSnackbar(
-            <SnackBarWithUndo
-                icon={<AiOutlineFolderAdd size="32px" />}
-                message={`${totalTabsAdded} ${totalTabsAdded === 1 ? 'tab' : 'tabs'} added to collection.`}
-                collectionName={props.collection.name}
-                updateRemoteData={props.updateRemoteData}
-                collections={previousCollections}
-                closeSnackbar={closeSnackbar}
-                undoBackgroundColor={SnackbarStyle.SUCCESS.backgroundColor}
-                duration={UNDO_TIME}
-            />, UNDO_TIME * 1000);
+        showUndoToast(
+            <AiOutlineFolderAdd size="32px" />,
+            `${totalTabsAdded} ${totalTabsAdded === 1 ? 'tab' : 'tabs'} added to collection.`,
+            props.collection.name,
+            async () => {
+                // Undo by restoring previous collections
+                await props.updateRemoteData(previousCollections);
+            },
+            UNDO_TIME
+        );
     }
 
     const handleAddSelectedTabs = async () => {
@@ -850,9 +852,9 @@ function ExpandedCollectionData(props) {
                 <div className="toolbar-buttons">
                     <button
                         className="modern-action-button primary"
-                        data-tip={`Add ${isHighlighted ? 'selected tabs' : 'the current tab'} to this collection`}
+                        data-tooltip-id="main-tooltip" data-tooltip-content={`Add ${isHighlighted ? 'selected tabs' : 'the current tab'} to this collection`}
                         data-place="bottom"
-                        data-class="small-tooltip"
+                        data-tooltip-class-name="small-tooltip"
                         onClick={(e) => { 
                             e.stopPropagation(); 
                             e.preventDefault();
@@ -871,9 +873,9 @@ function ExpandedCollectionData(props) {
                     
                     <button
                         className="modern-action-button secondary"
-                        data-tip="Add all tabs from this window to this collection"
+                        data-tooltip-id="main-tooltip" data-tooltip-content="Add all tabs from this window to this collection"
                         data-place="bottom"
-                        data-class="small-tooltip"
+                        data-tooltip-class-name="small-tooltip"
                         onClick={(e) => { 
                             e.stopPropagation(); 
                             e.preventDefault();

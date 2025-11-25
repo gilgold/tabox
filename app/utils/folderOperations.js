@@ -3,9 +3,7 @@
  * Provides CRUD operations for folders and collection-folder relationships
  */
 
-import { useSnackbar } from 'react-simple-snackbar';
-import { SnackbarStyle } from '../model/SnackbarTypes';
-import { SnackBarWithUndo } from '../SnackBarWithUndo';
+import { showUndoToast, showSuccessToast } from '../toastHelpers';
 import { UNDO_TIME } from '../constants';
 import { FaTrash } from 'react-icons/fa';
 import { browser } from '../../static/globals';
@@ -440,10 +438,6 @@ export function useFolderOperations({
     onFolderUpdate,
     onFolderDelete
 }) {
-    const [openSnackbar, closeSnackbar] = useSnackbar({ 
-        style: SnackbarStyle.SUCCESS, 
-        closeStyle: { display: 'none' } 
-    });
 
     const handleDeleteFolder = async (force = false, deleteCollections = false) => {
         try {
@@ -468,21 +462,28 @@ export function useFolderOperations({
 
                 // Show success message with undo option (only if collections weren't deleted)
                 if (!deleteCollections || result.collectionsDeleted === 0) {
-                    openSnackbar(
-                        <SnackBarWithUndo
-                            icon={<FaTrash />}
-                            message={`Folder deleted successfully${actionMessage}`}
-                            collectionName={folder.name}
-                            updateRemoteData={updateRemoteData}
-                            collections={allCollections}
-                            folders={allFolders}
-                            closeSnackbar={closeSnackbar}
-                            undoBackgroundColor={SnackbarStyle.SUCCESS.backgroundColor}
-                            duration={UNDO_TIME}
-                        />, UNDO_TIME * 1000);
+                    showUndoToast(
+                        <FaTrash />,
+                        `Folder deleted successfully${actionMessage}`,
+                        folder.name,
+                        async () => {
+                            // Undo by restoring previous folders and collections
+                            // Save all folders
+                            for (const f of allFolders) {
+                                await saveSingleFolder(f);
+                            }
+                            // Save all collections
+                            for (const c of allCollections) {
+                                await saveSingleCollection(c);
+                            }
+                            // Trigger data refresh
+                            await updateRemoteData(allCollections);
+                        },
+                        UNDO_TIME
+                    );
                 } else {
                     // Simple success message when collections were deleted (no undo possible)
-                    openSnackbar(`Folder and ${result.collectionsDeleted} collections deleted successfully`, 3000);
+                    showSuccessToast(`Folder and ${result.collectionsDeleted} collections deleted successfully`);
                 }
 
                 return true;

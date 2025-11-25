@@ -1,115 +1,102 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
 exports[`Footer Tests Footer renders correctly 1`] = `
-<footer
-  id="footer"
->
-  <div
-    className="footer_left"
-  >
-    <span
-      id="last_sync"
-    >
-      <svg
-        className="sync_dark "
-        fill="currentColor"
-        height="1em"
-        id="syncImg"
-        stroke="currentColor"
-        strokeWidth="0"
-        style={
-          Object {
-            "color": undefined,
-          }
-        }
-        viewBox="0 0 24 24"
-        width="1em"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <path
-          d="M0 0h24v24H0z"
-          fill="none"
-        />
-        <path
-          d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"
-        />
-      </svg>
-      <span
-        className="sync_msg"
-      >
-        Sync Disabled
-      </span>
-    </span>
-  </div>
-  <div
-    className="footer_center"
-  >
-    <span
-      className="tabox-gradient"
-    >
-      Tabox
-    </span>
-    <span
-      className="version"
-    />
-  </div>
-  <div
-    className="footer_right"
+<div>
+  <footer
+    id="footer"
   >
     <div
-      className="footer_icons"
+      class="footer_left"
     >
-      <a
-        href="https://twitter.com/Taboxapp"
-        rel="noreferrer"
-        target="_blank"
+      <span
+        id="last_sync"
       >
         <svg
-          className="social_icon twitter"
+          class="sync_dark "
           fill="currentColor"
           height="1em"
+          id="syncImg"
           stroke="currentColor"
-          strokeWidth="0"
-          style={
-            Object {
-              "color": undefined,
-            }
-          }
+          stroke-width="0"
           viewBox="0 0 24 24"
           width="1em"
           xmlns="http://www.w3.org/2000/svg"
         >
           <path
-            d="M10.4883 14.651L15.25 21H22.25L14.3917 10.5223L20.9308 3H18.2808L13.1643 8.88578L8.75 3H1.75L9.26086 13.0145L2.31915 21H4.96917L10.4883 14.651ZM16.25 19L5.75 5H7.75L18.25 19H16.25Z"
+            d="M0 0h24v24H0z"
+            fill="none"
           />
-        </svg>
-      </a>
-      <a
-        href="https://www.facebook.com/taboxext"
-        rel="noreferrer"
-        target="_blank"
-      >
-        <svg
-          className="social_icon facebook"
-          fill="currentColor"
-          height="1em"
-          stroke="currentColor"
-          strokeWidth="0"
-          style={
-            Object {
-              "color": undefined,
-            }
-          }
-          viewBox="0 0 512 512"
-          width="1em"
-          xmlns="http://www.w3.org/2000/svg"
-        >
           <path
-            d="M504 256C504 119 393 8 256 8S8 119 8 256c0 123.78 90.69 226.38 209.25 245V327.69h-63V256h63v-54.64c0-62.15 37-96.48 93.67-96.48 27.14 0 55.52 4.84 55.52 4.84v61h-31.28c-30.8 0-40.41 19.12-40.41 38.73V256h68.78l-11 71.69h-57.78V501C413.31 482.38 504 379.78 504 256z"
+            d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"
           />
         </svg>
-      </a>
+        <span
+          class="sync_msg"
+        >
+          Sync Disabled
+        </span>
+      </span>
     </div>
-  </div>
-</footer>
+    <div
+      class="footer_center"
+    >
+      <span
+        class="tabox-gradient"
+      >
+        Tabox
+      </span>
+      <span
+        class="version"
+      />
+    </div>
+    <div
+      class="footer_right"
+    >
+      <div
+        class="footer_icons"
+      >
+        <a
+          href="https://twitter.com/Taboxapp"
+          rel="noreferrer"
+          target="_blank"
+        >
+          <svg
+            class="social_icon twitter"
+            fill="currentColor"
+            height="1em"
+            stroke="currentColor"
+            stroke-width="0"
+            viewBox="0 0 24 24"
+            width="1em"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M10.4883 14.651L15.25 21H22.25L14.3917 10.5223L20.9308 3H18.2808L13.1643 8.88578L8.75 3H1.75L9.26086 13.0145L2.31915 21H4.96917L10.4883 14.651ZM16.25 19L5.75 5H7.75L18.25 19H16.25Z"
+            />
+          </svg>
+        </a>
+        <a
+          href="https://www.facebook.com/taboxext"
+          rel="noreferrer"
+          target="_blank"
+        >
+          <svg
+            class="social_icon facebook"
+            fill="currentColor"
+            height="1em"
+            stroke="currentColor"
+            stroke-width="0"
+            viewBox="0 0 512 512"
+            width="1em"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M504 256C504 119 393 8 256 8S8 119 8 256c0 123.78 90.69 226.38 209.25 245V327.69h-63V256h63v-54.64c0-62.15 37-96.48 93.67-96.48 27.14 0 55.52 4.84 55.52 4.84v61h-31.28c-30.8 0-40.41 19.12-40.41 38.73V256h68.78l-11 71.69h-57.78V501C413.31 482.38 504 379.78 504 256z"
+            />
+          </svg>
+        </a>
+      </div>
+    </div>
+  </footer>
+</div>
 `;

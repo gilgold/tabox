@@ -1,23 +1,25 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, Activity } from 'react';
 import './Modal.css';
 import { MdBugReport } from 'react-icons/md';
 import { browser } from '../static/globals';
 
-export const SyncDebugModal = ({ onClose, applyDataFromServer, updateRemoteData, onRecoverySuccess }) => {
+export const SyncDebugModal = ({ isOpen, onClose, applyDataFromServer, updateRemoteData, onRecoverySuccess }) => {
     const [syncLogs, setSyncLogs] = useState([]);
     const [backupOptions, setBackupOptions] = useState(null);
     const [loading, setLoading] = useState(false);
     const isMountedRef = useRef(true);
 
     useEffect(() => {
-        loadSyncLogs();
-        loadBackupOptions();
+        if (isOpen) {
+            loadSyncLogs();
+            loadBackupOptions();
+        }
         
         // Cleanup function to prevent state updates on unmounted component
         return () => {
             isMountedRef.current = false;
         };
-    }, []);
+    }, [isOpen]);
 
     const loadSyncLogs = async () => {
         const logs = await browser.runtime.sendMessage({ type: 'getSyncLogs' });
@@ -115,8 +117,9 @@ export const SyncDebugModal = ({ onClose, applyDataFromServer, updateRemoteData,
     };
 
     return (
-        <div className='modal-card sync-debug-modal'>
-            <div className='modal-card-wrapper'>
+        <Activity mode={isOpen ? 'visible' : 'hidden'}>
+            <div className='modal-card sync-debug-modal'>
+                <div className='modal-card-wrapper'>
                 <div className='modal-card-image'>
                     <MdBugReport size="50px" style={{ color: 'var(--primary-color)' }} />
                 </div>
@@ -226,5 +229,6 @@ export const SyncDebugModal = ({ onClose, applyDataFromServer, updateRemoteData,
                 <button className="modal-button" onClick={onClose}>Close</button>
             </div>
         </div>
+        </Activity>
     );
 }; 

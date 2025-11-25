@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useRecoilValue, useRecoilState } from 'recoil';
+import { useAtomValue, useAtom } from 'jotai';
 import './CollectionList.css';
 import { themeState, searchState } from './atoms/globalAppSettingsState';
 import { draggingTabState, draggingGroupState } from './atoms/animationsState';
-import ReactTooltip from 'react-tooltip';
 import { BsSearch } from 'react-icons/bs';
 import { browser } from '../static/globals';
 import CollapsableSection from './CollapsableSection';
@@ -38,16 +37,14 @@ import {
 import { updateCollectionsOrder } from './utils/storageUtils';
 
 const LIST_ROW_HEIGHT = 76;
-const VIRTUALIZATION_THRESHOLD = 40;
-const VIRTUALIZATION_BUFFER_ROWS = 6;
 
 function SearchTitle({ searchTerm }) {
     return <h2 className="search-title"><BsSearch size="14" /> &nbsp;Showing results for: <strong>{searchTerm}</strong></h2>
 }
 
 function NoCollections() {
-    const themeMode = useRecoilValue(themeState);
-    const search = useRecoilValue(searchState);
+    const themeMode = useAtomValue(themeState);
+    const search = useAtomValue(searchState);
 
     return !search ? <div className="no-collections-container">
         <p id='nothing_message'>You don&apos;t have any collections!<br />
@@ -101,19 +98,15 @@ function CollectionList({
     onFolderStateChange,
     ...props
 }) {
-    const search = useRecoilValue(searchState);
+    const search = useAtomValue(searchState);
     const [disableDrag, setDisableDrag] = useState(false);
     const [activeCollection, setActiveCollection] = useState(null);
     const [activeFolder, setActiveFolder] = useState(null);
-    const [draggingTab, setDraggingTab] = useRecoilState(draggingTabState);
-    const [draggingGroup, setDraggingGroup] = useRecoilState(draggingGroupState);
+    const [draggingTab, setDraggingTab] = useAtom(draggingTabState);
+    const [draggingGroup, setDraggingGroup] = useAtom(draggingGroupState);
+    
     const listContainerRef = useRef(null);
     const rootCollectionsSectionRef = useRef(null);
-    const scrollRafRef = useRef(null);
-    const [virtualizationState, setVirtualizationState] = useState({
-        scrollTop: 0,
-        viewportHeight: 0,
-    });
     
     
     // Create unified items array with folders and root-level collections only
@@ -155,43 +148,6 @@ function CollectionList({
         return collections.filter(collection => !collection.parentId);
     }, [collections]);
 
-    const shouldVirtualizeCollections =
-        !search &&
-        props.viewMode === 'list' &&
-        rootCollections.length >= VIRTUALIZATION_THRESHOLD;
-
-    const collectionsVirtualState = useMemo(() => {
-        if (!shouldVirtualizeCollections || rootCollections.length === 0) {
-            return null;
-        }
-
-        const container = listContainerRef.current;
-        const section = rootCollectionsSectionRef.current;
-
-        if (!container || !section) {
-            return null;
-        }
-
-        const sectionOffset = section.offsetTop - container.offsetTop;
-        const relativeScrollTop = Math.max(0, virtualizationState.scrollTop - sectionOffset);
-        const viewportHeight = virtualizationState.viewportHeight || container.clientHeight || LIST_ROW_HEIGHT * 6;
-        const rowHeight = LIST_ROW_HEIGHT;
-        const buffer = VIRTUALIZATION_BUFFER_ROWS;
-        const rawStart = Math.floor(relativeScrollTop / rowHeight) - buffer;
-        const maxStart = Math.max(0, rootCollections.length - 1);
-        const startIndex = Math.max(0, Math.min(maxStart, rawStart));
-        const visibleCount = Math.ceil(viewportHeight / rowHeight) + buffer * 2;
-        const endIndex = Math.max(startIndex, Math.min(rootCollections.length, startIndex + visibleCount));
-
-        return {
-            items: rootCollections.slice(startIndex, endIndex),
-            startIndex,
-            endIndex,
-            topSpacer: startIndex * rowHeight,
-            bottomSpacer: Math.max(0, (rootCollections.length - endIndex) * rowHeight),
-        };
-    }, [shouldVirtualizeCollections, rootCollections, virtualizationState]);
-
     // Create a helper function to get collections for a specific folder
     const getCollectionsForFolder = (folderId) => {
         return collections.filter(c => c.parentId === folderId);
@@ -224,44 +180,6 @@ function CollectionList({
             },
         }),
     );
-
-    useEffect(() => {
-        if (typeof window === 'undefined') {
-            return;
-        }
-
-        const container = listContainerRef.current;
-        if (!container) {
-            return;
-        }
-
-        const updateScrollMetrics = () => {
-            setVirtualizationState({
-                scrollTop: container.scrollTop,
-                viewportHeight: container.clientHeight || 0,
-            });
-        };
-
-        updateScrollMetrics();
-
-        const handleScroll = () => {
-            if (scrollRafRef.current) {
-                cancelAnimationFrame(scrollRafRef.current);
-            }
-            scrollRafRef.current = requestAnimationFrame(updateScrollMetrics);
-        };
-
-        container.addEventListener('scroll', handleScroll);
-        window.addEventListener('resize', updateScrollMetrics);
-
-        return () => {
-            container.removeEventListener('scroll', handleScroll);
-            window.removeEventListener('resize', updateScrollMetrics);
-            if (scrollRafRef.current) {
-                cancelAnimationFrame(scrollRafRef.current);
-            }
-        };
-    }, []);
 
     // Custom collision detection for better drop indicators between mixed item types
     const customCollisionDetection = (args) => {
@@ -409,14 +327,7 @@ function CollectionList({
     };
 
 
-    useEffect(() => {
-        // ReactTooltip needs rebuild when collections list changes to detect new tooltips
-        const timeoutId = setTimeout(() => {
-            ReactTooltip.rebuild();
-        }, 200);
-
-        return () => clearTimeout(timeoutId);
-    }, [collections]);
+    // Tooltip v5 automatically handles tooltip updates, no manual rebuild needed
 
     useEffect(() => {
         setDisableDrag(search !== undefined && search !== '');
@@ -1189,96 +1100,43 @@ function CollectionList({
                                             expandTooltip="Expand collections section"
                                             collapseTooltip="Collapse collections section"
                                         >
-                                            <div ref={rootCollectionsSectionRef}>
-                                                {collectionsVirtualState ? (
-                                                    <>
-                                                        <div
-                                                            className="collections-virtual-spacer"
-                                                            style={{ height: collectionsVirtualState.topSpacer }}
-                                                            aria-hidden="true"
+                                            <div ref={rootCollectionsSectionRef} className={props.viewMode === 'grid' ? 'collections-section-grid' : 'collections-section-list'}>
+                                                {rootCollections.map((collection, index) => 
+                                                    props.viewMode === 'grid' ? (
+                                                        <MemoizedSortableCollectionTile
+                                                            key={collection.uid}
+                                                            id={collection.uid}
+                                                            updateRemoteData={props.updateRemoteData}
+                                                            disableDrag={disableDrag}
+                                                            index={index}
+                                                            activeId={activeCollection?.uid}
+                                                            updateCollection={props.updateCollection}
+                                                            removeCollection={props.removeCollection}
+                                                            addCollection={addCollection}
+                                                            onDataUpdate={props.onDataUpdate}
+                                                            collection={collection}
+                                                            lightningEffect={lightningEffectUid === collection.uid}
+                                                            isInFolder={false}
+                                                            search={search}
                                                         />
-                                                        {collectionsVirtualState.items.map((collection, index) =>
-                                                            props.viewMode === 'grid' ? (
-                                                                <MemoizedSortableCollectionTile
-                                                                    key={collection.uid}
-                                                                    id={collection.uid}
-                                                                    updateRemoteData={props.updateRemoteData}
-                                                                    disableDrag={disableDrag}
-                                                                    index={collectionsVirtualState.startIndex + index}
-                                                                    activeId={activeCollection?.uid}
-                                                                    updateCollection={props.updateCollection}
-                                                                    removeCollection={props.removeCollection}
-                                                                    addCollection={addCollection}
-                                                                    onDataUpdate={props.onDataUpdate}
-                                                                    collection={collection}
-                                                                    lightningEffect={lightningEffectUid === collection.uid}
-                                                                    isInFolder={false}
-                                                                    search={search}
-                                                                />
-                                                            ) : (
-                                                                <MemoizedSortableCollectionItem
-                                                                    key={collection.uid}
-                                                                    id={collection.uid}
-                                                                    updateRemoteData={props.updateRemoteData}
-                                                                    expanded={false}
-                                                                    disableDrag={disableDrag}
-                                                                    index={collectionsVirtualState.startIndex + index}
-                                                                    activeId={activeCollection?.uid}
-                                                                    updateCollection={props.updateCollection}
-                                                                    removeCollection={props.removeCollection}
-                                                                    addCollection={addCollection}
-                                                                    onDataUpdate={props.onDataUpdate}
-                                                                    collection={collection}
-                                                                    lightningEffect={lightningEffectUid === collection.uid}
-                                                                    isInFolder={false}
-                                                                    search={search}
-                                                                />
-                                                            )
-                                                        )}
-                                                        <div
-                                                            className="collections-virtual-spacer"
-                                                            style={{ height: collectionsVirtualState.bottomSpacer }}
-                                                            aria-hidden="true"
+                                                    ) : (
+                                                        <MemoizedSortableCollectionItem
+                                                            key={collection.uid}
+                                                            id={collection.uid}
+                                                            updateRemoteData={props.updateRemoteData}
+                                                            expanded={false}
+                                                            disableDrag={disableDrag}
+                                                            index={index}
+                                                            activeId={activeCollection?.uid}
+                                                            updateCollection={props.updateCollection}
+                                                            removeCollection={props.removeCollection}
+                                                            addCollection={addCollection}
+                                                            onDataUpdate={props.onDataUpdate}
+                                                            collection={collection}
+                                                            lightningEffect={lightningEffectUid === collection.uid}
+                                                            isInFolder={false}
+                                                            search={search}
                                                         />
-                                                    </>
-                                                ) : (
-                                                    rootCollections.map((collection, index) => 
-                                                        props.viewMode === 'grid' ? (
-                                                            <MemoizedSortableCollectionTile
-                                                                key={collection.uid}
-                                                                id={collection.uid}
-                                                                updateRemoteData={props.updateRemoteData}
-                                                                disableDrag={disableDrag}
-                                                                index={index}
-                                                                activeId={activeCollection?.uid}
-                                                                updateCollection={props.updateCollection}
-                                                                removeCollection={props.removeCollection}
-                                                                addCollection={addCollection}
-                                                                onDataUpdate={props.onDataUpdate}
-                                                                collection={collection}
-                                                                lightningEffect={lightningEffectUid === collection.uid}
-                                                                isInFolder={false}
-                                                                search={search}
-                                                            />
-                                                        ) : (
-                                                            <MemoizedSortableCollectionItem
-                                                                key={collection.uid}
-                                                                id={collection.uid}
-                                                                updateRemoteData={props.updateRemoteData}
-                                                                expanded={false}
-                                                                disableDrag={disableDrag}
-                                                                index={index}
-                                                                activeId={activeCollection?.uid}
-                                                                updateCollection={props.updateCollection}
-                                                                removeCollection={props.removeCollection}
-                                                                addCollection={addCollection}
-                                                                onDataUpdate={props.onDataUpdate}
-                                                                collection={collection}
-                                                                lightningEffect={lightningEffectUid === collection.uid}
-                                                                isInFolder={false}
-                                                                search={search}
-                                                            />
-                                                        )
                                                     )
                                                 )}
                                             </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Activity } from 'react';
 import Modal from 'react-modal';
 import { MdFolder, MdClose } from 'react-icons/md';
 import './Modal.css';
@@ -79,7 +79,8 @@ function CreateFolderModal({ isOpen, onClose, onSave }) {
             shouldCloseOnOverlayClick={true}
             shouldCloseOnEsc={true}
         >
-            <div className="create-folder-modal-content">
+            <Activity mode={isOpen ? 'visible' : 'hidden'}>
+                <div className="create-folder-modal-content">
                 {/* Header */}
                 <div className="create-folder-modal-header">
                     <div className="create-folder-modal-title">
@@ -174,6 +175,7 @@ function CreateFolderModal({ isOpen, onClose, onSave }) {
                     Press <kbd>Enter</kbd> to create or <kbd>Esc</kbd> to cancel
                 </div>
             </div>
+            </Activity>
         </Modal>
     );
 }
