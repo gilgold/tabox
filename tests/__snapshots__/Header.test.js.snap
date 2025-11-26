@@ -33,9 +33,867 @@ exports[`Header -- Sync disabled Header renders correctly - sync disabled 1`] = 
       class="header-right"
     >
       <div
-        class="settings-loading"
+        class="settings-wrapper"
       >
-        ⚙️
+        <div
+          class="settings-button"
+        >
+          <svg
+            color="var(--text-color)"
+            fill="currentColor"
+            height="24"
+            stroke="currentColor"
+            stroke-width="0"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M2.13127 13.6308C1.9492 12.5349 1.95521 11.434 2.13216 10.3695C3.23337 10.3963 4.22374 9.86798 4.60865 8.93871C4.99357 8.00944 4.66685 6.93557 3.86926 6.17581C4.49685 5.29798 5.27105 4.51528 6.17471 3.86911C6.9345 4.66716 8.0087 4.99416 8.93822 4.60914C9.86774 4.22412 10.3961 3.23332 10.369 2.13176C11.4649 1.94969 12.5658 1.9557 13.6303 2.13265C13.6036 3.23385 14.1319 4.22422 15.0612 4.60914C15.9904 4.99406 17.0643 4.66733 17.8241 3.86975C18.7019 4.49734 19.4846 5.27153 20.1308 6.1752C19.3327 6.93499 19.0057 8.00919 19.3907 8.93871C19.7757 9.86823 20.7665 10.3966 21.8681 10.3695C22.0502 11.4654 22.0442 12.5663 21.8672 13.6308C20.766 13.6041 19.7756 14.1324 19.3907 15.0616C19.0058 15.9909 19.3325 17.0648 20.1301 17.8245C19.5025 18.7024 18.7283 19.4851 17.8247 20.1312C17.0649 19.3332 15.9907 19.0062 15.0612 19.3912C14.1316 19.7762 13.6033 20.767 13.6303 21.8686C12.5344 22.0507 11.4335 22.0447 10.3691 21.8677C10.3958 20.7665 9.86749 19.7761 8.93822 19.3912C8.00895 19.0063 6.93508 19.333 6.17532 20.1306C5.29749 19.503 4.51479 18.7288 3.86862 17.8252C4.66667 17.0654 4.99367 15.9912 4.60865 15.0616C4.22363 14.1321 3.23284 13.6038 2.13127 13.6308ZM11.9997 15.0002C13.6565 15.0002 14.9997 13.657 14.9997 12.0002C14.9997 10.3433 13.6565 9.00018 11.9997 9.00018C10.3428 9.00018 8.99969 10.3433 8.99969 12.0002C8.99969 13.657 10.3428 15.0002 11.9997 15.0002Z"
+            />
+          </svg>
+        </div>
+      </div>
+      <div
+        class="custom-drawer-overlay "
+      >
+        <div
+          class="custom-drawer "
+        >
+          <div
+            class="settings-drawer-content"
+          >
+            <div
+              class="settings-header"
+            >
+              <h2>
+                <svg
+                  fill="currentColor"
+                  height="1em"
+                  stroke="currentColor"
+                  stroke-width="0"
+                  viewBox="0 0 24 24"
+                  width="1em"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M2.13127 13.6308C1.9492 12.5349 1.95521 11.434 2.13216 10.3695C3.23337 10.3963 4.22374 9.86798 4.60865 8.93871C4.99357 8.00944 4.66685 6.93557 3.86926 6.17581C4.49685 5.29798 5.27105 4.51528 6.17471 3.86911C6.9345 4.66716 8.0087 4.99416 8.93822 4.60914C9.86774 4.22412 10.3961 3.23332 10.369 2.13176C11.4649 1.94969 12.5658 1.9557 13.6303 2.13265C13.6036 3.23385 14.1319 4.22422 15.0612 4.60914C15.9904 4.99406 17.0643 4.66733 17.8241 3.86975C18.7019 4.49734 19.4846 5.27153 20.1308 6.1752C19.3327 6.93499 19.0057 8.00919 19.3907 8.93871C19.7757 9.86823 20.7665 10.3966 21.8681 10.3695C22.0502 11.4654 22.0442 12.5663 21.8672 13.6308C20.766 13.6041 19.7756 14.1324 19.3907 15.0616C19.0058 15.9909 19.3325 17.0648 20.1301 17.8245C19.5025 18.7024 18.7283 19.4851 17.8247 20.1312C17.0649 19.3332 15.9907 19.0062 15.0612 19.3912C14.1316 19.7762 13.6033 20.767 13.6303 21.8686C12.5344 22.0507 11.4335 22.0447 10.3691 21.8677C10.3958 20.7665 9.86749 19.7761 8.93822 19.3912C8.00895 19.0063 6.93508 19.333 6.17532 20.1306C5.29749 19.503 4.51479 18.7288 3.86862 17.8252C4.66667 17.0654 4.99367 15.9912 4.60865 15.0616C4.22363 14.1321 3.23284 13.6038 2.13127 13.6308ZM11.9997 15.0002C13.6565 15.0002 14.9997 13.657 14.9997 12.0002C14.9997 10.3433 13.6565 9.00018 11.9997 9.00018C10.3428 9.00018 8.99969 10.3433 8.99969 12.0002C8.99969 13.657 10.3428 15.0002 11.9997 15.0002Z"
+                  />
+                </svg>
+                 Settings
+              </h2>
+              <button
+                class="close-button"
+              >
+                <svg
+                  fill="currentColor"
+                  height="20"
+                  stroke="currentColor"
+                  stroke-width="0"
+                  viewBox="0 0 24 24"
+                  width="20"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M0 0h24v24H0z"
+                    fill="none"
+                  />
+                  <path
+                    d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div
+              class="settings-content"
+            >
+              <div
+                class="settings-section"
+              >
+                <h3
+                  class="settings-collapsible-header"
+                >
+                  <div
+                    class="header-content"
+                  >
+                    <svg
+                      fill="currentColor"
+                      height="1em"
+                      stroke="currentColor"
+                      stroke-width="0"
+                      viewBox="0 0 24 24"
+                      width="1em"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M2.13127 13.6308C1.9492 12.5349 1.95521 11.434 2.13216 10.3695C3.23337 10.3963 4.22374 9.86798 4.60865 8.93871C4.99357 8.00944 4.66685 6.93557 3.86926 6.17581C4.49685 5.29798 5.27105 4.51528 6.17471 3.86911C6.9345 4.66716 8.0087 4.99416 8.93822 4.60914C9.86774 4.22412 10.3961 3.23332 10.369 2.13176C11.4649 1.94969 12.5658 1.9557 13.6303 2.13265C13.6036 3.23385 14.1319 4.22422 15.0612 4.60914C15.9904 4.99406 17.0643 4.66733 17.8241 3.86975C18.7019 4.49734 19.4846 5.27153 20.1308 6.1752C19.3327 6.93499 19.0057 8.00919 19.3907 8.93871C19.7757 9.86823 20.7665 10.3966 21.8681 10.3695C22.0502 11.4654 22.0442 12.5663 21.8672 13.6308C20.766 13.6041 19.7756 14.1324 19.3907 15.0616C19.0058 15.9909 19.3325 17.0648 20.1301 17.8245C19.5025 18.7024 18.7283 19.4851 17.8247 20.1312C17.0649 19.3332 15.9907 19.0062 15.0612 19.3912C14.1316 19.7762 13.6033 20.767 13.6303 21.8686C12.5344 22.0507 11.4335 22.0447 10.3691 21.8677C10.3958 20.7665 9.86749 19.7761 8.93822 19.3912C8.00895 19.0063 6.93508 19.333 6.17532 20.1306C5.29749 19.503 4.51479 18.7288 3.86862 17.8252C4.66667 17.0654 4.99367 15.9912 4.60865 15.0616C4.22363 14.1321 3.23284 13.6038 2.13127 13.6308ZM11.9997 15.0002C13.6565 15.0002 14.9997 13.657 14.9997 12.0002C14.9997 10.3433 13.6565 9.00018 11.9997 9.00018C10.3428 9.00018 8.99969 10.3433 8.99969 12.0002C8.99969 13.657 10.3428 15.0002 11.9997 15.0002Z"
+                      />
+                    </svg>
+                    <span>
+                      General Settings
+                    </span>
+                  </div>
+                  <svg
+                    fill="currentColor"
+                    height="1em"
+                    stroke="currentColor"
+                    stroke-width="0"
+                    viewBox="0 0 24 24"
+                    width="1em"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M0 0h24v24H0z"
+                      fill="none"
+                    />
+                    <path
+                      d="m12 8-6 6 1.41 1.41L12 10.83l4.59 4.58L18 14z"
+                    />
+                  </svg>
+                </h3>
+                <div
+                  class="collapsible-content expanded"
+                >
+                  <div
+                    class="setting-item"
+                  >
+                    <span
+                      data-tooltip-class-name="small-tooltip"
+                    >
+                      <input
+                        class="switch-input"
+                        id="darkModeToggle"
+                        name="darkModeToggle"
+                        type="checkbox"
+                      />
+                      <label
+                        class="switch-label"
+                        for="darkModeToggle"
+                      >
+                        <span
+                          class="toggle--on"
+                        >
+                          <span>
+                            <svg
+                              fill="currentColor"
+                              height="16"
+                              stroke="currentColor"
+                              stroke-width="0"
+                              style="margin-right: 8px;"
+                              viewBox="0 0 512 512"
+                              width="16"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path
+                                d="M264 480A232 232 0 0 1 32 248c0-94 54-178.28 137.61-214.67a16 16 0 0 1 21.06 21.06C181.07 76.43 176 104.66 176 136c0 110.28 89.72 200 200 200 31.34 0 59.57-5.07 81.61-14.67a16 16 0 0 1 21.06 21.06C442.28 426 358 480 264 480z"
+                              />
+                            </svg>
+                            Dark Mode: 
+                            <strong>
+                              On
+                            </strong>
+                          </span>
+                        </span>
+                        <span
+                          class="toggle--off"
+                        >
+                          <span>
+                            <svg
+                              fill="currentColor"
+                              height="16"
+                              stroke="currentColor"
+                              stroke-width="0"
+                              style="margin-right: 8px;"
+                              viewBox="0 0 512 512"
+                              width="16"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path
+                                d="M256 118a22 22 0 0 1-22-22V48a22 22 0 0 1 44 0v48a22 22 0 0 1-22 22zm0 368a22 22 0 0 1-22-22v-48a22 22 0 0 1 44 0v48a22 22 0 0 1-22 22zm113.14-321.14a22 22 0 0 1-15.56-37.55l33.94-33.94a22 22 0 0 1 31.11 31.11l-33.94 33.94a21.93 21.93 0 0 1-15.55 6.44zM108.92 425.08a22 22 0 0 1-15.55-37.56l33.94-33.94a22 22 0 1 1 31.11 31.11l-33.94 33.94a21.94 21.94 0 0 1-15.56 6.45zM464 278h-48a22 22 0 0 1 0-44h48a22 22 0 0 1 0 44zm-368 0H48a22 22 0 0 1 0-44h48a22 22 0 0 1 0 44zm307.08 147.08a21.94 21.94 0 0 1-15.56-6.45l-33.94-33.94a22 22 0 0 1 31.11-31.11l33.94 33.94a22 22 0 0 1-15.55 37.56zM142.86 164.86a21.89 21.89 0 0 1-15.55-6.44l-33.94-33.94a22 22 0 0 1 31.11-31.11l33.94 33.94a22 22 0 0 1-15.56 37.55zM256 358a102 102 0 1 1 102-102 102.12 102.12 0 0 1-102 102z"
+                              />
+                            </svg>
+                            Dark Mode: 
+                            <strong>
+                              Off
+                            </strong>
+                          </span>
+                        </span>
+                      </label>
+                    </span>
+                  </div>
+                  <div
+                    class="setting-item"
+                  >
+                    <span
+                      data-tooltip-class-name="small-tooltip"
+                    >
+                      <input
+                        class="switch-input"
+                        id="chkShowBadge"
+                        name="chkShowBadge"
+                        type="checkbox"
+                      />
+                      <label
+                        class="switch-label"
+                        for="chkShowBadge"
+                      >
+                        <span
+                          class="toggle--on"
+                        >
+                          <span>
+                            Tab counter badge 
+                            <strong>
+                              Enabled
+                            </strong>
+                          </span>
+                        </span>
+                        <span
+                          class="toggle--off"
+                        >
+                          <span>
+                            Tab counter badge 
+                            <strong>
+                              Disabled
+                            </strong>
+                          </span>
+                        </span>
+                      </label>
+                    </span>
+                  </div>
+                  <div
+                    class="setting-item"
+                  >
+                    <span
+                      data-tooltip-class-name="small-tooltip"
+                      data-tooltip-content="Reduces visual effects and animations to lower CPU usage and improve battery life"
+                      data-tooltip-id="main-tooltip"
+                    >
+                      <input
+                        class="switch-input"
+                        id="chkPerformanceMode"
+                        name="chkPerformanceMode"
+                        type="checkbox"
+                      />
+                      <label
+                        class="switch-label"
+                        for="chkPerformanceMode"
+                      >
+                        <span
+                          class="toggle--on"
+                        >
+                          <span>
+                            ⚡ Performance Mode: 
+                            <strong>
+                              Enabled
+                            </strong>
+                          </span>
+                        </span>
+                        <span
+                          class="toggle--off"
+                        >
+                          <span>
+                            ✨ Performance Mode: 
+                            <strong>
+                              Disabled
+                            </strong>
+                          </span>
+                        </span>
+                      </label>
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div
+                class="settings-section"
+              >
+                <h3
+                  class="settings-collapsible-header"
+                >
+                  <div
+                    class="header-content"
+                  >
+                    <svg
+                      fill="currentColor"
+                      height="1em"
+                      stroke="currentColor"
+                      stroke-width="0"
+                      viewBox="0 0 24 24"
+                      width="1em"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5ZM11 12H8V14H11V17H13V14H16V12H13V9H11V12Z"
+                      />
+                    </svg>
+                    <span>
+                      When adding a collection
+                    </span>
+                  </div>
+                  <svg
+                    fill="currentColor"
+                    height="1em"
+                    stroke="currentColor"
+                    stroke-width="0"
+                    viewBox="0 0 24 24"
+                    width="1em"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M0 0h24v24H0z"
+                      fill="none"
+                    />
+                    <path
+                      d="m12 8-6 6 1.41 1.41L12 10.83l4.59 4.58L18 14z"
+                    />
+                  </svg>
+                </h3>
+                <div
+                  class="collapsible-content expanded"
+                >
+                  <div
+                    class="setting-item"
+                  >
+                    <span
+                      data-tooltip-class-name="small-tooltip"
+                    >
+                      <input
+                        class="switch-input"
+                        id="chkIgnorePinned"
+                        name="chkIgnorePinned"
+                        type="checkbox"
+                      />
+                      <label
+                        class="switch-label"
+                        for="chkIgnorePinned"
+                      >
+                        <span
+                          class="toggle--on"
+                        >
+                          <span>
+                            <strong>
+                              Do not include
+                            </strong>
+                             pinned tabs
+                          </span>
+                        </span>
+                        <span
+                          class="toggle--off"
+                        >
+                          <span>
+                            <strong>
+                              Include
+                            </strong>
+                             pinned tabs
+                          </span>
+                        </span>
+                      </label>
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div
+                class="settings-section"
+              >
+                <h3
+                  class="settings-collapsible-header"
+                >
+                  <div
+                    class="header-content"
+                  >
+                    <svg
+                      fill="currentColor"
+                      height="1em"
+                      stroke="currentColor"
+                      stroke-width="0"
+                      version="1.1"
+                      viewBox="0 0 16 16"
+                      width="1em"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M3 1v12h12v-12h-12zM14 12h-10v-10h10v10zM2 14v-10.5l-1-1v12.5h12.5l-1-1h-10.5z"
+                      />
+                      <path
+                        d="M5.5 4l2.5 2.5-3 3 1.5 1.5 3-3 2.5 2.5v-6.5z"
+                      />
+                    </svg>
+                    <span>
+                      When opening collections
+                    </span>
+                  </div>
+                  <svg
+                    fill="currentColor"
+                    height="1em"
+                    stroke="currentColor"
+                    stroke-width="0"
+                    viewBox="0 0 24 24"
+                    width="1em"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M0 0h24v24H0z"
+                      fill="none"
+                    />
+                    <path
+                      d="m12 8-6 6 1.41 1.41L12 10.83l4.59 4.58L18 14z"
+                    />
+                  </svg>
+                </h3>
+                <div
+                  class="collapsible-content expanded"
+                >
+                  <div
+                    class="setting-item"
+                  >
+                    <span
+                      data-tooltip-class-name="small-tooltip"
+                    >
+                      <input
+                        class="switch-input"
+                        id="chkIgnoreDuplicates"
+                        name="chkIgnoreDuplicates"
+                        type="checkbox"
+                      />
+                      <label
+                        class="switch-label"
+                        for="chkIgnoreDuplicates"
+                      >
+                        <span
+                          class="toggle--on"
+                        >
+                          <span>
+                            If a tab already exists, 
+                            <strong>
+                              do not open it
+                            </strong>
+                          </span>
+                        </span>
+                        <span
+                          class="toggle--off"
+                        >
+                          <span>
+                            If a tab already exists, 
+                            <strong>
+                              open it anyway
+                            </strong>
+                          </span>
+                        </span>
+                      </label>
+                    </span>
+                  </div>
+                  <div
+                    class="setting-item"
+                  >
+                    <span
+                      data-tooltip-class-name="small-tooltip"
+                      data-tooltip-content="Smart tab loading delays non-essential tabs to improve performance.<br>Automatically avoids deferring media, auth, development, and collaboration sites.<br>Tabs load instantly when you switch to them."
+                      data-tooltip-id="main-tooltip"
+                    >
+                      <input
+                        class="switch-input"
+                        id="chkEnableTabDiscard"
+                        name="chkEnableTabDiscard"
+                        type="checkbox"
+                      />
+                      <label
+                        class="switch-label"
+                        for="chkEnableTabDiscard"
+                      >
+                        <span
+                          class="toggle--on"
+                        >
+                          <span>
+                            Smart tab loading: 
+                            <strong>
+                              Enabled
+                            </strong>
+                          </span>
+                        </span>
+                        <span
+                          class="toggle--off"
+                        >
+                          <span>
+                            Smart tab loading: 
+                            <strong>
+                              Disabled
+                            </strong>
+                          </span>
+                        </span>
+                      </label>
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div
+                class="settings-section"
+              >
+                <h3
+                  class="settings-collapsible-header"
+                >
+                  <div
+                    class="header-content"
+                  >
+                    <svg
+                      fill="currentColor"
+                      height="1em"
+                      stroke="currentColor"
+                      stroke-width="0"
+                      viewBox="0 0 24 24"
+                      width="1em"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M5 18.89H6.41421L15.7279 9.57627L14.3137 8.16206L5 17.4758V18.89ZM21 20.89H3V16.6473L16.435 3.21231C16.8256 2.82179 17.4587 2.82179 17.8492 3.21231L20.6777 6.04074C21.0682 6.43126 21.0682 7.06443 20.6777 7.45495L9.24264 18.89H21V20.89ZM15.7279 6.74785L17.1421 8.16206L18.5563 6.74785L17.1421 5.33363L15.7279 6.74785Z"
+                      />
+                    </svg>
+                    <span>
+                      When editing collections
+                    </span>
+                  </div>
+                  <svg
+                    fill="currentColor"
+                    height="1em"
+                    stroke="currentColor"
+                    stroke-width="0"
+                    viewBox="0 0 24 24"
+                    width="1em"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M0 0h24v24H0z"
+                      fill="none"
+                    />
+                    <path
+                      d="m12 8-6 6 1.41 1.41L12 10.83l4.59 4.58L18 14z"
+                    />
+                  </svg>
+                </h3>
+                <div
+                  class="collapsible-content expanded"
+                >
+                  <div
+                    class="setting-item"
+                  >
+                    <span
+                      data-tooltip-class-name="small-tooltip"
+                      data-tooltip-content="A tab is considered 'duplicate' <br />if it has the exact same URL as another tab"
+                      data-tooltip-id="main-tooltip"
+                    >
+                      <input
+                        class="switch-input"
+                        id="chkColEditIgnoreDuplicateTabs"
+                        name="chkColEditIgnoreDuplicateTabs"
+                        type="checkbox"
+                      />
+                      <label
+                        class="switch-label"
+                        for="chkColEditIgnoreDuplicateTabs"
+                      >
+                        <span
+                          class="toggle--on"
+                        >
+                          <span>
+                            If a tab exists in the collection, 
+                            <strong>
+                              do not add it
+                            </strong>
+                          </span>
+                        </span>
+                        <span
+                          class="toggle--off"
+                        >
+                          <span>
+                            If a tab exists in the collection, 
+                            <strong>
+                              add it anyway
+                            </strong>
+                          </span>
+                        </span>
+                      </label>
+                    </span>
+                  </div>
+                  <div
+                    class="setting-item"
+                  >
+                    <span
+                      data-tooltip-class-name="small-tooltip"
+                      data-tooltip-content="A group is considered 'duplicate' <br />if it has the exact same name and color as another group"
+                      data-tooltip-id="main-tooltip"
+                    >
+                      <input
+                        class="switch-input"
+                        id="chkColEditIgnoreDuplicateGroups"
+                        name="chkColEditIgnoreDuplicateGroups"
+                        type="checkbox"
+                      />
+                      <label
+                        class="switch-label"
+                        for="chkColEditIgnoreDuplicateGroups"
+                      >
+                        <span
+                          class="toggle--on"
+                        >
+                          <span>
+                            If a group already exists, 
+                            <strong>
+                              append tabs to it
+                            </strong>
+                          </span>
+                        </span>
+                        <span
+                          class="toggle--off"
+                        >
+                          <span>
+                            If a group already exists, 
+                            <strong>
+                              add as a new group
+                            </strong>
+                          </span>
+                        </span>
+                      </label>
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div
+                class="settings-section"
+              >
+                <h3
+                  class="settings-collapsible-header"
+                >
+                  <div
+                    class="header-content"
+                  >
+                    <svg
+                      fill="currentColor"
+                      height="1em"
+                      stroke="currentColor"
+                      stroke-width="0"
+                      viewBox="0 0 24 24"
+                      width="1em"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M0 0h24v24H0z"
+                        fill="none"
+                      />
+                      <path
+                        d="M7.41 13.41 6 12l-4 4 4 4 1.41-1.41L5.83 17H21v-2H5.83zM16.59 10.59 18 12l4-4-4-4-1.41 1.41L18.17 7H3v2h15.17z"
+                      />
+                    </svg>
+                    <span>
+                      Auto update collections
+                    </span>
+                  </div>
+                  <svg
+                    fill="currentColor"
+                    height="1em"
+                    stroke="currentColor"
+                    stroke-width="0"
+                    viewBox="0 0 24 24"
+                    width="1em"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M0 0h24v24H0z"
+                      fill="none"
+                    />
+                    <path
+                      d="m12 8-6 6 1.41 1.41L12 10.83l4.59 4.58L18 14z"
+                    />
+                  </svg>
+                </h3>
+                <div
+                  class="collapsible-content expanded"
+                >
+                  <div
+                    class="setting-item"
+                  >
+                    <span
+                      data-tooltip-class-name="small-tooltip"
+                      data-tooltip-content="When opening a collection, track changes<br />to the window and update the collection in the background."
+                      data-tooltip-id="main-tooltip"
+                    >
+                      <input
+                        class="switch-input"
+                        id="chkEnableAutoUpdate"
+                        name="chkEnableAutoUpdate"
+                        type="checkbox"
+                      />
+                      <label
+                        class="switch-label"
+                        for="chkEnableAutoUpdate"
+                      >
+                        <span
+                          class="toggle--on"
+                        >
+                          <span>
+                            Auto updating collections: 
+                            <strong>
+                              Enabled
+                            </strong>
+                          </span>
+                        </span>
+                        <span
+                          class="toggle--off"
+                        >
+                          <span>
+                            Auto updating collections: 
+                            <strong>
+                              Disabled
+                            </strong>
+                          </span>
+                        </span>
+                      </label>
+                    </span>
+                  </div>
+                  <div
+                    class="setting-item"
+                  >
+                    <span
+                      data-tooltip-class-name="small-tooltip"
+                      data-tooltip-content="When adding a new collection, start auto updating<br /> it with changes in the current window."
+                      data-tooltip-id="main-tooltip"
+                    >
+                      <input
+                        class="switch-input"
+                        disabled=""
+                        id="chkAutoUpdateOnNewCollection"
+                        name="chkAutoUpdateOnNewCollection"
+                        type="checkbox"
+                      />
+                      <label
+                        class="switch-label"
+                        for="chkAutoUpdateOnNewCollection"
+                      >
+                        <span
+                          class="toggle--on"
+                        >
+                          <span>
+                            Auto update new collections: 
+                            <strong>
+                              Enabled
+                            </strong>
+                          </span>
+                        </span>
+                        <span
+                          class="toggle--off"
+                        >
+                          <span>
+                            Auto update new collections: 
+                            <strong>
+                              Disabled
+                            </strong>
+                          </span>
+                        </span>
+                      </label>
+                    </span>
+                  </div>
+                  <div
+                    class="setting-item"
+                  >
+                    <span
+                      data-tooltip-class-name="small-tooltip"
+                      data-tooltip-content="When clicking the 'Update' button, this will link<br /> the collection to the window, making it 'active'."
+                      data-tooltip-id="main-tooltip"
+                    >
+                      <input
+                        class="switch-input"
+                        disabled=""
+                        id="chkManualUpdateLinkCollection"
+                        name="chkManualUpdateLinkCollection"
+                        type="checkbox"
+                      />
+                      <label
+                        class="switch-label"
+                        for="chkManualUpdateLinkCollection"
+                      >
+                        <span
+                          class="toggle--on"
+                        >
+                          <span>
+                            Click on 'Update' sets active: 
+                            <strong>
+                              Enabled
+                            </strong>
+                          </span>
+                        </span>
+                        <span
+                          class="toggle--off"
+                        >
+                          <span>
+                            Click on 'Update' sets active: 
+                            <strong>
+                              Disabled
+                            </strong>
+                          </span>
+                        </span>
+                      </label>
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div
+                class="settings-section"
+              >
+                <h3
+                  class="settings-collapsible-header"
+                >
+                  <div
+                    class="header-content"
+                  >
+                    <svg
+                      fill="currentColor"
+                      height="1em"
+                      stroke="currentColor"
+                      stroke-width="0"
+                      viewBox="0 0 24 24"
+                      width="1em"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M0 0h24v24H0z"
+                        fill="none"
+                      />
+                      <path
+                        d="M14 12c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2 2-.9 2-2zm-2-9a9 9 0 0 0-9 9H0l4 4 4-4H5c0-3.87 3.13-7 7-7s7 3.13 7 7a6.995 6.995 0 0 1-11.06 5.7l-1.42 1.44A9 9 0 1 0 12 3z"
+                      />
+                    </svg>
+                    <span>
+                      Backup & Restore
+                    </span>
+                  </div>
+                  <svg
+                    fill="currentColor"
+                    height="1em"
+                    stroke="currentColor"
+                    stroke-width="0"
+                    viewBox="0 0 24 24"
+                    width="1em"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M0 0h24v24H0z"
+                      fill="none"
+                    />
+                    <path
+                      d="m12 8-6 6 1.41 1.41L12 10.83l4.59 4.58L18 14z"
+                    />
+                  </svg>
+                </h3>
+                <div
+                  class="collapsible-content expanded"
+                >
+                  <button
+                    class="menu-button"
+                  >
+                    Export all collections & folders
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </header>
