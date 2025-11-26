@@ -30,21 +30,11 @@ export const getColorCode = (name) => {
 };
 
 /**
- * Get color name from hex value
- * @param {string} value - Hex color code
- * @returns {string|undefined} Color name or undefined if not found
- */
-export const getColorName = (value) => {
-    return Object.keys(tabGroupColorChart).find(key => tabGroupColorChart[key] === value);
-};
-
-/**
  * Get actual color value (supports both new names and legacy hex codes)
- * From colorMigration.js
  * @param {string} color - Color name or hex code
  * @returns {string} Actual color value
  */
-export const getColorValue = (color) => {
+const getColorValue = (color) => {
     if (!color) return 'var(--setting-row-border-color)';
     
     // If it's a color name from our palette, get its hex value
@@ -58,7 +48,6 @@ export const getColorValue = (color) => {
 
 /**
  * Get border color with background color conflict detection
- * From CollectionListItem.js
  * @param {string} collectionColor - Collection color to check
  * @returns {string} Border color that won't conflict with background
  */
@@ -99,7 +88,3 @@ export const getBorderColor = (collectionColor) => {
     // Return fallback color if there's a conflict, otherwise return the collection color
     return matchesBackground ? 'var(--setting-row-border-color)' : colorValue;
 };
-
-// Re-export COLOR_PALETTE for convenience
-export { COLOR_PALETTE } from './colorMigration';
-

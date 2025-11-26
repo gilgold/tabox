@@ -90,11 +90,11 @@ export const migrateColor = (oldColor) => {
 };
 
 /**
- * Migrate collection colors from old hex codes to new color names
+ * Migrate collection colors from old hex codes to new color names (internal use only)
  * @param {object} collection - Collection object with potential old colors
  * @returns {object} Collection with migrated colors
  */
-export const migrateCollectionColors = (collection) => {
+const migrateCollectionColors = (collection) => {
     if (!collection) return collection;
     
     const migratedCollection = { ...collection };
@@ -214,20 +214,3 @@ export const getColorValue = (colorName) => {
     // If it's an unknown format, return default
     return COLOR_PALETTE['default'];
 };
-
-/**
- * Get all available color names
- * @returns {Array} Array of color names
- */
-export const getColorNames = () => {
-    return Object.keys(COLOR_PALETTE);
-};
-
-/**
- * Validate if a color name exists in the palette
- * @param {string} colorName - Color name to validate
- * @returns {boolean} True if color exists
- */
-export const isValidColorName = (colorName) => {
-    return Object.prototype.hasOwnProperty.call(COLOR_PALETTE, colorName);
-}; 

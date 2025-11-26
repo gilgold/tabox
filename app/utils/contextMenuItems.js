@@ -1,7 +1,6 @@
 import { MdDelete, MdOutlineRefresh } from 'react-icons/md';
 import { CiExport } from 'react-icons/ci';
 import { FaStop } from 'react-icons/fa6';
-import { MdFolder, MdFolderOpen } from 'react-icons/md';
 import { MdContentCopy } from 'react-icons/md';
 
 const ICON_SIZE = 16;
@@ -56,63 +55,3 @@ export const createCollectionMenuItems = ({
         condition: true
     }
 ];
-
-// Folder menu items
-export const createFolderMenuItems = ({
-    onExport,
-    onDelete,
-    onToggleExpand,
-    onStopTracking,
-    isExpanded = false,
-    hasTrackedCollections = false
-}) => [
-    {
-        id: 'export',
-        text: 'Export Folder',
-        icon: <CiExport size={ICON_SIZE} />,
-        action: onExport,
-        className: '',
-        condition: true
-    },
-    {
-        id: 'toggle-expand',
-        text: isExpanded ? 'Collapse Folder' : 'Expand Folder',
-        icon: isExpanded ? <MdFolder size={ICON_SIZE} /> : <MdFolderOpen size={ICON_SIZE} />,
-        action: onToggleExpand,
-        className: '',
-        condition: true
-    },
-    {
-        id: 'stop-tracking-folder',
-        text: 'Stop Auto Tracking Folder',
-        icon: <FaStop size={ICON_SIZE} />,
-        action: onStopTracking,
-        className: '',
-        condition: hasTrackedCollections
-    },
-    {
-        id: 'delete',
-        text: 'Delete Folder',
-        icon: <MdDelete size={ICON_SIZE} />,
-        action: onDelete,
-        className: 'danger',
-        condition: true
-    }
-];
-
-// Generic menu item creator for custom use cases
-export const createMenuItem = ({
-    id,
-    text,
-    icon,
-    action,
-    className = '',
-    condition = true
-}) => ({
-    id,
-    text,
-    icon,
-    action,
-    className,
-    condition
-}); 

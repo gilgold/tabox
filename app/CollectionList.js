@@ -1042,6 +1042,7 @@ function CollectionList({
                                                             onFolderStateChange={onFolderStateChange}
                                                             onFolderDelete={props.onDataUpdate}
                                                             updateRemoteData={props.updateRemoteData}
+                                                            onDataUpdate={props.onDataUpdate}
                                                             viewMode={props.viewMode}
                                                             lightningEffect={lightningEffectFolderUid === folder.uid}
                                                         >

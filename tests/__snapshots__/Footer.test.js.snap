@@ -47,7 +47,9 @@ exports[`Footer Tests Footer renders correctly 1`] = `
       </span>
       <span
         class="version"
-      />
+      >
+        1.0.0
+      </span>
     </div>
     <div
       class="footer_right"

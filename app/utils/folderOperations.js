@@ -8,6 +8,8 @@ import { UNDO_TIME } from '../constants';
 import { FaTrash } from 'react-icons/fa';
 import { browser } from '../../static/globals';
 import TaboxFolder from '../model/TaboxFolder';
+import TaboxCollection from '../model/TaboxCollection';
+import { generateCopyName, applyUid } from '../utils';
 import { 
     saveSingleFolder, 
     loadSingleFolder, 
@@ -173,26 +175,106 @@ export const deleteFolder = async (folderId, force = false, deleteCollections = 
 };
 
 /**
- * Check if a folder is empty (auto-delete if needed)
- * @param {string} folderId - Folder UID to check
- * @returns {Promise<boolean>} True if folder was auto-deleted
+ * Duplicate a folder (including all collections inside it)
+ * @param {string} folderId - Folder UID to duplicate
+ * @returns {Promise<{success: boolean, newFolder?: TaboxFolder, duplicatedCollections?: number}>} Result
  */
-export const checkAndAutoDeleteEmptyFolder = async (folderId) => {
+export const duplicateFolder = async (folderId) => {
     try {
-        if (!folderId) return false;
-
-        const collectionsIndex = await loadCollectionsIndex();
-        const collectionsInFolder = Object.values(collectionsIndex).filter(c => c.parentId === folderId);
-
-        if (collectionsInFolder.length === 0) {
-            const result = await deleteFolder(folderId, false);
-            return result.success;
+        if (!folderId) {
+            throw new Error('Folder ID is required');
         }
 
-        return false;
+        // Load the folder to duplicate
+        const originalFolder = await loadSingleFolder(folderId);
+        if (!originalFolder) {
+            throw new Error(`Folder ${folderId} not found`);
+        }
+
+        // Load all folders to generate unique name
+        const allFolders = await loadAllFolders();
+        
+        // Generate unique copy name using the same convention as collections
+        const newName = generateCopyName(originalFolder.name, allFolders);
+
+        // Create new folder with same properties but new UID and name
+        const newFolder = new TaboxFolder(
+            newName,
+            originalFolder.color,
+            null, // createdAt - will be set to now
+            null, // lastUpdated - will be set to now
+            true // collapsed - keep collapsed after duplication
+        );
+
+        // Save the new folder
+        const folderSaved = await saveSingleFolder(newFolder, true);
+        if (!folderSaved) {
+            throw new Error('Failed to save duplicated folder');
+        }
+
+        // Get all collections in the original folder
+        const collectionsInFolder = await getFolderCollections(folderId);
+        let duplicatedCollections = 0;
+
+        // Duplicate each collection into the new folder
+        if (collectionsInFolder.length > 0) {
+            // Load all collections to generate unique names
+            const allCollections = await loadAllCollections();
+
+            for (const collection of collectionsInFolder) {
+                try {
+                    // Generate unique name for the duplicated collection
+                    const collectionNewName = generateCopyName(collection.name, allCollections);
+                    
+                    // Deep clone tabs and chromeGroups to avoid read-only property errors
+                    const clonedTabs = JSON.parse(JSON.stringify(collection.tabs || []));
+                    const clonedGroups = JSON.parse(JSON.stringify(collection.chromeGroups || []));
+
+                    // Create new collection with same data but new UID, name, and parent
+                    let duplicateCollection = new TaboxCollection(
+                        collectionNewName,
+                        clonedTabs,
+                        clonedGroups,
+                        collection.color,
+                        null, // createdOn - will be set to now
+                        collection.window,
+                        null, // lastUpdated - will be set to now
+                        null  // lastOpened - null for new duplicate
+                    );
+
+                    // Apply unique IDs to tabs and groups
+                    duplicateCollection = applyUid(duplicateCollection);
+
+                    // Set parent to the new folder
+                    duplicateCollection.parentId = newFolder.uid;
+
+                    // Save the duplicated collection
+                    await saveSingleCollection(duplicateCollection, true);
+                    
+                    // Add to allCollections for unique name generation in subsequent iterations
+                    allCollections.push(duplicateCollection);
+                    duplicatedCollections++;
+                } catch (collectionError) {
+                    console.error(`Error duplicating collection ${collection.name}:`, collectionError);
+                }
+            }
+        }
+
+        // Update folder collection count
+        await updateFolderCollectionCount(newFolder.uid);
+
+        // Trigger sync
+        await browser.storage.local.set({ localTimestamp: Date.now() });
+        await browser.runtime.sendMessage({ type: 'addCollection' });
+
+        return { 
+            success: true, 
+            newFolder, 
+            duplicatedCollections 
+        };
     } catch (error) {
-        console.error('Error checking empty folder:', error);
-        return false;
+        console.error('Error duplicating folder:', error);
+        return { success: false, error: error.message };
     }
 };
 
@@ -555,46 +637,4 @@ export function useFolderOperations({
         handleUpdateFolderColor,
         handleToggleCollapsed
     };
-}
-
-// ========================================
-// UTILITY FUNCTIONS
-// ========================================
-
-/**
- * Get folder hierarchy statistics
- * @returns {Promise<object>} Folder and collection statistics
- */
-export const getFolderStats = async () => {
-    try {
-        const folders = await loadAllFolders();
-        const collectionsIndex = await loadCollectionsIndex();
-        
-        const totalFolders = folders.length;
-        const totalCollections = Object.keys(collectionsIndex).length;
-        const collectionsInFolders = Object.values(collectionsIndex).filter(c => c.parentId).length;
-        const rootCollections = totalCollections - collectionsInFolders;
-
-        return {
-            totalFolders,
-            totalCollections,
-            collectionsInFolders,
-            rootCollections,
-            folders: folders.map(folder => ({
-                uid: folder.uid,
-                name: folder.name,
-                collectionCount: folder.collectionCount || 0,
-                collapsed: folder.collapsed
-            }))
-        };
-    } catch (error) {
-        console.error('Error getting folder stats:', error);
-        return {
-            totalFolders: 0,
-            totalCollections: 0,
-            collectionsInFolders: 0,
-            rootCollections: 0,
-            folders: []
-        };
-    }
-}; 
+} 

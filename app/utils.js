@@ -175,18 +175,7 @@ export async function getAllWindowsTabsAndGroups(folderName) {
 }
 
 // Color utilities moved to app/utils/colorUtils.js for consolidation
-export { tabGroupColorChart as tabGrooupColorChart, getColorCode, getColorName } from './utils/colorUtils';
-
-export const updateGroupAttribute = (group, attr, val, collection, updateCollection) => {
-  let currentCollection = { ...collection };
-  const grpIndex = currentCollection.chromeGroups.findIndex(el => el.uid === group.uid);
-  let chromeGroups = [...currentCollection.chromeGroups];
-  let chromeGrp = { ...chromeGroups[grpIndex] }
-  chromeGrp[attr] = val;
-  chromeGroups[grpIndex] = chromeGrp;
-  currentCollection.chromeGroups = chromeGroups;
-  updateCollection(currentCollection);
-}
+export { tabGroupColorChart as tabGrooupColorChart, getColorCode } from './utils/colorUtils';
 
 /**
  * Generate a unique copy name for a collection

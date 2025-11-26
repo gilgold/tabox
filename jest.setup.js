@@ -15,6 +15,27 @@ jest.mock('react-hot-toast', () => ({
     Toaster: () => null,
 }));
 
+// Mock webextension-polyfill (used by static/globals.js)
+jest.mock('webextension-polyfill', () => ({
+    runtime: {
+        getManifest: jest.fn(() => ({ version: '1.0.0' })),
+        sendMessage: jest.fn(() => Promise.resolve()),
+    },
+    storage: {
+        local: {
+            get: jest.fn(() => Promise.resolve({})),
+            set: jest.fn(() => Promise.resolve()),
+        },
+    },
+    windows: {
+        WINDOW_ID_CURRENT: -2,
+        getAll: jest.fn(() => Promise.resolve([{ id: 1 }])),
+    },
+    tabs: {
+        query: jest.fn(() => Promise.resolve([])),
+    },
+}));
+
 // Mock ReactDOM.createPortal to render portals inline for testing
 jest.spyOn(ReactDOM, 'createPortal').mockImplementation((element, node) => element);
 
@@ -22,13 +43,21 @@ jest.spyOn(ReactDOM, 'createPortal').mockImplementation((element, node) => eleme
 const b = {
     runtime: {
       getManifest: jest.fn(() => ({ version: '1.0.0' })),
+      sendMessage: jest.fn(() => Promise.resolve()),
     },
     storage: {
         local: {
-            get: jest.fn(),
-            set: jest.fn(),
+            get: jest.fn(() => Promise.resolve({})),
+            set: jest.fn(() => Promise.resolve()),
         },
-    }
+    },
+    windows: {
+        WINDOW_ID_CURRENT: -2,
+        getAll: jest.fn(() => Promise.resolve([{ id: 1 }])),
+    },
+    tabs: {
+        query: jest.fn(() => Promise.resolve([])),
+    },
   };
 global.browser = b;
 Object.defineProperty(global.browser, "browser", { b, writable: true });

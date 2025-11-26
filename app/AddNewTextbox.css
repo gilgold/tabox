@@ -3,7 +3,7 @@ input[type="text"] {
   color: var(--text-color);
   padding: 7px 10px;
   border: none;
-  border-radius: 20px;
+  border-radius: 14px;
   padding-right: 25px;
   background: linear-gradient(var(--input-bg-color), var(--input-bg-color)) padding-box,
     linear-gradient(90deg, var(--gradient-blue), var(--gradient-purple), var(--gradient-orange)) border-box;

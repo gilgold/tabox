@@ -24,11 +24,7 @@ export {
 
 // Data validation utilities
 export {
-  validateCollection,
-  validateArrayFormat,
-  validateDocumentFormat,
   detectAndValidateFormat,
-  generateDataReport,
   isDataSafe
 } from './dataValidation.js';
 
@@ -36,14 +32,12 @@ export {
 export {
   createBackup,
   createMigrationBackup,
-  createEmergencyBackup,
   restoreFromBackup,
   getAvailableBackups,
   cleanupOldBackups,
   createRollbackChain,
   addToRollbackChain,
-  executeRollback,
-  getBackupStats
+  executeRollback
 } from './backupUtils.js';
 
 // Migration coordination (main entry point)
@@ -58,43 +52,9 @@ export {
 // Color migration utilities
 export {
   COLOR_PALETTE,
-  migrateColor,
-  migrateCollectionColors,
   migrateAllCollectionColors,
-  getColorValue,
-  getColorNames,
-  isValidColorName
+  getColorValue
 } from './colorMigration.js';
-
-/**
- * Quick migration status check
- * @returns {Promise<object>} Current migration status
- */
-export const getMigrationStatus = async () => {
-  try {
-    // Import these here to avoid circular dependency issues
-    const { assessMigrationNeeds, migrationCoordinator } = await import('./migrationCoordinator.js');
-    
-    const assessment = await assessMigrationNeeds();
-    const coordinatorStatus = migrationCoordinator.getStatus();
-    
-    return {
-      currentVersion: assessment.currentVersion,
-      migrationNeeded: assessment.migrationNeeded,
-      isRunning: coordinatorStatus.isRunning,
-      currentOperation: coordinatorStatus.currentOperation,
-      dataValid: assessment.isDataValid,
-      collectionsCount: assessment.collections
-    };
-  } catch (error) {
-    return {
-      error: error.message,
-      currentVersion: 'unknown',
-      migrationNeeded: false,
-      isRunning: false
-    };
-  }
-};
 
 /**
  * Emergency data recovery function

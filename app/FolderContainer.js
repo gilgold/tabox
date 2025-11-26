@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { MdExpandMore, MdExpandLess, MdFolder, MdFolderOpen, MdDragIndicator, MdDelete, MdPlayArrow } from 'react-icons/md';
+import { MdExpandMore, MdExpandLess, MdFolder, MdFolderOpen, MdDragIndicator, MdDelete, MdPlayArrow, MdContentCopy } from 'react-icons/md';
 import { CiExport } from 'react-icons/ci';
 import { FaStop } from 'react-icons/fa6';
 import { AutoSaveTextbox } from './AutoSaveTextbox';
@@ -7,7 +7,7 @@ import ColorPicker from './ColorPicker';
 import ContextMenu from './ContextMenu';
 import DroppableFolderHeader from './DroppableFolderHeader';
 import DroppableFolderContent from './DroppableFolderContent';
-import { useFolderOperations } from './utils/folderOperations';
+import { useFolderOperations, duplicateFolder } from './utils/folderOperations';
 import { loadCollectionsIndex } from './utils/storageUtils';
 import { downloadTextFile } from './utils';
 import { browser } from '../static/globals';
@@ -26,6 +26,7 @@ function FolderContainer({
     onFolderStateChange,
     onFolderDelete,
     updateRemoteData,
+    onDataUpdate,
     dragAttributes,
     dragListeners,
     isDragging = false,
@@ -660,6 +661,25 @@ function FolderContainer({
         }
     };
 
+    const handleDuplicateFolder = async () => {
+        try {
+            const result = await duplicateFolder(folder.uid);
+            
+            if (result.success) {
+                console.log(`✅ Duplicated folder "${folder.name}" as "${result.newFolder.name}" with ${result.duplicatedCollections} collection(s)`);
+                
+                // Refresh data to show the new folder
+                if (onDataUpdate) {
+                    await onDataUpdate();
+                }
+            } else {
+                console.error('Failed to duplicate folder:', result.error);
+            }
+        } catch (error) {
+            console.error('Error duplicating folder:', error);
+        }
+    };
+
     return (
         <>
             <div 
@@ -842,6 +862,14 @@ function FolderContainer({
                                 text: 'Export Folder',
                                 icon: <CiExport size={16} />,
                                 action: handleExportFolder,
+                                className: '',
+                                condition: true
+                            },
+                            {
+                                id: 'duplicate',
+                                text: 'Duplicate Folder',
+                                icon: <MdContentCopy size={16} />,
+                                action: handleDuplicateFolder,
                                 className: '',
                                 condition: true
                             },
