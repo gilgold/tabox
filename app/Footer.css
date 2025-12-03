@@ -1,186 +1,240 @@
-.st0{opacity:0;}
+.st0 {
+	opacity: 0;
+}
+
+/* iOS 26 Liquid Glass Footer Design */
 footer {
-	background: var(--footer-bg-color);
+	/* Liquid Glass Effect */
+	background: var(--section-bg-color);
+	backdrop-filter: blur(2px) saturate(180%);
+	-webkit-backdrop-filter: blur(2px) saturate(180%);
+	border: 1px solid rgb(146 146 146 / 37%);
+	box-shadow:
+		0 4px 32px rgb(255 255 255 / 68%), inset 0 4px 30px rgb(255 255 255 / 23%);
+	/* Oval Shape - Elongated with perfect half circles on ends */
+	border-radius: 50px;
+
+	/* Floating Position */
+	position: fixed;
+	bottom: 10px;
+	left: 50%;
+	transform: translateX(-50%);
+
+	/* Size and Layout */
+	width: 55%;
+	max-width: 800px;
+	min-width: 420px;
+	height: 45px;
+	padding: 2px 30px;
+
+	/* Grid Layout */
+	display: grid;
+	grid-template-columns: 1fr auto 1fr;
+	align-items: center;
+
+	z-index: 1000;
+
+	/* Subtle Animation */
+	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+footer::after {
+	content: '';
 	position: absolute;
-	bottom: 0;
+	top: 0;
+	left: 0;
 	width: 100%;
-	height: 2.6rem;
-	vertical-align: middle;
+	height: 100%;
+	border-radius: 2rem;
+	backdrop-filter: blur(1px);
+	opacity: 0.6;
+	z-index: -1;
+	filter: blur(1px) drop-shadow(10px 4px 6px black) brightness(115%);
 }
 
+footer:hover {
+	box-shadow:
+		0 12px 48px rgba(0, 0, 0, 0.15),
+		0 4px 24px rgba(0, 0, 0, 0.08),
+		inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+/* Dark mode adjustments */
+[data-theme="dark"] footer {
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	box-shadow:
+		0 8px 32px rgba(0, 0, 0, 0.3),
+		0 2px 16px rgba(0, 0, 0, 0.2),
+		inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] footer:hover {
+	box-shadow:
+		0 12px 48px rgba(0, 0, 0, 0.4),
+		0 4px 24px rgba(0, 0, 0, 0.25),
+		inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+/* Left Section */
 .footer_left {
-	display: inline-block;
-    width: 33%;
-    height: 32px;
+	display: flex;
+	align-items: center;
+	gap: 15px;
+	justify-content: flex-start;
 }
 
-.header_title {
+/* Center Section */
+.footer_center {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
 	text-align: center;
-	padding-top: 7px;
 	font-weight: 600;
-	font-size: .8em;
 	color: var(--footer-text-color);
-	line-height: 1.1em;
-	width: 33%;
-    height: 40px;
-    display: inline-block;
-}
-.version {
-	font-size: .6em;
-	color: var(--footer-text-color);
-	font-weight: 400;
+	line-height: 1;
+	gap: 2px;
 }
 
+.version {
+	font-size: 0.7em;
+	color: #9752ff;
+	font-weight: 800;
+	opacity: 0.9;
+}
+
+/* Sync Status */
 #last_sync {
-	position: absolute;
-	bottom: 3px;
-	left: 3px;
-	font-size: .63em;
+	font-size: 0.75em;
 	display: flex;
 	color: var(--footer-text-color);
-	flex-direction: row;
-    align-items: center;
+	align-items: center;
+	gap: 6px;
+	opacity: 0.9;
 }
+
 footer svg {
-	height: 1.55em;
-	width: 1.55em;
-	float: left;
+	height: 1.2em;
+	width: 1.2em;
 	fill: var(--footer-text-color);
 }
-.footer_icons {
-	margin: 2px 15px;
+
+/* Right Section */
+.footer_right {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	justify-content: center;
+	font-size: 0.8em;
+	font-weight: 400;
+	gap: 6px;
 }
+
+.footer_right a {
+	text-decoration: none;
+	color: var(--footer-text-color);
+	opacity: 0.9;
+	transition: all 300ms ease;
+}
+
+.footer_right a:hover {
+	color: var(--link-hover-color);
+	opacity: 1;
+}
+
+.footer_icons {
+	display: flex;
+	gap: 20px;
+	align-items: center;
+	margin-right: 18px;
+}
+
 .social_icon {
 	fill: var(--footer-text-color);
-	margin: 0 2px;
-	transition: fill 400ms ease;
+	transition: all 400ms cubic-bezier(0.4, 0, 0.2, 1);
+	opacity: 0.8;
+	width: 24px;
+	height: 24px;
 }
+
+.social_icon:hover {
+	opacity: 1;
+	transform: scale(1.10);
+	transition-duration: 50ms;
+}
+
 .facebook:hover {
 	fill: #1777f2;
 }
+
 .facebook_f {
 	fill: var(--footer-bg-color);
 }
+
 .facebook:hover path.facebook_f {
 	fill: white;
 }
+
 .twitter:hover {
 	fill: #1da1f3;
 }
+
 .sync_msg {
-	padding-left: 3px;
-}
-.right_footer {
-	position: absolute;
-	bottom: 4px;
-	right: 5px;
-	font-size: .7em;
-	font-weight: 400;
-}
-.right_footer a {
-	text-decoration: none;
-	color: var(--footer-text-color);
-}
-.right_footer a:hover {
-	color: var(--link-hover-color);
+	font-weight: 500;
 }
 
-.theme-switch-wrapper {
-	display: flex;
-	position: relative;
-	top: 4px;
-	left: 4px;
-	float: left;
-	font-size: .6em;
-	line-height: 16px;
-}
-.theme-switch-wrapper input[type=checkbox] {
-	display:none;
-}
-	
-.theme-switch-wrapper input[type=checkbox] + span
-{
-	height: 16px;
-	width: 16px;
-	display:inline-block;
-	padding: 0;
-	cursor: pointer;
-}
-.circle {
-	width: 14px;
-    height: 14px;
-    background-color: var(--footer-text-color);
-    border-radius: 9px;
-    border: 0 solid gray;
-    position: relative;
-}
-.half {
-	position: absolute;
-    width: 6px;
-    top: 2px;
-    left: 6px;
-    height: 10px;
-    background-color: var(--footer-bg-color);
-    border: 0 solid rgb(1, 1, 1);
-    border-top-right-radius: 8px;
-    border-bottom-right-radius: 8px;
-}
-.theme-switch-inner-circle {
-	position: absolute;
-    top: calc(50% - 3px);
-    left: calc(50% - 3px);
-    width: 6px;
-    height: 6px;
-    border-radius: 3px;
-    
-    z-index: 101;
-    cursor: pointer;
-    transition: all 450ms ease;
-}
-.theme-switch-wrapper input[type='checkbox'] + label + span{
-	background-color: var(--footer-text-color);
-	border: 1px solid var(--footer-bg-color);
-	animation: scale-it 600ms ease-in-out;
-}
-.theme-switch-wrapper input[type='checkbox']:checked + label + span {
-	border: 1px solid var(--footer-bg-color) !important;
-	animation: scale-it 600ms ease-in-out;
-}
-.dark_mode_switch_label {
-	cursor: pointer;
-	margin-left: 5px;
-}
-.over {
-	transform: rotate( -180deg );
-	transition: transform 450ms ease;
-}
 
-.out {
-	transform: rotate( -360deg );   
-	transition: transform 450ms ease;
-}
 
-@keyframes scale-it {
-	0% {
-	  	transform: scale(1.0);
-	}
-	50% {
-		transform: scale(1.7);
-	  }
-	100% {
-		transform: scale(1.0);
-	}
-  }
-
-  @keyframes rotation {
+@keyframes rotation {
 	from {
-		transform: rotate(0deg);
-	}
-	to {
 		transform: rotate(359deg);
 	}
-  }
+
+	to {
+		transform: rotate(0deg);
+	}
+}
 
 .rotate {
 	animation: rotation 2s infinite linear;
+}
+
+/* Enhanced Tabox Gradient for Liquid Glass */
+.tabox-gradient {
+	background: linear-gradient(135deg,
+			var(--gradient-blue),
+			var(--gradient-purple),
+			var(--gradient-orange),
+			#ff6b9d);
+	-webkit-background-clip: text;
+	background-clip: text;
+	-webkit-text-fill-color: transparent;
+	background-size: 300% 300%;
+	/* Animation removed to reduce idle CPU usage - static gradient still looks great */
+	background-position: 50% 50%;
+	font-size: 1em;
+	line-height: 1;
+	font-weight: 700;
+	letter-spacing: 0.5px;
+}
+
+/* Only animate on hover for interactive feedback without idle CPU cost */
+.tabox-gradient:hover {
+	animation: liquidGradientShift 4s ease-in-out infinite;
+}
+
+@keyframes liquidGradientShift {
+
+	0%,
+	100% {
+		background-position: 0% 50%;
+	}
+
+	33% {
+		background-position: 100% 0%;
+	}
+
+	66% {
+		background-position: 50% 100%;
+	}
 }

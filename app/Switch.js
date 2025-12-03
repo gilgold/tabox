@@ -1,19 +1,18 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import './Switch.css';
 import { browser } from '../static/globals';
-import ReactTooltip from 'react-tooltip';
 
 const Switch = props => {
   const { id: _id, textOn, textOff, disabled, ...otherProps } = props;
   const [isChecked, setIsChecked] = useState(false);
   useEffect(() => {
-    ReactTooltip.rebuild();
+    // Load initial value from storage
     browser.storage.local.get(_id).then((items) => {
         if (items[_id]) {
             setIsChecked(items[_id]);
         }
     });
-  }, []);
+  }, [_id]); // Only run when _id changes
 
   useEffect(() => {
     setLocalStorage(disabled ? false : isChecked);
@@ -31,7 +30,7 @@ const Switch = props => {
     setLocalStorage(target.checked);
   });
 
-  return <span {...otherProps} data-class="small-tooltip" data-multiline={true}>
+  return <span {...otherProps} data-tooltip-class-name="small-tooltip">
                 <input type="checkbox" disabled={disabled} checked={disabled ? false : isChecked} onChange={toggle} id={_id} name={_id} className="switch-input" />
                 <label htmlFor={_id} className="switch-label">
                         <span className="toggle--on">

@@ -1,0 +1,334 @@
+.collection-filter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    
+    /* Subtle Glass Container */
+    background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.1) 0%,
+        rgba(255, 255, 255, 0.05) 100%
+    );
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    
+    box-shadow: 
+        0 1px 3px rgba(0, 0, 0, 0.05),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.filter-label {
+    margin-left: 5px
+}
+
+.filter-icon {
+    display: flex;
+    align-items: center;
+    color: var(--text-color);
+    opacity: 0.8;
+}
+
+.filter-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.filter-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    width: auto;
+    height: 28px;
+    padding: 0 8px;
+    color: var(--text-color);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    font-size: 10px;
+    font-weight: 600;
+    white-space: nowrap;
+    
+    /* Flat style - no bezel/emboss */
+    background: transparent;
+    border: none;
+    border-radius: 10px;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Icon-only filter buttons (for color filter indicator) */
+.filter-button.icon-only {
+    width: 28px;
+    min-width: 28px;
+    padding: 0;
+}
+
+
+
+/* Opened filter button - uses standard glass effect */
+.filter-button.opened-filter {
+    /* Use default filter button styles with lightning hover effect */
+    position: relative;
+    overflow: hidden;
+}
+
+/* Lightning hover effect for opened filter button */
+.filter-button.opened-filter::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.3),
+        transparent
+    );
+    transition: left 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 10px;
+}
+
+.filter-button.opened-filter:hover::before {
+    left: 100%;
+}
+
+/* Disable lightning effect when active */
+.filter-button.opened-filter.active::before {
+    display: none;
+}
+
+
+
+.filter-button:hover {
+    background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.25) 0%,
+        rgba(255, 255, 255, 0.15) 100%
+    );
+    transform: translateY(-1px) scale(1.02);
+    box-shadow: 
+        0 4px 12px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.filter-button.active {
+    background: linear-gradient(
+        135deg,
+        rgba(var(--primary-color-rgb, 52, 152, 219), 0.9) 0%,
+        rgba(var(--primary-color-rgb, 52, 152, 219), 0.8) 100%
+    ) !important;
+    color: white !important;
+    border: 1px solid rgba(var(--primary-color-rgb, 52, 152, 219), 0.6) !important;
+    box-shadow: 
+        0 4px 12px rgba(var(--primary-color-rgb, 52, 152, 219), 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.1) !important;
+    transform: translateY(-1px) !important;
+}
+
+.filter-button.active:hover {
+    background: linear-gradient(
+        135deg,
+        rgba(var(--primary-color-rgb, 52, 152, 219), 1) 0%,
+        rgba(var(--primary-color-rgb, 52, 152, 219), 0.9) 100%
+    );
+    transform: translateY(-1px) scale(1.02);
+    box-shadow: 
+        0 6px 16px rgba(var(--primary-color-rgb, 52, 152, 219), 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.4),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.2);
+}
+
+/* Color filter specific styles */
+.color-filter-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+}
+
+.color-filter-icon {
+    display: flex;
+    align-items: center;
+    color: var(--text-color);
+    opacity: 0.8;
+}
+
+.color-filter-indicator {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.7);
+    box-shadow: 
+        0 1px 3px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.filter-label { 
+    margin-left: 3px;
+}
+
+/* Clear filters button */
+.clear-filters-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 22px;
+    padding: 0 3px;
+    color: #ffffff;
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 600;
+    position: relative;
+    overflow: hidden;
+    
+    /* Red Tinted Liquid Glass Effect */
+    background: linear-gradient(
+        135deg,
+        rgba(220, 53, 69, 0.8) 0%,
+        rgba(220, 53, 69, 0.6) 100%
+    );
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border: 1px solid rgba(220, 53, 69, 0.5);
+    border-radius: 14px;
+    
+    box-shadow: 
+        0 2px 6px rgba(220, 53, 69, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.clear-filters-button:hover {
+    background: linear-gradient(
+        135deg,
+        rgba(220, 53, 69, 0.9) 0%,
+        rgba(220, 53, 69, 0.7) 100%
+    );
+    transform: translateY(-1px) scale(1.05);
+    box-shadow: 
+        0 4px 12px rgba(220, 53, 69, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+/* Dark mode adjustments for filter components */
+[data-theme="dark"] .collection-filter {
+    background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.08) 0%,
+        rgba(255, 255, 255, 0.04) 100%
+    );
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 
+        0 2px 6px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .filter-button {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
+[data-theme="dark"] .filter-button:hover {
+    background: rgba(255, 255, 255, 0.15);
+    box-shadow: 
+        0 4px 12px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+[data-theme="dark"] .filter-button.active {
+    background: linear-gradient(
+        135deg,
+        rgba(var(--primary-color-rgb, 52, 152, 219), 0.8) 0%,
+        rgba(var(--primary-color-rgb, 52, 152, 219), 0.7) 100%
+    );
+    color: white;
+    border: 1px solid rgba(var(--primary-color-rgb, 52, 152, 219), 0.5);
+    box-shadow: 
+        0 4px 12px rgba(var(--primary-color-rgb, 52, 152, 219), 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+[data-theme="dark"] .filter-button.active:hover {
+    background: linear-gradient(
+        135deg,
+        rgba(var(--primary-color-rgb, 52, 152, 219), 0.9) 0%,
+        rgba(var(--primary-color-rgb, 52, 152, 219), 0.8) 100%
+    );
+    box-shadow: 
+        0 6px 16px rgba(var(--primary-color-rgb, 52, 152, 219), 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+[data-theme="dark"] .clear-filters-button {
+    background: linear-gradient(
+        135deg,
+        rgba(220, 53, 69, 0.7) 0%,
+        rgba(220, 53, 69, 0.5) 100%
+    );
+    border: 1px solid rgba(220, 53, 69, 0.4);
+    box-shadow: 
+        0 2px 6px rgba(220, 53, 69, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+[data-theme="dark"] .clear-filters-button:hover {
+    background: linear-gradient(
+        135deg,
+        rgba(220, 53, 69, 0.8) 0%,
+        rgba(220, 53, 69, 0.6) 100%
+    );
+    box-shadow: 
+        0 4px 12px rgba(220, 53, 69, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+
+
+/* Dark mode styles for opened filter button */
+[data-theme="dark"] .filter-button.opened-filter {
+    /* Use default dark mode filter button styles with lightning hover effect */
+    position: relative;
+    overflow: hidden;
+}
+
+/* Lightning hover effect for opened filter button in dark mode */
+[data-theme="dark"] .filter-button.opened-filter::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.2),
+        transparent
+    );
+    transition: left 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 10px;
+}
+
+[data-theme="dark"] .filter-button.opened-filter:hover::before {
+    left: 100%;
+}
+
+/* Disable lightning effect when active in dark mode */
+[data-theme="dark"] .filter-button.opened-filter.active::before {
+    display: none;
+} 

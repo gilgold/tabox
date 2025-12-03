@@ -1,16 +1,15 @@
 import React from 'react';
-import renderer from 'react-test-renderer';
+import { render } from '@testing-library/react';
 import AddNewTextbox from '../app/AddNewTextbox';
-import { RecoilRoot } from 'recoil';
+import { Provider } from 'jotai';
 
 describe('Add new collection textbox tests', () => {
   test('Add new collection textbox renders correctly - sync disabled', () => {
-    const component = renderer.create(
-      <RecoilRoot>
+    const { container } = render(
+      <Provider>
         <AddNewTextbox />
-      </RecoilRoot>,
+      </Provider>,
     );
-    let tree = component.toJSON();
-    expect(tree).toMatchSnapshot();
+    expect(container).toMatchSnapshot();
   });
 });

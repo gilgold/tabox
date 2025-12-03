@@ -1,0 +1,335 @@
+:root {
+    --tile-size: 200px;
+    --tile-border-radius: calc(var(--tile-size) * 0.057); /* 8px at 140px */
+    --tile-padding: calc(var(--tile-size) * 0.057); /* 8px at 140px */
+    --tile-button-size: calc(var(--tile-size) * 0.171); /* 24px at 140px */
+    --tile-favicon-size: calc(var(--tile-size) * 0.11); /* 16px at 140px */
+    --tile-color: var(--bg-color);
+}
+
+.collection-tile {
+    width: var(--tile-size);
+    min-width: var(--tile-size);
+    max-width: var(--tile-size);
+    height: var(--tile-size);
+    background-color: var(--tile-color);
+    border: 3px solid var(--tile-color);
+    border-radius: var(--tile-border-radius);
+    position: relative;
+    cursor: grab;
+    padding: var(--tile-padding);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    user-select: none;
+    /* Removed automatic animation - now controlled by separate class */
+    will-change: transform, box-shadow;
+    contain: layout paint;
+    justify-self: center;
+}
+
+/* Controlled entrance animation - only applied when needed */
+.collection-tile-entering {
+    animation: tileSlideIn 0.4s ease-out both;
+}
+
+/* Prevent entrance animation during layout changes */
+.collection-tile-stable {
+    animation: none !important;
+    transform: translateY(0) scale(1) !important;
+    opacity: 1 !important;
+}
+
+.collection-tile:active {
+    cursor: grabbing;
+}
+
+.collection-tile:hover {
+    transform: translateY(-3px) scale(1.01);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+    border: 3px solid rgba(255, 255, 255, 0.25);
+}
+
+/* Dark Mode Tile Hover */
+[data-theme="dark"] .collection-tile:hover {
+    border: 3px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 6px 26px rgba(0, 0, 0, 0.35);
+}
+
+/* Enhanced Tile Content Opacity on Hover */
+.collection-tile:hover .tile-header,
+.collection-tile:hover .tile-favicons,
+.collection-tile:hover .tile-footer,
+.collection-tile:hover .tile-color-picker {
+    opacity: 0.7;
+    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.collection-tile.dragging {
+    opacity: 0.8;
+    z-index: 1000;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .collection-tile {
+        transition: none;
+    }
+
+    .collection-tile:hover {
+        transform: none;
+    }
+}
+
+
+
+/* Header with collection name */
+.tile-header {
+    padding: 15px 0 0 0;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.tile-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.tile-title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-color);
+    line-height: 1.2;
+    max-height: 32px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.tile-title-row .recently-opened-indicator {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: rgba(34, 197, 94, 0.8);
+    border: 1px solid rgba(34, 197, 94, 1);
+    flex-shrink: 0;
+    cursor: help;
+}
+
+/* Dark mode styles for recently opened indicator in tiles */
+[data-theme="dark"] .tile-title-row .recently-opened-indicator {
+    background: rgba(34, 197, 94, 0.9);
+    border: 1px solid rgba(34, 197, 94, 1);
+}
+
+/* Favicons grid */
+.tile-favicons {
+    flex: 1;
+    padding: var(--tile-padding);
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    column-gap: calc(var(--tile-padding) * 0.5);
+    row-gap: calc(var(--tile-padding) * 0.25);
+    align-content: start;
+    justify-content: center;
+    max-height: calc(var(--tile-size) * 0.5);
+}
+
+.tile-favicon {
+    width: var(--tile-favicon-size);
+    height: var(--tile-favicon-size);
+    border-radius: calc(var(--tile-favicon-size) * 0.125);
+    object-fit: cover;
+}
+
+.no-favicons {
+    grid-column: 1 / -1;
+    grid-row: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-color);
+    opacity: 0.6;
+    font-size: 12px;
+    font-style: italic;
+}
+
+/* Footer section */
+.tile-footer {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: calc(var(--tile-padding) * 0.75) var(--tile-padding);
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--tile-padding) * 0.25);
+}
+
+/* Stats section */
+.tile-stats {
+    font-size: 11px;
+    color: var(--text-color);
+    opacity: 0.9;
+    font-weight: 500;
+}
+
+/* Time ago */
+.tile-time {
+    font-size: 10px;
+    color: var(--text-color);
+    opacity: 0.6;
+}
+
+/* Action buttons */
+.tile-actions {
+    position: absolute;
+    top: var(--tile-padding);
+    right: var(--tile-padding);
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--tile-padding) * 0.5);
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 100;
+}
+
+.collection-tile:hover .tile-actions {
+    opacity: 1;
+    transform: translateY(-1px);
+}
+
+/* Modern Liquid Glass Action Buttons */
+.tile-action-button,
+.tile-actions .action-icon {
+    width: var(--tile-button-size);
+    height: var(--tile-button-size);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: calc(var(--tile-button-size) * 0.25);
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: calc(var(--tile-button-size) * 0.5);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
+    box-shadow: 
+        0 2px 8px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Enhanced hover effects for action buttons */
+.tile-action-button:hover,
+.tile-actions .action-icon:hover {
+    background: rgba(12, 144, 100, 0.9);
+    transform: translateY(-1px) scale(1.05);
+    box-shadow: 
+        0 4px 16px rgba(12, 144, 100, 0.3),
+        0 2px 8px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Specific modern hover effects for certain buttons */
+.play-button:hover {
+    background: rgba(52, 152, 219, 0.9);
+    box-shadow: 
+        0 4px 16px rgba(52, 152, 219, 0.3),
+        0 2px 8px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.delete-button:hover {
+    background: rgba(231, 76, 60, 0.9);
+    box-shadow: 
+        0 4px 16px rgba(231, 76, 60, 0.3),
+        0 2px 8px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+/* Color picker */
+.tile-color-picker {
+    position: absolute;
+    bottom: calc(var(--tile-padding) * 0.5);
+    right: var(--tile-padding);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.collection-tile:hover .tile-color-picker {
+    opacity: 1;
+}
+
+/* Active auto-tracking animation for tiles - on footer area */
+.collection-tile.active-auto-tracking .tile-footer {
+    background: var(--active-auto-update-gradient);
+    background-size: 200% 100%;
+    animation: gradientShift 4s ease-in-out infinite;
+}
+
+.collection-tile.active-auto-tracking:hover .tile-footer {
+    animation: none !important;
+    background: transparent !important;
+}
+
+@keyframes gradientShift {
+    0%, 100% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+}
+
+/* Tile entrance animation */
+@keyframes tileSlideIn {
+    0% {
+        opacity: 0;
+        transform: translateY(30px) scale(0.8);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* Staggered animation delays for tiles - only for entering tiles */
+.collection-tile-entering:nth-child(1) { animation-delay: 0ms; }
+.collection-tile-entering:nth-child(2) { animation-delay: 50ms; }
+.collection-tile-entering:nth-child(3) { animation-delay: 100ms; }
+.collection-tile-entering:nth-child(4) { animation-delay: 150ms; }
+.collection-tile-entering:nth-child(5) { animation-delay: 200ms; }
+.collection-tile-entering:nth-child(6) { animation-delay: 250ms; }
+.collection-tile-entering:nth-child(7) { animation-delay: 300ms; }
+.collection-tile-entering:nth-child(8) { animation-delay: 350ms; }
+.collection-tile-entering:nth-child(9) { animation-delay: 400ms; }
+.collection-tile-entering:nth-child(10) { animation-delay: 450ms; }
+.collection-tile-entering:nth-child(11) { animation-delay: 500ms; }
+.collection-tile-entering:nth-child(12) { animation-delay: 550ms; }
+.collection-tile-entering:nth-child(n+13) { animation-delay: 600ms; }
+
+/* Grid container for tiles */
+
+/* Responsive adjustments */
+@media (max-width: 650px) {
+    :root {
+        --tile-size: 150px; /* Smaller tiles on mobile */
+    }
+    
+    .collection-tile {
+        width: 100%;
+        min-width: var(--tile-size);
+        height: var(--tile-size);
+    }
+} 

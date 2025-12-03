@@ -1,154 +1,104 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
 exports[`Footer Tests Footer renders correctly 1`] = `
-<footer
-  id="footer"
->
-  <div
-    className="footer_left"
+<div>
+  <footer
+    id="footer"
   >
     <div
-      className="theme-switch-wrapper"
+      class="footer_left"
     >
-      <div
-        className="circle out"
-      >
-        <input
-          checked={false}
-          id="chkDarkMode"
-          onChange={[Function]}
-          type="checkbox"
-        />
-        <label
-          className="theme-switch"
-          htmlFor="chkDarkMode"
-        />
-        <span
-          className="theme-switch-inner-circle"
-          onClick={[Function]}
-        />
-        <div
-          className="half"
-        />
-      </div>
       <span
-        className="dark_mode_switch_label"
-        onClick={[Function]}
-      >
-         Dark Mode: 
-        <span
-          id="darkModeState"
-        >
-          off
-        </span>
-      </span>
-    </div>
-    <span
-      id="last_sync"
-    >
-      <svg
-        className="sync_dark "
-        fill="currentColor"
-        height="1em"
-        id="syncImg"
-        stroke="currentColor"
-        strokeWidth="0"
-        style={
-          Object {
-            "color": undefined,
-          }
-        }
-        viewBox="0 0 24 24"
-        width="1em"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <path
-          d="m13 7.101.01.001a4.978 4.978 0 0 1 2.526 1.362 5.005 5.005 0 0 1 1.363 2.528 5.061 5.061 0 0 1-.001 2.016 4.976 4.976 0 0 1-1.363 2.527l1.414 1.414a7.014 7.014 0 0 0 1.908-3.54 6.98 6.98 0 0 0 0-2.819 6.957 6.957 0 0 0-1.907-3.539 6.97 6.97 0 0 0-2.223-1.5 6.921 6.921 0 0 0-1.315-.408c-.137-.028-.275-.043-.412-.063V2L9 6l4 4V7.101zm-7.45 7.623c.174.412.392.812.646 1.19.249.37.537.718.854 1.034a7.036 7.036 0 0 0 2.224 1.501c.425.18.868.317 1.315.408.167.034.338.056.508.078v2.944l4-4-4-4v3.03c-.035-.006-.072-.003-.107-.011a4.978 4.978 0 0 1-2.526-1.362 4.994 4.994 0 0 1 .001-7.071L7.051 7.05a7.01 7.01 0 0 0-1.5 2.224A6.974 6.974 0 0 0 5 12a6.997 6.997 0 0 0 .55 2.724z"
-        />
-      </svg>
-       
-      <span
-        className="sync_msg"
-      >
-        Sync Disabled
-      </span>
-    </span>
-  </div>
-  <div
-    className="header_title"
-  >
-    Tabox
-    <br />
-    <span
-      className="version"
-    >
-      version 
-    </span>
-  </div>
-  <span
-    className="right_footer"
-  >
-    <div
-      className="footer_icons"
-    >
-      <a
-        href="https://twitter.com/Taboxapp"
-        rel="noreferrer"
-        target="_blank"
+        id="last_sync"
       >
         <svg
-          className="social_icon twitter"
+          class="sync_dark "
           fill="currentColor"
           height="1em"
+          id="syncImg"
           stroke="currentColor"
-          strokeWidth="0"
-          style={
-            Object {
-              "color": undefined,
-            }
-          }
+          stroke-width="0"
           viewBox="0 0 24 24"
           width="1em"
           xmlns="http://www.w3.org/2000/svg"
         >
           <path
-            d="M8 2H1L9.26086 13.0145L1.44995 21.9999H4.09998L10.4883 14.651L16 22H23L14.3917 10.5223L21.8001 2H19.1501L13.1643 8.88578L8 2ZM17 20L5 4H7L19 20H17Z"
+            d="M0 0h24v24H0z"
+            fill="none"
           />
-        </svg>
-      </a>
-      <a
-        href="https://www.facebook.com/taboxext"
-        rel="noreferrer"
-        target="_blank"
-      >
-        <svg
-          className="social_icon facebook"
-          fill="currentColor"
-          height="1em"
-          stroke="currentColor"
-          strokeWidth="0"
-          style={
-            Object {
-              "color": undefined,
-            }
-          }
-          viewBox="0 0 512 512"
-          width="1em"
-          xmlns="http://www.w3.org/2000/svg"
-        >
           <path
-            d="M504 256C504 119 393 8 256 8S8 119 8 256c0 123.78 90.69 226.38 209.25 245V327.69h-63V256h63v-54.64c0-62.15 37-96.48 93.67-96.48 27.14 0 55.52 4.84 55.52 4.84v61h-31.28c-30.8 0-40.41 19.12-40.41 38.73V256h68.78l-11 71.69h-57.78V501C413.31 482.38 504 379.78 504 256z"
+            d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"
           />
         </svg>
-      </a>
+        <span
+          class="sync_msg"
+        >
+          Sync Disabled
+        </span>
+      </span>
     </div>
-    <a
-      href="http://tabox.co"
-      rel="noreferrer"
-      target="_blank"
+    <div
+      class="footer_center"
     >
-      www.tabox.co
-    </a>
-  </span>
-</footer>
+      <span
+        class="tabox-gradient"
+      >
+        Tabox
+      </span>
+      <span
+        class="version"
+      >
+        1.0.0
+      </span>
+    </div>
+    <div
+      class="footer_right"
+    >
+      <div
+        class="footer_icons"
+      >
+        <a
+          href="https://twitter.com/Taboxapp"
+          rel="noreferrer"
+          target="_blank"
+        >
+          <svg
+            class="social_icon twitter"
+            fill="currentColor"
+            height="1em"
+            stroke="currentColor"
+            stroke-width="0"
+            viewBox="0 0 24 24"
+            width="1em"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M10.4883 14.651L15.25 21H22.25L14.3917 10.5223L20.9308 3H18.2808L13.1643 8.88578L8.75 3H1.75L9.26086 13.0145L2.31915 21H4.96917L10.4883 14.651ZM16.25 19L5.75 5H7.75L18.25 19H16.25Z"
+            />
+          </svg>
+        </a>
+        <a
+          href="https://www.facebook.com/taboxext"
+          rel="noreferrer"
+          target="_blank"
+        >
+          <svg
+            class="social_icon facebook"
+            fill="currentColor"
+            height="1em"
+            stroke="currentColor"
+            stroke-width="0"
+            viewBox="0 0 512 512"
+            width="1em"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M504 256C504 119 393 8 256 8S8 119 8 256c0 123.78 90.69 226.38 209.25 245V327.69h-63V256h63v-54.64c0-62.15 37-96.48 93.67-96.48 27.14 0 55.52 4.84 55.52 4.84v61h-31.28c-30.8 0-40.41 19.12-40.41 38.73V256h68.78l-11 71.69h-57.78V501C413.31 482.38 504 379.78 504 256z"
+            />
+          </svg>
+        </a>
+      </div>
+    </div>
+  </footer>
+</div>
 `;

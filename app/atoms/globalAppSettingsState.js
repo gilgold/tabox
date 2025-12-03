@@ -1,53 +1,22 @@
-import { atom } from 'recoil';
-import { browser } from '../../static/globals';
+import { atom } from 'jotai';
 
-const localStorageEffect = (key) => async ({ onSet }) => {
-    onSet(async newValue => {
-        let obj = { [key]: newValue };
-        await browser.storage.local.set(obj);
-    });
-};
+// Jotai atoms are simpler - no keys needed, just default values
+// Storage persistence is handled manually via updateRemoteData calls throughout the app
 
-export const themeState = atom({
-    key: 'theme',
-    default: [],
-    effects: [
-        localStorageEffect('theme'),
-    ]
-});
+export const themeState = atom([]);
 
-export const isLoggedInState = atom({
-    key: 'isLoggedIn',
-    default: false,
-    effects: [
-        localStorageEffect('isLoggedIn'),
-    ]
-});
+export const isLoggedInState = atom(false);
 
-export const syncInProgressState = atom({
-    key: 'syncInProgressState',
-    default: false,
-});
+export const syncInProgressState = atom(false);
 
-export const lastSyncTimeState = atom({
-    key: 'lastSyncTimeState',
-    default: null,
-});
+export const lastSyncTimeState = atom(null);
 
-export const searchState = atom({
-    key: 'search',
-    default: undefined,
-});
+export const searchState = atom(undefined);
 
-export const listKeyState = atom({
-    key: 'listKey',
-    default: 'key',
-});
+export const listKeyState = atom('key');
 
-export const settingsDataState = atom({
-    key: 'tabsArray',
-    default: [],
-    effects: [
-        localStorageEffect('tabsArray'),
-    ]
-});
+export const settingsDataState = atom([]);
+
+// Global tracking state change trigger - incremented whenever tracking state changes
+// This allows components to react to tracking changes without adding individual storage listeners
+export const trackingStateVersion = atom(0);

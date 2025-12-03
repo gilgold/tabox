@@ -13,7 +13,13 @@ function SortableCollectionItem(props) {
         isDragging,
     } = useSortable({
         id: props.id,
-        disabled: props.disableDrag
+        disabled: props.disableDrag,
+        data: {
+            itemType: 'collection',
+            collection: props.collection,
+            parentId: props.collection?.parentId || null,
+            isInFolder: !!props.collection?.parentId
+        }
     });
 
     const style = {

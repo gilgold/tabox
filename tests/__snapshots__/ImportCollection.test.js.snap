@@ -1,45 +1,41 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
 exports[`Import Collection section tests Import collection component renders correctly 1`] = `
-<span
-  className="image-upload"
->
-  <label
-    className="input-label"
-    htmlFor="file-input"
+<div>
+  <span
+    class="image-upload"
   >
-    <div
-      className="import-button"
+    <label
+      class="input-label"
+      for="file-input"
     >
-      <svg
-        className="import-icon"
-        fill="currentColor"
-        height="16px"
-        stroke="currentColor"
-        strokeWidth="0"
-        style={
-          Object {
-            "color": "var(--text-color)",
-          }
-        }
-        viewBox="0 0 512 512"
-        width="16px"
-        xmlns="http://www.w3.org/2000/svg"
+      <div
+        class="import-button"
       >
-        <path
-          d="M16 288c-8.8 0-16 7.2-16 16v32c0 8.8 7.2 16 16 16h112v-64zm489-183L407.1 7c-4.5-4.5-10.6-7-17-7H384v128h128v-6.1c0-6.3-2.5-12.4-7-16.9zm-153 31V0H152c-13.3 0-24 10.7-24 24v264h128v-65.2c0-14.3 17.3-21.4 27.4-11.3L379 308c6.6 6.7 6.6 17.4 0 24l-95.7 96.4c-10.1 10.1-27.4 3-27.4-11.3V352H128v136c0 13.3 10.7 24 24 24h336c13.3 0 24-10.7 24-24V160H376c-13.2 0-24-10.8-24-24z"
-        />
-      </svg>
-       
-      <span>
-        Import from file
-      </span>
-    </div>
-  </label>
-  <input
-    id="file-input"
-    onChange={[Function]}
-    type="file"
-  />
-</span>
+        <svg
+          class="import-icon"
+          fill="currentColor"
+          height="16px"
+          stroke="currentColor"
+          stroke-width="0"
+          viewBox="0 0 512 512"
+          width="16px"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M16 288c-8.8 0-16 7.2-16 16v32c0 8.8 7.2 16 16 16h112v-64zm489-183L407.1 7c-4.5-4.5-10.6-7-17-7H384v128h128v-6.1c0-6.3-2.5-12.4-7-16.9zm-153 31V0H152c-13.3 0-24 10.7-24 24v264h128v-65.2c0-14.3 17.3-21.4 27.4-11.3L379 308c6.6 6.7 6.6 17.4 0 24l-95.7 96.4c-10.1 10.1-27.4 3-27.4-11.3V352H128v136c0 13.3 10.7 24 24 24h336c13.3 0 24-10.7 24-24V160H376c-13.2 0-24-10.8-24-24z"
+          />
+        </svg>
+         
+        <span>
+          Import file
+        </span>
+      </div>
+    </label>
+    <input
+      id="file-input"
+      type="file"
+    />
+  </span>
+</div>
 `;

@@ -1,0 +1,1594 @@
+/* ========================================
+   UNIFIED MODAL STYLES
+   All modal-related styles consolidated here
+   ======================================== */
+
+/* ========================================
+   BASE MODAL STRUCTURE
+   ======================================== */
+
+/* React Modal Overlay */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(8px) saturate(180%);
+    -webkit-backdrop-filter: blur(8px) saturate(180%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999998;
+    animation: overlayFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes overlayFadeIn {
+    0% {
+        opacity: 0;
+        backdrop-filter: blur(0px);
+    }
+    100% {
+        opacity: 1;
+        backdrop-filter: blur(8px) saturate(180%);
+    }
+}
+
+.modal-content {
+    position: relative;
+    background: none;
+    border: none;
+    border-radius: 20px;
+    outline: none;
+    padding: 0;
+    max-width: 90vw;
+    max-height: 95vh;
+    overflow: auto;
+}
+
+/* ========================================
+   MODAL CARD STRUCTURE
+   ======================================== */
+
+.modal-card {
+    text-align: center;
+    width: 500px;
+    max-width: 90vw;
+    
+    /* Light Theme Liquid Glass Background */
+    background:
+        radial-gradient(circle at 15% 20%, rgba(133, 212, 247, 0.55) 0%, rgba(133, 212, 247, 0) 45%),
+        radial-gradient(circle at 82% 8%, rgba(255, 187, 210, 0.4) 0%, rgba(255, 187, 210, 0) 40%),
+        radial-gradient(circle at 70% 90%, rgba(167, 231, 203, 0.35) 0%, rgba(167, 231, 203, 0) 42%),
+        linear-gradient(
+            135deg,
+            rgba(255, 255, 255, 0.97) 0%,
+            rgba(247, 250, 255, 0.99) 35%,
+            rgba(255, 252, 245, 1) 100%
+        );
+    backdrop-filter: blur(40px) saturate(200%) brightness(110%);
+    -webkit-backdrop-filter: blur(40px) saturate(200%) brightness(110%);
+    
+    /* Enhanced Liquid Glass Border and Shadow System */
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 
+        0 32px 64px rgba(0, 0, 0, 0.1),
+        0 16px 32px rgba(0, 0, 0, 0.08),
+        0 8px 16px rgba(0, 0, 0, 0.06),
+        0 4px 8px rgba(0, 0, 0, 0.04),
+        inset 0 1px 0 rgba(255, 255, 255, 0.8),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.3),
+        inset 1px 0 0 rgba(255, 255, 255, 0.2),
+        inset -1px 0 0 rgba(255, 255, 255, 0.2);
+    
+    /* Modern Shape */
+    border-radius: 16px;
+    color: var(--text-color);
+    
+    /* Subtle Animation */
+    animation: modalSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+/* Add liquid glass shimmer overlay for light theme */
+.modal-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.06) 0%,
+        transparent 50%,
+        rgba(255, 255, 255, 0.03) 100%
+    );
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* Ensure modal content appears above overlay */
+.modal-card-wrapper,
+.button-row {
+    position: relative;
+    z-index: 2;
+}
+
+/* Modal Entrance Animation */
+@keyframes modalSlideIn {
+    0% {
+        opacity: 0;
+        transform: scale(0.9) translateY(-20px);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* Dark Mode Modal */
+[data-theme="dark"] .modal-card {
+    background: rgba(30, 30, 35, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 
+        0 16px 48px rgba(0, 0, 0, 0.6),
+        0 8px 24px rgba(0, 0, 0, 0.4),
+        0 4px 12px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Modal Card Content Structure */
+.modal-card-wrapper {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    flex-basis: 100%;
+    padding: 32px 24px;
+    position: relative;
+    z-index: 2;
+}
+
+.modal-card-image {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 50px;
+    height: 64px;
+}
+
+.modal-card-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    margin-left: 10px;
+    overflow: hidden;
+    min-width: 0;
+}
+
+.modal-card-header { 
+    font-size: 1.3em;
+    font-weight: 700;
+    text-align: left;
+    margin-bottom: 16px;
+    color: var(--text-color);
+    position: relative;
+    z-index: 2;
+}
+
+.modal-card-body {
+    text-align: left;
+    display: flex;
+    font-size: 0.9em;
+    flex-basis: 100%;
+    flex-direction: column;
+    gap: 16px;
+    position: relative;
+    z-index: 2;
+}
+
+.modal-card-body-section {
+    text-align: left;
+    display: flex;
+}
+
+/* ========================================
+   BUTTON STRUCTURE
+   ======================================== */
+
+.button-row {
+    display: flex;
+    flex-basis: 100%;
+    align-items: center;
+    justify-content: flex-end;
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+    padding: 10px 24px;
+    gap: 12px;
+    position: relative;
+    z-index: 2;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+[data-theme="dark"] .button-row {
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Universal Modal Button Base */
+.modal-button {
+    padding: 12px 20px;
+    
+    /* Light Theme Enhanced Liquid Glass Effect */
+    background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.25) 0%,
+        rgba(255, 255, 255, 0.15) 50%,
+        rgba(255, 255, 255, 0.10) 100%
+    );
+    backdrop-filter: blur(16px) saturate(180%) brightness(105%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%) brightness(105%);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    
+    /* Modern Shape */
+    border-radius: 10px;
+    
+    /* Typography */
+    color: var(--text-color);
+    font-size: 0.9em;
+    font-weight: 600;
+    
+    /* Effects */
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+    min-width: 80px;
+    position: relative;
+    overflow: hidden;
+    
+    /* Enhanced Shadow with matching border radius */
+    box-shadow: 
+        0 4px 16px rgba(0, 0, 0, 0.08),
+        0 2px 8px rgba(0, 0, 0, 0.06),
+        inset 0 1px 0 rgba(255, 255, 255, 0.8),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.2),
+        inset 1px 0 0 rgba(255, 255, 255, 0.3),
+        inset -1px 0 0 rgba(255, 255, 255, 0.3);
+}
+
+/* Universal Shimmer Effect for ALL Modal Buttons */
+.modal-button::before,
+.sync-debug-download-btn::before,
+.sync-debug-backup-btn::before,
+.sync-debug-action-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.3),
+        transparent
+    );
+    transition: left 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 10px;
+}
+
+.modal-button:hover::before,
+.sync-debug-download-btn:hover::before,
+.sync-debug-backup-btn:hover::before,
+.sync-debug-action-btn:hover::before {
+    left: 100%;
+}
+
+/* Ensure button content appears above shimmer */
+.modal-button > *,
+.sync-debug-download-btn > *,
+.sync-debug-backup-btn > *,
+.sync-debug-action-btn > * {
+    position: relative;
+    z-index: 2;
+}
+
+.modal-button:hover {
+    background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.35) 0%,
+        rgba(255, 255, 255, 0.25) 50%,
+        rgba(255, 255, 255, 0.18) 100%
+    );
+    transform: translateY(-2px);
+    box-shadow: 
+        0 8px 32px rgba(0, 0, 0, 0.12),
+        0 4px 16px rgba(0, 0, 0, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.4),
+        inset 1px 0 0 rgba(255, 255, 255, 0.5),
+        inset -1px 0 0 rgba(255, 255, 255, 0.5);
+}
+
+.modal-button:active {
+    transform: translateY(0);
+    box-shadow: 
+        0 2px 8px rgba(0, 0, 0, 0.2),
+        inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Primary Button */
+.modal-button.primary {
+    background: var(--primary-color);
+    border: 1px solid var(--primary-color);
+    color: white;
+    box-shadow: 
+        0 4px 16px rgba(var(--primary-color-rgb, 52, 152, 219), 0.3),
+        0 2px 8px rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.modal-button.primary:hover {
+    background: var(--primary-color);
+    filter: brightness(1.1);
+    transform: translateY(-1px) scale(1.02);
+    box-shadow: 
+        0 6px 20px rgba(var(--primary-color-rgb, 52, 152, 219), 0.4),
+        0 4px 12px rgba(0, 0, 0, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+/* Dark Mode Button Adjustments */
+[data-theme="dark"] .modal-button {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 
+        0 2px 8px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .modal-button:hover {
+    background: rgba(255, 255, 255, 0.2);
+    box-shadow: 
+        0 4px 16px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+[data-theme="dark"] .modal-button::before,
+[data-theme="dark"] .sync-debug-download-btn::before,
+[data-theme="dark"] .sync-debug-backup-btn::before,
+[data-theme="dark"] .sync-debug-action-btn::before {
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.2),
+        transparent
+    );
+}
+
+/* ========================================
+   BACKUP SELECT COMPONENT
+   ======================================== */
+
+.backup-select-container {
+    color: var(--text-color);
+    
+    /* Light Theme Modern Liquid Glass Select */
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    
+    display: flex;
+    flex-basis: 100%;
+    align-items: center;
+    justify-content: center;
+    font-weight: 500;
+    margin: 8px 0;
+    cursor: pointer;
+    line-height: 1.4;
+    font-size: 0.9rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    
+    /* Shadow */
+    box-shadow: 
+        0 2px 8px rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.backup-select-container:hover {
+    background: rgba(255, 255, 255, 0.8);
+    transform: translateY(-1px);
+    box-shadow: 
+        0 4px 16px rgba(0, 0, 0, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+/* Dark Mode Select */
+[data-theme="dark"] .backup-select-container {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 
+        0 2px 8px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .backup-select-container:hover {
+    background: rgba(255, 255, 255, 0.2);
+    box-shadow: 
+        0 4px 16px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+/* ========================================
+   SESSIONS MODAL STYLES
+   ======================================== */
+
+.session-list-wrapper {
+    display: block;
+    overflow: auto;
+    max-height: 180px;
+    width: 100%;
+    border: 1px solid rgba(var(--primary-color-rgb, 52, 152, 219), 0.4);
+    padding: 7px;
+    border-radius: 8px;
+    margin: 10px auto;
+    background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.15) 0%,
+        rgba(255, 255, 255, 0.10) 50%,
+        rgba(255, 255, 255, 0.06) 100%
+    );
+    backdrop-filter: blur(16px) saturate(170%) brightness(104%);
+    -webkit-backdrop-filter: blur(16px) saturate(170%) brightness(104%);
+    box-shadow: 
+        0 4px 16px rgba(0, 0, 0, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.6),
+        inset 1px 0 0 rgba(255, 255, 255, 0.3),
+        inset -1px 0 0 rgba(255, 255, 255, 0.3),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.2);
+}
+
+[data-theme="dark"] .session-list-wrapper {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.session-wrapper {
+    display: flex;
+    flex-direction: column;
+    padding: 5px;
+}
+
+.session-corner {
+    width: 20px;
+    display: inline-block;
+}
+
+.collection-row {
+    display: flex;
+    flex-direction: row;
+    justify-content: start;
+    align-items: center;
+    padding-left: 10px;
+    margin-top: 5px;
+    height: 30px;
+}
+
+.collection-corner {
+    padding-right: 10px;
+    display: flex;
+}
+
+.collection-text {
+    display: flex;
+    color: var(--text-color);
+    font-weight: 600;
+    flex: 1;
+}
+
+.collection-actions {
+    display: flex;
+    gap: 6px;
+    margin-left: auto;
+}
+
+.collection-action {
+    background-color: #4c884f;
+    border: none;
+    border-radius: 4px;
+    color: white;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 0;
+    height: 24px;
+    min-width: 60px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.collection-action:hover {
+    background-color: #5a9a5e;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.collection-action:active {
+    background-color: #426e45;
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.collection-action.add-collection {
+    background-color: var(--primary-color);
+}
+
+.collection-action.add-collection:hover {
+    background-color: #2980b9;
+}
+
+.collection-action.add-collection:active {
+    background-color: #1f618d;
+}
+
+.collection-action span {
+    padding: 0 8px;
+    line-height: 1;
+}
+
+.session-name {
+    display: flex;
+    background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.20) 0%,
+        rgba(255, 255, 255, 0.15) 50%,
+        rgba(255, 255, 255, 0.10) 100%
+    );
+    backdrop-filter: blur(12px) saturate(150%) brightness(103%);
+    -webkit-backdrop-filter: blur(12px) saturate(150%) brightness(103%);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    padding: 4px 10px;
+    border-radius: 8px;
+    justify-content: space-between;
+    box-shadow: 
+        0 2px 8px rgba(0, 0, 0, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.6),
+        inset 1px 0 0 rgba(255, 255, 255, 0.3),
+        inset -1px 0 0 rgba(255, 255, 255, 0.3);
+}
+
+[data-theme="dark"] .session-name {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.session-title {
+    display: flex;
+}
+
+.session-date {
+    float: right;
+}
+
+.modal-close-button {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 30px;
+    height: 30px;
+    cursor: pointer;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.modal-close-button:hover {
+    color: var(--primary-color);
+    background: rgba(255, 255, 255, 0.8);
+    transform: scale(1.1);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="dark"] .modal-close-button {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .modal-close-button:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.session-card-wrapper {
+    position: relative;
+}
+
+/* ========================================
+   SYNC DEBUG MODAL STYLES
+   ======================================== */
+
+.sync-debug-modal {
+    width: 650px;
+    max-width: 90vw;
+}
+
+.sync-debug-modal-body {
+    max-height: 370px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--primary-color) transparent;
+}
+
+.sync-debug-modal-body::-webkit-scrollbar {
+    width: 8px;
+}
+
+.sync-debug-modal-body::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 4px;
+}
+
+[data-theme="dark"] .sync-debug-modal-body::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.sync-debug-modal-body::-webkit-scrollbar-thumb {
+    background: var(--primary-color);
+    border-radius: 4px;
+}
+
+.sync-debug-modal-body::-webkit-scrollbar-thumb:hover {
+    background: var(--text-color);
+}
+
+.sync-debug-section {
+    flex-direction: column;
+    margin-bottom: 20px;
+    
+    /* Light Theme Enhanced Liquid Glass Section */
+    background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.18) 0%,
+        rgba(255, 255, 255, 0.12) 50%,
+        rgba(255, 255, 255, 0.08) 100%
+    );
+    backdrop-filter: blur(20px) saturate(180%) brightness(105%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%) brightness(105%);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 
+        0 4px 16px rgba(0, 0, 0, 0.08),
+        0 2px 8px rgba(0, 0, 0, 0.06),
+        inset 0 1px 0 rgba(255, 255, 255, 0.7),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.3),
+        inset 1px 0 0 rgba(255, 255, 255, 0.25),
+        inset -1px 0 0 rgba(255, 255, 255, 0.25);
+}
+
+/* Dark Mode Section */
+[data-theme="dark"] .sync-debug-section {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 
+        0 2px 8px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.sync-debug-section-title {
+    margin-bottom: 12px;
+    font-size: 1.1em;
+    font-weight: 700;
+    color: var(--text-color);
+    opacity: 0.9;
+}
+
+.sync-debug-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+/* Sync Debug Specific Buttons */
+.sync-debug-download-btn {
+    padding: 8px 12px;
+    font-size: 0.85em;
+    font-weight: 600;
+    
+    /* Light Theme Enhanced Liquid Glass */
+    background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.20) 0%,
+        rgba(255, 255, 255, 0.15) 50%,
+        rgba(255, 255, 255, 0.10) 100%
+    );
+    backdrop-filter: blur(12px) saturate(160%) brightness(104%);
+    -webkit-backdrop-filter: blur(12px) saturate(160%) brightness(104%);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    color: var(--text-color);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    box-shadow: 
+        0 3px 12px rgba(0, 0, 0, 0.08),
+        0 1px 4px rgba(0, 0, 0, 0.06),
+        inset 0 1px 0 rgba(255, 255, 255, 0.7),
+        inset 1px 0 0 rgba(255, 255, 255, 0.3),
+        inset -1px 0 0 rgba(255, 255, 255, 0.3);
+}
+
+.sync-debug-download-btn::before {
+    border-radius: 8px;
+}
+
+.sync-debug-download-btn:hover {
+    background: var(--primary-color);
+    border: 1px solid var(--primary-color);
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 
+        0 4px 12px rgba(var(--primary-color-rgb, 52, 152, 219), 0.3),
+        0 2px 8px rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+[data-theme="dark"] .sync-debug-download-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 
+        0 2px 8px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.sync-debug-logs-container {
+    max-height: 200px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    
+    /* Light Theme Enhanced Liquid Glass Container */
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.15) 0%,
+        rgba(255, 255, 255, 0.10) 50%,
+        rgba(255, 255, 255, 0.06) 100%
+    );
+    backdrop-filter: blur(12px) saturate(150%) brightness(102%);
+    -webkit-backdrop-filter: blur(12px) saturate(150%) brightness(102%);
+    border-radius: 8px;
+    
+    padding: 12px;
+    font-size: 0.85em;
+    width: 100%;
+    box-sizing: border-box;
+    
+    /* Enhanced Shadow */
+    box-shadow: 
+        inset 0 2px 8px rgba(0, 0, 0, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.6),
+        inset 1px 0 0 rgba(255, 255, 255, 0.3),
+        inset -1px 0 0 rgba(255, 255, 255, 0.3),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.2);
+        
+    /* Custom Scrollbar */
+    scrollbar-width: thin;
+    scrollbar-color: var(--primary-color) transparent;
+}
+
+.sync-debug-logs-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+.sync-debug-logs-container::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 3px;
+}
+
+[data-theme="dark"] .sync-debug-logs-container::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.sync-debug-logs-container::-webkit-scrollbar-thumb {
+    background: var(--primary-color);
+    border-radius: 3px;
+}
+
+[data-theme="dark"] .sync-debug-logs-container {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: 
+        inset 0 2px 4px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.sync-debug-log-entry {
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    line-height: 1.4;
+}
+
+.sync-debug-log-entry:not(:last-child) {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .sync-debug-log-entry:not(:last-child) {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sync-debug-log-level {
+    font-weight: normal;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-word;
+}
+
+.sync-debug-log-level.error {
+    color: #e74c3c;
+    font-weight: bold;
+}
+
+.sync-debug-log-level.success {
+    color: #27ae60;
+}
+
+.sync-debug-log-level.info {
+    color: var(--text-color);
+}
+
+.sync-debug-log-data {
+    font-size: 0.9em;
+    opacity: 0.7;
+    margin-top: 2px;
+    margin-left: 10px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    white-space: pre-wrap;
+    max-width: 100%;
+}
+
+.sync-debug-backup-group {
+    margin-bottom: 10px;
+}
+
+.sync-debug-backup-group-title {
+    font-size: 1.0em;
+    font-weight: 700;
+    margin-bottom: 12px;
+    color: var(--text-color);
+    opacity: 0.9;
+}
+
+.sync-debug-backup-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    margin: 8px 0;
+    
+    /* Light Theme Enhanced Liquid Glass Item */
+    background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.18) 0%,
+        rgba(255, 255, 255, 0.12) 50%,
+        rgba(255, 255, 255, 0.08) 100%
+    );
+    backdrop-filter: blur(12px) saturate(160%) brightness(103%);
+    -webkit-backdrop-filter: blur(12px) saturate(160%) brightness(103%);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 8px;
+    
+    font-size: 0.9em;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    
+    /* Enhanced Shadow */
+    box-shadow: 
+        0 2px 8px rgba(0, 0, 0, 0.06),
+        0 1px 3px rgba(0, 0, 0, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.6),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.2),
+        inset 1px 0 0 rgba(255, 255, 255, 0.3),
+        inset -1px 0 0 rgba(255, 255, 255, 0.3);
+}
+
+.sync-debug-backup-item:hover {
+    background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.28) 0%,
+        rgba(255, 255, 255, 0.20) 50%,
+        rgba(255, 255, 255, 0.15) 100%
+    );
+    transform: translateY(-2px) scale(1.005);
+    box-shadow: 
+        0 6px 24px rgba(0, 0, 0, 0.1),
+        0 3px 12px rgba(0, 0, 0, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.8),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.4),
+        inset 1px 0 0 rgba(255, 255, 255, 0.5),
+        inset -1px 0 0 rgba(255, 255, 255, 0.5);
+}
+
+[data-theme="dark"] .sync-debug-backup-item {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: 
+        0 1px 3px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="dark"] .sync-debug-backup-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: 
+        0 2px 8px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.sync-debug-backup-btn {
+    font-size: 0.85em !important;
+    font-weight: 600 !important;
+    padding: 8px 12px !important;
+    border-radius: 8px !important;
+    /* Inherits modal-button styling above */
+    position: relative;
+    overflow: hidden;
+}
+
+.sync-debug-backup-btn::before {
+    border-radius: 8px;
+}
+
+.sync-debug-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+.sync-debug-action-btn {
+    font-size: 0.85em !important;
+    font-weight: 600 !important;
+    border-radius: 10px !important;
+    /* Inherits modal-button styling above */
+    position: relative;
+    overflow: hidden;
+}
+
+/* ========================================
+   CREATE FOLDER MODAL STYLES
+   ======================================== */
+
+.create-folder-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px) saturate(180%);
+    -webkit-backdrop-filter: blur(8px) saturate(180%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999999;
+    animation: overlayFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.create-folder-modal {
+    position: relative;
+    background: none;
+    border: none;
+    border-radius: 16px;
+    outline: none;
+    padding: 0;
+    width: 420px;
+    max-width: 90vw;
+    animation: modalSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes modalSlideIn {
+    0% {
+        opacity: 0;
+        transform: scale(0.9) translateY(20px);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.create-folder-modal-content {
+    background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.95) 0%,
+        rgba(255, 255, 255, 0.9) 100%
+    );
+    backdrop-filter: blur(20px) saturate(180%) brightness(105%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%) brightness(105%);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    border-radius: 16px;
+    box-shadow: 
+        0 20px 40px rgba(0, 0, 0, 0.15),
+        0 8px 16px rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.3);
+    overflow: hidden;
+    position: relative;
+}
+
+.create-folder-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.4) 0%,
+        rgba(255, 255, 255, 0.1) 100%
+    );
+}
+
+.create-folder-modal-title {
+    display: flex;
+    align-items: center;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-color, #2c3e50);
+}
+
+.create-folder-modal-close {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 8px;
+    color: #ef4444;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    transition: all 0.2s ease;
+    font-size: 16px;
+}
+
+.create-folder-modal-close:hover {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.3);
+    transform: scale(1.05);
+}
+
+.create-folder-modal-body {
+    padding: 24px;
+}
+
+.create-folder-form-group {
+    margin-bottom: 20px;
+}
+
+.create-folder-label {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-color, #2c3e50);
+    margin-bottom: 8px;
+}
+
+.create-folder-input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    font-size: 14px;
+    color: var(--text-color, #2c3e50);
+    transition: all 0.2s ease;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.create-folder-input:focus {
+    border-color: #4facfe;
+    box-shadow: 
+        0 0 0 3px rgba(79, 172, 254, 0.1),
+        0 4px 12px rgba(79, 172, 254, 0.08);
+    background: rgba(255, 255, 255, 0.95);
+}
+
+.create-folder-input::placeholder {
+    color: var(--text-secondary-color, #7f8c8d);
+    opacity: 0.7;
+}
+
+.create-folder-color-grid {
+    display: grid;
+    grid-template-columns: repeat(9, 1fr);
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.create-folder-color-option {
+    width: 32px;
+    height: 32px;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-clip: padding-box;
+}
+
+.create-folder-color-option:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.create-folder-color-option.selected {
+    border-color: var(--text-color, #2c3e50);
+    transform: scale(1.05);
+    box-shadow: 
+        0 0 0 2px rgba(255, 255, 255, 0.8),
+        0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.create-folder-color-check {
+    color: white;
+    font-weight: bold;
+    font-size: 14px;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.create-folder-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 24px 20px;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+    background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.1) 0%,
+        rgba(255, 255, 255, 0.4) 100%
+    );
+}
+
+.create-folder-btn {
+    padding: 10px 20px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid;
+    position: relative;
+    overflow: hidden;
+}
+
+.create-folder-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+.create-folder-btn-cancel {
+    background: rgba(108, 117, 125, 0.1);
+    border-color: rgba(108, 117, 125, 0.3);
+    color: #6c757d;
+}
+
+.create-folder-btn-cancel:hover:not(:disabled) {
+    background: rgba(108, 117, 125, 0.15);
+    border-color: rgba(108, 117, 125, 0.4);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(108, 117, 125, 0.2);
+}
+
+.create-folder-btn-save {
+    background: linear-gradient(
+        135deg,
+        #4facfe 0%,
+        #00d2ff 100%
+    );
+    border-color: transparent;
+    color: white;
+    font-weight: 700;
+}
+
+.create-folder-btn-save:hover:not(:disabled) {
+    background: linear-gradient(
+        135deg,
+        #3498db 0%,
+        #2980b9 100%
+    );
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(79, 172, 254, 0.4);
+}
+
+.create-folder-keyboard-hint {
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-secondary-color, #7f8c8d);
+    padding: 10px 24px 10px;
+    opacity: 0.8;
+}
+
+.create-folder-keyboard-hint kbd {
+    background: rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 11px;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+    margin: 0 2px;
+}
+
+/* Dark mode support */
+[data-theme="dark"] .create-folder-modal-content {
+    background: linear-gradient(
+        135deg,
+        rgba(40, 44, 52, 0.95) 0%,
+        rgba(40, 44, 52, 0.9) 100%
+    );
+    border-color: rgba(255, 255, 255, 0.15);
+    box-shadow: 
+        0 20px 40px rgba(0, 0, 0, 0.4),
+        0 8px 16px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .create-folder-modal-header {
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+    background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.05) 0%,
+        rgba(255, 255, 255, 0.02) 100%
+    );
+}
+
+[data-theme="dark"] .create-folder-modal-footer {
+    border-top-color: rgba(255, 255, 255, 0.1);
+    background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.02) 0%,
+        rgba(255, 255, 255, 0.05) 100%
+    );
+}
+
+[data-theme="dark"] .create-folder-input {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: white;
+}
+
+[data-theme="dark"] .create-folder-input:focus {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: #4facfe;
+}
+
+[data-theme="dark"] .create-folder-keyboard-hint kbd {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.8);
+}
+
+/* ========================================
+   DELETE CONFIRMATION MODAL
+   ======================================== */
+
+/* Modal Content Wrapper */
+.delete-confirm-modal {
+    max-width: 480px;
+    width: 90%;
+    background: none;
+    border: none;
+    border-radius: 20px;
+    outline: none;
+    padding: 0;
+    overflow: visible;
+}
+
+.delete-confirm-modal-content {
+    background: linear-gradient(
+        145deg,
+        rgba(255, 255, 255, 0.95) 0%,
+        rgba(255, 255, 255, 0.9) 100%
+    );
+    backdrop-filter: blur(40px) saturate(200%) brightness(110%);
+    -webkit-backdrop-filter: blur(40px) saturate(200%) brightness(110%);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 
+        0 20px 40px rgba(0, 0, 0, 0.1),
+        0 8px 16px rgba(0, 0, 0, 0.05),
+        inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    position: relative;
+    overflow: hidden;
+}
+
+/* Header */
+.delete-confirm-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 24px 24px 16px 24px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.3) 0%,
+        rgba(255, 255, 255, 0.1) 100%
+    );
+}
+
+.delete-confirm-modal-title {
+    display: flex;
+    align-items: center;
+    font-size: 18px;
+    font-weight: 600;
+    color: #DC2626;
+    margin: 0;
+}
+
+.delete-confirm-modal-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 8px;
+    color: var(--text-secondary-color);
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+}
+
+.delete-confirm-modal-close:hover {
+    background: rgba(0, 0, 0, 0.1);
+    color: var(--text-color);
+}
+
+/* Body */
+.delete-confirm-modal-body {
+    padding: 24px;
+}
+
+.delete-confirm-question {
+    margin: 0 0 16px 0;
+    font-size: 16px;
+    color: var(--text-color);
+    line-height: 1.5;
+}
+
+.delete-confirm-warning-box {
+    background: rgba(248, 113, 113, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 8px;
+    padding: 16px;
+    margin: 16px 0 0 0;
+}
+
+.delete-confirm-warning-box p {
+    margin: 0 0 8px 0;
+    color: var(--text-color);
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.delete-confirm-warning-box p:last-child {
+    margin-bottom: 0;
+}
+
+/* Footer */
+.delete-confirm-modal-footer {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    padding: 16px 24px 24px 24px;
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+    background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.1) 0%,
+        rgba(255, 255, 255, 0.3) 100%
+    );
+}
+
+.delete-confirm-btn {
+    border-radius: 8px;
+    padding: 12px 24px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+    border: 1px solid;
+    min-width: 100px;
+}
+
+.delete-confirm-btn-cancel {
+    background: var(--bg-color);
+    color: var(--text-color);
+    border-color: var(--setting-row-border-color);
+}
+
+.delete-confirm-btn-cancel:hover {
+    background: var(--setting-row-hover-bg-color);
+    border-color: var(--primary-color);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.delete-confirm-btn-danger {
+    background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);
+    color: white;
+    border-color: #DC2626;
+    font-weight: 600;
+    box-shadow: 0 2px 4px rgba(220, 38, 38, 0.25);
+}
+
+.delete-confirm-btn-danger:hover {
+    background: linear-gradient(135deg, #B91C1C 0%, #991B1B 100%);
+    border-color: #B91C1C;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 12px rgba(220, 38, 38, 0.35);
+}
+
+.delete-confirm-btn-danger:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(220, 38, 38, 0.25);
+}
+
+/* Keyboard Hint */
+.delete-confirm-keyboard-hint {
+    padding: 12px 24px 0 24px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-secondary-color);
+    margin-bottom: 16px;
+}
+
+.delete-confirm-keyboard-hint kbd {
+    background: rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    margin: 0 2px;
+}
+
+/* Dark mode support */
+[data-theme="dark"] .delete-confirm-modal-content {
+    background: linear-gradient(
+        145deg,
+        rgba(23, 23, 23, 0.95) 0%,
+        rgba(38, 38, 38, 0.9) 100%
+    );
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 
+        0 20px 40px rgba(0, 0, 0, 0.4),
+        0 8px 16px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .delete-confirm-modal-header {
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+    background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.05) 0%,
+        rgba(255, 255, 255, 0.02) 100%
+    );
+}
+
+[data-theme="dark"] .delete-confirm-modal-footer {
+    border-top-color: rgba(255, 255, 255, 0.1);
+    background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.02) 0%,
+        rgba(255, 255, 255, 0.05) 100%
+    );
+}
+
+[data-theme="dark"] .delete-confirm-warning-box {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.4);
+}
+
+[data-theme="dark"] .delete-confirm-btn-cancel {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+[data-theme="dark"] .delete-confirm-btn-cancel:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: var(--primary-color);
+}
+
+[data-theme="dark"] .delete-confirm-keyboard-hint kbd {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.8);
+}
+
+/* Checkbox container styling */
+.delete-confirm-checkbox-container {
+    margin-top: 16px;
+    padding: 12px;
+    background-color: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 6px;
+}
+
+.delete-confirm-checkbox-label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.delete-confirm-checkbox {
+    margin-right: 8px;
+    transform: scale(1.1);
+    cursor: pointer;
+}
+
+.delete-confirm-checkbox-text {
+    color: #374151;
+    transition: color 0.2s ease;
+}
+
+.delete-confirm-checkbox-text.delete-mode {
+    color: #B91C1C;
+    font-weight: 600;
+}
+
+.delete-confirm-checkbox-hint {
+    margin: 6px 0 0 24px;
+    font-size: 12px;
+    color: #6B7280;
+    font-style: italic;
+}
+
+/* Dark mode checkbox styling */
+[data-theme="dark"] .delete-confirm-checkbox-container {
+    background: rgba(239, 68, 68, 0.12);
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+[data-theme="dark"] .delete-confirm-checkbox-text {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+[data-theme="dark"] .delete-confirm-checkbox-text.delete-mode {
+    color: #F87171;
+    font-weight: 600;
+}
+
+[data-theme="dark"] .delete-confirm-checkbox-hint {
+    color: rgba(255, 255, 255, 0.6);
+}

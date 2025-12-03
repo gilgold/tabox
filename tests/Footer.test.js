@@ -1,16 +1,15 @@
 import React from 'react';
-import renderer from 'react-test-renderer';
-import { RecoilRoot } from 'recoil';
+import { render } from '@testing-library/react';
+import { Provider } from 'jotai';
 import Footer from '../app/Footer';
 
 describe('Footer Tests', () => {
   test('Footer renders correctly', () => {
-    const component = renderer.create(
-      <RecoilRoot>
+    const { container } = render(
+      <Provider>
         <Footer />
-      </RecoilRoot>,
+      </Provider>,
     );
-    let tree = component.toJSON();
-    expect(tree).toMatchSnapshot();
+    expect(container).toMatchSnapshot();
   });
 });

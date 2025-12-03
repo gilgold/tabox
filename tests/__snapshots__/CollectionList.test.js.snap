@@ -1,23 +1,31 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
 exports[`Collection List tests Collection List renders correctly 1`] = `
-<section
-  className="settings_body"
->
-  <div>
-    <p
-      id="nothing_message"
+<div>
+  <section
+    class="collection-list-container settings_body list-view"
+  >
+    <div
+      class="collection-list"
     >
-      You don't have any collections!
-      <br />
-      <img
-        alt="desert scene"
-        className="no_contant_image"
-        src="images/desert.png"
-      />
-      <br />
-      Add the current tabs or import a collection from file.
-    </p>
-  </div>
-</section>
+      <div
+        class="no-collections-container"
+      >
+        <p
+          id="nothing_message"
+        >
+          You don't have any collections!
+          <br />
+          <img
+            alt="desert scene"
+            class="no_contant_image"
+            src="images/desert.png"
+          />
+          <br />
+          Add the current tabs or import a collection from file.
+        </p>
+      </div>
+    </div>
+  </section>
+</div>
 `;

@@ -1,244 +1,269 @@
-import React, { useEffect, useState } from 'react';
-import { MdDragIndicator, MdDeleteForever } from 'react-icons/md';
-import { FaCloudDownloadAlt, FaStop, FaTrash, FaRegCheckCircle } from 'react-icons/fa';
-import { useSetRecoilState } from 'recoil';
-import { rowToHighlightState } from './atoms/animationsState';
-import { listKeyState } from './atoms/globalAppSettingsState';
-import { downloadTextFile, getCurrentTabsAndGroups } from './utils';
-import { useSnackbar } from 'react-simple-snackbar';
-import { SnackbarStyle } from './model/SnackbarTypes';
-import { useAnimateKeyframes } from 'react-simple-animate';
+import React, { useEffect, useState, useRef, useMemo, useEffectEvent } from 'react';
+import { MdDragIndicator, MdCenterFocusWeak } from 'react-icons/md';
+import { FaPlay } from 'react-icons/fa';
+import ContextMenu from './ContextMenu';
+import { createCollectionMenuItems } from './utils/contextMenuItems';
+import TimeAgo from 'javascript-time-ago';
+import { useSetAtom, useAtomValue } from 'jotai';
+import { deletingCollectionUidsState, highlightedCollectionUidState, draggingTabState, draggingGroupState } from './atoms/animationsState';
+import { trackingStateVersion } from './atoms/globalAppSettingsState';
+
+import { showSuccessToast, showErrorToast } from './toastHelpers';
+
+import { getBorderColor } from './utils/colorUtils';
 import ExpandedCollectionData from './ExpandedCollectionData';
 import { AutoSaveTextbox } from './AutoSaveTextbox';
 import ColorPicker from './ColorPicker';
-import { UNDO_TIME } from './constants';
-import { SnackBarWithUndo } from './SnackBarWithUndo';
+import { useCollectionOperations } from './useCollectionOperations';
 import { browser } from '../static/globals';
+import DroppableCollection from './DroppableCollection';
 
 function CollectionListItem(props) {
-    const setRowToHighlight = useSetRecoilState(rowToHighlightState);
-    const [isDeleted, setDeleted] = useState(false);
+    const deletingCollectionUids = useAtomValue(deletingCollectionUidsState);
+    const setDeletingCollectionUids = useSetAtom(deletingCollectionUidsState);
+    const highlightedCollectionUid = useAtomValue(highlightedCollectionUidState);
+    const setHighlightedCollectionUid = useSetAtom(highlightedCollectionUidState);
+    const draggingTab = useAtomValue(draggingTabState);
+    const draggingGroup = useAtomValue(draggingGroupState);
     const [collectionName, setCollectionName] = useState(props.collection.name);
     const [isExpanded, setExpanded] = useState(false);
     const [isAutoUpdate, setIsAutoUpdate] = useState(false);
-    const setListKey = useSetRecoilState(listKeyState);
-    const [openSnackbar] = useSnackbar({ style: collectionName === '' ? SnackbarStyle.ERROR : SnackbarStyle.SUCCESS });
-    const [openUpdateSnackbar, closeUpdateSnackbar] = useSnackbar({ style: SnackbarStyle.SUCCESS, closeStyle: { display: 'none' } });
-    const [, closeDeleteSnackbar] = useSnackbar({ style: SnackbarStyle.SUCCESS, closeStyle: { display: 'none' } });
+    const mountedRef = useRef(true);
+    
+    // Prevent expansion when dragging a tab or group (unless it's from this collection)
+    const isDraggingTab = draggingTab !== null;
+    const isDraggingGroup = draggingGroup !== null;
+    const isDraggingItem = isDraggingTab || isDraggingGroup;
+    const isDraggingTabFromThisCollection = draggingTab?.sourceCollection?.uid === props.collection.uid;
+    const isDraggingGroupFromThisCollection = draggingGroup?.sourceCollection?.uid === props.collection.uid;
+    const isDraggingFromThisCollection = isDraggingTabFromThisCollection || isDraggingGroupFromThisCollection;
 
-    const { style: deleteStyle, play: playDelete } = useAnimateKeyframes({
-        duration: .7,
-        keyframes: ['transform: scale(1)', 'transform: scale(0)', 'display: none'],
-        iterationCount: 1
+
+
+    // Check if this item should be highlighted (new UID-based system)
+    const isHighlighted = highlightedCollectionUid === props.collection.uid;
+    
+    // Check if this item is being deleted
+    const isDeleting = deletingCollectionUids.has(props.collection.uid);
+
+    // Use shared collection operations
+    const {
+        _handleDelete,
+        _handleDuplicate,
+        _exportCollectionToFile,
+        _handleUpdate,
+        _handleOpenTabs,
+        _handleExpand,
+        _handleFocusWindow,
+        _handleStopTracking
+    } = useCollectionOperations({
+        collection: props.collection,
+        removeCollection: props.removeCollection,
+        updateCollection: props.updateCollection,
+        updateRemoteData: props.updateRemoteData,
+        setIsAutoUpdate,
+        setExpanded,
+        index: props.index,
+        isExpanded,
+        setDeletingCollectionUids,
+        addCollection: props.addCollection,
+        onDataUpdate: props.onDataUpdate
     });
-    const { style: highlightStyle, play: playHighlight } = useAnimateKeyframes({
-        duration: .8,
-        keyframes: ['background-color: var(--bg-color);', 'background-color: var(--highlight-row-color)', 'background-color: var(--bg-color)'],
-        iterationCount: 1
-    });
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            mountedRef.current = false;
+        };
+    }, []);
 
     useEffect(() => {
-        let timer;
-        if (props.highlightRow) {
-            setExpanded(false);
-            playHighlight(true);
-            timer = setTimeout(() => setRowToHighlight(-1), 1000);
+        if (isHighlighted) {
+            // Clear highlight after animation completes
+            const timer = setTimeout(() => {
+                setHighlightedCollectionUid(null);
+            }, 700); // Highlight animation duration (was 1200ms, now 700ms)
+            
+            return () => clearTimeout(timer);
         }
-        return () => {
-            setRowToHighlight(-1);
-            playHighlight(false);
-            clearTimeout(timer);
-        };
-    }, [props.collection]);
+    }, [isHighlighted, setHighlightedCollectionUid]);
 
-    useEffect(async () => {
+    // Use Effect Event for loading auto-update status
+    const loadAutoUpdateStatus = useEffectEvent(async () => {
         const { chkEnableAutoUpdate } = await browser.storage.local.get('chkEnableAutoUpdate');
         const { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack');
-        if (!collectionsToTrack || collectionsToTrack == {}) return;
+        if (!collectionsToTrack || collectionsToTrack == {}) {
+            if (mountedRef.current) {
+                setIsAutoUpdate(false);
+            }
+            return;
+        }
         const activeCollections = collectionsToTrack.map(c => c.collectionUid);
         const collectionIsActive = activeCollections.includes(props.collection.uid);
-        setIsAutoUpdate(chkEnableAutoUpdate && collectionIsActive);
-    }, [props.collection]);
+        if (mountedRef.current) {
+            setIsAutoUpdate(chkEnableAutoUpdate && collectionIsActive);
+        }
+    });
+
+    // Check auto-update status on mount and when collection changes
+    useEffect(() => {
+        loadAutoUpdateStatus();
+    }, [props.collection.uid]); // Use UID instead of full object for more stable dependency
+    
+    // PERFORMANCE FIX: Watch global tracking version instead of individual storage listener
+    // This prevents having N storage listeners (one per collection)
+    const trackingVersion = useAtomValue(trackingStateVersion);
+    useEffect(() => {
+                loadAutoUpdateStatus();
+    }, [trackingVersion]);
 
     const handleSaveCollectionColor = async (color) => {
         let newCollectionItem = { ...props.collection };
         newCollectionItem.color = color;
-        await props.updateCollection(newCollectionItem);
+        newCollectionItem.lastUpdated = Date.now();
+        await props.updateCollection(newCollectionItem, true); // Manual color change - trigger lightning effect
     }
 
-    const _handleDelete = async () => {
-        const { tabsArray: previousCollections } = await browser.storage.local.get('tabsArray');
-        setExpanded(false);
-        await _handleStopTracking();
-        const newList = props.removeCollection(props.collection.uid);
-        setDeleted(true);
-        playDelete(true);
-        setTimeout(async () => { setDeleted(false); await props.updateRemoteData(newList); }, 400);
-        openUpdateSnackbar(
-            <SnackBarWithUndo
-                icon={<FaTrash />}
-                message={`Collection deleted successfully`}
-                collectionName={props.collection.name}
-                updateRemoteData={props.updateRemoteData}
-                collections={previousCollections}
-                closeSnackbar={closeDeleteSnackbar}
-                undoBackgroundColor={SnackbarStyle.SUCCESS.backgroundColor}
-                duration={UNDO_TIME}
-            />, UNDO_TIME * 1000);
-    }
+    // All collection operations are now handled by the shared hook
 
-    const _exportCollectionToFile = () => {
-        downloadTextFile(JSON.stringify(props.collection), props.collection.name);
-    }
-
-    const isWithinDisplayBounds = async (collection) => {
-        const { top, left } = collection.window;
-        // Get information about available displays
-        const displayInfo = await browser.system.display.getInfo();
-        // Iterate through displays
-        for (let display of displayInfo) {
-            const displayBounds = display.bounds;
-
-            // Check if the coordinates are within this display's bounds
-            if (
-                top >= displayBounds.top &&
-                top <= displayBounds.top + displayBounds.height &&
-                left >= displayBounds.left &&
-                left <= displayBounds.left + displayBounds.width
-            ) {
-                return true; // Found a display that contains the coordinates
-            }
-        }
-        return false; // Coordinates are not within any display bounds
-        
+    const _handleExpandWithNameReset = () => {
+        _handleExpand();
+        setCollectionName(props.collection.name);
     };
-
-
-    const _handleUpdate = async () => {
-        const { tabsArray: previousCollections } = await browser.storage.local.get('tabsArray');
-        const { chkEnableAutoUpdate } = await browser.storage.local.get('chkEnableAutoUpdate');
-        const { chkManualUpdateLinkCollection } = await browser.storage.local.get('chkManualUpdateLinkCollection');
-        if (chkEnableAutoUpdate && chkManualUpdateLinkCollection) {
-            let { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack') || [];
-            const activeWindowId = collectionsToTrack.find(c => c.collectionUid === props.collection.uid)?.windowId;
-            if (!activeWindowId) {
-                const trackObj = {
-                    collectionUid: props.collection.uid,
-                    windowId: (await browser.windows.get(browser.windows.WINDOW_ID_CURRENT)).id
-                }
-                collectionsToTrack.push(trackObj);
-                await browser.storage.local.set({ collectionsToTrack: collectionsToTrack });
-                setIsAutoUpdate(true);
-            }
-        }
-        let newItem = await getCurrentTabsAndGroups(props.collection.name);
-        newItem.color = props.collection.color;
-        newItem.uid = props.collection.uid;
-        await props.updateCollection(newItem);
-        setRowToHighlight(props.index);
-        playHighlight(true);
-        setTimeout(() => setRowToHighlight(-1), 1000);
-        openUpdateSnackbar(
-            <SnackBarWithUndo
-                icon={<FaRegCheckCircle />}
-                message={`Collection updated ${chkEnableAutoUpdate && chkManualUpdateLinkCollection ? 'and linked to window' : ''} successfully`}
-                collectionName={props.collection.name}
-                updateRemoteData={props.updateRemoteData}
-                collections={previousCollections}
-                closeSnackbar={closeUpdateSnackbar}
-                undoBackgroundColor={SnackbarStyle.SUCCESS.backgroundColor}
-                duration={UNDO_TIME}
-            />, UNDO_TIME * 1000);
-    };
-
-    const _handleOpenTabs = async () => {
-        if (isExpanded) return;
-        if (isAutoUpdate) {
-            await _handleFocusWindow();
-            return;
-        }
-        const { chkOpenNewWindow } = await browser.storage.local.get('chkOpenNewWindow');
-        let window;
-        if (chkOpenNewWindow) {
-            const hasWindowProp = 'window' in props.collection && props.collection.window;
-            const isCollectionWithinBounds = hasWindowProp && await isWithinDisplayBounds(props.collection);
-            let windowCreationObject = {
-                focused: true,
-                width: hasWindowProp ? props.collection.window.width : null,
-                height: hasWindowProp ? props.collection.window.height : null
-            }
-            if (isCollectionWithinBounds) {
-                windowCreationObject.left = props.collection.window.left;
-                windowCreationObject.top = props.collection.window.top;
-            }
-            window = await browser.windows.create(windowCreationObject);
-            window.tabs = await browser.tabs.query({ windowId: window.id });
-        } else {
-            window = await browser.windows.getCurrent({ populate: true, windowTypes: ['normal'] });
-        }
-        const msg = {
-            type: 'openTabs',
-            collection: props.collection,
-            window: window
-        };
-        await browser.runtime.sendMessage(msg);
-        setTimeout(() => setListKey(Math.random().toString()), 500);
-    }
-
-    const _handleExpand = () => {
-        setExpanded(!isExpanded);
-        setCollectionName(props.collection.name)
-    }
-
-    const _handleFocusWindow = async () => {
-        const { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack') || [];
-        const activeWindowId = collectionsToTrack.find(c => c.collectionUid === props.collection.uid)?.windowId;
-        if (!activeWindowId) return;
-        const msg = {
-            type: 'focusWindow',
-            windowId: activeWindowId
-        };
-        browser.runtime.sendMessage(msg);
-    }
-
-    const _handleStopTracking = async () => {
-        const { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack');
-        setIsAutoUpdate(false);
-        if (!collectionsToTrack || collectionsToTrack == {}) return;
-        const activeCollections = collectionsToTrack.map(c => c.collectionUid);
-        const collectionIsActive = activeCollections.includes(props.collection.uid);
-        if (!collectionIsActive) return;
-        const newCollectionsToTrack = collectionsToTrack.filter(c => c.collectionUid !== props.collection.uid);
-        await browser.storage.local.set({ collectionsToTrack: newCollectionsToTrack });
-    }
 
     const handleCollectionNameChange = (val) => {
         setCollectionName(val.trim());
         if (val.trim() === "") {
-            openSnackbar("Please enter a name for the collection", 4000);
+            showErrorToast("Please enter a name for the collection");
             setCollectionName(props.collection.name);
             return;
         }
         let currentCollection = { ...props.collection };
         currentCollection.name = val;
-        props.updateCollection(currentCollection);
-        openSnackbar(`Collection name updated to '${val}'!`, 5000);
+        currentCollection.lastUpdated = Date.now();
+        props.updateCollection(currentCollection, true); // Manual name change - trigger lightning effect
+        showSuccessToast(`Collection name updated to '${val}'!`);
     }
 
+    const _handleRowClick = (e) => {
+        e.stopPropagation();
+        // Prevent expansion when dragging a tab or group from another collection
+        if (isDraggingItem && !isDraggingFromThisCollection) {
+            return;
+        }
+        _handleExpandWithNameReset();
+    };
+
     const totalGroups = props.collection.chromeGroups ? props.collection.chromeGroups.length : 0;
-    let style = props.highlightRow ? highlightStyle : {};
-    style = isDeleted ? deleteStyle : style;
+    const timeAgo = new TimeAgo('en-US');
+    let style = isDeleting ? {} : {};
+
+    // Check if collection was recently opened (last 3 hours)
+    const isRecentlyOpened = useMemo(() => {
+        if (!props.collection.lastOpened) return false;
+        const threeHoursAgo = Date.now() - (3 * 60 * 60 * 1000);
+        return props.collection.lastOpened >= threeHoursAgo;
+    }, [props.collection.lastOpened]);
+
+    // Helper function to escape regex special characters
+    const escapeRegex = (string) => {
+        return string.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    };
+
+    // Check if collection name matches search (but not tabs)
+    const hasMatchingName = useMemo(() => {
+        if (!props.search || !props.search.trim()) return false;
+        const searchRegex = new RegExp(escapeRegex(props.search), 'i');
+        return props.collection.name?.match(searchRegex) || false;
+    }, [props.search, props.collection.name]);
+
+    // Check if collection has matching tabs when search is active
+    const hasMatchingTabs = useMemo(() => {
+        if (!props.search || !props.search.trim()) return false;
+        const searchRegex = new RegExp(escapeRegex(props.search), 'i');
+        return props.collection.tabs && props.collection.tabs.some(tab => 
+            tab.title?.match(searchRegex) || 
+            tab.url?.match(searchRegex)
+        );
+    }, [props.search, props.collection.tabs]);
+
+    // Count matching tabs when search is active
+    const matchingTabsCount = useMemo(() => {
+        if (!props.search || !props.search.trim()) return 0;
+        const searchRegex = new RegExp(escapeRegex(props.search), 'i');
+        return props.collection.tabs ? props.collection.tabs.filter(tab => 
+            tab.title?.match(searchRegex) || 
+            tab.url?.match(searchRegex)
+        ).length : 0;
+    }, [props.search, props.collection.tabs]);
+
+    // Auto-expand collections ONLY when tabs match (not when only name matches)
+    useEffect(() => {
+        if (props.search && props.search.trim()) {
+            if (hasMatchingTabs) {
+                // Auto-expand if search is active and has matching tabs
+                setExpanded(true);
+            } else {
+                // If no tabs match (even if name matches), ensure collection is collapsed
+                // This handles the case where only collection name matches the search
+                setExpanded(false);
+            }
+        }
+        // Note: We don't auto-collapse when search is cleared to preserve user's manual expansion state
+    }, [props.search, hasMatchingTabs]);
+
+    // Helper function to highlight matching text in collection name
+    const highlightMatchInName = useMemo(() => {
+        if (!props.search || !props.search.trim()) {
+            return null;
+        }
+        
+        const name = props.collection.name;
+        const searchTerm = props.search.trim();
+        
+        // Check if name matches search (case-insensitive)
+        const searchRegex = new RegExp(escapeRegex(searchTerm), 'i');
+        if (!name || !name.match(searchRegex)) {
+            return null;
+        }
+        
+        const escapedSearch = escapeRegex(searchTerm);
+        const highlightRegex = new RegExp(`(${escapedSearch})`, 'gi');
+        const parts = name.split(highlightRegex);
+        
+        return parts.map((part, index) => {
+            // Check if this part matches the search term (case-insensitive)
+            if (part.toLowerCase() === searchTerm.toLowerCase()) {
+                return (
+                    <span key={`match-${index}-${part}`} className="search-match-text">
+                        {part}
+                    </span>
+                );
+            }
+            return part ? <span key={`text-${index}-${part}`}>{part}</span> : null;
+        }).filter(Boolean);
+    }, [props.search, props.collection.name]);
 
     return (
-        <div className={`row setting_row ${isAutoUpdate && 'active-auto-tracking'}`} style={{ ...style, borderLeft: `5px solid ${isExpanded ? 'transparent' : props.collection.color}`, backgroundColor: isExpanded ? 'var(--setting-row-hover-bg-color)' : null }}>
-            <div
-                className="column handle"
-                {...props.dragHandleProps.attributes}
-                {...props.dragHandleProps.listeners}
+        <DroppableCollection collection={props.collection}>
+            <div 
+                onClick={_handleRowClick} 
+                className={`row setting_row collection-list-item ${isExpanded ? 'expanded' : ''} ${isAutoUpdate && 'active-auto-tracking'} ${isHighlighted ? 'collection-item-highlight' : ''} ${isDeleting ? 'collection-item-deleting' : ''} ${props.lightningEffect ? 'lightning-effect' : ''}`} 
+                style={{ 
+                    ...style, 
+                    border: '2px solid var(--setting-row-border-color)'
+                }}
+                data-in-folder={props.isInFolder ? 'true' : 'false'}
             >
-                <MdDragIndicator />
-            </div>
-            <div className="column" style={{ flex: '0 0 20px' }}>
+            <div className="collection-row-main">
+                <div
+                    className="column handle"
+                    {...props.dragHandleProps.attributes}
+                    {...props.dragHandleProps.listeners}
+                >
+                    <MdDragIndicator />
+                </div>
+            <div className="column color-picker-column">
                 <div style={{ position: 'relative', display: 'flex' }}>
                     <ColorPicker
                         currentColor={props.collection.color}
@@ -249,50 +274,89 @@ function CollectionListItem(props) {
             <div
                 className="column settings_div"
                 title={props.collection.name}
-                onClick={async () => await _handleOpenTabs()}
             >
-                <span className="truncate_box">{isExpanded ? <div className="edit-collection-wrapper">
-                    <AutoSaveTextbox
-                        onChange={setCollectionName}
-                        maxLength={50}
-                        initValue={props.collection.name}
-                        item={props.collection}
-                        action={handleCollectionNameChange} />
-                </div> : props.collection.name}</span>
-            </div>
-            <div className="column total_tabs" onClick={_handleOpenTabs}>
-                {props.collection.tabs.length} tab{props.collection.tabs.length > 1 ? 's' : ''} {totalGroups > 0 && '(' + totalGroups + ' group' + (totalGroups > 1 ? 's' : '') + ')'}
+                <div className="collection-name-wrapper">
+                    <div className="collection-name">
+                        {isExpanded ?
+                            <div className="edit-collection-wrapper" onClick={(e) => e.stopPropagation()}>
+                                <AutoSaveTextbox
+                                    onChange={setCollectionName}
+                                    maxLength={50}
+                                    initValue={props.collection.name}
+                                    item={props.collection}
+                                    action={handleCollectionNameChange} />
+                            </div>
+                            :
+                            <div className="collection-name-row">
+                                <span className="truncate_box">
+                                    {highlightMatchInName !== null ? highlightMatchInName : props.collection.name}
+                                </span>
+                                {isRecentlyOpened && (
+                                    <span className="recently-opened-indicator" title="Recently opened (last 3 hours)"></span>
+                                )}
+                            </div>
+                        }
+                    </div>
+                    <div className="collection-counts">
+                        {props.search && props.search.trim() && hasMatchingTabs ? (
+                            <>
+                                <span className="matching-tabs-indicator">
+                                    {matchingTabsCount} matching tab{matchingTabsCount !== 1 ? 's' : ''}
+                                </span>
+                                <span className="collection-separator"> • </span>
+                            </>
+                        ) : null}
+                        <span className="collection-time-ago">
+                            {props.collection.lastUpdated ? timeAgo.format(new Date(props.collection.lastUpdated)) :
+                                props.collection.createdOn ? timeAgo.format(new Date(props.collection.createdOn)) : 'Unknown time'}
+                        </span>
+                        <span className="collection-separator"> • </span>
+                        <span>
+                            {props.collection.tabs?.length || 0} tab{(props.collection.tabs?.length || 0) > 1 ? 's' : ''} {totalGroups > 0 && '(' + totalGroups + ' group' + (totalGroups > 1 ? 's' : '') + ')'}
+                        </span>
+                    </div>
+                </div>
             </div>
             <div className="column right_items">
-                <span
-                    data-tip={`${isAutoUpdate ? 'Stop auto updating' : 'Update'} this collection`}
-                    className={`float-button ${isAutoUpdate ? 'stop_btn' : 'update_btn'}`}
-                    onClick={async () => isAutoUpdate ? _handleStopTracking() : await _handleUpdate()}
-                >
-                    {isAutoUpdate ? <FaStop /> : 'update'}
-                </span>
-                <span data-tip={'Export Collection to File'} onClick={() => _exportCollectionToFile()} className="export">
-                    <FaCloudDownloadAlt color="var(--primary-color)" size="18" />
-                </span>
-                <span data-tip={'Delete Collection'} className="export" onClick={async () => await _handleDelete()}>
-                    <MdDeleteForever color="#e74c3c" size="18" />
-                </span>
-                <span
-                    className={`expand-icon ${isExpanded ? 'expan-open' : ''}`}
-                    data-tip={`${isExpanded ? 'Collapse' : 'Expand'} list of tabs`}
-                    onClick={(e) => {
+                <button
+                    className="open-tabs-icon"
+                    data-tooltip-id="main-tooltip" data-tooltip-content={isAutoUpdate ? "Focus collection window" : "Open collection tabs"}
+                    onClick={async (e) => {
                         e.stopPropagation();
-                        _handleExpand();
+                        if (isAutoUpdate) {
+                            await _handleFocusWindow();
+                        } else {
+                            await _handleOpenTabs();
+                        }
                     }}
                 >
-                    ⌃
-                </span>
+                    {isAutoUpdate ? <MdCenterFocusWeak size={20} /> : <FaPlay />}
+                </button>
+
+                <ContextMenu
+                    menuItems={createCollectionMenuItems({
+                        isAutoUpdate,
+                        onExport: _exportCollectionToFile,
+                        onDelete: _handleDelete,
+                        onUpdate: _handleUpdate,
+                        onStopTracking: _handleStopTracking,
+                        onDuplicate: _handleDuplicate
+                    })}
+                    tooltip="Collection options"
+                />
+                </div>
             </div>
-            {isExpanded ? <ExpandedCollectionData
-                collection={props.collection}
-                updateCollection={props.updateCollection}
-                updateRemoteData={props.updateRemoteData} /> : null}
-        </div>);
+            {isExpanded ? (
+                <div className="expanded-wrapper" onClick={(e) => e.stopPropagation()}>
+                    <ExpandedCollectionData
+                        collection={props.collection}
+                        updateCollection={props.updateCollection}
+                        updateRemoteData={props.updateRemoteData}
+                        search={props.search} />
+                </div>
+            ) : null}
+        </div>
+        </DroppableCollection>);
 }
 
 export default CollectionListItem;

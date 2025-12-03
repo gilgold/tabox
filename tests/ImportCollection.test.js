@@ -1,16 +1,15 @@
 import React from 'react';
-import renderer from 'react-test-renderer';
+import { render } from '@testing-library/react';
 import ImportCollection from '../app/ImportCollection';
-import { RecoilRoot } from 'recoil';
+import { Provider } from 'jotai';
 
 describe('Import Collection section tests', () => {
   test('Import collection component renders correctly', () => {
-    const component = renderer.create(
-      <RecoilRoot>
+    const { container } = render(
+      <Provider>
         <ImportCollection />
-      </RecoilRoot>,
+      </Provider>,
     );
-    let tree = component.toJSON();
-    expect(tree).toMatchSnapshot();
+    expect(container).toMatchSnapshot();
   });
 });

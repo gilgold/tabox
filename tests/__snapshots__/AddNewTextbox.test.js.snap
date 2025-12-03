@@ -1,128 +1,121 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
 exports[`Add new collection textbox tests Add new collection textbox renders correctly - sync disabled 1`] = `
-<section
-  className="add-collections-wrapper"
->
-  <div
-    className="add-collection-group"
+<div>
+  <section
+    class="add-collections-wrapper"
   >
-    <input
-      id="new_setting_title"
-      maxLength="50"
-      name="new_setting_title"
-      onChange={[Function]}
-      onKeyDown={[Function]}
-      placeholder=" "
-      type="text"
-      value=""
-    />
-    <span
-      className="bar"
-    />
-    <label
-      className="textbox_label"
-    >
-      Search or Add collections
-    </label>
-    <button
-      className="clear-button"
-      disabled={true}
-      onClick={[Function]}
-      style={
-        Object {
-          "opacity": "0",
-        }
-      }
-    >
-      <svg
-        fill="currentColor"
-        height="16px"
-        stroke="currentColor"
-        strokeWidth="0"
-        style={
-          Object {
-            "color": undefined,
-          }
-        }
-        viewBox="0 0 512 512"
-        width="16px"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <path
-          d="m289.94 256 95-95A24 24 0 0 0 351 127l-95 95-95-95a24 24 0 0 0-34 34l95 95-95 95a24 24 0 1 0 34 34l95-95 95 95a24 24 0 0 0 34-34z"
-        />
-      </svg>
-    </button>
-    <br />
-    <span
-      className="highlighted_note"
-      style={
-        Object {
-          "display": "none",
-        }
-      }
-    >
-      Save 
-      <span
-        className="highlighter"
-      >
-        0
-         selected
-      </span>
-       tabs
-    </span>
-  </div>
-  <button
-    className="btn"
-    disabled={false}
-    id="add_new_setting"
-    onClick={[Function]}
-  >
-    <span>
-      Add
-    </span>
-  </button>
-  <span
-    className="image-upload"
-  >
-    <label
-      className="input-label"
-      htmlFor="file-input"
+    <div
+      class="left-controls-group"
     >
       <div
-        className="import-button"
+        class="add-collection-group"
       >
-        <svg
-          className="import-icon"
-          fill="currentColor"
-          height="16px"
-          stroke="currentColor"
-          strokeWidth="0"
-          style={
-            Object {
-              "color": "var(--text-color)",
-            }
-          }
-          viewBox="0 0 512 512"
-          width="16px"
-          xmlns="http://www.w3.org/2000/svg"
+        <input
+          id="new_setting_title"
+          maxlength="50"
+          name="new_setting_title"
+          placeholder=" "
+          type="text"
+          value=""
+        />
+        <label
+          class="textbox_label"
         >
-          <path
-            d="M16 288c-8.8 0-16 7.2-16 16v32c0 8.8 7.2 16 16 16h112v-64zm489-183L407.1 7c-4.5-4.5-10.6-7-17-7H384v128h128v-6.1c0-6.3-2.5-12.4-7-16.9zm-153 31V0H152c-13.3 0-24 10.7-24 24v264h128v-65.2c0-14.3 17.3-21.4 27.4-11.3L379 308c6.6 6.7 6.6 17.4 0 24l-95.7 96.4c-10.1 10.1-27.4 3-27.4-11.3V352H128v136c0 13.3 10.7 24 24 24h336c13.3 0 24-10.7 24-24V160H376c-13.2 0-24-10.8-24-24z"
-          />
-        </svg>
-         
-        <span>
-          Import from file
-        </span>
+          Search or Add collections
+        </label>
+        <button
+          class="clear-button"
+          disabled=""
+          style="opacity: 0;"
+        >
+          <svg
+            fill="currentColor"
+            height="16px"
+            stroke="currentColor"
+            stroke-width="0"
+            viewBox="0 0 512 512"
+            width="16px"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="m289.94 256 95-95A24 24 0 0 0 351 127l-95 95-95-95a24 24 0 0 0-34 34l95 95-95 95a24 24 0 1 0 34 34l95-95 95 95a24 24 0 0 0 34-34z"
+            />
+          </svg>
+        </button>
       </div>
-    </label>
-    <input
-      id="file-input"
-      onChange={[Function]}
-      type="file"
-    />
-  </span>
-</section>
+      <div
+        class="add-button-container"
+      >
+        <button
+          class="add-new-collection-btn"
+          id="add_new_setting"
+        >
+          <span>
+            Add Collection
+          </span>
+        </button>
+      </div>
+      <div
+        class="window-toggle-container"
+      >
+        <div
+          class="window-choice-toggle disabled current-active"
+          data-tooltip-class-name="small-tooltip"
+          data-tooltip-content="Only available when multiple Chrome windows are open"
+          data-tooltip-id="main-tooltip"
+        >
+          <button
+            class="mode-toggle-btn active disabled"
+            data-tooltip-class-name="small-tooltip"
+            data-tooltip-content="Only one window open"
+            data-tooltip-id="main-tooltip"
+            disabled=""
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              fill="none"
+              height="1em"
+              stroke="currentColor"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="1em"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+          <button
+            class="mode-toggle-btn  disabled"
+            data-tooltip-class-name="small-tooltip"
+            data-tooltip-content="Only one window open"
+            data-tooltip-id="main-tooltip"
+            disabled=""
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              fill="currentColor"
+              height="1em"
+              stroke="currentColor"
+              stroke-width="0"
+              viewBox="0 0 20 20"
+              width="1em"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z"
+              />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
 `;

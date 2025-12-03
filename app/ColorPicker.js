@@ -1,83 +1,116 @@
 import React, { useEffect, useState } from 'react';
 import { Popover } from 'react-tiny-popover';
-import ReactTooltip from 'react-tooltip';
+import { COLOR_PALETTE } from './utils/colorMigration';
 
 function ColorPicker(props) {
 
-    const [color, setColor] = useState(props?.currentColor ?? 'var(--bg-color)');
+    const [color, setColor] = useState(props?.currentColor ?? 'var(--setting-row-border-color)');
     const [showPicker, setShowPicker] = useState(false);
     const [selectedColorCircle, setSelectedColorCircle] = useState(0);
 
-    const colorList = props.colorList ?? [
-        'var(--bg-color)',
-        '#B60205',
-        '#D93F0B',
-        '#FBCA04',
-        '#0E8A16',
-        '#1D76DB',
-        '#0052CC',
-        '#6330e4',
-        '#f78786',
-        '#f1bc97',
-        '#f3e3a2',
-        '#95e6b2',
-        '#acf4f9',
-        '#99bdff',
-        '#C5DEF5',
-        '#6294dc',
-        '#b499f7'
-    ];
+    const colorList = props.colorList ?? COLOR_PALETTE;
+
+    // Helper function to get actual color value (supports both new names and legacy hex codes)
+    const getActualColor = (color) => {
+        if (!color) return 'var(--setting-row-border-color)';
+        
+        // If it's a color name from our palette, get its hex value
+        if (COLOR_PALETTE[color]) {
+            return COLOR_PALETTE[color];
+        }
+        
+        // If it's already a hex code or CSS variable, return as is
+        return color;
+    };
 
     useEffect(() => {
-        setColor(props?.currentColor ?? 'var(--bg-color)')
+        const actualColor = getActualColor(props?.currentColor);
+        setColor(actualColor);
+        
         if (props.currentColor) {
-            const colorIndex = colorList.findIndex(element => element === props.currentColor);
+            // Find index by checking both color names and values
+            const colorEntries = Object.entries(colorList);
+            const colorIndex = colorEntries.findIndex(([name, value]) => 
+                name === props.currentColor || value === props.currentColor
+            );
             setSelectedColorCircle(colorIndex);
+        } else {
+            // Reset selection when no color is selected
+            setSelectedColorCircle(-1);
         }
     }, [props.currentColor]);
 
     useEffect(() => {
-        ReactTooltip.rebuild();
-        return () => setShowPicker(false);
+        return () => {
+            // Safely close picker only if component is still mounted
+            try {
+                setShowPicker(false);
+            } catch (error) {
+                // Component was unmounted, ignore error
+                console.debug('ColorPicker cleanup: component already unmounted');
+            }
+        };
     }, []);
 
-    const handleChange = async (color, index) => {
-        setColor(color);
+    const handleChange = async (colorName, colorValue, index, e) => {
+        e.stopPropagation();
+        setColor(colorValue); // Set display color to hex value
         setSelectedColorCircle(index);
-        props.action(color, props.group ?? null);
-
+        props.action(colorName, props.group ?? null); // Pass color name for storage
+        setShowPicker(false); // Close picker after selection
     };
 
-    const handleClick = () => {
+    const handleClick = (e) => {
+        e.stopPropagation();
+        e.preventDefault();
         setShowPicker(!showPicker);
     };
 
     const handleClose = (e) => {
-        if (e && ['colorOption'].includes(e.target.className)) return;
+        if (e && ['colorOption', 'modern-color-option', 'color-grid'].includes(e.target.className)) return;
         setShowPicker(false);
     };
 
+    const size = props.size === 'small' ? 'small' : 'normal';
+
     return <Popover
         isOpen={showPicker}
-        positions={['right']} // preferred positions by priority
+        positions={['bottom', 'top', 'right', 'left']} // try bottom first for modern feel
         onClickOutside={handleClose}
+        containerStyle={{ zIndex: 2000 }}
+        contentStyle={{ zIndex: 2000 }}
         content={
-            <div className="popover">
-                {colorList.map((_color, index) => index === 8 ?
-                    <div className="break" key={'breaker'} /> :
-                    <div
-                        key={`color-${index}`}
-                        onClick={async () => await handleChange(_color, index)}
-                        className={`colorOption`}
-                        style={{ backgroundColor: _color }}>
-                        <div className={`selectedInnerCircle ${index === selectedColorCircle ? 'selected' : ''}`} />
-                    </div>
-                )}
+            <div className={`modern-color-popover ${size}`} style={{ zIndex: 2000 }}>
+                <div className="color-picker-header">
+                    <span>Choose Color</span>
+                </div>
+                <div className="color-grid">
+                    {Object.entries(colorList).map(([colorName, colorValue], index) => (
+                        <div
+                            key={`color-${colorName}`}
+                            onClick={async (e) => await handleChange(colorName, colorValue, index, e)}
+                            className={`modern-color-option ${index === selectedColorCircle ? 'selected' : ''}`}
+                            style={{ 
+                                backgroundColor: colorValue,
+                                '--color-value': colorValue 
+                            }}
+                            data-tooltip-id="main-tooltip" data-tooltip-content={colorName.replace('-', ' ')}
+                            data-for="color-tooltip">
+                            {index === selectedColorCircle && (
+                                <div className="selection-indicator">
+                                    <svg width="8" height="8" viewBox="0 0 12 12" fill="none">
+                                        <path d="M10 3L4.5 8.5L2 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                    </svg>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
             </div>}
     >
-        <div onClick={handleClick} className="colorPickerWrapper" data-tip-disable={showPicker} data-tip={props.tooltip}>
-            <div className="colorPicker" style={{ borderColor: color === 'var(--bg-color)' ? 'var(--settings-row-text-color)' : color }} onClick={handleClick}>
-                <div className="currentColor" style={{ backgroundColor: color }} />
+        <div onClick={handleClick} className={`modern-color-picker-wrapper ${size}`} data-tooltip-hidden={showPicker} data-tooltip-id="main-tooltip" data-tooltip-content={props.tooltip}>
+            <div className={`modern-color-picker ${showPicker ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); handleClick(e); }}>
+                <div className="current-color-preview" style={{ backgroundColor: color }} />
             </div>
         </div>
     </Popover>;

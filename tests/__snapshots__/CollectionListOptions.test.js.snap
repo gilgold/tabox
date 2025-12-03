@@ -1,158 +1,373 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
 exports[`Collection List Options tests CollectionListOptions renders correctly 1`] = `
-<div
-  className="options-wrapper"
->
+<div>
   <div
-    className="sort-icon"
-  />
-   
-  <span
-    className="sortLabel"
+    class="collections-toolbar"
   >
-    Sort by: 
-  </span>
-  <div
-    className="sort-select-container css-b62m3t-container"
-    onKeyDown={[Function]}
-  >
-    <span
-      className="css-1f43avz-a11yText-A11yText"
-      id="react-select-2-live-region"
-    />
-    <span
-      aria-atomic="false"
-      aria-live="polite"
-      aria-relevant="additions text"
-      className="css-1f43avz-a11yText-A11yText"
-      role="log"
-    />
     <div
-      className="sort-select__control css-qt765t-control"
-      onMouseDown={[Function]}
-      onTouchEnd={[Function]}
+      class="toolbar-left"
     >
       <div
-        className="sort-select__value-container css-16674sh-Component"
+        class="sort-controls"
       >
-        <div
-          className="sort-select__placeholder css-1jqq78o-placeholder"
-          id="react-select-2-placeholder"
+        <svg
+          class="sort-icon"
+          fill="currentColor"
+          height="1em"
+          stroke="currentColor"
+          stroke-width="0"
+          viewBox="0 0 24 24"
+          width="1em"
+          xmlns="http://www.w3.org/2000/svg"
         >
-          Select...
-        </div>
-        <div
-          className="sort-select__input-container css-jkf187-Component"
-          data-value=""
-        >
-          <input
-            aria-activedescendant=""
-            aria-autocomplete="list"
-            aria-describedby="react-select-2-placeholder"
-            aria-expanded={false}
-            aria-haspopup={true}
-            autoCapitalize="none"
-            autoComplete="off"
-            autoCorrect="off"
-            className="sort-select__input"
-            disabled={false}
-            id="react-select-2-input"
-            onBlur={[Function]}
-            onChange={[Function]}
-            onFocus={[Function]}
-            role="combobox"
-            spellCheck="false"
-            style={
-              Object {
-                "background": 0,
-                "border": 0,
-                "color": "inherit",
-                "font": "inherit",
-                "gridArea": "1 / 2",
-                "label": "input",
-                "margin": 0,
-                "minWidth": "2px",
-                "opacity": 1,
-                "outline": 0,
-                "padding": 0,
-                "width": "100%",
-              }
-            }
-            tabIndex={0}
-            type="text"
-            value=""
+          <path
+            d="M0 0h24v24H0z"
+            fill="none"
           />
-        </div>
-      </div>
-      <div
-        className="sort-select__indicators css-ny0e4k-Component"
-      >
-        <span
-          className="sort-select__indicator-separator css-1u9des2-indicatorSeparator"
-        />
+          <path
+            d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z"
+          />
+        </svg>
         <div
-          aria-hidden="true"
-          className="sort-select__indicator sort-select__dropdown-indicator css-1t9vv14-indicatorContainer"
-          onMouseDown={[Function]}
-          onTouchEnd={[Function]}
+          class="sort-type-select css-b62m3t-container"
+        >
+          <span
+            class="css-1f43avz-a11yText-A11yText"
+            id="react-select-2-live-region"
+          />
+          <span
+            aria-atomic="false"
+            aria-live="polite"
+            aria-relevant="additions text"
+            class="css-1f43avz-a11yText-A11yText"
+            role="log"
+          />
+          <div
+            class="react-select__control css-18br1kc-control"
+          >
+            <div
+              class="react-select__value-container react-select__value-container--has-value css-4ed9hr"
+            >
+              <div
+                class="custom-select-single-value"
+              >
+                <svg
+                  class="option-icon"
+                  fill="currentColor"
+                  height="16"
+                  stroke="currentColor"
+                  stroke-width="0"
+                  viewBox="0 0 24 24"
+                  width="16"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M0 0h24v24H0z"
+                    fill="none"
+                  />
+                  <path
+                    d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"
+                  />
+                  <path
+                    d="M12.5 7H11v6l5.25 3.15.75-1.23-4.5-2.67z"
+                  />
+                </svg>
+                <span
+                  class="option-label"
+                >
+                  Date
+                </span>
+              </div>
+              <input
+                aria-activedescendant=""
+                aria-autocomplete="list"
+                aria-expanded="false"
+                aria-haspopup="true"
+                aria-readonly="true"
+                class="css-1s80ejz-dummyInput-DummyInput"
+                id="react-select-2-input"
+                inputmode="none"
+                role="combobox"
+                tabindex="0"
+                value=""
+              />
+            </div>
+            <div
+              class="react-select__indicators css-1wy0on6"
+            >
+              <span
+                class="react-select__indicator-separator css-1hyfx7x"
+              />
+              <div
+                aria-hidden="true"
+                class="react-select__indicator react-select__dropdown-indicator css-je05im-indicatorContainer"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="css-tj5bde-Svg"
+                  focusable="false"
+                  height="20"
+                  viewBox="0 0 20 20"
+                  width="20"
+                >
+                  <path
+                    d="M4.516 7.548c0.436-0.446 1.043-0.481 1.576 0l3.908 3.747 3.908-3.747c0.533-0.481 1.141-0.446 1.574 0 0.436 0.445 0.408 1.197 0 1.615-0.406 0.418-4.695 4.502-4.695 4.502-0.217 0.223-0.502 0.335-0.787 0.335s-0.57-0.112-0.789-0.335c0 0-4.287-4.084-4.695-4.502s-0.436-1.17 0-1.615z"
+                  />
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+        <button
+          class="toolbar-button"
+          title="Ascending (A→Z, Oldest→Newest)"
         >
           <svg
-            aria-hidden="true"
-            className="css-tj5bde-Svg"
-            focusable="false"
-            height={20}
-            viewBox="0 0 20 20"
-            width={20}
+            fill="currentColor"
+            height="18"
+            stroke="currentColor"
+            stroke-width="0"
+            viewBox="0 0 24 24"
+            width="18"
+            xmlns="http://www.w3.org/2000/svg"
           >
             <path
-              d="M4.516 7.548c0.436-0.446 1.043-0.481 1.576 0l3.908 3.747 3.908-3.747c0.533-0.481 1.141-0.446 1.574 0 0.436 0.445 0.408 1.197 0 1.615-0.406 0.418-4.695 4.502-4.695 4.502-0.217 0.223-0.502 0.335-0.787 0.335s-0.57-0.112-0.789-0.335c0 0-4.287-4.084-4.695-4.502s-0.436-1.17 0-1.615z"
+              d="M0 0h24v24H0V0z"
+              fill="none"
+            />
+            <path
+              d="m20 12-1.41-1.41L13 16.17V4h-2v12.17l-5.58-5.59L4 12l8 8 8-8z"
+            />
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div
+      class="toolbar-center"
+    >
+      <div
+        class="collection-filter"
+      >
+        <div
+          class="filter-icon"
+        >
+          <svg
+            fill="currentColor"
+            height="16"
+            stroke="currentColor"
+            stroke-width="0"
+            viewBox="0 0 24 24"
+            width="16"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M0 0h24v24H0z"
+              fill="none"
+            />
+            <path
+              d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"
             />
           </svg>
         </div>
+        <div
+          class="filter-controls"
+        >
+          <button
+            class="filter-button opened-filter "
+            data-tooltip-class-name="small-tooltip"
+            data-tooltip-content="Show collections opened in the last 3 hours"
+            data-tooltip-id="main-tooltip"
+          >
+            <svg
+              fill="currentColor"
+              height="14"
+              stroke="currentColor"
+              stroke-width="0"
+              viewBox="0 0 24 24"
+              width="14"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M0 0h24v24H0z"
+                fill="none"
+              />
+              <path
+                d="M19 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4v-2H5V8h14v10h-4v2h4c1.1 0 2-.9 2-2V6a2 2 0 0 0-2-2zm-7 6-4 4h3v6h2v-6h3l-4-4z"
+              />
+            </svg>
+            <span
+              class="filter-label"
+            >
+              Opened
+            </span>
+          </button>
+          <div
+            class="color-filter-wrapper"
+          >
+            <svg
+              class="color-filter-icon"
+              fill="currentColor"
+              height="16"
+              stroke="currentColor"
+              stroke-width="0"
+              viewBox="0 0 24 24"
+              width="16"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M0 0h24v24H0z"
+                fill="none"
+              />
+              <path
+                d="M12 2C6.49 2 2 6.49 2 12s4.49 10 10 10a2.5 2.5 0 0 0 2.5-2.5c0-.61-.23-1.2-.64-1.67a.528.528 0 0 1-.13-.33c0-.28.22-.5.5-.5H16c3.31 0 6-2.69 6-6 0-4.96-4.49-9-10-9zm5.5 11c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm-3-4c-.83 0-1.5-.67-1.5-1.5S13.67 6 14.5 6s1.5.67 1.5 1.5S15.33 9 14.5 9zM5 11.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5S7.33 13 6.5 13 5 12.33 5 11.5zm6-4c0 .83-.67 1.5-1.5 1.5S8 8.33 8 7.5 8.67 6 9.5 6s1.5.67 1.5 1.5z"
+              />
+            </svg>
+            <div
+              class="modern-color-picker-wrapper small"
+              data-tooltip-content="Filter by collection color"
+              data-tooltip-hidden="false"
+              data-tooltip-id="main-tooltip"
+            >
+              <div
+                class="modern-color-picker "
+              >
+                <div
+                  class="current-color-preview"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
-  </div>
-  <div
-    className="verticle-divider"
-  />
-  <span
-    data-class="small-tooltip"
-    data-multiline={true}
-  >
-    <input
-      checked={false}
-      className="switch-input"
-      id="chkOpenNewWindow"
-      name="chkOpenNewWindow"
-      onChange={[Function]}
-      type="checkbox"
-    />
-    <label
-      className="switch-label"
-      htmlFor="chkOpenNewWindow"
+    <div
+      class="toolbar-right"
     >
-      <span
-        className="toggle--on"
+      <button
+        class="toolbar-toggle-button "
+        data-tooltip-class-name="small-tooltip"
+        data-tooltip-content="Open collections in current window"
+        data-tooltip-id="main-tooltip"
       >
-        <span>
-          Tabs will open in a 
-          <strong>
-            new window
-          </strong>
-        </span>
-      </span>
-      <span
-        className="toggle--off"
+        <svg
+          fill="currentColor"
+          height="18"
+          stroke="currentColor"
+          stroke-width="0"
+          viewBox="0 0 24 24"
+          width="18"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M0 0h24v24H0z"
+            fill="none"
+          />
+          <path
+            d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"
+          />
+        </svg>
+      </button>
+      <button
+        class="toolbar-button"
+        data-tooltip-class-name="small-tooltip"
+        data-tooltip-content="Create new folder"
+        data-tooltip-id="main-tooltip"
       >
-        <span>
-          Tabs will be added to 
-          <strong>
-            this window
-          </strong>
-        </span>
-      </span>
-    </label>
-  </span>
+        <svg
+          fill="currentColor"
+          height="18"
+          stroke="currentColor"
+          stroke-width="0"
+          viewBox="0 0 24 24"
+          width="18"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M0 0h24v24H0V0z"
+            fill="none"
+          />
+          <path
+            d="M20 6h-8l-2-2H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-1 8h-3v3h-2v-3h-3v-2h3V9h2v3h3v2z"
+          />
+        </svg>
+      </button>
+      <button
+        class="toolbar-button"
+        data-tooltip-class-name="small-tooltip"
+        data-tooltip-content="Switch to grid view"
+        data-tooltip-id="main-tooltip"
+      >
+        <svg
+          fill="currentColor"
+          height="18"
+          stroke="currentColor"
+          stroke-width="0"
+          viewBox="0 0 256 256"
+          width="18"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M84,52V92H28a4,4,0,0,1-4-4V64A16,16,0,0,1,40,48H80A4,4,0,0,1,84,52Zm16,152a4,4,0,0,0,4,4h48a4,4,0,0,0,4-4V164H100ZM24,168v24a16,16,0,0,0,16,16H80a4,4,0,0,0,4-4V164H28A4,4,0,0,0,24,168Zm0-56v32a4,4,0,0,0,4,4H84V108H28A4,4,0,0,0,24,112ZM152,48H104a4,4,0,0,0-4,4V92h56V52A4,4,0,0,0,152,48Zm76,60H172v40h56a4,4,0,0,0,4-4V112A4,4,0,0,0,228,108ZM100,148h56V108H100ZM216,48H176a4,4,0,0,0-4,4V92h56a4,4,0,0,0,4-4V64A16,16,0,0,0,216,48Zm12,116H172v40a4,4,0,0,0,4,4h40a16,16,0,0,0,16-16V168A4,4,0,0,0,228,164Z"
+          />
+        </svg>
+      </button>
+      <button
+        class="toolbar-button"
+        data-tooltip-class-name="small-tooltip"
+        data-tooltip-content="Restore previous session"
+        data-tooltip-id="main-tooltip"
+        disabled=""
+      >
+        <svg
+          fill="currentColor"
+          height="18"
+          stroke="currentColor"
+          stroke-width="0"
+          viewBox="0 0 24 24"
+          width="18"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M0 0h24v24H0z"
+            fill="none"
+          />
+          <path
+            d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"
+          />
+        </svg>
+      </button>
+      <button
+        class="toolbar-button"
+        data-tooltip-class-name="small-tooltip"
+        data-tooltip-content="Import collections or folders"
+        data-tooltip-id="main-tooltip"
+      >
+        <svg
+          fill="none"
+          height="18"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          width="18"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M14 3v4a1 1 0 0 0 1 1h4"
+          />
+          <path
+            d="M5 13v-8a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2h-5.5m-9.5 -2h7m-3 -3l3 3l-3 3"
+          />
+        </svg>
+      </button>
+    </div>
+  </div>
+  <input
+    accept=".txt"
+    style="display: none;"
+    type="file"
+  />
 </div>
 `;
