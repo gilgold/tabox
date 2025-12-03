@@ -480,6 +480,8 @@ const updateAllFoldersBG = async (folders) => {
 
 let lastValidated = 0;
 let syncLock = false; // Prevent concurrent sync operations
+let syncLockOperation = null; // Track what operation holds the lock
+let syncLockTime = 0; // Track when lock was acquired
 let syncQueue = []; // Queue pending sync operations
 
 // Enhanced error handling with retry logic (OPTIMIZED: reduced retries from 5 to 3)
@@ -662,26 +664,48 @@ async function createPreSyncBackup(label = 'pre-sync') {
 }
 
 // Acquire sync lock to prevent concurrent operations
-async function acquireSyncLock(operation = 'unknown', timeout = 30000) {
+// Returns: true if lock acquired, false if timeout, 'busy' if should skip (lock held by same-type operation)
+async function acquireSyncLock(operation = 'unknown', timeout = 15000) {
     const startTime = Date.now();
+    
+    // If lock is already held, check if we should wait or skip
+    if (syncLock) {
+        // If the same type of operation is already running, skip instead of waiting
+        if (syncLockOperation === operation) {
+            logSyncOperation('info', `Skipping duplicate ${operation} - already in progress`);
+            return 'busy';
+        }
+        
+        // Log what we're waiting for
+        logSyncOperation('info', `Waiting for lock: ${operation} (held by: ${syncLockOperation})`);
+    }
     
     while (syncLock) {
         if (Date.now() - startTime > timeout) {
-            logSyncOperation('error', `Sync lock timeout for operation: ${operation}`);
+            const lockDuration = Date.now() - syncLockTime;
+            logSyncOperation('error', `Sync lock timeout for operation: ${operation}`, {
+                heldBy: syncLockOperation,
+                lockDuration: lockDuration
+            });
             return false;
         }
         await new Promise(resolve => setTimeout(resolve, 100));
     }
     
     syncLock = true;
+    syncLockOperation = operation;
+    syncLockTime = Date.now();
     logSyncOperation('info', `Acquired sync lock for: ${operation}`);
     return true;
 }
 
 // Release sync lock
 function releaseSyncLock(operation = 'unknown') {
+    const lockDuration = Date.now() - syncLockTime;
     syncLock = false;
-    logSyncOperation('info', `Released sync lock for: ${operation}`);
+    syncLockOperation = null;
+    syncLockTime = 0;
+    logSyncOperation('info', `Released sync lock for: ${operation}`, { duration: lockDuration });
 }
 
 // Update collection UIDs to ensure uniqueness
@@ -1047,12 +1071,20 @@ async function _getServerFileTimestamp(token, fileId) {
 }
 
 // Enhanced updateRemote with atomic operations and better error handling
-async function updateRemote(token, collections = null) {
+// skipLock parameter allows calling from within syncData which already holds the lock
+async function updateRemote(token, collections = null, skipLock = false) {
     const operation = 'updateRemote';
     
-    if (!await acquireSyncLock(operation)) {
-        logSyncOperation('error', 'Failed to acquire sync lock for updateRemote');
-        return false;
+    if (!skipLock) {
+        const lockResult = await acquireSyncLock(operation);
+        if (lockResult === 'busy') {
+            // Same operation already in progress, return success
+            return 'already_in_progress';
+        }
+        if (!lockResult) {
+            logSyncOperation('error', 'Failed to acquire sync lock for updateRemote');
+            return false;
+        }
     }
     
     try {
@@ -1112,7 +1144,9 @@ async function updateRemote(token, collections = null) {
         logSyncOperation('error', 'Exception in updateRemote', { error: error.message });
         return false;
     } finally {
-        releaseSyncLock(operation);
+        if (!skipLock) {
+            releaseSyncLock(operation);
+        }
     }
 }
 
@@ -1220,12 +1254,20 @@ async function createNewSyncFileAndBackup(token) {
 }
 
 // Enhanced updateLocalDataFromServer with validation and atomic operations
-async function updateLocalDataFromServer(token, force = false) {
+// skipLock parameter allows calling from within syncData which already holds the lock
+async function updateLocalDataFromServer(token, force = false, skipLock = false) {
     const operation = 'updateLocalDataFromServer';
     
-    if (!await acquireSyncLock(operation)) {
-        logSyncOperation('error', 'Failed to acquire sync lock for updateLocalDataFromServer');
-        return false;
+    if (!skipLock) {
+        const lockResult = await acquireSyncLock(operation);
+        if (lockResult === 'busy') {
+            // Same operation already in progress, return success
+            return 'already_in_progress';
+        }
+        if (!lockResult) {
+            logSyncOperation('error', 'Failed to acquire sync lock for updateLocalDataFromServer');
+            return false;
+        }
     }
     
     try {
@@ -1277,7 +1319,9 @@ async function updateLocalDataFromServer(token, force = false) {
         logSyncOperation('error', 'Exception in updateLocalDataFromServer', { error: error.message });
         return false;
     } finally {
-        releaseSyncLock(operation);
+        if (!skipLock) {
+            releaseSyncLock(operation);
+        }
     }
 }
 
@@ -1417,7 +1461,13 @@ async function updateCollection(collection, windowId) {
 async function syncData(token) {
     const operation = 'syncData';
     
-    if (!await acquireSyncLock(operation)) {
+    const lockResult = await acquireSyncLock(operation);
+    if (lockResult === 'busy') {
+        // Same operation already in progress, return success
+        logSyncOperation('info', 'syncData already in progress, skipping duplicate call');
+        return 'already_in_progress';
+    }
+    if (!lockResult) {
         logSyncOperation('error', 'Failed to acquire sync lock for syncData');
         return false;
     }
@@ -1440,7 +1490,8 @@ async function syncData(token) {
             
             logSyncOperation('info', 'Server file invalid, creating new sync file');
             await createNewSyncFileAndBackup(token);
-            const result = await updateRemote(token);
+            // Pass skipLock=true since syncData already holds the lock
+            const result = await updateRemote(token, null, true);
             return result !== false;
         }
         
@@ -1484,19 +1535,20 @@ async function syncData(token) {
                 return false;
             }
         } else {
-            logSyncOperation('info', 'Local data is newer, updating remote', { 
-                serverTimestamp, 
-                localTimestamp,
-                isConflict 
-            });
-            
-            if (isConflict) {
-                // Potential conflict - create additional backup
-                await createPreSyncBackup('conflict-before-local-update');
-            }
-            
-            const result = await updateRemote(token);
-            return result !== false;
+        logSyncOperation('info', 'Local data is newer, updating remote', { 
+            serverTimestamp, 
+            localTimestamp,
+            isConflict 
+        });
+        
+        if (isConflict) {
+            // Potential conflict - create additional backup
+            await createPreSyncBackup('conflict-before-local-update');
+        }
+        
+        // Pass skipLock=true since syncData already holds the lock
+        const result = await updateRemote(token, null, true);
+        return result !== false;
         }
         
     } catch (error) {

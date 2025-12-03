@@ -1,13 +1,24 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { FaUndoAlt } from 'react-icons/fa';
 
 export const UndoButton = (props) => {
+    // Capture the undoAction in a ref on mount to prevent it from changing
+    // This fixes the bug where multiple toasts would all execute the same (last) undo action
+    const undoActionRef = useRef(props.undoAction);
+    const closeSnackbarRef = useRef(props.closeSnackbar);
+    
+    // Only capture on mount - don't update refs after initial render
+    useEffect(() => {
+        undoActionRef.current = props.undoAction;
+        closeSnackbarRef.current = props.closeSnackbar;
+    }, []); // Empty deps - only run on mount
+
     const handleUndo = async () => {
-        if (props.undoAction) {
-            await props.undoAction();
+        if (undoActionRef.current) {
+            await undoActionRef.current();
         }
-        if (props.closeSnackbar) {
-        props.closeSnackbar();
+        if (closeSnackbarRef.current) {
+            closeSnackbarRef.current();
         }
     }
 

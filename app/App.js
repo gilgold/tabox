@@ -2,6 +2,7 @@
 import './App.css';
 import 'react-tooltip/dist/react-tooltip.css';
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import Header from './Header';
 import AddNewTextbox from './AddNewTextbox';
 import CollectionList from './CollectionList';
@@ -491,13 +492,16 @@ function App() {
       const success = await saveSingleCollection(newCollection, true); // Force timestamp update for user changes
       
       if (success) {
-        // Update local state
-        const newList = [...settingsData];
-        const index = newList.findIndex(c => c.uid === newCollection.uid);
-        if (index !== -1) {
-          newList[index] = newCollection;
-                  setSettingsData(newList);
-        }
+        // Update local state using functional update to avoid stale closure issues
+        // This ensures we always use the latest state, even with rapid consecutive updates
+        setSettingsData(prevSettingsData => {
+          const newList = [...prevSettingsData];
+          const index = newList.findIndex(c => c.uid === newCollection.uid);
+          if (index !== -1) {
+            newList[index] = newCollection;
+          }
+          return newList;
+        });
         
         // Trigger lightning effect for manual updates
         if (isManualUpdate) {
@@ -513,19 +517,29 @@ function App() {
         _update();
       } else {
         console.error(`❌ Failed to update collection ${newCollection.uid}`);
-        // Fallback to legacy full update
-        const newList = [...settingsData];
-        const index = newList.findIndex(c => c.uid === newCollection.uid);
-        newList[index] = newCollection;
-        await updateRemoteData(newList);
+        // Fallback to legacy full update - use functional update here too
+        setSettingsData(prevSettingsData => {
+          const newList = [...prevSettingsData];
+          const index = newList.findIndex(c => c.uid === newCollection.uid);
+          if (index !== -1) {
+            newList[index] = newCollection;
+          }
+          return newList;
+        });
+        await updateRemoteData(settingsData.map(c => c.uid === newCollection.uid ? newCollection : c));
       }
     } catch (error) {
       console.error('Error updating collection:', error);
-      // Fallback to legacy system
-      const newList = [...settingsData];
-      const index = newList.findIndex(c => c.uid === newCollection.uid);
-      newList[index] = newCollection;
-      await updateRemoteData(newList);
+      // Fallback to legacy system - use functional update here too
+      setSettingsData(prevSettingsData => {
+        const newList = [...prevSettingsData];
+        const index = newList.findIndex(c => c.uid === newCollection.uid);
+        if (index !== -1) {
+          newList[index] = newCollection;
+        }
+        return newList;
+      });
+      await updateRemoteData(settingsData.map(c => c.uid === newCollection.uid ? newCollection : c));
     }
   }
 
@@ -638,6 +652,12 @@ function App() {
         setFoldersData(newFolders);
         
         showSuccessToast(`Folder "${newFolder.name}" created successfully`);
+        
+        // Update sync time in footer (sync is already fired by createFolder)
+        if (isLoggedIn) {
+          setLastSyncTime(Date.now());
+        }
+        
         return newFolder;
       } else {
         console.error(`❌ Failed to create folder: ${name}`);
@@ -670,6 +690,11 @@ function App() {
       
       setSettingsData(collections);
       setFoldersData(folders);
+      
+      // Update sync time in footer (sync is already fired by folder operations)
+      if (isLoggedIn) {
+        setLastSyncTime(Date.now());
+      }
     } catch (error) {
       console.error('Error refreshing data:', error);
     }
@@ -1386,14 +1411,18 @@ function App() {
     };
   }, []);
 
-  return <div className="App">
-    <Tooltip
-      id="main-tooltip"
-      delayShow={200}
-      variant={themeMode === 'light' ? 'dark' : 'light'}
-      place="bottom"
-      style={{ zIndex: 99999 }}
-    />
+  return <>
+    {ReactDOM.createPortal(
+      <Tooltip
+        id="main-tooltip"
+        delayShow={200}
+        variant={themeMode === 'light' ? 'dark' : 'light'}
+        place="bottom"
+        style={{ zIndex: 2147483647, whiteSpace: 'pre-line' }}
+      />,
+      document.body
+    )}
+    <div className="App">
     <Header
       applyDataFromServer={applyDataFromServer}
       updateRemoteData={updateRemoteData}
@@ -1429,7 +1458,8 @@ function App() {
       <div className="bottom-fade-overlay"></div>
     </div>
     <Footer />
-  </div>;
+  </div>
+  </>;
 }
 
 export default App;

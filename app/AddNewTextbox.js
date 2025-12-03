@@ -238,6 +238,9 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
                 // Trigger context menu update once after all collections are added
                 await browser.runtime.sendMessage({ type: 'addCollection' });
                 
+                // Trigger cloud sync (fire and forget - don't block UI)
+                browser.runtime.sendMessage({ type: 'updateRemote' }).catch(() => {});
+                
                 // Force refresh data to update UI
                 if (onDataUpdate) {
                     await onDataUpdate();

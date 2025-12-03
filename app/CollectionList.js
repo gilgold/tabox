@@ -148,6 +148,14 @@ function CollectionList({
         return collections.filter(collection => !collection.parentId);
     }, [collections]);
 
+    // Calculate visible folders - folders that have matching collections or when no filters are active
+    const visibleFolders = useMemo(() => {
+        return folders.filter(folder => {
+            const folderCollections = collections.filter(c => c.parentId === folder.uid);
+            return folderCollections.length > 0 || !hasActiveFilters;
+        });
+    }, [folders, collections, hasActiveFilters]);
+
     // Create a helper function to get collections for a specific folder
     const getCollectionsForFolder = (folderId) => {
         return collections.filter(c => c.parentId === folderId);
@@ -935,8 +943,9 @@ function CollectionList({
         return `${disableDrag.toString()}-${props.viewMode}`;
     }, [disableDrag, props.viewMode]);
 
-    // Check if there are any collections or folders available (regardless of collapse state)
-    const hasAnyContent = collections.length > 0 || folders.length > 0;
+    // Check if there's actually visible content to display
+    // This accounts for folders being hidden when filters are active and they have no matching collections
+    const hasAnyContent = rootCollections.length > 0 || visibleFolders.length > 0 || (search && collections.length > 0);
 
     return (
         <section ref={listContainerRef} className={`collection-list-container settings_body ${props.viewMode === 'grid' ? 'grid-view' : 'list-view'}`} key={props.key}>
@@ -1011,15 +1020,7 @@ function CollectionList({
                                 // Normal mode: show folders and root collections separately
                                 <>
                                     {/* Folders Section */}
-                                    {(() => {
-                                        // Filter folders to only show those with matching collections or when no filtering is applied
-                                        const visibleFolders = folders.filter(folder => {
-                                            const folderCollections = collections.filter(c => c.parentId === folder.uid);
-                                            return folderCollections.length > 0 || !hasActiveFilters;
-                                        });
-                                        
-                                        // Only render the section if there are visible folders
-                                        return visibleFolders.length > 0 && (
+                                    {visibleFolders.length > 0 && (
                                             <CollapsableSection
                                                 sectionKey="foldersCollapsed"
                                                 sectionTitle="Folders"
@@ -1089,8 +1090,7 @@ function CollectionList({
                                                     );
                                                 })}
                                             </CollapsableSection>
-                                        );
-                                    })()}
+                                    )}
                                     
                                     {/* Collections Section */}
                                     {rootCollections.length > 0 && (

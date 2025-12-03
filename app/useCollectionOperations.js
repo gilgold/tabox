@@ -40,8 +40,11 @@ export function useCollectionOperations({
             // Delete from new storage system first
             await deleteSingleCollection(collection.uid);
             
-            const newList = removeCollection(collection.uid);
-            await updateRemoteData(newList);
+            // IMPORTANT: Load fresh data from storage instead of using stale React state
+            // This fixes a bug where rapid deletions would restore previously deleted items
+            // because the setTimeout callback had a stale closure of removeCollection/settingsData
+            const freshCollections = await loadAllCollections();
+            await updateRemoteData(freshCollections);
             
             // Update folder collection count if collection was in a folder
             if (parentFolderId) {

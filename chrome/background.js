@@ -331,6 +331,11 @@ async function handleRemoteUpdate(retryCount = 0, maxRetries = 2) {
     }
     
     const result = await updateRemote(token);
+    if (result === 'already_in_progress') {
+      // Operation already in progress, consider it success
+      logSyncOperation('info', 'Remote update already in progress');
+      return true;
+    }
     if (result === false) {
       if (retryCount < maxRetries) {
         logSyncOperation('info', `Remote update failed, retrying`, { 
@@ -762,6 +767,8 @@ try {
         if (syncResult === false) {
           console.error('Initial sync failed during login');
           // Still return user as login was successful, sync can be retried
+        } else if (syncResult === 'already_in_progress') {
+          logSyncOperation('info', 'Sync already in progress during login, will complete separately');
         }
         
         return Promise.resolve(user);
@@ -843,6 +850,9 @@ try {
         } else if (newData === 'no_update_needed') {
           // No update needed - data is already in sync
           logSyncOperation('info', 'Local data is already in sync, no action needed');
+        } else if (newData === 'already_in_progress') {
+          // Operation already in progress, no need for fallback
+          logSyncOperation('info', 'Server load already in progress');
         } else {
           // Successfully loaded new data from server
           logSyncOperation('success', 'Successfully loaded data from server');

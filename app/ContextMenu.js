@@ -1,16 +1,21 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { MdOutlineMoreHoriz } from 'react-icons/md';
+import { useAtom } from 'jotai';
+import { activeContextMenuState } from './atoms/animationsState';
 
 function ContextMenu({ 
     menuItems = [],
     tooltip = "Options"
 }) {
-    const [showMenu, setShowMenu] = useState(false);
-    const [menuPosition, setMenuPosition] = useState({ top: 0, right: 0 });
+    const [activeMenuId, setActiveMenuId] = useAtom(activeContextMenuState);
+    const [menuPosition, setMenuPosition] = React.useState({ top: 0, right: 0 });
     const menuButtonRef = useRef(null);
-    const menuRef = useRef(null);
-    const menuId = useRef(`context-menu-${Math.random().toString(36).substr(2, 9)}`);
+    // Generate a stable unique ID for this menu instance
+    const menuId = useMemo(() => `context-menu-${Math.random().toString(36).substr(2, 9)}`, []);
+    
+    // Derive showMenu from global state
+    const showMenu = activeMenuId === menuId;
 
     // Filter menu items based on condition (if provided)
     const visibleMenuItems = menuItems.filter(item => {
@@ -23,9 +28,9 @@ function ContextMenu({
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (showMenu && menuButtonRef.current && !menuButtonRef.current.contains(event.target)) {
-                const menu = document.getElementById(menuId.current);
+                const menu = document.getElementById(menuId);
                 if (menu && !menu.contains(event.target)) {
-                    setShowMenu(false);
+                    setActiveMenuId(null);
                 }
             }
         };
@@ -50,7 +55,7 @@ function ContextMenu({
         return () => {
             document.removeEventListener('click', handleClickOutside);
         };
-    }, [showMenu, visibleMenuItems.length]);
+    }, [showMenu, visibleMenuItems.length, menuId, setActiveMenuId]);
 
     // Refine position after menu renders with actual height
     useEffect(() => {
@@ -60,7 +65,7 @@ function ContextMenu({
 
         // Use requestAnimationFrame to ensure menu is fully rendered before checking position
         const rafId = requestAnimationFrame(() => {
-            const menu = document.getElementById(menuId.current);
+            const menu = document.getElementById(menuId);
             if (menu) {
                 const menuRect = menu.getBoundingClientRect();
                 const buttonRect = menuButtonRef.current.getBoundingClientRect();
@@ -106,18 +111,19 @@ function ContextMenu({
         return () => {
             cancelAnimationFrame(rafId);
         };
-    }, [showMenu, visibleMenuItems.length]);
+    }, [showMenu, visibleMenuItems.length, menuId]);
 
     const handleMenuClick = (e) => {
         e.stopPropagation();
-        setShowMenu(!showMenu);
+        // Toggle: if this menu is open, close it; otherwise open it (and close any other)
+        setActiveMenuId(showMenu ? null : menuId);
     };
 
     const handleMenuItemClick = (action) => {
         if (action && typeof action === 'function') {
             action();
         }
-        setShowMenu(false);
+        setActiveMenuId(null);
     };
 
     return (
@@ -132,7 +138,7 @@ function ContextMenu({
             </span>
             {showMenu && createPortal(
                 <div 
-                    id={menuId.current}
+                    id={menuId}
                     className="context-menu" 
                     style={{
                         top: `${menuPosition.top}px`,

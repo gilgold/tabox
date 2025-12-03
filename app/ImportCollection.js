@@ -75,7 +75,7 @@ function ImportCollection(props) {
             }
             catch (error) {
                 console.error('Import error:', error);
-                openSnackbar('Invalid File: Unable to parse JSON - ' + error.message, 4000);
+                showErrorToast('Invalid File: Unable to parse JSON - ' + error.message);
                 event.target.value = '';
                 return;
             }
@@ -169,10 +169,10 @@ function ImportCollection(props) {
                 setHighlightedCollectionUid(importedCollections[0].uid);
             }
 
-            openSuccessSnackbar(`Successfully imported ${importedFolders.length} folders and ${importedCollections.length} collections`, 3000);
+            showSuccessToast(`Successfully imported ${importedFolders.length} folders and ${importedCollections.length} collections`);
         } catch (error) {
             console.error('Error importing full export:', error);
-            openSnackbar('Error importing data: ' + error.message, 4000);
+            showErrorToast('Error importing data: ' + error.message);
         }
     };
 
@@ -230,10 +230,10 @@ function ImportCollection(props) {
                 setHighlightedCollectionUid(importedCollections[0].uid);
             }
 
-            openSuccessSnackbar(`Successfully imported folder "${importedFolder.name}" with ${importedCollections.length} collections`, 3000);
+            showSuccessToast(`Successfully imported folder "${importedFolder.name}" with ${importedCollections.length} collections`);
         } catch (error) {
             console.error('Error importing folder:', error);
-            openSnackbar('Error importing folder: ' + error.message, 4000);
+            showErrorToast('Error importing folder: ' + error.message);
         }
     };
 
@@ -256,10 +256,10 @@ function ImportCollection(props) {
                 setHighlightedCollectionUid(collectionsWithUniqueNames[0].uid);
             }
             
-            openSuccessSnackbar(`Successfully imported ${collectionsWithUniqueNames.length} collections`, 3000);
+            showSuccessToast(`Successfully imported ${collectionsWithUniqueNames.length} collections`);
         } catch (error) {
             console.error('Error importing legacy collections:', error);
-            openSnackbar('Error importing collections: ' + error.message, 4000);
+            showErrorToast('Error importing collections: ' + error.message);
         }
     };
 
@@ -277,10 +277,10 @@ function ImportCollection(props) {
             await props.updateRemoteData(newData);
             setHighlightedCollectionUid(newItem.uid);
             
-            openSuccessSnackbar(`Successfully imported collection "${newItem.name}"`, 3000);
+            showSuccessToast(`Successfully imported collection "${newItem.name}"`);
         } catch (error) {
             console.error('Error importing single collection:', error);
-            openSnackbar('Error importing collection: ' + error.message, 4000);
+            showErrorToast('Error importing collection: ' + error.message);
         }
     };
     return <span className="image-upload">

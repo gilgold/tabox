@@ -23,6 +23,7 @@ import { TbFileImport } from 'react-icons/tb';
 import Modal from 'react-modal';
 import { CollectionFilter } from './CollectionFilter';
 import { showSuccessToast, showErrorToast } from './toastHelpers';
+import { Tooltip } from 'react-tooltip';
 
 import { applyUid } from './utils';
 
@@ -342,7 +343,7 @@ export function CollectionListOptions(props) {
             }
             catch (error) {
                 console.error('Import error:', error);
-                openSnackbar('Invalid File: Unable to parse JSON - ' + error.message, 4000);
+                showErrorToast('Invalid File: Unable to parse JSON - ' + error.message);
                 event.target.value = '';
                 return;
             }
@@ -436,10 +437,10 @@ export function CollectionListOptions(props) {
                 setHighlightedCollectionUid(importedCollections[0].uid);
             }
 
-            openSuccessSnackbar(`Successfully imported ${importedFolders.length} folders and ${importedCollections.length} collections`, 3000);
+            showSuccessToast(`Successfully imported ${importedFolders.length} folders and ${importedCollections.length} collections`);
         } catch (error) {
             console.error('Error importing full export:', error);
-            openSnackbar('Error importing data: ' + error.message, 4000);
+            showErrorToast('Error importing data: ' + error.message);
         }
     };
 
@@ -497,10 +498,10 @@ export function CollectionListOptions(props) {
                 setHighlightedCollectionUid(importedCollections[0].uid);
             }
 
-            openSuccessSnackbar(`Successfully imported folder "${importedFolder.name}" with ${importedCollections.length} collections`, 3000);
+            showSuccessToast(`Successfully imported folder "${importedFolder.name}" with ${importedCollections.length} collections`);
         } catch (error) {
             console.error('Error importing folder:', error);
-            openSnackbar('Error importing folder: ' + error.message, 4000);
+            showErrorToast('Error importing folder: ' + error.message);
         }
     };
 
@@ -523,10 +524,10 @@ export function CollectionListOptions(props) {
                 setHighlightedCollectionUid(collectionsWithUniqueNames[0].uid);
             }
             
-            openSuccessSnackbar(`Successfully imported ${collectionsWithUniqueNames.length} collections`, 3000);
+            showSuccessToast(`Successfully imported ${collectionsWithUniqueNames.length} collections`);
         } catch (error) {
             console.error('Error importing legacy collections:', error);
-            openSnackbar('Error importing collections: ' + error.message, 4000);
+            showErrorToast('Error importing collections: ' + error.message);
         }
     };
 
@@ -544,10 +545,10 @@ export function CollectionListOptions(props) {
             await props.updateRemoteData(newData);
             setHighlightedCollectionUid(newItem.uid);
             
-            openSuccessSnackbar(`Successfully imported collection "${newItem.name}"`, 3000);
+            showSuccessToast(`Successfully imported collection "${newItem.name}"`);
         } catch (error) {
             console.error('Error importing single collection:', error);
-            openSnackbar('Error importing collection: ' + error.message, 4000);
+            showErrorToast('Error importing collection: ' + error.message);
         }
     };
 
@@ -559,26 +560,28 @@ export function CollectionListOptions(props) {
                 <div className="toolbar-left">
                     <div className="sort-controls">
                         <MdSort className="sort-icon" />
-                        <Select
-                            className="sort-type-select"
-                            classNamePrefix="react-select"
-                            value={sortOptions.find(option => option.value === sortType)}
-                            onChange={handleSortTypeChange}
-                            options={sortOptions}
-                            styles={customStyles}
-                            components={{ 
-                                Option: CustomOption,
-                                SingleValue: CustomSingleValue 
-                            }}
-                            isSearchable={false}
-                            isClearable={false}
-                            placeholder="Sort by..."
-                        />
+                        <div id="toolbar-sort-select" className="sort-type-select-wrapper">
+                            <Select
+                                className="sort-type-select"
+                                classNamePrefix="react-select"
+                                value={sortOptions.find(option => option.value === sortType)}
+                                onChange={handleSortTypeChange}
+                                options={sortOptions}
+                                styles={customStyles}
+                                components={{ 
+                                    Option: CustomOption,
+                                    SingleValue: CustomSingleValue 
+                                }}
+                                isSearchable={false}
+                                isClearable={false}
+                                placeholder="Sort by..."
+                            />
+                        </div>
                         
                         <button
+                            id="toolbar-sort-direction"
                             className="toolbar-button"
                             onClick={toggleSortDirection}
-                            title={sortAscending ? "Ascending (A→Z, Oldest→Newest)" : "Descending (Z→A, Newest→Oldest)"}
                         >
                             {/* Inverted: Up arrow for descending (higher values first), Down arrow for ascending (lower values first) */}
                             {sortAscending ? <MdArrowDownward size={ICON_SIZE} /> : <MdArrowUpward size={ICON_SIZE} />}
@@ -592,43 +595,40 @@ export function CollectionListOptions(props) {
 
                 <div className="toolbar-right">
                     <button
+                        id="toolbar-open-new-window"
                         className={`toolbar-toggle-button ${openInNewWindow ? 'active' : ''}`}
                         onClick={toggleNewWindow}
-                        data-tooltip-id="main-tooltip" data-tooltip-content={openInNewWindow ? "Open collections in new window" : "Open collections in current window"}
-                        data-tooltip-class-name="small-tooltip"
                     >
                         <MdOpenInNew size={ICON_SIZE} />
                     </button>
                     <button
+                        id="toolbar-create-folder"
                         className="toolbar-button"
                         onClick={handleCreateFolder}
-                        data-tooltip-id="main-tooltip" data-tooltip-content="Create new folder"
-                        data-tooltip-class-name="small-tooltip"
                     >
                         <MdCreateNewFolder size={ICON_SIZE} />
                     </button>
                     <button
+                        id="toolbar-view-mode"
                         className="toolbar-button"
                         onClick={toggleViewMode}
-                        data-tooltip-id="main-tooltip" data-tooltip-content={viewMode === 'list' ? "Switch to grid view" : "Switch to list view"}
-                        data-tooltip-class-name="small-tooltip"
                     >
                         {viewMode === 'list' ? <PiGridNineFill size={ICON_SIZE} /> : <MdViewList size={ICON_SIZE} />}
                     </button>
+                    <span id="toolbar-restore-session">
+                        <button
+                            className="toolbar-button"
+                            onClick={handleRestoreSession}
+                            disabled={sessionList.length === 0}
+                            style={{ pointerEvents: sessionList.length === 0 ? 'none' : 'auto' }}
+                        >
+                            <MdHistory size={ICON_SIZE} />
+                        </button>
+                    </span>
                     <button
-                        className="toolbar-button"
-                        onClick={handleRestoreSession}
-                        disabled={sessionList.length === 0}
-                        data-tooltip-id="main-tooltip" data-tooltip-content="Restore previous session"
-                        data-tooltip-class-name="small-tooltip"
-                    >
-                        <MdHistory size={ICON_SIZE} />
-                    </button>
-                    <button
+                        id="toolbar-import"
                         className="toolbar-button"
                         onClick={handleImportClick}
-                        data-tooltip-id="main-tooltip" data-tooltip-content="Import collections or folders"
-                        data-tooltip-class-name="small-tooltip"
                     >
                         <TbFileImport size={ICON_SIZE} />
                     </button>
@@ -669,6 +669,48 @@ export function CollectionListOptions(props) {
                     onSave={handleFolderSave}
                 />
             </Suspense>
+            <Tooltip
+                anchorSelect="#toolbar-sort-direction"
+                content={sortAscending ? "Ascending (A→Z, Oldest→Newest)" : "Descending (Z→A, Newest→Oldest)"}
+                className="small-tooltip"
+                place="bottom"
+            />
+            <Tooltip
+                anchorSelect="#toolbar-sort-select .react-select__control"
+                content="Choose how collections are sorted"
+                className="small-tooltip"
+                place="bottom"
+            />
+            <Tooltip
+                anchorSelect="#toolbar-open-new-window"
+                content={openInNewWindow ? "Open collections in new window" : "Open collections in current window"}
+                className="small-tooltip"
+                place="bottom"
+            />
+            <Tooltip
+                anchorSelect="#toolbar-create-folder"
+                content="Create new folder"
+                className="small-tooltip"
+                place="bottom"
+            />
+            <Tooltip
+                anchorSelect="#toolbar-view-mode"
+                content={viewMode === 'list' ? "Switch to grid view" : "Switch to list view"}
+                className="small-tooltip"
+                place="bottom"
+            />
+            <Tooltip
+                anchorSelect="#toolbar-restore-session, #toolbar-restore-session button"
+                content={sessionList.length === 0 ? "No previous sessions available" : "Restore previous session"}
+                className="small-tooltip"
+                place="bottom"
+            />
+            <Tooltip
+                anchorSelect="#toolbar-import"
+                content="Import collections or folders"
+                className="small-tooltip"
+                place="bottom"
+            />
         </>
     );
 }

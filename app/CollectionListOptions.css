@@ -152,6 +152,7 @@
 	);
 	transition: left 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 	border-radius: 12px;
+	pointer-events: none;
 }
 
 .toolbar-button:hover::before {
@@ -398,6 +399,7 @@
 	);
 	transition: left 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 	border-radius: 8px;
+	pointer-events: none;
 }
 
 .toolbar-toggle-button:hover::before {

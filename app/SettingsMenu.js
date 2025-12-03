@@ -223,6 +223,8 @@ export default function SettingsMenu(props) {
                                             <Switch 
                                                 id="darkModeToggle"
                                                 onMouseUp={handleDarkModeToggle}
+                                                data-tooltip-id="main-tooltip"
+                                                data-tooltip-content="Toggle between light and dark theme"
                                                 textOn={<span><IoMoon size="16" style={{ marginRight: '8px' }} />Dark Mode: <strong>On</strong></span>}
                                                 textOff={<span><IoSunny size="16" style={{ marginRight: '8px' }} />Dark Mode: <strong>Off</strong></span>}
                                             />
@@ -231,6 +233,8 @@ export default function SettingsMenu(props) {
                                             <Switch 
                                                 id="chkShowBadge"
                                                 onMouseUp={handleShowBadge}
+                                                data-tooltip-id="main-tooltip"
+                                                data-tooltip-content="Show the total number of tabs across all collections on the extension icon"
                                                 textOn={<span>Tab counter badge <strong>Enabled</strong></span>}
                                                 textOff={<span>Tab counter badge <strong>Disabled</strong></span>}
                                             />
@@ -261,6 +265,8 @@ export default function SettingsMenu(props) {
                                         <div className="setting-item">
                                             <Switch 
                                                 id="chkIgnorePinned"
+                                                data-tooltip-id="main-tooltip"
+                                                data-tooltip-content="Choose whether pinned tabs should be saved when creating a new collection"
                                                 textOn={<span><strong>Do not include</strong> pinned tabs</span>}
                                                 textOff={<span><strong>Include</strong> pinned tabs</span>}
                                             />
@@ -281,6 +287,8 @@ export default function SettingsMenu(props) {
                                         <div className="setting-item">
                                             <Switch 
                                                 id="chkIgnoreDuplicates"
+                                                data-tooltip-id="main-tooltip"
+                                                data-tooltip-content="Skip opening tabs that are already open in the current window"
                                                 textOn={<span>If a tab already exists, <strong>do not open it</strong></span>}
                                                 textOff={<span>If a tab already exists, <strong>open it anyway</strong></span>}
                                             />
@@ -288,7 +296,8 @@ export default function SettingsMenu(props) {
                                         <div className="setting-item">
                                             <Switch 
                                                 id="chkEnableTabDiscard"
-                                                data-tooltip-id="main-tooltip" data-tooltip-content="Smart tab loading delays non-essential tabs to improve performance.<br>Automatically avoids deferring media, auth, development, and collaboration sites.<br>Tabs load instantly when you switch to them."
+                                                data-tooltip-id="main-tooltip"
+                                                data-tooltip-content={"Smart tab loading delays non-essential tabs to improve performance.\nAutomatically avoids deferring media, auth, development, and collaboration sites.\nTabs load instantly when you switch to them."}
                                                 textOn={<span>Smart tab loading: <strong>Enabled</strong></span>}
                                                 textOff={<span>Smart tab loading: <strong>Disabled</strong></span>}
                                             />
@@ -309,7 +318,8 @@ export default function SettingsMenu(props) {
                                         <div className="setting-item">
                                             <Switch 
                                                 id="chkColEditIgnoreDuplicateTabs"
-                                                data-tooltip-id="main-tooltip" data-tooltip-content="A tab is considered 'duplicate' <br />if it has the exact same URL as another tab"
+                                                data-tooltip-id="main-tooltip"
+                                                data-tooltip-content={"A tab is considered 'duplicate'\nif it has the exact same URL as another tab"}
                                                 textOn={<span>If a tab exists in the collection, <strong>do not add it</strong></span>}
                                                 textOff={<span>If a tab exists in the collection, <strong>add it anyway</strong></span>}
                                             />
@@ -317,7 +327,8 @@ export default function SettingsMenu(props) {
                                         <div className="setting-item">
                                             <Switch 
                                                 id="chkColEditIgnoreDuplicateGroups"
-                                                data-tooltip-id="main-tooltip" data-tooltip-content="A group is considered 'duplicate' <br />if it has the exact same name and color as another group"
+                                                data-tooltip-id="main-tooltip"
+                                                data-tooltip-content={"A group is considered 'duplicate'\nif it has the exact same name and color as another group"}
                                                 textOn={<span>If a group already exists, <strong>append tabs to it</strong></span>}
                                                 textOff={<span>If a group already exists, <strong>add as a new group</strong></span>}
                                             />
@@ -339,8 +350,8 @@ export default function SettingsMenu(props) {
                                             <Switch 
                                                 id="chkEnableAutoUpdate"
                                                 onMouseUp={handleAutoUpdate}
-                                               
-                                                data-tooltip-id="main-tooltip" data-tooltip-content="When opening a collection, track changes<br />to the window and update the collection in the background."
+                                                data-tooltip-id="main-tooltip"
+                                                data-tooltip-content={"When opening a collection, track changes\nto the window and update the collection in the background."}
                                                 textOn={<span>Auto updating collections: <strong>Enabled</strong></span>}
                                                 textOff={<span>Auto updating collections: <strong>Disabled</strong></span>}
                                             />
@@ -348,9 +359,9 @@ export default function SettingsMenu(props) {
                                         <div className="setting-item">
                                             <Switch 
                                                 id="chkAutoUpdateOnNewCollection"
-                                               
                                                 disabled={!autoUpdateEnabled}
-                                                data-tooltip-id="main-tooltip" data-tooltip-content="When adding a new collection, start auto updating<br /> it with changes in the current window."
+                                                data-tooltip-id="main-tooltip"
+                                                data-tooltip-content={"When adding a new collection, start auto updating\nit with changes in the current window."}
                                                 textOn={<span>Auto update new collections: <strong>Enabled</strong></span>}
                                                 textOff={<span>Auto update new collections: <strong>Disabled</strong></span>}
                                             />
@@ -358,9 +369,9 @@ export default function SettingsMenu(props) {
                                         <div className="setting-item">
                                             <Switch 
                                                 id="chkManualUpdateLinkCollection"
-                                               
                                                 disabled={!autoUpdateEnabled}
-                                                data-tooltip-id="main-tooltip" data-tooltip-content="When clicking the 'Update' button, this will link<br /> the collection to the window, making it 'active'."
+                                                data-tooltip-id="main-tooltip"
+                                                data-tooltip-content={"When clicking the 'Update' button, this will link\nthe collection to the window, making it 'active'."}
                                                 textOn={<span>Click on &#39;Update&#39; sets active: <strong>Enabled</strong></span>}
                                                 textOff={<span>Click on &#39;Update&#39; sets active: <strong>Disabled</strong></span>}
                                             />

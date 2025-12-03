@@ -524,10 +524,11 @@
 }
 
 #nothing_message {
-	margin: 30px auto;
+	margin: 6px auto;
 	text-align: center;
 	color: var(--text-color);
-	font-size: .85em;
+	font-size: 1.1em;
+	line-height: 1.6;
 	animation: fadeIn ease-in .2s;
 }
 
@@ -541,10 +542,19 @@
 }
 
 .no_contant_image {
-	height: 130px;
+	height: 200px;
 	margin: 20px auto;
 	display: block;
 	max-width: 100%;
+	/* Fade effect on all edges to blend with background */
+	-webkit-mask-image: 
+		linear-gradient(to right, transparent, black 15%, black 85%, transparent),
+		linear-gradient(to bottom, transparent, black 15%, black 85%, transparent);
+	-webkit-mask-composite: source-in;
+	mask-image: 
+		linear-gradient(to right, transparent, black 15%, black 85%, transparent),
+		linear-gradient(to bottom, transparent, black 15%, black 85%, transparent);
+	mask-composite: intersect;
 }
 
 /* Fix NoCollections centering in all views */

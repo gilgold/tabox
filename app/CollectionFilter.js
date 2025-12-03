@@ -2,19 +2,27 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MdFilterList, MdClear, MdPalette, MdOpenInBrowser } from 'react-icons/md';
 import ColorPicker from './ColorPicker';
 import './CollectionFilter.css';
+import { Tooltip } from 'react-tooltip';
 
 
 
 function RecentlyOpenedFilter({ isActive, onToggle }) {
     return (
+        <>
         <button
+            id="filter-recently-opened"
             className={`filter-button opened-filter ${isActive ? 'active' : ''}`}
             onClick={onToggle}
-            data-tooltip-id="main-tooltip" data-tooltip-content="Show collections opened in the last 3 hours"
-            data-tooltip-class-name="small-tooltip"
         >
             <MdOpenInBrowser size={14} /><span className="filter-label">Opened</span>
         </button>
+        <Tooltip
+            anchorSelect="#filter-recently-opened"
+            content="Show collections opened in the last 3 hours"
+            className="small-tooltip"
+            place="bottom"
+        />
+        </>
     );
 }
 
@@ -28,7 +36,8 @@ function ColorFilter({ selectedColor, onColorChange, onClear }) {
     };
 
     return (
-        <div className="color-filter-wrapper">
+        <>
+        <div className="color-filter-wrapper" id="filter-color-picker">
             <MdPalette size={16} className="color-filter-icon" />
             <ColorPicker
                 currentColor={selectedColor}
@@ -37,6 +46,13 @@ function ColorFilter({ selectedColor, onColorChange, onClear }) {
                 size="small"
             />
         </div>
+        <Tooltip
+            anchorSelect="#filter-color-picker"
+            content="Filter collections by color"
+            className="small-tooltip"
+            place="bottom"
+        />
+        </>
     );
 }
 
@@ -44,14 +60,21 @@ function ClearFiltersButton({ hasActiveFilters, onClear }) {
     if (!hasActiveFilters) return null;
 
     return (
+        <>
         <button
+            id="filter-clear"
             className="clear-filters-button"
             onClick={onClear}
-            data-tooltip-id="main-tooltip" data-tooltip-content="Clear all filters"
-            data-tooltip-class-name="small-tooltip"
         >
             <MdClear size={14} />
         </button>
+        <Tooltip
+            anchorSelect="#filter-clear"
+            content="Clear all filters"
+            className="small-tooltip"
+            place="bottom"
+        />
+        </>
     );
 }
 

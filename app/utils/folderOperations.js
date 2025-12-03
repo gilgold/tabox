@@ -43,9 +43,10 @@ export const createFolder = async (name, color = null, collapsed = false) => {
         const success = await saveSingleFolder(folder, true); // Force timestamp update for new folders
 
         if (success) {
-            // Trigger sync for folder creation
-            await browser.storage.local.set({ localTimestamp: Date.now() });
-            await browser.runtime.sendMessage({ type: 'addCollection' }); // Reuse existing sync trigger
+            // Trigger sync for folder creation (fire and forget - don't block UI)
+            browser.storage.local.set({ localTimestamp: Date.now() }).then(() => {
+                browser.runtime.sendMessage({ type: 'updateRemote' }).catch(() => {});
+            });
             
             return folder;
         } else {
@@ -73,9 +74,10 @@ export const updateFolder = async (folder, forceUpdateTimestamp = false) => {
         const success = await saveSingleFolder(folder, forceUpdateTimestamp);
 
         if (success) {
-            // Trigger sync for folder update
-            await browser.storage.local.set({ localTimestamp: Date.now() });
-            await browser.runtime.sendMessage({ type: 'addCollection' }); // Reuse existing sync trigger
+            // Trigger sync for folder update (fire and forget - don't block UI)
+            browser.storage.local.set({ localTimestamp: Date.now() }).then(() => {
+                browser.runtime.sendMessage({ type: 'updateRemote' }).catch(() => {});
+            });
             
             return true;
         } else {
@@ -153,9 +155,10 @@ export const deleteFolder = async (folderId, force = false, deleteCollections = 
         const success = await deleteSingleFolder(folderId);
 
         if (success) {
-            // Trigger sync for folder deletion
-            await browser.storage.local.set({ localTimestamp: Date.now() });
-            await browser.runtime.sendMessage({ type: 'addCollection' }); // Reuse existing sync trigger
+            // Trigger sync for folder deletion (fire and forget - don't block UI)
+            browser.storage.local.set({ localTimestamp: Date.now() }).then(() => {
+                browser.runtime.sendMessage({ type: 'updateRemote' }).catch(() => {});
+            });
             
             return { success: true, collectionsMovedToRoot, collectionsDeleted };
         } else {
@@ -263,9 +266,10 @@ export const duplicateFolder = async (folderId) => {
         // Update folder collection count
         await updateFolderCollectionCount(newFolder.uid);
 
-        // Trigger sync
-        await browser.storage.local.set({ localTimestamp: Date.now() });
-        await browser.runtime.sendMessage({ type: 'addCollection' });
+        // Trigger sync (fire and forget - don't block UI)
+        browser.storage.local.set({ localTimestamp: Date.now() }).then(() => {
+            browser.runtime.sendMessage({ type: 'updateRemote' }).catch(() => {});
+        });
 
         return { 
             success: true, 
@@ -322,9 +326,10 @@ export const moveCollectionToFolder = async (collectionId, folderId) => {
                 // Note: Empty folders are kept and can receive new collections via drag-and-drop
             }
 
-            // Trigger sync for collection movement
-            await browser.storage.local.set({ localTimestamp: Date.now() });
-            await browser.runtime.sendMessage({ type: 'addCollection' }); // Reuse existing sync trigger
+            // Trigger sync for collection movement (fire and forget - don't block UI)
+            browser.storage.local.set({ localTimestamp: Date.now() }).then(() => {
+                browser.runtime.sendMessage({ type: 'updateRemote' }).catch(() => {});
+            });
 
             return true;
         } else {
@@ -370,9 +375,10 @@ export const removeCollectionFromFolder = async (collectionId) => {
             
             // Note: Empty folders are kept and can receive new collections via drag-and-drop
 
-            // Trigger sync for collection removal from folder
-            await browser.storage.local.set({ localTimestamp: Date.now() });
-            await browser.runtime.sendMessage({ type: 'addCollection' }); // Reuse existing sync trigger
+            // Trigger sync for collection removal from folder (fire and forget - don't block UI)
+            browser.storage.local.set({ localTimestamp: Date.now() }).then(() => {
+                browser.runtime.sendMessage({ type: 'updateRemote' }).catch(() => {});
+            });
 
             return true;
         } else {

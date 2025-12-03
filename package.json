@@ -6,8 +6,13 @@
   "scripts": {
     "test": "jest --transformIgnorePatterns \"node_modules/(?!@toolz/allow-react)/\" --env=jsdom --coverage",
     "dev": "INLINE_RUNTIME_CHUNK=false NODE_ENV=development webpack --mode development --config webpack.js --watch",
+    "build": "INLINE_RUNTIME_CHUNK=false NODE_ENV=production webpack --mode production --config webpack.js",
+    "build:debug": "INLINE_RUNTIME_CHUNK=false NODE_ENV=production webpack --mode production --config webpack.js --env sourcemap=true",
+    "build:release": "INLINE_RUNTIME_CHUNK=false NODE_ENV=production webpack --mode production --config webpack.js --env sourcemap=false --env drop_console=true",
+    "build:analyze": "INLINE_RUNTIME_CHUNK=false NODE_ENV=production webpack --mode production --config webpack.js --profile --json > stats.json",
     "prod": "INLINE_RUNTIME_CHUNK=false NODE_ENV=production webpack --mode production --config webpack.js",
-    "lint": "eslint './**/*.js'"
+    "lint": "eslint './**/*.js'",
+    "clean": "rm -rf build .cache"
   },
   "repository": {
     "type": "git",

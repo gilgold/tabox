@@ -9,7 +9,7 @@
   --settings-row-text-color: #464646;
   --highlight-row-color: #f2fad1;
   --footer-bg-color: #e3eff6;
-  --section-bg-color: #d1ceff12;
+  --section-bg-color: #d0d0d012;
   --footer-text-color: #464646;
   --link-hover-color: #E09500;
   --input-bg-color: #F5F9FB;
@@ -29,6 +29,10 @@
     radial-gradient(circle at 85% 8%, rgba(255, 198, 178, 0.35) 0%, rgba(255, 198, 178, 0) 40%),
     radial-gradient(circle at 70% 90%, rgba(183, 236, 203, 0.35) 0%, rgba(183, 236, 203, 0) 45%),
     linear-gradient(145deg, #fefefe 0%, #f8fbff 40%, #fff9f2 100%);
+  --tooltip-bg-color: #ffffff;
+  --tooltip-text-color: #121212;
+  --tooltip-border-color: rgba(9, 16, 31, 0.1);
+  --tooltip-shadow-color: rgba(9, 16, 31, 0.18);
 }
 [data-theme="dark"] {
   --primary-color: #3A77D8;
@@ -41,7 +45,7 @@
   --settings-row-text-color: #c3c3c3;
   --highlight-row-color: #5b5f4a;
   --footer-bg-color: #2A333E;
-  --section-bg-color: #2d33478c;
+  --section-bg-color: #3437424f;
   --footer-text-color: #939fa7;
   --link-hover-color: #E09500;
   --input-bg-color: #2f343b;
@@ -57,6 +61,10 @@
   --tile-color: #2f3b45;
   --primary-hover-bg: rgba(58, 119, 216, 0.15);
   --bg-gradient: linear-gradient(to bottom, #152d4c, #0f1e32, #0d1a27, #090e14, #090e14, #090e14, #090e14, #090e14, #000000);
+  --tooltip-bg-color: rgba(14, 20, 32, 0.96);
+  --tooltip-text-color: #f5f7ff;
+  --tooltip-border-color: rgba(255, 255, 255, 0.14);
+  --tooltip-shadow-color: rgba(0, 0, 0, 0.55);
 }
 body, html, * {
   font-family: "Helvetica Neue", Helvetica, Arial, "Lucida Grande", sans-serif;
@@ -121,6 +129,26 @@ body {
 .small-tooltip {
 	font-size: 12px !important;
 	padding: 6px 10px !important;
+	background: var(--tooltip-bg-color) !important;
+	color: var(--tooltip-text-color) !important;
+	border: 1px solid var(--tooltip-border-color) !important;
+	box-shadow: 0 8px 22px var(--tooltip-shadow-color) !important;
+	text-align: left;
+}
+
+/* Enable line breaks + unified styling for all tooltips */
+.react-tooltip {
+	white-space: pre-line !important;
+	background: var(--tooltip-bg-color) !important;
+	color: var(--tooltip-text-color) !important;
+	border: 1px solid var(--tooltip-border-color) !important;
+	box-shadow: 0 8px 22px var(--tooltip-shadow-color) !important;
+	--rt-color: var(--tooltip-bg-color);
+	--rt-text-color: var(--tooltip-text-color);
+}
+
+.react-tooltip-arrow {
+	color: var(--tooltip-bg-color) !important;
 }
 
 /* Global z-index fix for react-tiny-popover in grid tiles */
