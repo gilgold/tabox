@@ -191,7 +191,6 @@ export function useCollectionOperations({
     };
 
     const _handleOpenTabs = async () => {
-        if (isExpanded) return;
         if (await _isAutoUpdate()) {
             await _handleFocusWindow();
             return;
