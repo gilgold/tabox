@@ -1,3 +1,35 @@
+
+<div align="right">
+  <details>
+    <summary >🌐 Language</summary>
+    <div>
+      <div align="center">
+        <a href="https://openaitx.github.io/view.html?user=gilgold&project=tabox&lang=en">English</a>
+        | <a href="https://openaitx.github.io/view.html?user=gilgold&project=tabox&lang=zh-CN">简体中文</a>
+        | <a href="https://openaitx.github.io/view.html?user=gilgold&project=tabox&lang=zh-TW">繁體中文</a>
+        | <a href="https://openaitx.github.io/view.html?user=gilgold&project=tabox&lang=ja">日本語</a>
+        | <a href="https://openaitx.github.io/view.html?user=gilgold&project=tabox&lang=ko">한국어</a>
+        | <a href="https://openaitx.github.io/view.html?user=gilgold&project=tabox&lang=hi">हिन्दी</a>
+        | <a href="https://openaitx.github.io/view.html?user=gilgold&project=tabox&lang=th">ไทย</a>
+        | <a href="https://openaitx.github.io/view.html?user=gilgold&project=tabox&lang=fr">Français</a>
+        | <a href="https://openaitx.github.io/view.html?user=gilgold&project=tabox&lang=de">Deutsch</a>
+        | <a href="https://openaitx.github.io/view.html?user=gilgold&project=tabox&lang=es">Español</a>
+        | <a href="https://openaitx.github.io/view.html?user=gilgold&project=tabox&lang=it">Italiano</a>
+        | <a href="https://openaitx.github.io/view.html?user=gilgold&project=tabox&lang=ru">Русский</a>
+        | <a href="https://openaitx.github.io/view.html?user=gilgold&project=tabox&lang=pt">Português</a>
+        | <a href="https://openaitx.github.io/view.html?user=gilgold&project=tabox&lang=nl">Nederlands</a>
+        | <a href="https://openaitx.github.io/view.html?user=gilgold&project=tabox&lang=pl">Polski</a>
+        | <a href="https://openaitx.github.io/view.html?user=gilgold&project=tabox&lang=ar">العربية</a>
+        | <a href="https://openaitx.github.io/view.html?user=gilgold&project=tabox&lang=fa">فارسی</a>
+        | <a href="https://openaitx.github.io/view.html?user=gilgold&project=tabox&lang=tr">Türkçe</a>
+        | <a href="https://openaitx.github.io/view.html?user=gilgold&project=tabox&lang=vi">Tiếng Việt</a>
+        | <a href="https://openaitx.github.io/view.html?user=gilgold&project=tabox&lang=id">Bahasa Indonesia</a>
+        | <a href="https://openaitx.github.io/view.html?user=gilgold&project=tabox&lang=as">অসমীয়া</
+      </div>
+    </div>
+  </details>
+</div>
+
 # Tabox - Save and Share Tab Groups
 
 [![CircleCI](https://circleci.com/gh/gilgold/tabox/tree/main.svg?style=svg)](https://circleci.com/gh/gilgold/tabox/tree/main)
