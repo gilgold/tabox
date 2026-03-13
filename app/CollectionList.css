@@ -1227,6 +1227,29 @@
 	z-index: 100;
 }
 
+/* Drop indicator between tab rows during drag */
+.tab-drop-indicator {
+	height: 30px;
+	border-radius: 6px;
+	background-color: rgba(var(--primary-color-rgb, 52, 152, 219), 0.08);
+	border: 2px dashed rgba(var(--primary-color-rgb, 52, 152, 219), 0.3);
+	transition: background-color 0.15s ease, border-color 0.15s ease;
+	pointer-events: auto;
+}
+
+.tab-drop-indicator:hover {
+	background-color: rgba(var(--primary-color-rgb, 52, 152, 219), 0.18);
+	border-color: rgba(var(--primary-color-rgb, 52, 152, 219), 0.5);
+}
+
+.tab-drop-indicator-top {
+	margin-bottom: 2px;
+}
+
+.tab-drop-indicator-bottom {
+	margin-top: 2px;
+}
+
 /* Group Container Styles */
 .group-container {
     position: relative;

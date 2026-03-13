@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { CSS } from '@dnd-kit/utilities';
 import TabRow from './TabRow';
-import { useSortable, defaultAnimateLayoutChanges } from '@dnd-kit/sortable';
+import { useSortable } from '@dnd-kit/sortable';
 
 function SortableTabRow(props) {
     const {
@@ -12,6 +12,7 @@ function SortableTabRow(props) {
         transition,
         isDragging,
         isOver,
+        active,
     } = useSortable({
         id: props.tab.uid,
         disabled: props.disableDrag,
@@ -23,21 +24,57 @@ function SortableTabRow(props) {
         // Only animate layout changes when this specific item is being dragged
         animateLayoutChanges: (args) => {
             const { wasDragging, isDragging } = args;
-            
+
             // If currently dragging this item, don't animate (it's hidden)
             if (isDragging) {
                 return false;
             }
-            
+
             // If this item was being dragged and is now being dropped, animate to new position
             if (wasDragging) {
                 return true;
             }
-            
+
             // For all other items, don't animate to prevent displacement
             return false;
         }
     });
+
+    const elementRef = useRef(null);
+    const [dropPosition, setDropPosition] = useState(null); // 'top' or 'bottom'
+
+    // Merge refs: one for dnd-kit, one for our element measurement
+    const mergedRef = useCallback((node) => {
+        elementRef.current = node;
+        setNodeRef(node);
+    }, [setNodeRef]);
+
+    // Track mouse position relative to element to determine drop indicator position
+    useEffect(() => {
+        if (!isOver || isDragging || !elementRef.current) {
+            setDropPosition(null);
+            return;
+        }
+
+        const element = elementRef.current;
+
+        const handlePointerMove = (e) => {
+            const rect = element.getBoundingClientRect();
+            const midY = rect.top + rect.height / 2;
+            setDropPosition(e.clientY < midY ? 'top' : 'bottom');
+        };
+
+        // Use document-level listener since the pointer may be captured by dnd-kit
+        document.addEventListener('pointermove', handlePointerMove);
+        // Also set initial position
+        document.addEventListener('mousemove', handlePointerMove);
+
+        return () => {
+            document.removeEventListener('pointermove', handlePointerMove);
+            document.removeEventListener('mousemove', handlePointerMove);
+            setDropPosition(null);
+        };
+    }, [isOver, isDragging]);
 
     const style = {
         transform: CSS.Transform.toString(transform),
@@ -48,20 +85,20 @@ function SortableTabRow(props) {
         zIndex: isDragging ? 1000 : 'auto',
     };
 
-    // Handle group drop zone styling
-    const dropZoneStyle = isOver ? {
-        backgroundColor: 'rgba(var(--primary-color-rgb, 52, 152, 219), 0.1)',
-        borderRadius: '4px'
-    } : {};
+    const showIndicator = isOver && !isDragging && dropPosition && active;
 
     return (
-        <div 
-            ref={setNodeRef} 
-            style={{ ...style, ...dropZoneStyle }}
+        <div
+            ref={mergedRef}
+            style={style}
+            className="sortable-tab-row-wrapper"
             {...attributes}
             {...listeners}
         >
-            <TabRow 
+            {showIndicator && dropPosition === 'top' && (
+                <div className="tab-drop-indicator tab-drop-indicator-top" />
+            )}
+            <TabRow
                 tab={props.tab}
                 updateCollection={props.updateCollection}
                 collection={props.collection}
@@ -69,8 +106,11 @@ function SortableTabRow(props) {
                 isDragging={isDragging}
                 search={props.search}
             />
+            {showIndicator && dropPosition === 'bottom' && (
+                <div className="tab-drop-indicator tab-drop-indicator-bottom" />
+            )}
         </div>
     );
 }
 
-export default SortableTabRow; 
+export default SortableTabRow;
