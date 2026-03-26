@@ -1,0 +1,842 @@
+/* Animatable custom property for tracking border rotation */
+@property --fp-tracking-angle {
+    syntax: "<angle>";
+    initial-value: 0deg;
+    inherits: false;
+}
+
+/* ========================================
+   FP Collection Card — Physical, warm, rich
+   Color-highlight hover · frosted action bar · grain
+   ======================================== */
+
+.fp-card {
+    position: relative;
+    background: var(--fp-surface-elevated, var(--settings-bg-color));
+    border-radius: var(--fp-card-radius, 16px);
+    border: 1px solid var(--fp-border, rgba(0, 0, 0, 0.06));
+    border-left: 3.5px solid var(--card-color, var(--primary-color));
+    overflow: hidden;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    min-height: 165px;
+    box-shadow: var(--fp-shadow-sm);
+    transition:
+        background 0.22s var(--fp-ease, ease),
+        box-shadow 0.22s var(--fp-ease, ease),
+        border-color 0.22s var(--fp-ease, ease);
+}
+
+/* Left-edge fade glow — extends from the solid left border */
+.fp-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 55px;
+    border-radius: inherit;
+    opacity: 0.10;
+    pointer-events: none;
+    z-index: 1;
+    background: linear-gradient(to right, var(--card-color, var(--primary-color)) 0%, transparent 100%);
+    transition: opacity 0.22s var(--fp-ease, ease);
+}
+
+[data-theme="dark"] .fp-card::before {
+    opacity: 0.15;
+}
+
+/* Subtle grain texture overlay */
+.fp-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    opacity: 0.018;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+[data-theme="dark"] .fp-card::after {
+    opacity: 0.04;
+}
+
+/* List view: narrower fade for compact rows */
+.fp-content-list-mode .fp-card::before {
+    width: 40px;
+}
+
+.fp-card:hover {
+    box-shadow:
+        0 4px 14px rgba(0, 0, 0, 0.07),
+        0 1px 3px rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.13);
+    border-left-color: var(--card-color, var(--primary-color));
+    background: color-mix(in srgb, var(--fp-surface-elevated, var(--settings-bg-color)) 94%, var(--primary-color));
+}
+
+.fp-card:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--card-color, var(--primary-color)) 68%, white);
+    outline-offset: 3px;
+}
+
+.fp-card:hover::before {
+    opacity: 0;
+}
+
+[data-theme="dark"] .fp-card:hover {
+    box-shadow:
+        0 4px 16px rgba(0, 0, 0, 0.22),
+        0 1px 4px rgba(0, 0, 0, 0.12);
+    border-color: rgba(255, 255, 255, 0.12);
+    border-left-color: var(--card-color, var(--primary-color));
+    background: color-mix(in srgb, var(--fp-surface-elevated, var(--settings-bg-color)) 92%, var(--primary-color));
+}
+
+[data-theme="dark"] .fp-card:hover::before {
+    opacity: 0;
+}
+
+.fp-card.fp-card-bulk-mode:hover {
+    background: color-mix(in srgb, var(--fp-surface-elevated, var(--settings-bg-color)) 96%, var(--card-color, var(--primary-color)));
+}
+
+/* Selected card — primary accent glow */
+.fp-card.fp-card-selected {
+    border-color: var(--primary-color);
+    box-shadow:
+        0 0 0 1px var(--primary-color),
+        0 0 0 4px rgba(22, 152, 226, 0.1),
+        var(--fp-shadow-md);
+}
+
+[data-theme="dark"] .fp-card.fp-card-selected {
+    box-shadow:
+        0 0 0 1px var(--primary-color),
+        0 0 0 4px rgba(58, 119, 216, 0.15),
+        var(--fp-shadow-md);
+}
+
+.fp-card.fp-card-bulk-selected {
+    border-color: color-mix(in srgb, var(--bulk-selection-accent, var(--card-color, var(--primary-color))) 72%, var(--fp-border, rgba(0, 0, 0, 0.06)));
+    background: color-mix(in srgb, var(--fp-surface-elevated, var(--settings-bg-color)) 93%, var(--bulk-selection-accent, var(--card-color, var(--primary-color))));
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--bulk-selection-accent, var(--card-color, var(--primary-color))) 72%, white),
+        0 0 0 5px color-mix(in srgb, var(--bulk-selection-accent, var(--card-color, var(--primary-color))) 18%, transparent),
+        0 14px 32px color-mix(in srgb, var(--bulk-selection-accent, var(--card-color, var(--primary-color))) 22%, transparent),
+        var(--fp-shadow-md);
+}
+
+[data-theme="dark"] .fp-card.fp-card-bulk-selected {
+    background: color-mix(in srgb, var(--fp-surface-elevated, var(--settings-bg-color)) 88%, var(--bulk-selection-accent, var(--card-color, var(--primary-color))));
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--bulk-selection-accent, var(--card-color, var(--primary-color))) 78%, rgba(255, 255, 255, 0.6)),
+        0 0 0 5px color-mix(in srgb, var(--bulk-selection-accent, var(--card-color, var(--primary-color))) 20%, transparent),
+        0 18px 36px color-mix(in srgb, var(--bulk-selection-accent, var(--card-color, var(--primary-color))) 24%, transparent),
+        var(--fp-shadow-md);
+}
+
+/* ---- Body ---- */
+.fp-card-body {
+    padding: 10px 14px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    flex: 1;
+}
+
+.fp-card.fp-card-has-top-badge .fp-card-body {
+    padding-top: 34px;
+}
+
+/* ---- Title ---- */
+.fp-card-title-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.fp-card-bulk-select-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+    margin-right: 2px;
+    opacity: 0;
+    transition: opacity 0.18s var(--fp-ease, ease);
+}
+
+.fp-card:hover .fp-card-bulk-select-btn,
+.fp-card:focus-within .fp-card-bulk-select-btn,
+.fp-card.fp-card-bulk-selected .fp-card-bulk-select-btn,
+.fp-card-bulk-select-btn.is-checked {
+    opacity: 1;
+}
+
+.fp-card-bulk-select-btn:focus-visible {
+    opacity: 1;
+}
+
+.fp-card-title {
+    font-family: var(--fp-font-body);
+    font-size: 14px;
+    font-weight: 650;
+    margin: 0;
+    color: var(--text-color);
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    word-break: break-word;
+    letter-spacing: -0.005em;
+}
+
+.fp-card-search-match {
+    background: rgba(251, 191, 36, 0.3);
+    border-radius: 2px;
+    padding: 0 2px;
+}
+
+[data-theme="dark"] .fp-card-search-match {
+    background: rgba(251, 191, 36, 0.32);
+}
+
+/* ---- Badges ---- */
+.fp-card-badges {
+    display: flex;
+    gap: 5px;
+    flex-shrink: 0;
+    align-items: center;
+    margin-top: 2px;
+}
+
+.fp-card-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.fp-card-top-badge-wrap {
+    position: absolute;
+    top: 10px;
+    left: 12px;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+}
+
+.fp-card-badge.fp-card-badge-label {
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-family: var(--fp-font-body);
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+/* ---- Incognito icon (before title) ---- */
+.fp-card-incognito-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: var(--settings-row-text-color);
+    opacity: 0.45;
+}
+
+.fp-card-badge.recent {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #34d399;
+    box-shadow: 0 0 4px rgba(52, 211, 153, 0.4);
+}
+
+.fp-card-badge.tracking {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    box-shadow: 0 0 4px rgba(22, 152, 226, 0.4);
+    animation: fp-pulse 2.5s ease-in-out infinite;
+}
+
+@keyframes fp-pulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 4px rgba(22, 152, 226, 0.4); }
+    50% { opacity: 0.55; box-shadow: 0 0 2px rgba(22, 152, 226, 0.2); }
+}
+
+/* ---- Footer Row: favicons left · stats right ---- */
+.fp-card-footer {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    margin-top: auto;
+    padding-top: 10px;
+    border-top: 1px solid var(--fp-border, rgba(0, 0, 0, 0.06));
+}
+
+/* ---- Favicons ---- */
+.fp-card-favicons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    align-items: center;
+    min-height: 22px;
+    flex: 1;
+    min-width: 0;
+}
+
+.fp-card-favicon-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    align-items: center;
+    min-width: 0;
+    flex: 1;
+}
+
+.fp-card-favicon {
+    width: 22px;
+    height: 22px;
+    border-radius: 5px;
+    object-fit: contain;
+    background: var(--fp-border, var(--input-bg-color));
+    transition:
+        filter 0.2s var(--fp-ease, ease),
+        opacity 0.2s var(--fp-ease, ease);
+}
+
+.fp-card:hover .fp-card-favicon {
+    filter: blur(1.5px) brightness(0.92);
+    opacity: 0.45;
+}
+
+.fp-card-favicon-more {
+    font-family: var(--fp-font-body);
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--settings-row-text-color);
+    opacity: 0.55;
+    background: var(--fp-border, var(--input-bg-color));
+    border-radius: 5px;
+    padding: 2px 6px;
+    line-height: 1.4;
+    letter-spacing: 0.01em;
+    flex-shrink: 0;
+    transition: opacity 0.2s var(--fp-ease, ease);
+}
+
+.fp-card:hover .fp-card-favicon-more {
+    opacity: 0.25;
+}
+
+.fp-card-no-favicons {
+    font-size: 12px;
+    color: var(--settings-row-text-color);
+    opacity: 0.4;
+    font-style: italic;
+}
+
+/* ---- Stats (right side of footer) ---- */
+.fp-card-stats {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+/* ---- Metadata Chips ---- */
+.fp-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.fp-card-meta-chip {
+    font-family: var(--fp-font-body);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--settings-row-text-color);
+    background: var(--fp-border, var(--section-bg-color));
+    padding: 4px 10px;
+    border-radius: var(--fp-radius-xs, 6px);
+    white-space: nowrap;
+    letter-spacing: 0.01em;
+}
+
+/* Prominent tab & group chips */
+.fp-card-meta-chip.tabs {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--text-color);
+    background: rgba(22, 152, 226, 0.1);
+    padding: 5px 12px;
+}
+
+[data-theme="dark"] .fp-card-meta-chip.tabs {
+    background: rgba(58, 119, 216, 0.18);
+    color: rgba(255, 255, 255, 0.88);
+}
+
+.fp-card-meta-chip.groups {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--text-color);
+    background: rgba(139, 93, 255, 0.1);
+    padding: 5px 12px;
+}
+
+[data-theme="dark"] .fp-card-meta-chip.groups {
+    background: rgba(139, 93, 255, 0.18);
+    color: rgba(255, 255, 255, 0.88);
+}
+
+.fp-card-meta-chip.folder {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+}
+
+.fp-card-folder-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+
+/* ---- Timestamp ---- */
+.fp-card-time {
+    font-size: 10.5px;
+    font-weight: 500;
+    color: var(--settings-row-text-color);
+    opacity: 0.38;
+    white-space: nowrap;
+    letter-spacing: 0.01em;
+    text-align: right;
+}
+
+/* ---- Hover Action Bar ---- */
+.fp-card-actions {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 12px;
+    background: linear-gradient(
+        to top,
+        var(--fp-surface-elevated, var(--settings-bg-color)) 65%,
+        transparent
+    );
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    opacity: 0;
+    transition: opacity 0.18s var(--fp-ease, ease);
+    pointer-events: none;
+    z-index: 2;
+}
+
+.fp-card:hover .fp-card-actions {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Color picker — inline within action bar */
+.fp-card-color-picker {
+    flex-shrink: 0;
+}
+
+/* Base button */
+.fp-card-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 10px;
+    border-radius: var(--fp-radius-xs, 6px);
+    border: 1px solid var(--fp-border, var(--divider-color));
+    background: var(--fp-surface-elevated, var(--input-bg-color));
+    color: var(--text-color);
+    font-family: var(--fp-font-body);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition:
+        background var(--fp-duration, 0.2s) var(--fp-ease, ease),
+        border-color var(--fp-duration, 0.2s) var(--fp-ease, ease),
+        color var(--fp-duration, 0.2s) var(--fp-ease, ease),
+        transform 0.1s var(--fp-ease, ease);
+}
+
+.fp-card-action-btn:active {
+    transform: scale(0.93);
+}
+
+/* Primary (Open/Focus) — hero action */
+.fp-card-action-btn.primary {
+    flex: 1;
+    justify-content: center;
+    padding: 7px 16px;
+    font-size: 12px;
+    font-weight: 700;
+    background: var(--primary-color);
+    color: #fff;
+    border-color: var(--primary-color);
+    box-shadow: 0 2px 8px rgba(22, 152, 226, 0.25);
+    letter-spacing: 0.01em;
+}
+
+.fp-card-action-btn.primary:hover {
+    filter: brightness(1.1);
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    box-shadow: 0 3px 12px rgba(22, 152, 226, 0.35);
+}
+
+/* Secondary group wrapper */
+.fp-card-action-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+/* Secondary buttons (Update, Delete) — same height, muted colors */
+.fp-card-action-btn.secondary {
+    padding: 7px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--fp-surface-elevated, var(--input-bg-color));
+    color: var(--settings-row-text-color);
+    border-color: var(--fp-border, var(--divider-color));
+}
+
+.fp-card-action-btn.secondary:hover {
+    background: var(--setting-row-hover-bg-color);
+    border-color: var(--fp-border-strong, var(--setting-row-border-color));
+    color: var(--text-color);
+}
+
+.fp-card-action-btn.secondary.danger {
+    color: #b91c1c;
+    border-color: rgba(239, 68, 68, 0.22);
+}
+
+.fp-card-action-btn.secondary.danger:hover {
+    color: #dc2626;
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.35);
+}
+
+[data-theme="dark"] .fp-card-action-btn.secondary.danger {
+    color: #fca5a5;
+    border-color: rgba(239, 68, 68, 0.25);
+}
+
+[data-theme="dark"] .fp-card-action-btn.secondary.danger:hover {
+    color: #fca5a5;
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.35);
+}
+
+/* Three-dot menu — top-right corner */
+.fp-card-action-menu {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 3;
+    display: inline-flex;
+    align-items: center;
+    opacity: 0;
+    transition: opacity 0.18s var(--fp-ease, ease);
+}
+
+.fp-card:hover .fp-card-action-menu {
+    opacity: 1;
+}
+
+/* ---- States ---- */
+.fp-card-dragging {
+    opacity: 0.35;
+    transform: scale(0.97) !important;
+}
+
+.fp-card-highlighted {
+    animation: fp-card-glow 0.8s ease-out;
+}
+
+@keyframes fp-card-glow {
+    0% {
+        box-shadow: 0 0 0 0 rgba(22, 152, 226, 0.45), var(--fp-shadow-sm);
+    }
+    40% {
+        box-shadow: 0 0 0 8px rgba(22, 152, 226, 0.12), var(--fp-shadow-md);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(22, 152, 226, 0), var(--fp-shadow-sm);
+    }
+}
+
+.fp-card-deleting {
+    animation: fp-card-shrink 0.35s var(--fp-ease, ease) forwards;
+}
+
+@keyframes fp-card-shrink {
+    to {
+        opacity: 0;
+        transform: scale(0.92);
+    }
+}
+
+.fp-card-lightning {
+    animation: fp-card-flash 0.55s ease-out;
+}
+
+@keyframes fp-card-flash {
+    0% {
+        box-shadow: 0 0 0 0 rgba(139, 93, 255, 0.45), var(--fp-shadow-sm);
+    }
+    35% {
+        box-shadow: 0 0 14px 4px rgba(139, 93, 255, 0.2), var(--fp-shadow-md);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(139, 93, 255, 0), var(--fp-shadow-sm);
+    }
+}
+
+@keyframes fp-tracking-rotate {
+    to {
+        --fp-tracking-angle: 360deg;
+    }
+}
+
+.fp-card.fp-card-tracking {
+    --_tracking-bg: var(--fp-surface-elevated, var(--settings-bg-color));
+    border: 2.5px solid transparent !important;
+    background:
+        linear-gradient(var(--_tracking-bg), var(--_tracking-bg)) padding-box,
+        conic-gradient(
+            from var(--fp-tracking-angle),
+            #1698e2, #8b5dff, #ff8c42, #1698e2
+        ) border-box !important;
+    animation: fp-tracking-rotate 3s linear infinite;
+    box-shadow:
+        0 0 14px -3px rgba(22, 152, 226, 0.18),
+        0 0 6px -2px rgba(139, 93, 255, 0.12),
+        var(--fp-shadow-sm);
+}
+
+[data-theme="dark"] .fp-card.fp-card-tracking {
+    box-shadow:
+        0 0 16px -3px rgba(58, 119, 216, 0.22),
+        0 0 6px -2px rgba(168, 85, 247, 0.16),
+        var(--fp-shadow-sm);
+}
+
+.fp-card.fp-card-tracking:hover {
+    --_tracking-bg: color-mix(in srgb, var(--fp-surface-elevated, var(--settings-bg-color)) 94%, var(--primary-color));
+    box-shadow:
+        0 0 20px -3px rgba(22, 152, 226, 0.25),
+        0 0 8px -2px rgba(139, 93, 255, 0.16),
+        0 4px 14px rgba(0, 0, 0, 0.07);
+}
+
+[data-theme="dark"] .fp-card.fp-card-tracking:hover {
+    --_tracking-bg: color-mix(in srgb, var(--fp-surface-elevated, var(--settings-bg-color)) 92%, var(--primary-color));
+    box-shadow:
+        0 0 20px -3px rgba(58, 119, 216, 0.3),
+        0 0 8px -2px rgba(168, 85, 247, 0.2),
+        0 4px 16px rgba(0, 0, 0, 0.22);
+}
+
+.fp-card.fp-card-tracking.fp-card-selected {
+    box-shadow:
+        0 0 0 2px var(--primary-color),
+        0 0 16px -3px rgba(22, 152, 226, 0.2),
+        var(--fp-shadow-md);
+}
+
+[data-theme="dark"] .fp-card.fp-card-tracking.fp-card-selected {
+    box-shadow:
+        0 0 0 2px var(--primary-color),
+        0 0 16px -3px rgba(58, 119, 216, 0.25),
+        var(--fp-shadow-md);
+}
+
+/* ---- Drag Overlay ---- */
+.fp-card-drag-overlay {
+    box-shadow: var(--fp-shadow-xl);
+    opacity: 0.92;
+}
+
+.fp-card-drag-overlay > div {
+    width: 100%;
+    height: 100%;
+}
+
+.fp-card-drag-overlay .fp-card {
+    border-color: var(--primary-color);
+    width: 100%;
+    height: 100%;
+}
+
+/* ---- Matching Tabs (search results) ---- */
+.fp-card.fp-card-has-matches {
+    flex-direction: column;
+}
+
+.fp-card-matching-tabs {
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--fp-border, rgba(0, 0, 0, 0.06));
+    padding: 12px 14px 46px;
+    gap: 2px;
+}
+
+.fp-card-matching-tab {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: var(--fp-radius-sm, 8px);
+    text-decoration: none;
+    color: var(--text-color);
+    cursor: pointer;
+    transition:
+        background 0.15s var(--fp-ease, ease),
+        box-shadow 0.15s var(--fp-ease, ease);
+    min-width: 0;
+}
+
+.fp-card-matching-tab:hover {
+    background: var(--setting-row-hover-bg-color);
+    box-shadow: var(--fp-shadow-xs);
+}
+
+.fp-card-matching-tab-favicon {
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
+    object-fit: contain;
+    flex-shrink: 0;
+    margin-top: 1px;
+    background: var(--fp-border, var(--input-bg-color));
+}
+
+.fp-card-matching-tab-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    flex: 1;
+}
+
+.fp-card-matching-tab-title {
+    font-family: var(--fp-font-body);
+    font-size: 13.5px;
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--text-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    letter-spacing: -0.005em;
+}
+
+.fp-card-matching-tab-url {
+    font-size: 11.5px;
+    font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+    color: var(--settings-row-text-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+}
+
+/* Highlight inside tab titles and URLs */
+.fp-card-matching-tab-title .fp-card-search-match {
+    background: rgba(251, 191, 36, 0.35);
+    color: var(--text-color);
+    padding: 1px 3px;
+    border-radius: 3px;
+    font-weight: 700;
+}
+
+.fp-card-matching-tab-url .fp-card-search-match {
+    background: rgba(251, 191, 36, 0.28);
+    color: var(--text-color);
+    padding: 1px 3px;
+    border-radius: 3px;
+}
+
+[data-theme="dark"] .fp-card-matching-tab-title .fp-card-search-match {
+    background: rgba(251, 191, 36, 0.38);
+}
+
+[data-theme="dark"] .fp-card-matching-tab-url .fp-card-search-match {
+    background: rgba(251, 191, 36, 0.30);
+}
+
+.fp-card-matching-tabs-more {
+    display: block;
+    padding: 10px 14px;
+    margin-top: 4px;
+    border: none;
+    background: none;
+    color: var(--primary-color);
+    font-family: var(--fp-font-body);
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: left;
+    border-radius: var(--fp-radius-sm, 8px);
+    transition: background 0.15s var(--fp-ease, ease);
+}
+
+.fp-card-matching-tabs-more:hover {
+    background: var(--primary-hover-bg);
+}
+
+.fp-card-meta-match-badge {
+    background: rgba(22, 152, 226, 0.1);
+    color: var(--primary-color);
+}
+
+[data-theme="dark"] .fp-card-meta-match-badge {
+    background: rgba(58, 119, 216, 0.22);
+}
+
+/* ---- Reduced Motion ---- */
+@media (prefers-reduced-motion: reduce) {
+    .fp-card-badge.tracking,
+    .fp-card-highlighted,
+    .fp-card-lightning,
+    .fp-card-deleting,
+    .fp-card.fp-card-tracking {
+        animation: none !important;
+    }
+    .fp-card,
+    .fp-card::before,
+    .fp-card-actions,
+    .fp-card-color-picker,
+    .fp-card-favicon {
+        transition: none !important;
+    }
+}

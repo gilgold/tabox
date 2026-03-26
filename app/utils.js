@@ -2,12 +2,13 @@ import TaboxCollection from './model/TaboxCollection';
 import { browser } from '../static/globals';
 import { generateUid } from './utils/sharedConstants';
 
-export function downloadTextFile(text, filename) {
+export function downloadTextFile(text, filename, extension = 'txt') {
   // Downloads a text file
   const element = document.createElement("a");
   const file = new Blob([text], { type: 'text/plain' });
   element.href = URL.createObjectURL(file);
-  element.download = `${filename}.txt`;
+  const normalizedExtension = `${extension}`.replace(/^\./, '');
+  element.download = `${filename}.${normalizedExtension}`;
   document.body.appendChild(element);
   element.click();
 }
@@ -30,7 +31,16 @@ export function applyUid(item) {
   }
   
   // Create new collection but preserve existing UID and timestamps
-  const newCollection = new TaboxCollection(item.name, tabs, chromeGroups, item.color, item.createdOn, item.window, item.lastUpdated, item.lastOpened);
+  const newCollection = new TaboxCollection(
+    item.name,
+    tabs,
+    chromeGroups,
+    item.color,
+    item.createdOn,
+    item.window,
+    item.lastUpdated,
+    item.lastOpened
+  );
   
   // Preserve the original collection UID if it exists
   if (item.uid) {
@@ -50,7 +60,7 @@ export function applyUid(item) {
   if (item.incognitoTabCount !== undefined) {
     newCollection.incognitoTabCount = item.incognitoTabCount;
   }
-  
+
   return newCollection;
 }
 
@@ -109,9 +119,10 @@ export async function getCurrentTabsAndGroups(title, forceOnlyHighlighted = fals
 /**
  * Get all windows with their tabs and groups to create a folder with collections
  * @param {string} folderName - Name for the folder
+ * @param {string} folderColor - Color for the folder
  * @returns {Promise<{folder: TaboxFolder, collections: TaboxCollection[]}>} Folder and collections data
  */
-export async function getAllWindowsTabsAndGroups(folderName) {
+export async function getAllWindowsTabsAndGroups(folderName, folderColor = '#4facfe') {
   try {
     const { chkIgnorePinned } = await browser.storage.local.get('chkIgnorePinned');
     const TaboxFolder = (await import('./model/TaboxFolder')).default;
@@ -127,7 +138,7 @@ export async function getAllWindowsTabsAndGroups(folderName) {
     }
     
     // Create folder with default blue color and collapsed state
-    const folder = new TaboxFolder(folderName, '#4facfe', null, null, true);
+    const folder = new TaboxFolder(folderName, folderColor, null, null, true);
     
     // Create collections for each window
     const collections = [];

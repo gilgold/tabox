@@ -20,6 +20,7 @@ module.exports = (env, argv) => {
     
     entry: {
       app: path.join(__dirname, "./static/index.js"),
+      fullpage: path.join(__dirname, "./static/fullpage.js"),
     },
     
     output: {
@@ -124,10 +125,34 @@ module.exports = (env, argv) => {
           viewport: "width=device-width, initial-scale=1, shrink-to-fit=no",
           "theme-color": "#000000"
         },
-        manifest: "manifest.json",
         filename: "index.html",
         template: "./static/index.html",
+        chunks: ['app'],
         hash: !isProduction, // Only add hash in development for cache busting
+        minify: isProduction ? {
+          removeComments: true,
+          collapseWhitespace: true,
+          removeRedundantAttributes: true,
+          useShortDoctype: true,
+          removeEmptyAttributes: true,
+          removeStyleLinkTypeAttributes: true,
+          keepClosingSlash: true,
+          minifyJS: true,
+          minifyCSS: true,
+          minifyURLs: true,
+        } : false,
+      }),
+      new HtmlWebpackPlugin({
+        title: "Tabox - Full Page View",
+        meta: {
+          charset: "utf-8",
+          viewport: "width=device-width, initial-scale=1, shrink-to-fit=no",
+          "theme-color": "#000000"
+        },
+        filename: "fullpage.html",
+        template: "./static/fullpage.html",
+        chunks: ['fullpage'],
+        hash: !isProduction,
         minify: isProduction ? {
           removeComments: true,
           collapseWhitespace: true,

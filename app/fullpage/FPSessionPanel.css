@@ -1,0 +1,13 @@
+.session-panel .session-panel-color-bar {
+    background: linear-gradient(90deg, #f59e0b 0%, rgba(245, 158, 11, 0.16) 100%);
+}
+
+.session-panel-badge {
+    background: rgba(245, 158, 11, 0.14);
+    color: #b45309;
+}
+
+[data-theme="dark"] .session-panel-badge {
+    background: rgba(245, 158, 11, 0.22);
+    color: #fbbf24;
+}

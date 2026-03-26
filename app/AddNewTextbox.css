@@ -1,4 +1,4 @@
-input[type="text"] {
+.add-collection-group input[type="text"] {
   font-size: .85em;
   color: var(--text-color);
   padding: 7px 10px;
@@ -15,11 +15,11 @@ input[type="text"] {
   flex-basis: 310px;
 }
 
-input[type="text"]:hover {
+.add-collection-group input[type="text"]:hover {
   box-shadow: 0 0 8px rgba(58, 119, 216, 0.15);
 }
 
-input[type="text"]:focus {
+.add-collection-group input[type="text"]:focus {
   outline: none;
   background: linear-gradient(var(--input-bg-color), var(--input-bg-color)) padding-box,
     linear-gradient(90deg, var(--gradient-blue), var(--gradient-purple), var(--gradient-orange)) border-box;
@@ -68,7 +68,7 @@ input[type="text"]:focus {
   width: 310px;
 }
 
-label.textbox_label {
+.add-collection-group label.textbox_label {
   color: var(--text-color);
   font-size: .85em;
   font-weight: normal;
@@ -79,8 +79,8 @@ label.textbox_label {
   transition: 0.25s ease-in-out all;
 }
 
-input[type="text"]:focus~label.textbox_label,
-input[type="text"]:not(:placeholder-shown)~label.textbox_label {
+.add-collection-group input[type="text"]:focus~label.textbox_label,
+.add-collection-group input[type="text"]:not(:placeholder-shown)~label.textbox_label {
   top: -7px;
   left: 20px;
   font-size: .75em;
@@ -93,8 +93,8 @@ input[type="text"]:not(:placeholder-shown)~label.textbox_label {
 }
 
 /* Dark Mode Label Outline - Dark shadow for light text */
-[data-theme="dark"] input[type="text"]:focus~label.textbox_label,
-[data-theme="dark"] input[type="text"]:not(:placeholder-shown)~label.textbox_label {
+[data-theme="dark"] .add-collection-group input[type="text"]:focus~label.textbox_label,
+[data-theme="dark"] .add-collection-group input[type="text"]:not(:placeholder-shown)~label.textbox_label {
   text-shadow:
     -2px -2px 0 rgba(0, 0, 0, 0.7),
     2px -2px 0 rgba(0, 0, 0, 0.7),
@@ -237,6 +237,49 @@ input[type="text"]:not(:placeholder-shown)~label.textbox_label {
   margin: 0;
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+.folder-color-inline-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 14px;
+  background: rgba(79, 172, 254, 0.08);
+  border: 1px solid rgba(79, 172, 254, 0.12);
+  flex-wrap: nowrap;
+}
+
+.folder-color-inline-option {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(255, 255, 255, 0.9);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.folder-color-inline-option:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+}
+
+.folder-color-inline-option.selected {
+  border-color: rgba(17, 24, 39, 0.85);
+  box-shadow: 0 0 0 2px rgba(79, 172, 254, 0.2);
+}
+
+.folder-color-inline-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 
 .highlighter {

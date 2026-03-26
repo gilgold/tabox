@@ -1,0 +1,226 @@
+/* ========================================
+   FP Session Card variant on shared fp-card
+   ======================================== */
+
+.fp-session-card.fp-card {
+    --card-color: #f59e0b;
+}
+
+.fp-session-card.fp-card:hover {
+    background: color-mix(in srgb, var(--fp-surface-elevated, var(--settings-bg-color)) 94%, #f59e0b);
+}
+
+[data-theme="dark"] .fp-session-card.fp-card:hover {
+    background: color-mix(in srgb, var(--fp-surface-elevated, var(--settings-bg-color)) 92%, #f59e0b);
+}
+
+.fp-session-card.fp-card.fp-card-selected {
+    border-color: color-mix(in srgb, #f59e0b 78%, transparent);
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, #f59e0b 35%, transparent),
+        0 10px 24px rgba(245, 158, 11, 0.12);
+}
+
+[data-theme="dark"] .fp-session-card.fp-card.fp-card-selected {
+    box-shadow:
+        0 0 0 1px rgba(245, 158, 11, 0.32),
+        0 12px 30px rgba(0, 0, 0, 0.28);
+}
+
+.fp-session-card .fp-card-badge.fp-card-badge-label {
+    background: rgba(245, 158, 11, 0.14);
+    color: #b45309;
+}
+
+[data-theme="dark"] .fp-session-card .fp-card-badge.fp-card-badge-label {
+    background: rgba(245, 158, 11, 0.22);
+    color: #fbbf24;
+}
+
+.fp-session-card .fp-card-meta-chip.tabs {
+    background: rgba(245, 158, 11, 0.12);
+}
+
+[data-theme="dark"] .fp-session-card .fp-card-meta-chip.tabs {
+    background: rgba(245, 158, 11, 0.2);
+    color: rgba(255, 255, 255, 0.88);
+}
+
+.fp-session-card .fp-card-actions {
+    gap: 8px;
+    align-items: stretch;
+    opacity: 0;
+    transform: translateY(10px);
+    transition:
+        opacity 0.18s var(--fp-ease, ease),
+        transform 0.18s var(--fp-ease, ease);
+}
+
+.fp-session-card.fp-card:hover .fp-card-actions,
+.fp-session-card.fp-card:focus-within .fp-card-actions {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+.fp-session-action-btn {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 34px;
+    padding: 7px 12px;
+    border-radius: var(--fp-radius-xs, 6px);
+    border-width: 1px;
+    border-style: solid;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    gap: 4px;
+    white-space: nowrap;
+    box-shadow: 0 10px 18px rgba(15, 23, 42, 0.08);
+    box-sizing: border-box;
+    transition:
+        background var(--fp-duration, 0.2s) var(--fp-ease, ease),
+        border-color var(--fp-duration, 0.2s) var(--fp-ease, ease),
+        color var(--fp-duration, 0.2s) var(--fp-ease, ease),
+        transform 0.12s var(--fp-ease, ease),
+        box-shadow 0.18s var(--fp-ease, ease);
+}
+
+.fp-session-card .fp-session-action-btn {
+    flex: 1 1 0;
+    width: 50%;
+    min-width: 0;
+}
+
+.fp-session-action-btn-restore {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: #fff;
+    border-color: #d97706;
+}
+
+.fp-session-action-btn-restore:hover {
+    transform: translateY(-1px);
+    background: linear-gradient(135deg, #f8b84c 0%, #ea8d12 100%);
+    border-color: #d97706;
+    box-shadow: 0 14px 24px rgba(217, 119, 6, 0.22);
+}
+
+.fp-session-action-btn-save {
+    color: #fff;
+    background: linear-gradient(135deg, #38bdf8 0%, #1698e2 100%);
+    border-color: #1698e2;
+}
+
+.fp-session-action-btn-save:hover {
+    transform: translateY(-1px);
+    background: linear-gradient(135deg, #5ac8fb 0%, #22a6eb 100%);
+    border-color: #1698e2;
+    box-shadow: 0 14px 24px rgba(22, 152, 226, 0.24);
+}
+
+.fp-session-action-btn-export {
+    color: #f8fafc;
+    background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+    border-color: #475569;
+}
+
+.fp-session-action-btn-export:hover {
+    transform: translateY(-1px);
+    background: linear-gradient(135deg, #7a8ba3 0%, #55657d 100%);
+    border-color: #475569;
+    box-shadow: 0 14px 24px rgba(71, 85, 105, 0.22);
+}
+
+.fp-session-action-btn-clear {
+    color: var(--text-color);
+    background: color-mix(in srgb, var(--fp-surface-elevated, var(--settings-bg-color)) 88%, transparent);
+    border-color: var(--fp-border, rgba(0, 0, 0, 0.08));
+    box-shadow: none;
+}
+
+.fp-session-action-btn-clear:hover {
+    transform: translateY(-1px);
+    background: color-mix(in srgb, var(--fp-surface-elevated, var(--settings-bg-color)) 78%, var(--settings-hover-bg-color, rgba(0, 0, 0, 0.04)));
+}
+
+.fp-session-action-btn:active {
+    transform: translateY(0) scale(0.97);
+}
+
+[data-theme="dark"] .fp-session-action-btn-restore {
+    background: linear-gradient(135deg, #f8b84c 0%, #f59e0b 100%);
+    border-color: #f59e0b;
+    color: #1a1a1a;
+    box-shadow: 0 12px 22px rgba(0, 0, 0, 0.28);
+}
+
+[data-theme="dark"] .fp-session-action-btn-save {
+    color: #eaf6ff;
+    background: linear-gradient(135deg, #3a77d8 0%, #1698e2 100%);
+    border-color: rgba(132, 202, 255, 0.75);
+    box-shadow: 0 12px 22px rgba(0, 0, 0, 0.28);
+}
+
+[data-theme="dark"] .fp-session-action-btn-export {
+    color: #f8fafc;
+    background: linear-gradient(135deg, #6b7c95 0%, #475569 100%);
+    border-color: rgba(203, 213, 225, 0.26);
+    box-shadow: 0 12px 22px rgba(0, 0, 0, 0.28);
+}
+
+[data-theme="dark"] .fp-session-action-btn-clear {
+    color: rgba(255, 255, 255, 0.92);
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+[data-theme="dark"] .fp-session-action-btn-restore:hover {
+    background: linear-gradient(135deg, #ffd07a 0%, #fbbf24 100%);
+    box-shadow: 0 16px 26px rgba(0, 0, 0, 0.34);
+}
+
+[data-theme="dark"] .fp-session-action-btn-save:hover {
+    background: linear-gradient(135deg, #5a92ea 0%, #2db2ff 100%);
+    border-color: rgba(132, 202, 255, 0.82);
+    box-shadow: 0 16px 26px rgba(0, 0, 0, 0.34);
+}
+
+[data-theme="dark"] .fp-session-action-btn-export:hover {
+    background: linear-gradient(135deg, #7c8fa8 0%, #5a6a82 100%);
+    box-shadow: 0 16px 26px rgba(0, 0, 0, 0.34);
+}
+
+[data-theme="dark"] .fp-session-action-btn-clear:hover {
+    background: rgba(255, 255, 255, 0.09);
+}
+
+.fp-session-card .fp-card-matching-tab-title .fp-card-search-match {
+    background: rgba(251, 191, 36, 0.35);
+    color: var(--text-color);
+    padding: 1px 3px;
+    border-radius: 3px;
+    font-weight: 700;
+}
+
+.fp-session-card .fp-card-matching-tab-url .fp-card-search-match {
+    background: rgba(251, 191, 36, 0.28);
+    color: var(--text-color);
+    padding: 1px 3px;
+    border-radius: 3px;
+}
+
+[data-theme="dark"] .fp-session-card .fp-card-matching-tab-title .fp-card-search-match {
+    background: rgba(251, 191, 36, 0.38);
+}
+
+[data-theme="dark"] .fp-session-card .fp-card-matching-tab-url .fp-card-search-match {
+    background: rgba(251, 191, 36, 0.3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fp-session-card.fp-card,
+    .fp-session-card .fp-card-actions {
+        transition: none !important;
+    }
+}

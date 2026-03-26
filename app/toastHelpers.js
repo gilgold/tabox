@@ -1,15 +1,21 @@
 import React from 'react';
 import toast from 'react-hot-toast';
 import { SnackBarWithUndo } from './SnackBarWithUndo';
+import { FPToast } from './fullpage/FPToast';
 import { UNDO_TIME } from './constants';
 
-// Track active toast IDs to enforce max limit
 const MAX_TOASTS = 2;
 const activeToastIds = [];
 
-/**
- * Enforce max toast limit by dismissing oldest toast if needed
- */
+let currentViewContext = 'popup';
+
+export const setToastViewContext = (context) => {
+    currentViewContext = context;
+};
+
+const isFullPage = () => currentViewContext === 'fullpage';
+const getPosition = () => isFullPage() ? 'bottom-right' : 'bottom-center';
+
 const enforceToastLimit = () => {
     while (activeToastIds.length >= MAX_TOASTS) {
         const oldestId = activeToastIds.shift();
@@ -17,9 +23,6 @@ const enforceToastLimit = () => {
     }
 };
 
-/**
- * Track a new toast ID and remove it when dismissed
- */
 const trackToast = (toastId) => {
     activeToastIds.push(toastId);
 };
@@ -40,25 +43,41 @@ export const showUndoToast = (
     duration = UNDO_TIME
 ) => {
     enforceToastLimit();
-    
-    const toastId = toast.custom(
-        (t) => (
-            <SnackBarWithUndo
-                t={t}
-                icon={icon}
-                message={message}
-                collectionName={collectionName}
-                undoAction={undoAction}
-                duration={duration * 1000}
-                visible={t.visible}
-            />
-        ),
-        {
-            duration: duration * 1000,
-            position: 'bottom-center',
-        }
-    );
-    
+
+    const durationMs = duration * 1000;
+    const position = getPosition();
+
+    const toastId = isFullPage()
+        ? toast.custom(
+            (t) => (
+                <FPToast
+                    t={t}
+                    variant="undo"
+                    icon={icon}
+                    title={collectionName.trim()}
+                    message={message}
+                    undoAction={undoAction}
+                    duration={durationMs}
+                    visible={t.visible}
+                />
+            ),
+            { duration: durationMs, position }
+        )
+        : toast.custom(
+            (t) => (
+                <SnackBarWithUndo
+                    t={t}
+                    icon={icon}
+                    message={message}
+                    collectionName={collectionName}
+                    undoAction={undoAction}
+                    duration={durationMs}
+                    visible={t.visible}
+                />
+            ),
+            { duration: durationMs, position }
+        );
+
     trackToast(toastId);
     return toastId;
 };
@@ -70,18 +89,33 @@ export const showUndoToast = (
  */
 export const showSuccessToast = (message, duration = 3000) => {
     enforceToastLimit();
-    
-    const toastId = toast.success(message, {
-        duration: duration,
-        position: 'bottom-center',
-        style: {
-            background: '#4caf50',
-            color: '#fff',
-            padding: '12px 16px',
-            borderRadius: '8px',
-        },
-    });
-    
+
+    const position = getPosition();
+
+    const toastId = isFullPage()
+        ? toast.custom(
+            (t) => (
+                <FPToast
+                    t={t}
+                    variant="success"
+                    message={message}
+                    duration={duration}
+                    visible={t.visible}
+                />
+            ),
+            { duration, position }
+        )
+        : toast.success(message, {
+            duration,
+            position,
+            style: {
+                background: '#4caf50',
+                color: '#fff',
+                padding: '12px 16px',
+                borderRadius: '8px',
+            },
+        });
+
     trackToast(toastId);
     return toastId;
 };
@@ -93,19 +127,34 @@ export const showSuccessToast = (message, duration = 3000) => {
  */
 export const showInfoToast = (message, duration = 4000) => {
     enforceToastLimit();
-    
-    const toastId = toast(message, {
-        duration: duration,
-        position: 'bottom-center',
-        icon: 'ℹ️',
-        style: {
-            background: '#2196f3',
-            color: '#fff',
-            padding: '12px 16px',
-            borderRadius: '8px',
-        },
-    });
-    
+
+    const position = getPosition();
+
+    const toastId = isFullPage()
+        ? toast.custom(
+            (t) => (
+                <FPToast
+                    t={t}
+                    variant="info"
+                    message={message}
+                    duration={duration}
+                    visible={t.visible}
+                />
+            ),
+            { duration, position }
+        )
+        : toast(message, {
+            duration,
+            position,
+            icon: 'ℹ️',
+            style: {
+                background: '#2196f3',
+                color: '#fff',
+                padding: '12px 16px',
+                borderRadius: '8px',
+            },
+        });
+
     trackToast(toastId);
     return toastId;
 };
@@ -115,19 +164,33 @@ export const showInfoToast = (message, duration = 4000) => {
  */
 export const showErrorToast = (message) => {
     enforceToastLimit();
-    
-    const toastId = toast.error(message, {
-        duration: 4000,
-        position: 'bottom-center',
-        style: {
-            background: '#f44336',
-            color: '#fff',
-            padding: '12px 16px',
-            borderRadius: '8px',
-        },
-    });
-    
+
+    const position = getPosition();
+
+    const toastId = isFullPage()
+        ? toast.custom(
+            (t) => (
+                <FPToast
+                    t={t}
+                    variant="error"
+                    message={message}
+                    duration={4000}
+                    visible={t.visible}
+                />
+            ),
+            { duration: 4000, position }
+        )
+        : toast.error(message, {
+            duration: 4000,
+            position,
+            style: {
+                background: '#f44336',
+                color: '#fff',
+                padding: '12px 16px',
+                borderRadius: '8px',
+            },
+        });
+
     trackToast(toastId);
     return toastId;
 };
-

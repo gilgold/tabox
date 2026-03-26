@@ -60,17 +60,17 @@ exports[`Add new collection textbox tests Add new collection textbox renders cor
         class="window-toggle-container"
       >
         <div
-          class="window-choice-toggle disabled current-active"
+          class="window-choice-toggle  current-active"
           data-tooltip-class-name="small-tooltip"
-          data-tooltip-content="Only available when multiple Chrome windows are open"
+          data-tooltip-content=""
           data-tooltip-id="main-tooltip"
         >
           <button
-            class="mode-toggle-btn active disabled"
+            aria-label="Save current window as collection"
+            class="mode-toggle-btn active "
             data-tooltip-class-name="small-tooltip"
-            data-tooltip-content="Only one window open"
+            data-tooltip-content="Save current window as collection"
             data-tooltip-id="main-tooltip"
-            disabled=""
             type="button"
           >
             <svg
@@ -91,11 +91,11 @@ exports[`Add new collection textbox tests Add new collection textbox renders cor
             </svg>
           </button>
           <button
-            class="mode-toggle-btn  disabled"
+            aria-label="Save all windows as folder"
+            class="mode-toggle-btn  "
             data-tooltip-class-name="small-tooltip"
-            data-tooltip-content="Only one window open"
+            data-tooltip-content="Save all windows as folder"
             data-tooltip-id="main-tooltip"
-            disabled=""
             type="button"
           >
             <svg

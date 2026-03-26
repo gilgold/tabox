@@ -1,0 +1,352 @@
+/* ========================================
+   FP Layout — Warm Atelier Design System
+   Serif display + geometric sans body.
+   Warm surfaces, physical cards, depth.
+   ======================================== */
+
+/* ---------- Design Tokens ---------- */
+:root {
+    /* Sizing */
+    --fp-sidebar-width: 264px;
+    --fp-sidebar-collapsed: 60px;
+    --fp-topbar-height: 60px;
+    --fp-statusbar-height: 38px;
+    --fp-card-min-width: 320px;
+    --fp-card-radius: 14px;
+    --fp-panel-width: 45vw;
+
+    /* Typography — system stacks only (external fonts blocked by extension CSP) */
+    --fp-font-display: -apple-system, 'Segoe UI', system-ui, BlinkMacSystemFont, sans-serif;
+    --fp-font-body: -apple-system, 'Segoe UI', system-ui, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+
+    /* Radii */
+    --fp-radius-xs: 6px;
+    --fp-radius-sm: 8px;
+    --fp-radius-md: 12px;
+    --fp-radius-lg: 16px;
+    --fp-radius-xl: 20px;
+
+    /* Transitions */
+    --fp-ease: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    --fp-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --fp-duration: 0.2s;
+    --fp-duration-slow: 0.35s;
+
+    /* Fullpage surface overrides — warm tint */
+    --fp-surface: rgba(255, 252, 249, 0.55);
+    --fp-surface-solid: #fdfbf9;
+    --fp-surface-elevated: rgba(246, 244, 240, 0.88);
+    --fp-border: rgba(0, 0, 0, 0.06);
+    --fp-border-strong: rgba(0, 0, 0, 0.1);
+    --fp-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.03);
+    --fp-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+    --fp-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.03);
+    --fp-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.08), 0 4px 8px rgba(0, 0, 0, 0.03);
+    --fp-shadow-xl: 0 20px 48px rgba(0, 0, 0, 0.1), 0 8px 16px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="dark"] {
+    --fp-surface: rgba(22, 26, 36, 0.55);
+    --fp-surface-solid: #181c26;
+    --fp-surface-elevated: #1f2430;
+    --fp-border: rgba(255, 255, 255, 0.08);
+    --fp-border-strong: rgba(255, 255, 255, 0.13);
+    --fp-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.2);
+    --fp-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.25), 0 1px 2px rgba(0, 0, 0, 0.15);
+    --fp-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
+    --fp-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.35), 0 4px 8px rgba(0, 0, 0, 0.18);
+    --fp-shadow-xl: 0 20px 48px rgba(0, 0, 0, 0.45), 0 8px 16px rgba(0, 0, 0, 0.22);
+}
+
+/* ---------- Root Grid ---------- */
+.fp-layout {
+    display: grid;
+    grid-template-rows: var(--fp-topbar-height) 1fr;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+    color: var(--text-color);
+    font-family: var(--fp-font-body);
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* ---------- Body: sidebar + content + panel ---------- */
+.fp-body {
+    display: flex;
+    overflow: hidden;
+    min-height: 0;
+}
+
+/* ---------- Detail Panel Container ---------- */
+.fp-detail-panel {
+    width: 0;
+    flex-shrink: 0;
+    overflow: hidden;
+    border-left: 1px solid var(--fp-border);
+    background: var(--fp-surface-elevated);
+    transition: width var(--fp-duration-slow) var(--fp-ease);
+}
+
+.fp-body-panel-open .fp-detail-panel {
+    width: var(--fp-panel-width);
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+}
+
+/* Inline panel overrides — remove portal positioning */
+.fp-detail-panel .panel-overlay {
+    position: static;
+    background: none;
+    width: 100%;
+    height: 100%;
+}
+
+.fp-detail-panel .panel-overlay.visible {
+    background: none;
+}
+
+.fp-detail-panel .collection-detail-panel {
+    position: static;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    box-shadow: none;
+    border-radius: 0;
+    transform: none;
+    background: transparent;
+}
+
+.fp-detail-panel .collection-detail-panel.open {
+    transform: none;
+}
+
+/* ---- Fullpage panel — scaled-up UI elements ---- */
+
+/* Header */
+.fp-detail-panel .panel-header {
+    padding: 12px 20px;
+}
+
+.fp-detail-panel .panel-close-btn {
+    padding: 8px 16px;
+    font-size: 13.5px;
+    gap: 6px;
+    border-radius: 8px;
+}
+
+/* Title section */
+.fp-detail-panel .panel-collection-info {
+    padding: 0 24px 20px;
+}
+
+.fp-detail-panel .panel-title-section {
+    padding-top: 16px;
+}
+
+.fp-detail-panel .panel-title {
+    font-size: 1.5rem;
+}
+
+.fp-detail-panel .panel-title-edit .auto-save-textbox {
+    font-size: 1.5rem;
+}
+
+.fp-detail-panel .panel-edit-btn {
+    width: 34px;
+    height: 34px;
+}
+
+.fp-detail-panel .panel-meta {
+    font-size: 14px;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.fp-detail-panel .panel-incognito-badge {
+    padding: 5px 10px;
+}
+
+.fp-detail-panel .panel-recent-badge {
+    font-size: 12px;
+    padding: 3px 10px;
+}
+
+/* Action buttons */
+.fp-detail-panel .panel-actions {
+    margin-top: 20px;
+}
+
+.fp-detail-panel .panel-action-btn {
+    padding: 9px 14px;
+    font-size: 13.5px;
+    gap: 8px;
+    border-radius: 10px;
+}
+
+.fp-detail-panel .panel-action-btn.secondary {
+    padding: 9px 12px;
+}
+
+.fp-detail-panel .panel-action-btn.danger {
+    padding: 9px 12px;
+}
+
+.fp-detail-panel .panel-action-group {
+    gap: 8px;
+}
+
+/* Panel content — tabs area */
+.fp-detail-panel .panel-content {
+    padding: 0;
+}
+
+.fp-detail-panel .panel-content .expanded-content {
+    padding: 16px 20px;
+}
+
+/* Tab rows — generous height, spacing, and typography */
+.fp-detail-panel .single-tab-row {
+    min-height: 52px;
+    padding: 12px 16px;
+    gap: 12px;
+}
+
+.fp-detail-panel .collection-draggable-tab {
+    --tab-drop-indicator-height: 60px;
+    --tab-drop-indicator-radius: 10px;
+}
+
+.fp-detail-panel .favicon-col {
+    flex: 0 0 24px !important;
+    margin-right: 4px;
+}
+
+.fp-detail-panel .tab-favicon {
+    width: 24px;
+    height: 24px;
+    border-radius: 5px;
+}
+
+.fp-detail-panel .tab-title-wrapper {
+    gap: 4px;
+}
+
+.fp-detail-panel .single-tab-title {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.fp-detail-panel .tab-url-preview {
+    font-size: 12px;
+}
+
+/* Tab action buttons — large hit targets */
+.fp-detail-panel .actions-col {
+    gap: 6px;
+}
+
+.fp-detail-panel .single-tab-row .tab-action-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+}
+
+.fp-detail-panel .single-tab-row .tab-action-btn svg {
+    width: 20px !important;
+    height: 20px !important;
+}
+
+.fp-detail-panel .single-tab-row .action-button,
+.fp-detail-panel .single-tab-row .action-icon,
+.fp-detail-panel .single-tab-row .del-tab {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+}
+
+.fp-detail-panel .single-tab-row .action-button svg,
+.fp-detail-panel .single-tab-row .action-icon svg,
+.fp-detail-panel .single-tab-row .del-tab svg {
+    width: 18px !important;
+    height: 18px !important;
+}
+
+/* Group headers */
+.fp-detail-panel .group-header {
+    padding: 12px 16px;
+    font-size: 14px;
+    min-height: 48px;
+}
+
+.fp-detail-panel .group-header .group-icon {
+    width: 22px;
+    height: 22px;
+}
+
+/* Tab actions toolbar */
+.fp-detail-panel .tab-actions-toolbar {
+    padding: 12px 20px;
+    margin-bottom: 16px;
+    gap: 10px;
+}
+
+.fp-detail-panel .tab-actions-toolbar button {
+    padding: 9px 16px;
+    font-size: 13px;
+}
+
+/* Footer floats via position:fixed — exclude from grid flow */
+.fp-layout > footer,
+.fp-layout > #footer {
+    font-family: var(--fp-font-body);
+}
+
+/* ---------- Custom Scrollbar ---------- */
+.fp-layout ::-webkit-scrollbar {
+    width: 6px;
+}
+
+.fp-layout ::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.fp-layout ::-webkit-scrollbar-thumb {
+    background: var(--fp-border-strong);
+    border-radius: 3px;
+}
+
+.fp-layout ::-webkit-scrollbar-thumb:hover {
+    background: var(--setting-row-border-color);
+}
+
+/* ---------- Responsive ---------- */
+@media (min-width: 1600px) {
+    :root {
+        --fp-sidebar-width: 284px;
+    }
+}
+
+@media (max-width: 900px) {
+    .fp-detail-panel {
+        position: fixed;
+        top: 0;
+        right: 0;
+        height: 100vh;
+        z-index: 500;
+        border-left: 1px solid var(--fp-border);
+        box-shadow: var(--fp-shadow-xl);
+    }
+
+    .fp-body-panel-open .fp-detail-panel {
+        width: min(var(--fp-panel-width), 90vw);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fp-detail-panel {
+        transition: none !important;
+    }
+}

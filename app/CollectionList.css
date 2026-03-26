@@ -281,6 +281,7 @@
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
+	min-width: 0;
 }
 
 .collection-name {
@@ -1122,6 +1123,18 @@
 	font-family: monospace;
 }
 
+.tab-url-preview-button {
+	background: none;
+	border: 0;
+	padding: 0;
+	text-align: left;
+	width: 100%;
+	cursor: pointer;
+	font: inherit;
+	color: inherit;
+	opacity: inherit;
+}
+
 .tab-url-preview .search-match-text {
 	opacity: 1;
 	font-weight: 600;
@@ -1227,27 +1240,51 @@
 	z-index: 100;
 }
 
-/* Drop indicator between tab rows during drag */
-.tab-drop-indicator {
-	height: 30px;
-	border-radius: 6px;
-	background-color: rgba(var(--primary-color-rgb, 52, 152, 219), 0.08);
-	border: 2px dashed rgba(var(--primary-color-rgb, 52, 152, 219), 0.3);
-	transition: background-color 0.15s ease, border-color 0.15s ease;
-	pointer-events: auto;
+/* Tab drag wrapper — position: relative needed for drop indicator overlays */
+.collection-draggable-tab {
+	position: relative;
 }
 
-.tab-drop-indicator:hover {
-	background-color: rgba(var(--primary-color-rgb, 52, 152, 219), 0.18);
-	border-color: rgba(var(--primary-color-rgb, 52, 152, 219), 0.5);
+.collection-detail-drop-hover {
+	position: relative;
 }
 
-.tab-drop-indicator-top {
-	margin-bottom: 2px;
+.collection-detail-drop-hover::before {
+	content: '';
+	position: absolute;
+	left: 2px;
+	right: 2px;
+	top: 6px;
+	bottom: 6px;
+	height: auto;
+	border-radius: 12px;
+	border: 2px dashed rgba(22, 152, 226, 0.72);
+	background: rgba(22, 152, 226, 0.08);
+	pointer-events: none;
+	z-index: 12;
 }
 
-.tab-drop-indicator-bottom {
-	margin-top: 2px;
+.collection-edge-drop-zone {
+	position: relative;
+	min-height: 12px;
+	border-radius: 999px;
+	transition: all 0.2s ease;
+}
+
+.collection-edge-drop-zone.is-over {
+	background: rgba(22, 152, 226, 0.18);
+	box-shadow: inset 0 0 0 2px rgba(22, 152, 226, 0.72);
+}
+
+.collection-edge-drop-zone-label {
+	display: inline-flex;
+	align-items: center;
+	padding: 2px 10px;
+	border-radius: 999px;
+	background: rgba(22, 152, 226, 0.88);
+	color: white;
+	font-size: 11px;
+	font-weight: 600;
 }
 
 /* Group Container Styles */
@@ -1258,6 +1295,23 @@
 
 .group-container:hover {
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1) !important;
+}
+
+.group-open-button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    filter: saturate(1.15);
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+        0 8px 18px rgba(0, 0, 0, 0.12);
+}
+
+.group-open-button:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+.group-open-button:disabled {
+    box-shadow: inset 0 0 0 1px rgba(107, 114, 128, 0.12);
 }
 
 .group-title-input {
@@ -1602,16 +1656,73 @@
 	display: flex;
 	align-items: center;
 	opacity: 0;
-	transition: opacity 300ms ease-in-out;
+	transition: opacity 200ms ease-out;
 	justify-content: flex-end;
 	flex-direction: row;
 	flex: 0 0 auto !important;
+	gap: 4px;
 }
 
 .single-tab-row:hover .actions-col {
 	opacity: 1;
 }
 
+/* Modern tab action buttons */
+.tab-action-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	border: none;
+	border-radius: 8px;
+	cursor: pointer;
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	background: transparent;
+	color: var(--text-secondary-color);
+	flex-shrink: 0;
+}
+
+.tab-action-btn svg {
+	width: 18px !important;
+	height: 18px !important;
+}
+
+.tab-action-btn.tab-action-open {
+	color: var(--primary-color);
+}
+
+.tab-action-btn.tab-action-open:hover {
+	background: rgba(var(--primary-color-rgb, 52, 152, 219), 0.15);
+	color: var(--primary-color);
+	transform: scale(1.1);
+}
+
+.tab-action-btn.tab-action-move {
+	color: #e6a23c;
+}
+
+.tab-action-btn.tab-action-move:hover {
+	background: rgba(230, 162, 60, 0.15);
+	color: #d4940a;
+	transform: scale(1.1);
+}
+
+.tab-action-btn.tab-action-delete {
+	color: #e06c75;
+}
+
+.tab-action-btn.tab-action-delete:hover {
+	background: rgba(224, 108, 117, 0.15);
+	color: #d94f5a;
+	transform: scale(1.1);
+}
+
+.tab-action-btn:active {
+	transform: scale(0.92);
+}
+
+/* Legacy action-button for backwards compatibility */
 .action-button {
 	border: none;
 	background-color: transparent;
@@ -2075,7 +2186,7 @@
 
 /* Collection List Grid/List Layout */
 
-/* Tab row action buttons - smaller size */
+/* Legacy tab row action buttons (kept for non-tab-row uses) */
 .single-tab-row .action-button {
     height: 22px;
     width: 18px;
@@ -2092,7 +2203,6 @@
     transform: scale(1.1);
 }
 
-/* Tab row action button icons - smaller */
 .single-tab-row .action-button svg,
 .single-tab-row .del-tab svg {
     width: 14px !important;

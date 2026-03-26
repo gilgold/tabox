@@ -214,3 +214,17 @@ export const getColorValue = (colorName) => {
     // If it's an unknown format, return default
     return COLOR_PALETTE['default'];
 };
+
+/**
+ * Normalize a stored or selected color into a comparable palette key.
+ * Default-colored collections may be stored as null, "default", or the CSS variable.
+ * @param {string} colorName
+ * @returns {string}
+ */
+export const normalizeColorKey = (colorName) => {
+    if (!colorName || colorName === COLOR_PALETTE['default']) {
+        return 'default';
+    }
+
+    return migrateColor(colorName);
+};

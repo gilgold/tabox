@@ -12,6 +12,7 @@ if (typeof window === 'undefined' && typeof importScripts !== 'undefined') {
 
 import { getAllStorageData, safeStorageSet, safeStorageGet, safeStorageRemove, atomicStorageTransaction, getStorageStats } from './storageUtils.js';
 import { detectAndValidateFormat, isDataSafe } from './dataValidation.js';
+import { assessMigrationSupport40 } from './migrationSupport40.js';
 import { 
   createMigrationBackup, 
   createRollbackChain, 
@@ -31,16 +32,6 @@ const MIGRATION_CONFIG = {
   
   // Version definitions
   SUPPORTED_VERSIONS: {
-    '3.0': {
-      description: 'Enhanced format with UIDs',
-      hasBackups: false,
-      migrationComplexity: 'medium'
-    },
-    '3.5': {
-      description: 'Index-based storage with backup systems',
-      hasBackups: true,
-      migrationComplexity: 'low'
-    },
     '4.0': {
       description: 'Folder support with enhanced storage',
       hasBackups: true,
@@ -50,11 +41,7 @@ const MIGRATION_CONFIG = {
   
   // Migration paths
   MIGRATION_PATHS: {
-    '3.0': ['enhanced_to_current'],
-    '3.5': ['folders_initialization', 'timestamp_migration'], // Add folder system support + timestamp migration
-    '3.5-color-migration-needed': ['color_migration', 'folders_initialization', 'timestamp_migration'], // Color migration + folder support + timestamps
-    '4.0': ['timestamp_migration'], // Add timestamp migration for v4.0 → v4.0.1
-    'unknown': ['enhanced_to_current'] // Safe fallback
+    '4.0': ['timestamp_migration']
   }
 };
 
@@ -77,7 +64,25 @@ class MigrationCoordinator {
       
       const currentData = await getAllStorageData();
       const detection = detectAndValidateFormat(currentData);
-      const currentVersion = await this.detectCurrentVersionFromData(currentData);
+      const supportAssessment = assessMigrationSupport40(currentData);
+      const currentVersion = supportAssessment.currentVersion;
+
+      if (!supportAssessment.supported) {
+        return {
+          currentVersion,
+          detectedFormat: detection.format,
+          isDataValid: detection.isValid,
+          dataErrors: detection.errors,
+          collections: detection.info.collectionCount || 0,
+          migrationNeeded: false,
+          migrationPath: [],
+          recommendations: ['Automatic migration is only supported for 4.0+ local data'],
+          risks: ['Unsupported pre-4.0 runtime data detected'],
+          alreadyCompleted: false,
+          unsupported: true,
+          unsupportedReason: supportAssessment.unsupportedReason
+        };
+      }
       
       // Check if migration has already been completed for this version
       const migrationHistory = await this.getMigrationHistory();
@@ -133,35 +138,11 @@ class MigrationCoordinator {
         alreadyCompleted: false
       };
       
-      // Determine if migration is needed
-      if (currentVersion !== MIGRATION_CONFIG.CURRENT_VERSION) {
+      if (supportAssessment.migrationNeeded) {
         assessment.migrationNeeded = true;
-        assessment.migrationPath = this.calculateMigrationPath(currentVersion);
-        
-        // Add recommendations based on current state
-        if (assessment.collections === 0) {
-          assessment.recommendations.push('No collections found - migration will be quick');
-        } else if (assessment.collections > 50) {
-          assessment.recommendations.push('Large collection count - migration may take longer');
-        }
-        
-        if (!detection.isValid) {
-          assessment.risks.push('Data validation errors detected - backup will be created');
-        }
-        
-        if (detection.format === 'unknown') {
-          assessment.risks.push('Unknown data format - using safe fallback migration');
-        }
+        assessment.migrationPath = supportAssessment.migrationPath;
       } else {
-        // Even if at current version, check if color migration is specifically needed
-        // (needsColorMigration was already checked above)
-        if (needsColorMigration) {
-          assessment.migrationNeeded = true;
-          assessment.migrationPath = ['color_migration'];
-          assessment.recommendations.push('Color system migration needed for better compatibility');
-        } else {
-          assessment.recommendations.push('Already at current version - no migration needed');
-        }
+        assessment.recommendations.push('Already at current version - no migration needed');
       }
       
       return assessment;
@@ -308,11 +289,9 @@ class MigrationCoordinator {
         
         // Create backup before this step (skip for safe migrations to save space)
         let backupInfo;
-        if (step === 'color_migration' || step === 'folders_initialization' || step === 'timestamp_migration') {
+        if (step === 'color_migration' || step === 'timestamp_migration') {
           const skipReason = step === 'color_migration' ? 
             'Color migration is safe operation' : 
-            step === 'folders_initialization' ? 
-            'Folder initialization is safe operation (no data changes)' :
             'Timestamp migration is safe operation (only adds missing timestamps)';
           backupInfo = {
             id: `${step}_no_backup`,
@@ -392,17 +371,8 @@ class MigrationCoordinator {
     
     try {
       switch (step) {
-        case 'enhanced_to_current':
-          return await this.migrateEnhancedToCurrent(data);
-          
         case 'color_migration':
           return await this.migrateColorsOnly(data);
-          
-        case 'current_to_document':
-          return await this.migrateCurrentToDocument(data);
-          
-        case 'folders_initialization':
-          return await this.migrateFoldersInitialization(data);
           
         case 'timestamp_migration':
           return await this.migrateTimestamps(data);
@@ -418,59 +388,7 @@ class MigrationCoordinator {
   }
 
   /**
-   * Migrate from enhanced format (3.0-3.4) to current format (3.5)
-   * @param {object} data - Enhanced format data
-   * @returns {Promise<object>} Current format data
-   */
-  async migrateEnhancedToCurrent(data) {
-    
-    // Import color migration utilities
-    const { migrateAllCollectionColors } = await import('./colorMigration.js');
-    
-    // Ensure all collections have required fields
-    const enhancedCollections = data.tabsArray.map((collection, index) => {
-      // Safety check: ensure UID exists
-      if (!collection.uid) {
-        const seed = collection.name || index.toString();
-        collection.uid = `enhanced_${btoa(seed).slice(0, 8)}_${Date.now().toString(36)}`;
-        console.warn('Generated UID for collection during migration:', collection.name);
-      }
-      
-      // Clean up any folder artifacts (safety measure)
-      const cleanedCollection = { ...collection };
-      delete cleanedCollection.parentId;
-      if (cleanedCollection.type === 'folder') {
-        return null; // Skip folder items
-      }
-      
-      // Ensure all required fields
-      return {
-        ...cleanedCollection,
-        type: 'collection',
-        createdOn: cleanedCollection.createdOn || Date.now(),
-        lastUpdated: cleanedCollection.lastUpdated !== null && cleanedCollection.lastUpdated !== undefined ? cleanedCollection.lastUpdated : Date.now(),
-        lastOpened: cleanedCollection.lastOpened || null // Default to null for migrated collections
-      };
-    }).filter(Boolean); // Remove null entries (folders)
-    
-    // Migrate colors from old hex codes to new color names
-    const colorMigratedCollections = migrateAllCollectionColors(enhancedCollections);
-    
-    // Add backup systems and enhanced metadata
-    return {
-      ...data,
-      tabsArray: colorMigratedCollections,
-      autoBackups: data.autoBackups || [],
-      preSyncBackups: data.preSyncBackups || [],
-      migrationSource: 'enhanced',
-      migrationTimestamp: Date.now(),
-      lastUpdated: Date.now(),
-      colorSystemVersion: '2.0' // Mark as migrated to new color system
-    };
-  }
-
-  /**
-   * Migrate colors only for existing 3.5 users
+   * Repair old collection colors in 4.0-era local data
    * @param {object} data - Current format data with old colors
    * @returns {Promise<object>} Data with migrated colors
    */
@@ -508,121 +426,6 @@ class MigrationCoordinator {
       console.error('❌ Color migration failed:', error);
       console.error('Error details:', error.stack);
       throw new Error(`Color migration failed: ${error.message}`);
-    }
-  }
-
-  /**
-   * Migrate from current format (3.5) to document format (4.0)
-   * @param {object} data - Current format data
-   * @returns {Promise<object>} Document format data
-   */
-  async migrateCurrentToDocument(data) {
-    
-    const collections = {};
-    const collectionsIndex = [];
-    
-    // Transform array to document structure
-    data.tabsArray.forEach(collection => {
-      const collectionKey = `collection_${collection.uid}`;
-      collections[collectionKey] = {
-        ...collection,
-        schemaVersion: '4.0',
-        migratedFrom: '3.5',
-        migrationTimestamp: Date.now()
-      };
-      collectionsIndex.push(collection.uid);
-    });
-    
-    // Extract user settings from legacy data
-    const userSettings = await this.extractUserSettings(data);
-    
-    return {
-      // New document structure
-      collections_index: collectionsIndex,
-      app_metadata: {
-        version: '4.0',
-        lastUpdated: Date.now(),
-        migrationSource: 'current',
-        totalCollections: collectionsIndex.length,
-        migrationTimestamp: Date.now()
-      },
-      user_settings: userSettings,
-      
-      // Store individual collections
-      ...collections,
-      
-      // Keep legacy backup during transition
-      _legacy_tabsArray: data.tabsArray,
-      _legacy_backup: {
-        timestamp: Date.now(),
-        source: 'pre_4.0_migration',
-        originalFormat: 'array',
-        data: { ...data }
-      }
-    };
-  }
-
-  /**
-   * Extract user settings from legacy data
-   * @returns {Promise<object>} User settings object
-   */
-  async extractUserSettings() {
-    // This would extract user preferences from the legacy storage
-    // For now, return default settings
-    return {
-      theme: 'system',
-      syncEnabled: true,
-      autoBackup: true,
-      maxBackups: 10,
-      extractedFrom: 'legacy',
-      extractionTimestamp: Date.now()
-    };
-  }
-
-  /**
-   * Initialize folder system for v4.0 (3.5 → 4.0 migration)
-   * @param {object} data - v3.5 format data
-   * @returns {Promise<object>} v4.0 format data with folder support
-   */
-  async migrateFoldersInitialization(data) {
-    try {
-      
-      if (!data.tabsArray || !Array.isArray(data.tabsArray)) {
-        console.warn('⚠️ No tabsArray found in data - returning data with folder system initialized');
-        return {
-          ...data,
-          folderSystemVersion: '1.0',
-          folders_index: {},
-          lastUpdated: Date.now(),
-          folderSystemInitTimestamp: Date.now()
-        };
-      }
-      
-      // Initialize empty folders index
-      const foldersIndex = {};
-      
-      // Ensure all collections have parentId field (should be null initially)
-      const updatedCollections = data.tabsArray.map(collection => ({
-        ...collection,
-        parentId: collection.parentId || null // Preserve existing parentId, default to null
-      }));
-      
-      const result = {
-        ...data,
-        tabsArray: updatedCollections,
-        folderSystemVersion: '1.0', // Mark as having folder system initialized
-        folders_index: foldersIndex,
-        lastUpdated: Date.now(),
-        folderSystemInitTimestamp: Date.now()
-      };
-      
-      
-      return result;
-      
-    } catch (error) {
-      console.error('❌ Folder system initialization failed:', error);
-      console.error('Error details:', error.stack);
-      throw new Error(`Folder system initialization failed: ${error.message}`);
     }
   }
 
@@ -719,35 +522,7 @@ class MigrationCoordinator {
    */
   detectCurrentVersionFromData(versionData) {
     try {
-      // Check for explicit version first
-      const explicitVersion = versionData[MIGRATION_CONFIG.SCHEMA_VERSION_KEY];
-      
-      if (explicitVersion && MIGRATION_CONFIG.SUPPORTED_VERSIONS[explicitVersion]) {
-        return explicitVersion;
-      }
-
-      // Detect based on data structure
-      const detection = detectAndValidateFormat(versionData);
-      
-      if (detection.format === 'document') {
-        return '4.0';
-      } else if (detection.format === 'array') {
-        // Determine array sub-version
-        if (versionData.autoBackups !== undefined || versionData.preSyncBackups !== undefined) {
-          // Check if color migration is needed for 3.5 users
-          if (!versionData.colorSystemVersion || versionData.colorSystemVersion < '2.0') {
-            return '3.5-color-migration-needed';
-          }
-          return '3.5';
-        } else {
-          return '3.0';
-        }
-      } else if (detection.format === 'empty') {
-        return MIGRATION_CONFIG.CURRENT_VERSION; // New installation
-      } else {
-        return 'unknown';
-      }
-
+      return assessMigrationSupport40(versionData).currentVersion;
     } catch (error) {
       console.error('Version detection from data failed:', error);
       return 'unknown';
@@ -829,7 +604,7 @@ class MigrationCoordinator {
    */
   calculateMigrationPath(fromVersion) {
     return MIGRATION_CONFIG.MIGRATION_PATHS[fromVersion] || 
-           MIGRATION_CONFIG.MIGRATION_PATHS['unknown'];
+           [];
   }
 
   /**
@@ -839,10 +614,7 @@ class MigrationCoordinator {
    */
   getTargetVersionForStep(step) {
     const stepVersionMap = {
-      'enhanced_to_current': '3.5',
-      'color_migration': '3.5',
-      'current_to_document': '4.0',
-      'folders_initialization': '4.0',
+      'color_migration': '4.0',
       'timestamp_migration': '4.0' // v3 storage version, still app version 4.0
     };
     
@@ -1027,11 +799,11 @@ class MigrationCoordinator {
         return browser.runtime.getManifest().version;
       } else {
         // Fallback version for development/testing
-        return '3.5.1';
+        return MIGRATION_CONFIG.CURRENT_VERSION;
       }
     } catch (error) {
       console.error('Error getting app version:', error);
-      return '3.5.1';
+      return MIGRATION_CONFIG.CURRENT_VERSION;
     }
   }
 

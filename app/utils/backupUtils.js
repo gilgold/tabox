@@ -116,14 +116,21 @@ export const createBackup = async (backupType, reason, customData = null) => {
 const createMinimalBackup = async (backupType, reason, fullData) => {
   try {
     
-    // Extract only essential data
     const essentialData = {
       tabsArray: fullData.tabsArray || [],
+      collections_index: fullData.collections_index || {},
+      folders_index: fullData.folders_index || {},
       localTimestamp: fullData.localTimestamp || Date.now(),
-      // Skip large backup arrays to save space
       migrationTimestamp: Date.now(),
       backupType: 'minimal'
     };
+    
+    // Include folder_<uid> records since they're typically small
+    for (const key of Object.keys(fullData)) {
+      if (key.startsWith('folder_') && key !== 'folders_index') {
+        essentialData[key] = fullData[key];
+      }
+    }
     
     const dataSize = JSON.stringify(essentialData).length;
     
@@ -422,12 +429,20 @@ export const executeRollback = async (chainId, rollbackToStep = -1) => {
       throw new Error(`No backup found for rollback to step ${rollbackToStep}`);
     }
     
-    // Execute rollback
+    // If the backup was skipped (safe migration steps), the atomic transaction
+    // rollback already restored the full storage snapshot — nothing more to do.
+    if (backupToRestore.skipped) {
+      chain.rolledBack = true;
+      chain.rolledBackAt = Date.now();
+      chain.rolledBackToStep = rollbackToStep;
+      chain.rollbackNote = 'Skipped restore — atomic transaction rollback handled recovery';
+      await safeStorageSet({ [chainKey]: chain });
+      return true;
+    }
+    
     const success = await restoreFromBackup(backupToRestore.key, true);
     
     if (success) {
-      
-      // Mark chain as rolled back
       chain.rolledBack = true;
       chain.rolledBackAt = Date.now();
       chain.rolledBackToStep = rollbackToStep;

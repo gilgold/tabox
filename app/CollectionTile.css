@@ -316,6 +316,29 @@
     background: rgba(var(--primary-color-rgb, 52, 152, 219), 0.85);
 }
 
+/* Folder name label - shown in fullpage view */
+.tile-folder-label {
+    position: absolute;
+    bottom: 38px;
+    left: var(--tile-padding);
+    font-size: 8px;
+    font-weight: 600;
+    color: var(--footer-text-color);
+    background: rgba(128, 128, 128, 0.1);
+    padding: 1px 5px;
+    border-radius: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: calc(100% - calc(var(--tile-padding) * 2));
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+[data-theme="dark"] .tile-folder-label {
+    background: rgba(255, 255, 255, 0.08);
+}
+
 /* Active auto-tracking animation for tiles - on footer area */
 .collection-tile.active-auto-tracking .tile-footer {
     background: var(--active-auto-update-gradient);

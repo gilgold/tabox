@@ -1,13 +1,9 @@
-/* Modern Liquid Glass Header Layout */
+/* ═══════════════════════════════════════════
+   Header — Shared Base
+   ═══════════════════════════════════════════ */
 .header {
 	margin: 0 0 5px 0;
-	
-	/* Liquid Glass Effect */
 	background: transparent;
-	
-	/* Clean Flat Shape */
-	
-	/* Layout */
 	color: var(--bg-color);
 	width: 100%;
 	height: 46px;
@@ -16,12 +12,9 @@
 	grid-template-columns: 1fr auto;
 	align-items: center;
 	box-sizing: border-box;
-	
-	/* Subtle Animation */
 	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Header Sections */
 .header-left {
 	display: flex;
 	align-items: center;
@@ -32,9 +25,12 @@
 	display: flex;
 	align-items: center;
 	justify-content: flex-end;
+	gap: 4px;
 }
 
-/* Modern Login Section */
+/* ═══════════════════════════════════════════
+   Login Section — Full (popup mode)
+   ═══════════════════════════════════════════ */
 .login-section {
 	display: flex;
 	align-items: center;
@@ -58,7 +54,7 @@
 	transform: translateY(0) scale(0.98);
 }
 
-/* Avatar Styling Kept As-Is Per Request */
+/* Avatar */
 .avatar-wrapper {
 	height: 24px;
 	width: 24px;
@@ -70,13 +66,13 @@
 	justify-content: center;
 	padding: 2px;
 	box-sizing: border-box;
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15), 
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15),
 	            0 1px 3px rgba(0, 0, 0, 0.1);
 	transition: all 0.3s ease;
 }
 
 .avatar-wrapper:hover {
-	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2), 
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2),
 	            0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
@@ -87,7 +83,7 @@
 	object-fit: cover;
 }
 
-/* Enhanced User Info */
+/* User Info (full mode) */
 .user-info {
 	display: flex;
 	flex-direction: column;
@@ -128,4 +124,322 @@
 
 .login-section:hover .email {
 	opacity: 0.9;
+}
+
+/* ═══════════════════════════════════════════
+   Login Section — Compact (fullpage mode)
+   ═══════════════════════════════════════════ */
+.login-section-compact {
+	gap: 0;
+	padding: 0;
+	position: relative;
+	overflow: visible;
+}
+
+.login-section-compact:hover {
+	background: none;
+	backdrop-filter: none;
+	-webkit-backdrop-filter: none;
+	transform: none;
+}
+
+.compact-user-trigger {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 10px;
+	border-radius: 10px;
+	cursor: pointer;
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.compact-user-trigger:hover {
+	background: rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="dark"] .compact-user-trigger:hover {
+	background: rgba(255, 255, 255, 0.08);
+}
+
+.compact-user-trigger:active {
+	transform: scale(0.97);
+}
+
+.login-section-compact .header_text {
+	max-width: 120px;
+	font-size: 0.72em;
+	line-height: 1;
+}
+
+/* ─── User Context Menu ─── */
+.user-context-menu {
+	position: absolute;
+	top: calc(100% + 6px);
+	right: 0;
+	min-width: 160px;
+	background: var(--bg-color);
+	border: 1px solid rgba(0, 0, 0, 0.12);
+	border-radius: 10px;
+	box-shadow:
+		0 8px 24px rgba(0, 0, 0, 0.14),
+		0 2px 8px rgba(0, 0, 0, 0.08);
+	padding: 4px;
+	z-index: 60000;
+	animation: menuFadeIn 0.15s ease-out;
+}
+
+[data-theme="dark"] .user-context-menu {
+	border-color: rgba(255, 255, 255, 0.1);
+	box-shadow:
+		0 8px 24px rgba(0, 0, 0, 0.35),
+		0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+@keyframes menuFadeIn {
+	from { opacity: 0; transform: translateY(-4px); }
+	to { opacity: 1; transform: translateY(0); }
+}
+
+.user-context-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 8px 12px;
+	border: none;
+	border-radius: 6px;
+	background: none;
+	color: var(--text-color);
+	font-size: 0.9em;
+	font-weight: 500;
+	cursor: pointer;
+	transition: background 0.15s ease;
+	white-space: nowrap;
+}
+
+.user-context-item:hover {
+	background: rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="dark"] .user-context-item:hover {
+	background: rgba(255, 255, 255, 0.08);
+}
+
+/* Account info header */
+.user-context-header {
+	padding: 8px 12px;
+}
+
+.user-context-name {
+	font-size: 0.95em;
+	font-weight: 600;
+	color: var(--text-color);
+	line-height: 1.3;
+}
+
+.user-context-email {
+	font-size: 0.82em;
+	font-weight: 400;
+	color: var(--footer-text-color);
+	opacity: 0.75;
+	line-height: 1.3;
+	margin-top: 1px;
+}
+
+.user-context-divider {
+	height: 1px;
+	margin: 2px 8px;
+	background: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="dark"] .user-context-divider {
+	background: rgba(255, 255, 255, 0.08);
+}
+
+/* ═══════════════════════════════════════════
+   Popup Mode — Action Buttons
+   ═══════════════════════════════════════════ */
+.header-action-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	border: 1px solid rgba(0, 0, 0, 0.1);
+	background: rgba(0, 0, 0, 0.04);
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
+	border-radius: 10px;
+	color: var(--text-color);
+	cursor: pointer;
+	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+	opacity: 0.75;
+	position: relative;
+	overflow: hidden;
+	flex-shrink: 0;
+}
+
+.header-action-btn::before {
+	content: '';
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	background: linear-gradient(135deg,
+		rgba(22, 152, 226, 0.12),
+		rgba(139, 93, 255, 0.1),
+		rgba(255, 140, 66, 0.08));
+	opacity: 0;
+	transition: opacity 0.3s ease;
+}
+
+.header-action-btn:hover {
+	opacity: 1;
+	transform: scale(1.06);
+	border-color: rgba(139, 93, 255, 0.3);
+	box-shadow: 0 2px 10px rgba(139, 93, 255, 0.1);
+}
+
+.header-action-btn:hover::before {
+	opacity: 1;
+}
+
+.header-action-btn:active {
+	transform: scale(0.94);
+}
+
+[data-theme="dark"] .header-action-btn {
+	border-color: rgba(255, 255, 255, 0.1);
+	background: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .header-action-btn:hover {
+	border-color: rgba(139, 93, 255, 0.3);
+	box-shadow: 0 2px 12px rgba(139, 93, 255, 0.15);
+}
+
+/* Override settings button in popup to match action buttons */
+.header-popup .settings-wrapper {
+	position: relative;
+	top: auto;
+	right: auto;
+}
+
+.header-popup .settings-button {
+	width: 40px;
+	height: 40px;
+	border-radius: 10px;
+}
+
+/* ─── Vertical Separator (shared with FPTopBar) ─── */
+.header-separator {
+	width: 1px;
+	height: 20px;
+	background: linear-gradient(
+		180deg,
+		transparent,
+		rgba(0, 0, 0, 0.12) 30%,
+		rgba(0, 0, 0, 0.12) 70%,
+		transparent
+	);
+	flex-shrink: 0;
+}
+
+[data-theme="dark"] .header-separator {
+	background: linear-gradient(
+		180deg,
+		transparent,
+		rgba(255, 255, 255, 0.12) 30%,
+		rgba(255, 255, 255, 0.12) 70%,
+		transparent
+	);
+}
+
+/* ─── Sync Status (fullpage control strip) ─── */
+.sync-status {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 8px;
+	border-radius: 10px;
+	cursor: default;
+	transition: background 0.2s ease;
+}
+
+.sync-status:hover {
+	background: rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="dark"] .sync-status:hover {
+	background: rgba(255, 255, 255, 0.06);
+}
+
+.sync-dot {
+	width: 9px;
+	height: 9px;
+	border-radius: 50%;
+	flex-shrink: 0;
+	transition: all 0.3s ease;
+}
+
+.sync-dot.connected {
+	background: #34c759;
+	box-shadow: 0 0 6px rgba(52, 199, 89, 0.5);
+}
+
+.sync-dot.syncing {
+	background: #ffcc00;
+	box-shadow: 0 0 6px rgba(255, 204, 0, 0.5);
+	animation: pulse-dot 1.4s ease-in-out infinite;
+}
+
+.sync-dot.disconnected {
+	background: #8e8e93;
+	box-shadow: none;
+}
+
+@keyframes pulse-dot {
+	0%, 100% { opacity: 1; transform: scale(1); }
+	50% { opacity: 0.5; transform: scale(0.85); }
+}
+
+.sync-label {
+	font-size: 0.85em;
+	font-weight: 500;
+	color: var(--text-color);
+	white-space: nowrap;
+	opacity: 0.8;
+	line-height: 1;
+}
+
+.sync-status-action {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border: none;
+	border-radius: 999px;
+	background: transparent;
+	color: var(--text-color);
+	opacity: 0.78;
+	cursor: pointer;
+	transition: background 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
+}
+
+.sync-status-action:hover:not(:disabled) {
+	background: rgba(0, 0, 0, 0.06);
+	opacity: 1;
+}
+
+[data-theme="dark"] .sync-status-action:hover:not(:disabled) {
+	background: rgba(255, 255, 255, 0.08);
+}
+
+.sync-status-action:active:not(:disabled) {
+	transform: scale(0.95);
+}
+
+.sync-status-action:disabled {
+	opacity: 0.45;
+	cursor: default;
 }

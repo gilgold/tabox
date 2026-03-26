@@ -15,9 +15,12 @@ function GroupContainer({
     onSaveGroupColor, 
     onSaveGroupName, 
     onDeleteGroup,
+    onOpenGroupTabs,
     isExpanded = true,
     onToggleExpanded,
     isDragging = false,
+    headerDropProps = null,
+    bodyDropProps = null,
     dragAttributes = {},
     dragListeners = {}
 }) {
@@ -128,6 +131,7 @@ function GroupContainer({
         overflow: 'hidden',
         transition: 'all 0.3s ease',
         boxShadow: `0 2px 8px ${hexToRgba(groupColor, 0.1)}`,
+        position: 'relative',
     };
 
     const headerStyle = {
@@ -202,17 +206,48 @@ function GroupContainer({
         opacity: 0.7,
     };
 
+    const openButtonStyle = {
+        border: 'none',
+        background: 'linear-gradient(135deg, rgba(22, 152, 226, 0.18) 0%, rgba(22, 152, 226, 0.1) 100%)',
+        color: 'var(--primary-color)',
+        padding: '8px 12px',
+        borderRadius: '999px',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: '12px',
+        fontWeight: '700',
+        letterSpacing: '0.01em',
+        lineHeight: 1,
+        boxShadow: 'inset 0 0 0 1px rgba(22, 152, 226, 0.18)',
+        opacity: tabCount > 0 ? 1 : 0.45,
+        cursor: tabCount > 0 ? 'pointer' : 'not-allowed',
+        transition: 'all 0.2s ease',
+    };
+
     const tabsContainerStyle = {
         padding: localExpanded ? '8px 0' : '0',
         maxHeight: localExpanded ? 'none' : '0',
         overflow: 'hidden',
-        transition: 'all 0.3s ease',
+        // No transition on expand: dnd-kit needs stable layout immediately for collision detection.
+        // A 0.3s expand animation caused stale droppable rects and "first drag fails" when
+        // dragging tabs out of a newly expanded group.
+        transition: localExpanded ? 'none' : 'all 0.3s ease',
         background: 'var(--section-bg-color)',
+        ...(bodyDropProps?.isOver ? {
+            background: `linear-gradient(180deg, ${hexToRgba(groupColor, 0.14)} 0%, var(--section-bg-color) 100%)`,
+            outline: `2px dashed ${groupColor}`,
+            outlineOffset: '-2px',
+        } : {}),
     };
 
     return (
         <div style={containerStyle} className="group-container">
-            <DroppableGroupHeader group={group}>
+            <DroppableGroupHeader
+                group={group}
+                dropProps={headerDropProps}
+                showDropZone={!!headerDropProps?.isOver}
+            >
                 <div style={headerStyle} onClick={(e) => {
                     // Only toggle if not clicking on interactive elements or drag handle
                     if (!e.target.closest('.autosave-wrapper') && 
@@ -258,6 +293,19 @@ function GroupContainer({
                     </div>
                     
                     <div style={actionsStyle} className="group-actions" onClick={(e) => e.stopPropagation()}>
+                        <button
+                            type="button"
+                            style={openButtonStyle}
+                            className="group-open-button"
+                            onClick={() => onOpenGroupTabs?.(group)}
+                            title="Open all tabs in group"
+                            aria-label={`Open all tabs in ${group.title || 'group'}`}
+                            data-tooltip-id="main-tooltip"
+                            data-tooltip-content="Open all tabs in this group"
+                            disabled={tabCount === 0}
+                        >
+                            Open group
+                        </button>
                         <ColorPicker
                             colorList={tabGrooupColorChart}
                             tooltip="Choose a color for this group"
@@ -283,7 +331,11 @@ function GroupContainer({
                 </div>
             </DroppableGroupHeader>
             
-            <div style={tabsContainerStyle} className="group-tabs-container">
+            <div
+                ref={bodyDropProps?.setNodeRef || null}
+                style={tabsContainerStyle}
+                className="group-tabs-container"
+            >
                 {localExpanded && children}
             </div>
         </div>

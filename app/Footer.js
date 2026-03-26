@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React from 'react'
 import { useAtomValue } from 'jotai';
 import { syncInProgressState, isLoggedInState, lastSyncTimeState } from './atoms/globalAppSettingsState';
 import './Footer.css';
@@ -6,52 +6,23 @@ import { browser } from '../static/globals';
 import ReactTimeAgo from 'react-time-ago';
 import { RiTwitterXLine } from 'react-icons/ri';
 import { FaFacebook } from 'react-icons/fa';
-import { MdSync } from 'react-icons/md';
-
-const ONE_MINUTE = 60 * 1000;
 
 function SyncLabel() {
   const syncInProgress = useAtomValue(syncInProgressState);
   const isLoggedIn = useAtomValue(isLoggedInState);
   const lastSyncTime = useAtomValue(lastSyncTimeState);
-  
-  // Enable live seconds count only while sync time is under 1 minute
-  const [isWithinOneMinute, setIsWithinOneMinute] = useState(() => {
-    if (!lastSyncTime) return false;
-    return Date.now() - lastSyncTime < ONE_MINUTE;
-  });
 
-  useEffect(() => {
-    if (!lastSyncTime) {
-      setIsWithinOneMinute(false);
-      return;
-    }
+  const dotClass = !isLoggedIn
+    ? 'disconnected'
+    : syncInProgress ? 'syncing' : 'connected';
 
-    const timeSinceSync = Date.now() - lastSyncTime;
-    
-    if (timeSinceSync < ONE_MINUTE) {
-      setIsWithinOneMinute(true);
-      // Set a timeout to disable ticking after the remaining time
-      const remainingTime = ONE_MINUTE - timeSinceSync;
-      const timer = setTimeout(() => {
-        setIsWithinOneMinute(false);
-      }, remainingTime);
-      return () => clearTimeout(timer);
-    } else {
-      setIsWithinOneMinute(false);
-    }
-  }, [lastSyncTime]);
-
-  // Enable live updates (tick) only within the first minute to show live seconds count
-  const msg = syncInProgress ? 'syncing...' : <ReactTimeAgo date={lastSyncTime ?? Date.now()} locale="en-US" timeStyle="round" tick={isWithinOneMinute} />
+  const msg = syncInProgress
+    ? 'syncing...'
+    : <ReactTimeAgo date={lastSyncTime ?? Date.now()} locale="en-US" timeStyle="round" tick />;
 
   return <span id="last_sync">
-    <MdSync 
-      className={`sync_dark ${syncInProgress ? 'rotate' : ''}`} 
-      key={`syncImg-${syncInProgress}`} 
-      id="syncImg" 
-    /> 
-    <span className="sync_msg">{ isLoggedIn ? msg : `Sync Disabled` }</span>
+    <span className={`footer-sync-dot ${dotClass}`} />
+    <span className="sync_msg">{ isLoggedIn ? msg : 'Sync Disabled' }</span>
   </span>
 }
 

@@ -1,57 +1,62 @@
-import React, { useEffect, useState, lazy, Suspense, useEffectEvent } from 'react'
-import ReactDOM from 'react-dom'
+import React, { useEffect, useState, lazy, Suspense, useEffectEvent } from 'react';
+import ReactDOM from 'react-dom';
+import Modal from 'react-modal';
 import './SettingsMenu.css';
 import Switch from './Switch';
 import { themeState, isLoggedInState, listKeyState } from './atoms/globalAppSettingsState';
 import { useAtomValue, useSetAtom, useAtom } from 'jotai';
 import { browser } from '../static/globals';
-import Modal from 'react-modal';
 import { showUndoToast } from './toastHelpers';
 import { UNDO_TIME } from './constants';
 import { downloadTextFile } from './utils';
-
-// Lazy load SyncDebugModal as it's rarely used
-const SyncDebugModal = lazy(() => import('./SyncDebugModal').then(module => ({ default: module.SyncDebugModal })));
 import { RiFolderAddFill, RiEdit2Line, RiSettings5Fill } from 'react-icons/ri';
 import { ImNewTab } from 'react-icons/im';
-import { MdOutlineSyncAlt, MdSettingsBackupRestore, MdClose, MdExpandMore, MdExpandLess } from 'react-icons/md';
-import {  MdBugReport } from 'react-icons/md';
+import { MdOutlineSyncAlt, MdSettingsBackupRestore, MdClose, MdExpandMore, MdExpandLess, MdBugReport } from 'react-icons/md';
 import { FaRegCheckCircle } from 'react-icons/fa';
 import { IoMoon, IoSunny } from 'react-icons/io5';
 
+const SyncDebugModal = lazy(() => import('./SyncDebugModal').then((module) => ({ default: module.SyncDebugModal })));
+
 export default function SettingsMenu(props) {
+    const { variant = 'popup' } = props;
+    const isFullPageVariant = variant === 'fullpage';
     const [themeMode, setThemeMode] = useAtom(themeState);
     const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(false);
     const [badgeEnabled, setBadgeEnabled] = useState(false);
-    const [performanceModeEnabled, setPerformanceModeEnabled] = useState(false);
+    const [, setPerformanceModeEnabled] = useState(false);
     const [isSyncDebugModalOpen, setIsSyncDebugModalOpen] = useState(false);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-    
-    // State for tracking which sections are expanded
+    const [activeCategory, setActiveCategory] = useState('general');
     const [expandedSections, setExpandedSections] = useState({
         general: true,
         adding: true,
         opening: true,
         editing: true,
         autoUpdate: true,
-        backup: true
+        backup: true,
     });
-    
+
     const isLoggedIn = useAtomValue(isLoggedInState);
     const setListKey = useSetAtom(listKeyState);
 
-    // Use Effect Event for initialization logic
+    const closeMenu = () => setIsDrawerOpen(false);
+
+    const openMenu = () => {
+        if (isFullPageVariant) {
+            setActiveCategory('general');
+        }
+        setIsDrawerOpen(true);
+    };
+
     const onMount = useEffectEvent(async () => {
         const { chkEnableAutoUpdate, chkPerformanceMode } = await browser.storage.local.get(['chkEnableAutoUpdate', 'chkPerformanceMode']);
         setAutoUpdateEnabled(chkEnableAutoUpdate || false);
         setPerformanceModeEnabled(chkPerformanceMode || false);
-        
-        // Initialize dark mode switch state based on current theme
+
         const { theme } = await browser.storage.local.get('theme');
         const isDarkMode = theme === 'dark';
         await browser.storage.local.set({ darkModeToggle: isDarkMode });
-        
-        // Apply performance mode class to document if enabled
+
         if (chkPerformanceMode === true) {
             document.documentElement.classList.add('performance-mode');
         } else {
@@ -59,29 +64,44 @@ export default function SettingsMenu(props) {
         }
     });
 
-    // Use Effect Event for badge updates
     const onBadgeChange = useEffectEvent(async () => {
         await browser.runtime.sendMessage({ type: 'updateBadge' });
     });
 
     useEffect(() => {
         onMount();
+
+        const onStorageChanged = (changes) => {
+            if (changes.chkEnableAutoUpdate && changes.chkEnableAutoUpdate.newValue !== undefined) {
+                setAutoUpdateEnabled(!!changes.chkEnableAutoUpdate.newValue);
+            }
+            if (changes.chkPerformanceMode && changes.chkPerformanceMode.newValue !== undefined) {
+                const enabled = !!changes.chkPerformanceMode.newValue;
+                setPerformanceModeEnabled(enabled);
+                if (enabled) {
+                    document.documentElement.classList.add('performance-mode');
+                } else {
+                    document.documentElement.classList.remove('performance-mode');
+                }
+            }
+        };
+        browser.storage.onChanged.addListener(onStorageChanged);
+        return () => browser.storage.onChanged.removeListener(onStorageChanged);
     }, []);
 
     useEffect(() => {
         onBadgeChange();
     }, [badgeEnabled]);
 
-    // Dark mode toggle handler
     const handleDarkModeToggle = async () => {
         const newMode = themeMode === 'dark' ? 'light' : 'dark';
         const isDarkMode = newMode === 'dark';
-        
+
         setThemeMode(newMode);
         document.documentElement.setAttribute('data-theme', newMode);
-        await browser.storage.local.set({ 
+        await browser.storage.local.set({
             theme: newMode,
-            darkModeToggle: isDarkMode 
+            darkModeToggle: isDarkMode,
         });
     };
 
@@ -91,16 +111,15 @@ export default function SettingsMenu(props) {
             'Successfully recovered from backup',
             'Collections',
             async () => {
-                // Undo recovery by restoring previous collections
                 await props.updateRemoteData(previousCollections);
             },
-            UNDO_TIME
+            UNDO_TIME,
         );
     };
 
     const handleSyncDebug = () => {
         setIsSyncDebugModalOpen(true);
-        setIsDrawerOpen(false);
+        closeMenu();
     };
 
     const closeSyncDebugModal = () => {
@@ -108,33 +127,30 @@ export default function SettingsMenu(props) {
     };
 
     const handleExport = async () => {
-        setIsDrawerOpen(false);
+        closeMenu();
         try {
-            // Get all collections and folders
             const { loadAllCollections, loadAllFolders } = await import('./utils/storageUtils');
             const collections = await loadAllCollections();
             const folders = await loadAllFolders();
 
-            // Create comprehensive export data
             const exportData = {
                 type: 'full_export',
-                collections: collections,
-                folders: folders,
+                collections,
+                folders,
                 exportedAt: new Date().toISOString(),
                 version: '2.0',
                 stats: {
                     totalCollections: collections.length,
                     totalFolders: folders.length,
-                    collectionsInFolders: collections.filter(c => c.parentId).length,
-                    rootCollections: collections.filter(c => !c.parentId).length
-                }
+                    collectionsInFolders: collections.filter((collection) => collection.parentId).length,
+                    rootCollections: collections.filter((collection) => !collection.parentId).length,
+                },
             };
 
             const exported = JSON.stringify(exportData, null, 2);
             downloadTextFile(exported, `tabox-full-export-${Date.now()}`);
         } catch (error) {
             console.error('Error exporting all data:', error);
-            // Fallback to old method
             const { settingsData } = await browser.storage.local.get('settingsData');
             const exported = JSON.stringify(settingsData, null, 2);
             downloadTextFile(exported, `tabox-export-${Date.now()}`);
@@ -146,264 +162,428 @@ export default function SettingsMenu(props) {
             setListKey(Date.now().toString());
             setAutoUpdateEnabled(!autoUpdateEnabled);
         }, 100);
-    }
+    };
 
     const handleShowBadge = async () => {
         setTimeout(async () => {
             setBadgeEnabled(!badgeEnabled);
         }, 100);
-    }
+    };
 
     const handlePerformanceMode = async () => {
-        // Wait a bit for Switch component to update storage
         setTimeout(async () => {
-            // Read the NEW value from storage (Switch component just updated it)
             const { chkPerformanceMode } = await browser.storage.local.get('chkPerformanceMode');
             const isEnabled = chkPerformanceMode === true;
-            
+
             setPerformanceModeEnabled(isEnabled);
-            
-            // Apply/remove performance mode class to document
+
             if (isEnabled) {
                 document.documentElement.classList.add('performance-mode');
             } else {
                 document.documentElement.classList.remove('performance-mode');
             }
         }, 100);
-    }
+    };
 
     const toggleDrawer = () => {
-        setIsDrawerOpen(!isDrawerOpen);
-    }
+        if (isDrawerOpen) {
+            closeMenu();
+            return;
+        }
 
-    // Toggle section expansion
+        openMenu();
+    };
+
     const toggleSection = (sectionKey) => {
-        setExpandedSections(prev => ({
+        setExpandedSections((prev) => ({
             ...prev,
-            [sectionKey]: !prev[sectionKey]
+            [sectionKey]: !prev[sectionKey],
         }));
+    };
+
+    const settingsSections = [
+        {
+            key: 'general',
+            title: 'General Settings',
+            icon: RiSettings5Fill,
+            items: [
+                {
+                    type: 'switch',
+                    key: 'darkModeToggle',
+                    title: 'Dark Mode',
+                    description: 'Switch Tabox between light and dark themes.',
+                    switchProps: {
+                        id: 'darkModeToggle',
+                        onMouseUp: handleDarkModeToggle,
+                        'data-tooltip-id': 'main-tooltip',
+                        'data-tooltip-content': 'Toggle between light and dark theme',
+                        textOn: <span><IoMoon size="16" style={{ marginRight: '8px' }} />Dark Mode: <strong>On</strong></span>,
+                        textOff: <span><IoSunny size="16" style={{ marginRight: '8px' }} />Dark Mode: <strong>Off</strong></span>,
+                    },
+                },
+                {
+                    type: 'switch',
+                    key: 'chkShowBadge',
+                    title: 'Tab counter badge',
+                    description: 'Show the total number of saved tabs on the toolbar icon.',
+                    switchProps: {
+                        id: 'chkShowBadge',
+                        onMouseUp: handleShowBadge,
+                        'data-tooltip-id': 'main-tooltip',
+                        'data-tooltip-content': 'Show the total number of tabs across all collections on the extension icon',
+                        textOn: <span>Tab counter badge <strong>Enabled</strong></span>,
+                        textOff: <span>Tab counter badge <strong>Disabled</strong></span>,
+                    },
+                },
+                {
+                    type: 'switch',
+                    key: 'chkPerformanceMode',
+                    title: 'Performance Mode',
+                    description: 'Reduce animations and visual effects to use less CPU and battery.',
+                    switchProps: {
+                        id: 'chkPerformanceMode',
+                        onMouseUp: handlePerformanceMode,
+                        'data-tooltip-id': 'main-tooltip',
+                        'data-tooltip-content': 'Reduces visual effects and animations to lower CPU usage and improve battery life',
+                        textOn: <span>⚡ Performance Mode: <strong>Enabled</strong></span>,
+                        textOff: <span>✨ Performance Mode: <strong>Disabled</strong></span>,
+                    },
+                },
+                {
+                    type: 'switch',
+                    key: 'chkToolbarIconOpensFullPage',
+                    title: 'Toolbar launch mode',
+                    description: 'Choose whether clicking the Tabox toolbar icon opens the popup or the full page.',
+                    switchProps: {
+                        id: 'chkToolbarIconOpensFullPage',
+                        'data-tooltip-id': 'main-tooltip',
+                        'data-tooltip-content': 'Choose what happens when you click the Tabox icon in the browser toolbar',
+                        textOn: <span>When opening Tabox launch in: <strong>new tab</strong></span>,
+                        textOff: <span>When opening Tabox launch in: <strong>popup</strong></span>,
+                    },
+                },
+            ],
+        },
+        {
+            key: 'adding',
+            title: 'When adding a collection',
+            icon: RiFolderAddFill,
+            items: [
+                {
+                    type: 'switch',
+                    key: 'chkIgnorePinned',
+                    title: 'Pinned tabs',
+                    description: 'Control whether pinned tabs are included when saving a new collection.',
+                    switchProps: {
+                        id: 'chkIgnorePinned',
+                        'data-tooltip-id': 'main-tooltip',
+                        'data-tooltip-content': 'Choose whether pinned tabs should be saved when creating a new collection',
+                        textOn: <span><strong>Do not include</strong> pinned tabs</span>,
+                        textOff: <span><strong>Include</strong> pinned tabs</span>,
+                    },
+                },
+            ],
+        },
+        {
+            key: 'opening',
+            title: 'When opening collections',
+            icon: ImNewTab,
+            items: [
+                {
+                    type: 'switch',
+                    key: 'chkIgnoreDuplicates',
+                    title: 'Duplicate open tabs',
+                    description: 'Skip tabs that are already open in the current window when restoring a collection.',
+                    switchProps: {
+                        id: 'chkIgnoreDuplicates',
+                        'data-tooltip-id': 'main-tooltip',
+                        'data-tooltip-content': 'Skip opening tabs that are already open in the current window',
+                        textOn: <span>If a tab already exists, <strong>do not open it</strong></span>,
+                        textOff: <span>If a tab already exists, <strong>open it anyway</strong></span>,
+                    },
+                },
+                {
+                    type: 'switch',
+                    key: 'chkEnableTabDiscard',
+                    title: 'Smart tab loading',
+                    description: 'Delay non-essential tabs until you activate them so large restores open more smoothly.',
+                    switchProps: {
+                        id: 'chkEnableTabDiscard',
+                        'data-tooltip-id': 'main-tooltip',
+                        'data-tooltip-content': "Smart tab loading delays non-essential tabs to improve performance.\nAutomatically avoids deferring media, auth, development, and collaboration sites.\nTabs load instantly when you switch to them.",
+                        textOn: <span>Smart tab loading: <strong>Enabled</strong></span>,
+                        textOff: <span>Smart tab loading: <strong>Disabled</strong></span>,
+                    },
+                },
+            ],
+        },
+        {
+            key: 'editing',
+            title: 'When editing collections',
+            icon: RiEdit2Line,
+            items: [
+                {
+                    type: 'switch',
+                    key: 'chkColEditIgnoreDuplicateTabs',
+                    title: 'Duplicate tabs while editing',
+                    description: 'Prevent adding the same URL twice to a collection.',
+                    switchProps: {
+                        id: 'chkColEditIgnoreDuplicateTabs',
+                        'data-tooltip-id': 'main-tooltip',
+                        'data-tooltip-content': "A tab is considered 'duplicate'\nif it has the exact same URL as another tab",
+                        textOn: <span>If a tab exists in the collection, <strong>do not add it</strong></span>,
+                        textOff: <span>If a tab exists in the collection, <strong>add it anyway</strong></span>,
+                    },
+                },
+                {
+                    type: 'switch',
+                    key: 'chkColEditIgnoreDuplicateGroups',
+                    title: 'Duplicate groups while editing',
+                    description: 'Append tabs to an existing matching group instead of creating another one.',
+                    switchProps: {
+                        id: 'chkColEditIgnoreDuplicateGroups',
+                        'data-tooltip-id': 'main-tooltip',
+                        'data-tooltip-content': "A group is considered 'duplicate'\nif it has the exact same name and color as another group",
+                        textOn: <span>If a group already exists, <strong>append tabs to it</strong></span>,
+                        textOff: <span>If a group already exists, <strong>add as a new group</strong></span>,
+                    },
+                },
+            ],
+        },
+        {
+            key: 'autoUpdate',
+            title: 'Auto update collections',
+            icon: MdOutlineSyncAlt,
+            items: [
+                {
+                    type: 'switch',
+                    key: 'chkEnableAutoUpdate',
+                    title: 'Auto updating collections',
+                    description: 'Keep tracked collections synced with changes in the linked browser window.',
+                    switchProps: {
+                        id: 'chkEnableAutoUpdate',
+                        onMouseUp: handleAutoUpdate,
+                        'data-tooltip-id': 'main-tooltip',
+                        'data-tooltip-content': "When opening a collection, track changes\nto the window and update the collection in the background.",
+                        textOn: <span>Auto updating collections: <strong>Enabled</strong></span>,
+                        textOff: <span>Auto updating collections: <strong>Disabled</strong></span>,
+                    },
+                },
+                {
+                    type: 'switch',
+                    key: 'chkAutoUpdateOnNewCollection',
+                    title: 'Auto update new collections',
+                    description: 'Automatically start tracking newly created collections when auto update is on.',
+                    switchProps: {
+                        id: 'chkAutoUpdateOnNewCollection',
+                        disabled: !autoUpdateEnabled,
+                        'data-tooltip-id': 'main-tooltip',
+                        'data-tooltip-content': "When adding a new collection, start auto updating\nit with changes in the current window.",
+                        textOn: <span>Auto update new collections: <strong>Enabled</strong></span>,
+                        textOff: <span>Auto update new collections: <strong>Disabled</strong></span>,
+                    },
+                },
+                {
+                    type: 'switch',
+                    key: 'chkManualUpdateLinkCollection',
+                    title: 'Update button sets active',
+                    description: 'Link a collection to the current window when you manually click Update.',
+                    switchProps: {
+                        id: 'chkManualUpdateLinkCollection',
+                        disabled: !autoUpdateEnabled,
+                        'data-tooltip-id': 'main-tooltip',
+                        'data-tooltip-content': "When clicking the 'Update' button, this will link\nthe collection to the window, making it 'active'.",
+                        textOn: <span>Click on &#39;Update&#39; sets active: <strong>Enabled</strong></span>,
+                        textOff: <span>Click on &#39;Update&#39; sets active: <strong>Disabled</strong></span>,
+                    },
+                },
+            ],
+        },
+        {
+            key: 'backup',
+            title: 'Backup & Restore',
+            icon: MdSettingsBackupRestore,
+            items: [
+                {
+                    type: 'button',
+                    key: 'export-all',
+                    title: 'Export all collections & folders',
+                    description: 'Download a full backup of every collection and folder.',
+                    onClick: handleExport,
+                    content: 'Export all collections & folders',
+                },
+                {
+                    type: 'button',
+                    key: 'sync-debug',
+                    title: 'Sync Debug & Recovery',
+                    description: 'Open sync diagnostics and recovery tools for your Google Drive data.',
+                    onClick: handleSyncDebug,
+                    isVisible: isLoggedIn,
+                    content: (
+                        <>
+                            <MdBugReport size="14" style={{ marginRight: '8px' }} />
+                            Sync Debug & Recovery
+                        </>
+                    ),
+                },
+            ],
+        },
+    ];
+
+    const visibleItemsForSection = (section) => section.items.filter((item) => item.isVisible !== false);
+    const activeSection = settingsSections.find((section) => section.key === activeCategory) || settingsSections[0];
+    const ActiveSectionIcon = activeSection.icon;
+
+    const renderPopupItem = (item) => {
+        if (item.type === 'button') {
+            return (
+                <button key={item.key} className="menu-button" onClick={item.onClick}>
+                    {item.content}
+                </button>
+            );
+        }
+
+        return (
+            <div key={item.key} className="setting-item">
+                <Switch {...item.switchProps} />
+            </div>
+        );
+    };
+
+    const renderFullPageItem = (item) => {
+        if (item.type === 'button') {
+            return (
+                <div key={item.key} className="fp-settings-item-card fp-settings-item-card-action">
+                    <div className="fp-settings-item-copy">
+                        <h4>{item.title}</h4>
+                        <p>{item.description}</p>
+                    </div>
+                    <button className="menu-button fp-settings-menu-button" onClick={item.onClick}>
+                        {item.content}
+                    </button>
+                </div>
+            );
+        }
+
+        return (
+            <div key={item.key} className="fp-settings-item-card">
+                <div className="fp-settings-item-copy">
+                    <h4>{item.title}</h4>
+                    <p>{item.description}</p>
+                </div>
+                <div className="fp-settings-item-control">
+                    <Switch {...item.switchProps} animateOnUserToggleOnly={true} />
+                </div>
+            </div>
+        );
     };
 
     return (
         <>
             <div className="settings-wrapper">
                 <div className="settings-button" onClick={toggleDrawer}>
-                    <RiSettings5Fill 
-                        color={isDrawerOpen ? 'var(--primary-color)' : 'var(--text-color)'} 
-                        size="24" 
+                    <RiSettings5Fill
+                        color={isDrawerOpen ? 'var(--primary-color)' : 'var(--text-color)'}
+                        size="28"
                     />
                 </div>
             </div>
 
-            {ReactDOM.createPortal(
-                <div className={`custom-drawer-overlay ${isDrawerOpen ? 'open' : ''}`} onClick={() => setIsDrawerOpen(false)}>
-                    <div className={`custom-drawer ${isDrawerOpen ? 'open' : ''}`} onClick={(e) => e.stopPropagation()}>
+            {!isFullPageVariant && ReactDOM.createPortal(
+                <div className={`custom-drawer-overlay ${isDrawerOpen ? 'open' : ''}`} onClick={closeMenu}>
+                    <div className={`custom-drawer ${isDrawerOpen ? 'open' : ''}`} onClick={(event) => event.stopPropagation()}>
                         <div className="settings-drawer-content">
-                            {/* Header */}
                             <div className="settings-header">
                                 <h2><RiSettings5Fill /> Settings</h2>
-                                <button className="close-button" onClick={() => setIsDrawerOpen(false)}>
+                                <button className="close-button" onClick={closeMenu}>
                                     <MdClose size="20" />
                                 </button>
                             </div>
 
-                            {/* Content */}
                             <div className="settings-content">
-                                {/* General Settings */}
-                                <div className="settings-section">
-                                    <h3 className="settings-collapsible-header" onClick={() => toggleSection('general')}>
-                                        <div className="header-content">
-                                            <RiSettings5Fill /> 
-                                            <span>General Settings</span>
-                                        </div>
-                                        {expandedSections.general ? <MdExpandLess /> : <MdExpandMore />}
-                                    </h3>
-                                    <div className={`collapsible-content ${expandedSections.general ? 'expanded' : 'collapsed'}`}>
-                                        <div className="setting-item">
-                                            <Switch 
-                                                id="darkModeToggle"
-                                                onMouseUp={handleDarkModeToggle}
-                                                data-tooltip-id="main-tooltip"
-                                                data-tooltip-content="Toggle between light and dark theme"
-                                                textOn={<span><IoMoon size="16" style={{ marginRight: '8px' }} />Dark Mode: <strong>On</strong></span>}
-                                                textOff={<span><IoSunny size="16" style={{ marginRight: '8px' }} />Dark Mode: <strong>Off</strong></span>}
-                                            />
-                                        </div>
-                                        <div className="setting-item">
-                                            <Switch 
-                                                id="chkShowBadge"
-                                                onMouseUp={handleShowBadge}
-                                                data-tooltip-id="main-tooltip"
-                                                data-tooltip-content="Show the total number of tabs across all collections on the extension icon"
-                                                textOn={<span>Tab counter badge <strong>Enabled</strong></span>}
-                                                textOff={<span>Tab counter badge <strong>Disabled</strong></span>}
-                                            />
-                                        </div>
-                                        <div className="setting-item">
-                                            <Switch
-                                                id="chkPerformanceMode"
-                                                onMouseUp={handlePerformanceMode}
-                                                data-tooltip-id="main-tooltip" 
-                                                data-tooltip-content="Reduces visual effects and animations to lower CPU usage and improve battery life"
-                                                textOn={<span>⚡ Performance Mode: <strong>Enabled</strong></span>}
-                                                textOff={<span>✨ Performance Mode: <strong>Disabled</strong></span>}
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
+                                {settingsSections.map((section) => {
+                                    const SectionIcon = section.icon;
+                                    const visibleItems = visibleItemsForSection(section);
 
-                                {/* When adding a collection */}
-                                <div className="settings-section">
-                                    <h3 className="settings-collapsible-header" onClick={() => toggleSection('adding')}>
-                                        <div className="header-content">
-                                            <RiFolderAddFill /> 
-                                            <span>When adding a collection</span>
+                                    return (
+                                        <div key={section.key} className="settings-section">
+                                            <h3 className="settings-collapsible-header" onClick={() => toggleSection(section.key)}>
+                                                <div className="header-content">
+                                                    <SectionIcon />
+                                                    <span>{section.title}</span>
+                                                </div>
+                                                {expandedSections[section.key] ? <MdExpandLess /> : <MdExpandMore />}
+                                            </h3>
+                                            <div className={`collapsible-content ${expandedSections[section.key] ? 'expanded' : 'collapsed'}`}>
+                                                {visibleItems.map(renderPopupItem)}
+                                            </div>
                                         </div>
-                                        {expandedSections.adding ? <MdExpandLess /> : <MdExpandMore />}
-                                    </h3>
-                                    <div className={`collapsible-content ${expandedSections.adding ? 'expanded' : 'collapsed'}`}>
-                                        <div className="setting-item">
-                                            <Switch 
-                                                id="chkIgnorePinned"
-                                                data-tooltip-id="main-tooltip"
-                                                data-tooltip-content="Choose whether pinned tabs should be saved when creating a new collection"
-                                                textOn={<span><strong>Do not include</strong> pinned tabs</span>}
-                                                textOff={<span><strong>Include</strong> pinned tabs</span>}
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* When opening collections */}
-                                <div className="settings-section">
-                                    <h3 className="settings-collapsible-header" onClick={() => toggleSection('opening')}>
-                                        <div className="header-content">
-                                            <ImNewTab /> 
-                                            <span>When opening collections</span>
-                                        </div>
-                                        {expandedSections.opening ? <MdExpandLess /> : <MdExpandMore />}
-                                    </h3>
-                                    <div className={`collapsible-content ${expandedSections.opening ? 'expanded' : 'collapsed'}`}>
-                                        <div className="setting-item">
-                                            <Switch 
-                                                id="chkIgnoreDuplicates"
-                                                data-tooltip-id="main-tooltip"
-                                                data-tooltip-content="Skip opening tabs that are already open in the current window"
-                                                textOn={<span>If a tab already exists, <strong>do not open it</strong></span>}
-                                                textOff={<span>If a tab already exists, <strong>open it anyway</strong></span>}
-                                            />
-                                        </div>
-                                        <div className="setting-item">
-                                            <Switch 
-                                                id="chkEnableTabDiscard"
-                                                data-tooltip-id="main-tooltip"
-                                                data-tooltip-content={"Smart tab loading delays non-essential tabs to improve performance.\nAutomatically avoids deferring media, auth, development, and collaboration sites.\nTabs load instantly when you switch to them."}
-                                                textOn={<span>Smart tab loading: <strong>Enabled</strong></span>}
-                                                textOff={<span>Smart tab loading: <strong>Disabled</strong></span>}
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* When editing collections */}
-                                <div className="settings-section">
-                                    <h3 className="settings-collapsible-header" onClick={() => toggleSection('editing')}>
-                                        <div className="header-content">
-                                            <RiEdit2Line /> 
-                                            <span>When editing collections</span>
-                                        </div>
-                                        {expandedSections.editing ? <MdExpandLess /> : <MdExpandMore />}
-                                    </h3>
-                                    <div className={`collapsible-content ${expandedSections.editing ? 'expanded' : 'collapsed'}`}>
-                                        <div className="setting-item">
-                                            <Switch 
-                                                id="chkColEditIgnoreDuplicateTabs"
-                                                data-tooltip-id="main-tooltip"
-                                                data-tooltip-content={"A tab is considered 'duplicate'\nif it has the exact same URL as another tab"}
-                                                textOn={<span>If a tab exists in the collection, <strong>do not add it</strong></span>}
-                                                textOff={<span>If a tab exists in the collection, <strong>add it anyway</strong></span>}
-                                            />
-                                        </div>
-                                        <div className="setting-item">
-                                            <Switch 
-                                                id="chkColEditIgnoreDuplicateGroups"
-                                                data-tooltip-id="main-tooltip"
-                                                data-tooltip-content={"A group is considered 'duplicate'\nif it has the exact same name and color as another group"}
-                                                textOn={<span>If a group already exists, <strong>append tabs to it</strong></span>}
-                                                textOff={<span>If a group already exists, <strong>add as a new group</strong></span>}
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Auto update collections */}
-                                <div className="settings-section">
-                                    <h3 className="settings-collapsible-header" onClick={() => toggleSection('autoUpdate')}>
-                                        <div className="header-content">
-                                            <MdOutlineSyncAlt /> 
-                                            <span>Auto update collections</span>
-                                        </div>
-                                        {expandedSections.autoUpdate ? <MdExpandLess /> : <MdExpandMore />}
-                                    </h3>
-                                    <div className={`collapsible-content ${expandedSections.autoUpdate ? 'expanded' : 'collapsed'}`}>
-                                        <div className="setting-item">
-                                            <Switch 
-                                                id="chkEnableAutoUpdate"
-                                                onMouseUp={handleAutoUpdate}
-                                                data-tooltip-id="main-tooltip"
-                                                data-tooltip-content={"When opening a collection, track changes\nto the window and update the collection in the background."}
-                                                textOn={<span>Auto updating collections: <strong>Enabled</strong></span>}
-                                                textOff={<span>Auto updating collections: <strong>Disabled</strong></span>}
-                                            />
-                                        </div>
-                                        <div className="setting-item">
-                                            <Switch 
-                                                id="chkAutoUpdateOnNewCollection"
-                                                disabled={!autoUpdateEnabled}
-                                                data-tooltip-id="main-tooltip"
-                                                data-tooltip-content={"When adding a new collection, start auto updating\nit with changes in the current window."}
-                                                textOn={<span>Auto update new collections: <strong>Enabled</strong></span>}
-                                                textOff={<span>Auto update new collections: <strong>Disabled</strong></span>}
-                                            />
-                                        </div>
-                                        <div className="setting-item">
-                                            <Switch 
-                                                id="chkManualUpdateLinkCollection"
-                                                disabled={!autoUpdateEnabled}
-                                                data-tooltip-id="main-tooltip"
-                                                data-tooltip-content={"When clicking the 'Update' button, this will link\nthe collection to the window, making it 'active'."}
-                                                textOn={<span>Click on &#39;Update&#39; sets active: <strong>Enabled</strong></span>}
-                                                textOff={<span>Click on &#39;Update&#39; sets active: <strong>Disabled</strong></span>}
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Backup & Restore */}
-                                <div className="settings-section">
-                                    <h3 className="settings-collapsible-header" onClick={() => toggleSection('backup')}>
-                                        <div className="header-content">
-                                            <MdSettingsBackupRestore /> 
-                                            <span>Backup & Restore</span>
-                                        </div>
-                                        {expandedSections.backup ? <MdExpandLess /> : <MdExpandMore />}
-                                    </h3>
-                                    <div className={`collapsible-content ${expandedSections.backup ? 'expanded' : 'collapsed'}`}>
-                                        <button className="menu-button" onClick={handleExport}>
-                                            Export all collections & folders
-                                        </button>
-                                        {isLoggedIn && (
-                                            <button className="menu-button" onClick={handleSyncDebug}>
-                                                <MdBugReport size="14" style={{ marginRight: '8px' }} />
-                                                Sync Debug & Recovery
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>
-                </div>, document.body)}
+                </div>,
+                document.body,
+            )}
+
+            {isFullPageVariant && (
+                <Modal
+                    isOpen={isDrawerOpen}
+                    onRequestClose={closeMenu}
+                    contentLabel="Settings"
+                    className="fp-settings-modal"
+                    overlayClassName="fp-settings-modal-overlay"
+                    ariaHideApp={false}
+                    shouldCloseOnOverlayClick={true}
+                    shouldCloseOnEsc={true}
+                >
+                    <div className="fp-settings-modal-shell">
+                        <aside className="fp-settings-sidebar" aria-label="Settings categories">
+                            <div className="fp-settings-sidebar-header">
+                                <h2><RiSettings5Fill /> Settings</h2>
+                                <p>Customize how Tabox saves, opens, and restores your collections.</p>
+                            </div>
+
+                            <nav className="fp-settings-sidebar-nav">
+                                {settingsSections.map((section) => {
+                                    const SectionIcon = section.icon;
+                                    const isActive = section.key === activeSection.key;
+
+                                    return (
+                                        <button
+                                            key={section.key}
+                                            type="button"
+                                            className={`fp-settings-sidebar-item ${isActive ? 'active' : ''}`}
+                                            onClick={() => setActiveCategory(section.key)}
+                                        >
+                                            <SectionIcon className="fp-settings-sidebar-item-icon" />
+                                            <span>{section.title}</span>
+                                        </button>
+                                    );
+                                })}
+                            </nav>
+                        </aside>
+
+                        <div className="fp-settings-main">
+                            <div className="fp-settings-main-header">
+                                <div className="fp-settings-main-heading">
+                                    <h3><ActiveSectionIcon /> {activeSection.title}</h3>
+                                    <p>Review and update the settings in this category without changing their current behavior.</p>
+                                </div>
+
+                                <button className="close-button" onClick={closeMenu}>
+                                    <MdClose size="20" />
+                                </button>
+                            </div>
+
+                            <div className="fp-settings-main-content">
+                                {visibleItemsForSection(activeSection).map(renderFullPageItem)}
+                            </div>
+                        </div>
+                    </div>
+                </Modal>
+            )}
 
             <Modal
                 isOpen={isSyncDebugModalOpen}
@@ -413,8 +593,8 @@ export default function SettingsMenu(props) {
                 overlayClassName="modal-overlay"
                 ariaHideApp={false}
             >
-                <Suspense fallback={<div style={{padding: '20px', textAlign: 'center'}}>Loading...</div>}>
-                    <SyncDebugModal 
+                <Suspense fallback={<div style={{ padding: '20px', textAlign: 'center' }}>Loading...</div>}>
+                    <SyncDebugModal
                         isOpen={isSyncDebugModalOpen}
                         onClose={closeSyncDebugModal}
                         applyDataFromServer={props.applyDataFromServer}
@@ -424,5 +604,5 @@ export default function SettingsMenu(props) {
                 </Suspense>
             </Modal>
         </>
-    )
+    );
 }

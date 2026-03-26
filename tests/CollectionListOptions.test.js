@@ -1,5 +1,7 @@
+/* global browser */
 import React from 'react';
-import { render, act } from '@testing-library/react';
+import { render, act, waitFor } from '@testing-library/react';
+import '@testing-library/jest-dom';
 import { CollectionListOptions } from '../app/CollectionListOptions';
 import { Provider } from 'jotai';
 
@@ -20,5 +22,39 @@ describe('Collection List Options tests', () => {
     });
     
     expect(container).toMatchSnapshot();
+  });
+
+  test('loads recently closed items through browser.sessions for the restore toolbar button', async () => {
+    browser.sessions.getRecentlyClosed.mockResolvedValue([
+      {
+        lastModified: 1710000000,
+        tab: {
+          sessionId: 'tab-session-1',
+          title: 'Closed Tab',
+          url: 'https://example.com',
+        },
+      },
+    ]);
+
+    const { container } = render(
+      <Provider>
+        <CollectionListOptions addCollection={jest.fn()} />
+      </Provider>,
+    );
+
+    await waitFor(() => {
+      expect(browser.sessions.getRecentlyClosed).toHaveBeenCalled();
+      expect(container.querySelector('#toolbar-restore-session button')).not.toBeDisabled();
+    });
+  });
+
+  test('keeps popup import limited to legacy txt files', async () => {
+    const { container } = render(
+      <Provider>
+        <CollectionListOptions addCollection={jest.fn()} />
+      </Provider>,
+    );
+
+    expect(container.querySelector('input[type="file"]')).toHaveAttribute('accept', '.txt');
   });
 });

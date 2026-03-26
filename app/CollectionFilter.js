@@ -100,7 +100,7 @@ export function CollectionFilter({ onFiltersChange }) {
         if (isMountedRef.current && onFiltersChange) {
             onFiltersChange({
                 recentlyOpenedActual: recentlyOpenedActive,
-                color: selectedColor
+                color: selectedColor,
             });
         }
     }, [recentlyOpenedActive, selectedColor]);

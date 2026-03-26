@@ -1,27 +1,6 @@
 import React from 'react';
-import { useDroppable } from '@dnd-kit/core';
-import { useAtomValue } from 'jotai';
-import { draggingGroupState } from './atoms/animationsState';
-
-function DroppableGroupHeader({ group, children }) {
-    const draggingGroup = useAtomValue(draggingGroupState);
-    const isDraggingGroup = !!draggingGroup;
-    
-    const {
-        isOver,
-        setNodeRef,
-    } = useDroppable({
-        id: `group-${group.uid}`,
-        data: {
-            type: 'group',
-            group: group
-        },
-        disabled: isDraggingGroup, // Disable drop zone when dragging a group
-    });
-
-    // Only show drop zone if not dragging a group (groups cannot be nested)
-    const showDropZone = isOver && !isDraggingGroup;
-    
+ 
+function DroppableGroupHeader({ group, children, dropProps = null, showDropZone = false }) {
     const style = {
         backgroundColor: showDropZone ? 'rgba(var(--primary-color-rgb, 52, 152, 219), 0.15)' : 'transparent',
         border: showDropZone ? '2px dashed var(--primary-color)' : '2px dashed transparent',
@@ -34,7 +13,7 @@ function DroppableGroupHeader({ group, children }) {
 
     const labelStyle = {
         position: 'absolute',
-        top: isOver ? '8px' : '-20px',
+        top: showDropZone ? '8px' : '-20px',
         right: '8px',
         background: 'var(--primary-color)',
         color: 'white',
@@ -42,7 +21,7 @@ function DroppableGroupHeader({ group, children }) {
         borderRadius: '4px',
         fontSize: '11px',
         fontWeight: 'bold',
-        opacity: isOver ? 1 : 0,
+        opacity: showDropZone ? 1 : 0,
         transition: 'all 0.2s ease',
         zIndex: 1000,
         pointerEvents: 'none',
@@ -50,10 +29,10 @@ function DroppableGroupHeader({ group, children }) {
     };
 
     return (
-        <div ref={setNodeRef} style={style}>
+        <div ref={dropProps?.setNodeRef || null} style={style}>
             {showDropZone && (
                 <div style={labelStyle}>
-                    📁 Add to {group.title}
+                    Add to {group.title}
                 </div>
             )}
             {children}

@@ -38,3 +38,15 @@ p {
 	pointer-events: none;
 	z-index: 1000;
 }
+
+/* ========================================
+   FULL PAGE MODE - Layout overrides
+   ======================================== */
+.App.fullpage {
+	height: 100vh;
+	max-height: 100vh;
+}
+
+.App.fullpage .main-content-wrapper {
+	position: relative;
+}

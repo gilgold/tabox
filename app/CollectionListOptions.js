@@ -4,7 +4,6 @@ import { settingsDataState } from './atoms/globalAppSettingsState';
 import { highlightedCollectionUidState } from './atoms/animationsState';
 import './CollectionListOptions.css';
 import { PiGridNineFill } from "react-icons/pi";
-import { SortType } from './model/SortOptions';
 import { browser } from '../static/globals';
 import Select from 'react-select';
 import { 
@@ -24,6 +23,7 @@ import Modal from 'react-modal';
 import { CollectionFilter } from './CollectionFilter';
 import { showSuccessToast, showErrorToast } from './toastHelpers';
 import { Tooltip } from 'react-tooltip';
+import { loadBrowserSessions, subscribeToBrowserSessions } from './utils/browserSessions';
 
 
 // Lazy load rarely-used modals for better performance
@@ -141,9 +141,7 @@ export function CollectionListOptions(props) {
                     }
                 }
 
-                // Load sessions for restore functionality
-                let { sessions } = await browser.storage.local.get('sessions');
-                sessions = sessions || [];
+                const sessions = await loadBrowserSessions();
                 
                 // Only update state if component is still mounted
                 if (isMountedRef.current) {
@@ -156,9 +154,16 @@ export function CollectionListOptions(props) {
 
         loadData();
 
-        // Cleanup function
+        const unsubscribe = subscribeToBrowserSessions(async () => {
+            const sessions = await loadBrowserSessions();
+            if (isMountedRef.current) {
+                setSessionList(sessions);
+            }
+        });
+
         return () => {
             isMountedRef.current = false;
+            unsubscribe();
         };
     }, []);
 
@@ -261,6 +266,20 @@ export function CollectionListOptions(props) {
             props.onFiltersChange(filters);
         }
     };
+
+    useEffect(() => {
+        const openFolder = () => setIsFolderModalOpen(true);
+        const openImport = () => fileInputRef.current?.click();
+        const openSession = () => { if (sessionList.length > 0) setIsSessionModalOpen(true); };
+        window.addEventListener('tabox:open-create-folder', openFolder);
+        window.addEventListener('tabox:open-import', openImport);
+        window.addEventListener('tabox:open-restore-session', openSession);
+        return () => {
+            window.removeEventListener('tabox:open-create-folder', openFolder);
+            window.removeEventListener('tabox:open-import', openImport);
+            window.removeEventListener('tabox:open-restore-session', openSession);
+        };
+    }, [sessionList]);
 
     const handleCreateFolder = () => {
         setIsFolderModalOpen(true);
@@ -502,7 +521,7 @@ export function CollectionListOptions(props) {
             />
             <Tooltip
                 anchorSelect="#toolbar-restore-session, #toolbar-restore-session button"
-                content={sessionList.length === 0 ? "No previous sessions available" : "Restore previous session"}
+                content={sessionList.length === 0 ? "No recently closed items available" : "Restore recently closed item"}
                 className="small-tooltip"
                 place="bottom"
             />

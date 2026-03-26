@@ -7,7 +7,7 @@ import ContextMenu from './ContextMenu';
 import { createCollectionMenuItems } from './utils/contextMenuItems';
 import TimeAgo from 'javascript-time-ago';
 import { useSetAtom, useAtomValue } from 'jotai';
-import { highlightedCollectionUidState, deletingCollectionUidsState, draggingTabState } from './atoms/animationsState';
+import { highlightedCollectionUidState, deletingCollectionUidsState } from './atoms/animationsState';
 import { trackingStateVersion } from './atoms/globalAppSettingsState';
 
 import { getColorValue } from './utils/colorMigration';
@@ -128,7 +128,6 @@ function CollectionTile(props) {
         const tabs = props.collection.tabs || [];
         return tabs.slice(0, 10).map(tab => tab.favIconUrl).filter(Boolean);
     }, [props.collection.tabs]);
-
     const formatTimeAgo = (timestamp) => {
         try {
             return timeAgo.format(new Date(timestamp));
@@ -226,6 +225,11 @@ function CollectionTile(props) {
                     <div className="no-favicons">No tabs</div>
                 )}
             </div>
+
+            {/* Folder label (fullpage only) */}
+            {props.folderName && (
+                <div className="tile-folder-label">{props.folderName}</div>
+            )}
 
             {/* Footer */}
             <div className="tile-footer">

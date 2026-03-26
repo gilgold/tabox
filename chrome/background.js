@@ -1,11 +1,23 @@
 /* eslint-disable no-undef */
 try {
   importScripts('browser-polyfill.min.js');
+  importScripts('sync-session-state.js');
+  importScripts('sync-transport.js');
+  importScripts('sync-merge.js');
+  importScripts('sync-apply.js');
   importScripts('background-utils.js');
 }
 catch (e) {
   console.error(e);
 }
+  const syncSessionStateApi = typeof require === 'function'
+    ? require('./sync-session-state.js')
+    : globalThis.TaboxSyncSessionState;
+  const {
+    SYNC_SESSION_STATE_KEY,
+    SYNC_SESSION_STATUS,
+    writeSyncSessionState
+  } = syncSessionStateApi;
   let updateInProgress = false;
   
   // Sync throttling to prevent multiple sync operations
@@ -20,72 +32,6 @@ catch (e) {
     }, 2000); // Prevent sync for 2 seconds after last operation
     
     return await operation();
-  };
-
-  // Define handleSaveSession first so it's available for throttleSessionSave
-  const handleSaveSession = async (updateCurrent = false) => {
-    try {
-      const windows = await browser.windows.getAll();
-      let { sessions } = await browser.storage.local.get('sessions');
-      if (sessions === undefined) {
-        sessions = [];
-      }
-      
-      let sessionCollections = [];
-      for (const window of windows) {
-        try {
-          const uid = (crypto && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
-          const collection = await updateCollection({
-            uid: uid,
-            name: `Session, ${new Date().toLocaleString()}`,
-          }, window.id);
-          
-          // Only add collection if updateCollection succeeded
-          if (collection !== null) {
-            sessionCollections.push(collection);
-          }
-        } catch (windowError) {
-          // Continue with other windows
-        }
-      }
-
-    if (updateCurrent && sessions.length > 0) {
-      sessions.shift();
-    }
-
-      const sessionObj = {
-        timestamp: Date.now(),
-        collections: sessionCollections
-      }
-      
-      sessions.unshift(sessionObj);
-      if (sessions.length > 5) {
-        sessions.pop();
-      }
-      await browser.storage.local.set({ sessions });
-      
-    } catch (error) {
-      console.error('Error in handleSaveSession:', error);
-    }
-  };
-
-  // Session save throttling - save at most once every 30 seconds
-  let sessionSaveTimeout = null;
-  let pendingSessionSave = false;
-  const throttleSessionSave = (updateCurrent = false) => {
-    pendingSessionSave = true;
-    
-    if (sessionSaveTimeout) {
-      return; // Already scheduled
-    }
-    
-    sessionSaveTimeout = setTimeout(async () => {
-      if (pendingSessionSave) {
-        await handleSaveSession(updateCurrent);
-        pendingSessionSave = false;
-      }
-      sessionSaveTimeout = null;
-    }, 30000); // 30 seconds
   };
 
   // Auto-update debouncing - wait 2 seconds after last event
@@ -106,11 +52,127 @@ catch (e) {
   };
 
 const AUTO_BACKUP_ALARM = 'auto-backup-alarm';
+const BACKGROUND_SYNC_ALARM = 'background-sync-alarm';
+const BACKGROUND_SYNC_PERIOD_MINUTES = 6 * 60;
+const TOOLBAR_FULLPAGE_SETTING_KEY = 'chkToolbarIconOpensFullPage';
+
+async function updateSharedSyncSessionState(overrides = {}) {
+  const { googleUser, googleRefreshToken } = await browser.storage.local.get(['googleUser', 'googleRefreshToken']);
+
+  return writeSyncSessionState(browser.storage.local, {
+    user: overrides.user !== undefined ? overrides.user : (googleUser || null),
+    hasRefreshToken: overrides.hasRefreshToken !== undefined ? overrides.hasRefreshToken : Boolean(googleRefreshToken),
+    ...overrides
+  });
+}
+
+async function openExtensionFullPage() {
+  const fullPageUrl = browser.runtime.getURL('fullpage.html');
+  const existingTabs = await browser.tabs.query({
+    currentWindow: true,
+    url: fullPageUrl
+  });
+  const existingTab = existingTabs[0];
+
+  if (existingTab && existingTab.id != null) {
+    await browser.tabs.update(existingTab.id, { active: true });
+    return existingTab;
+  }
+
+  return browser.tabs.create({ url: fullPageUrl });
+}
+
+async function applyToolbarLaunchBehavior() {
+  const { [TOOLBAR_FULLPAGE_SETTING_KEY]: openInFullPage } = await browser.storage.local.get(TOOLBAR_FULLPAGE_SETTING_KEY);
+  const popup = openInFullPage ? '' : 'index.html';
+  await browser.action.setPopup({ popup });
+}
+
+async function shouldRunBackgroundSync() {
+  const {
+    googleRefreshToken,
+    [SYNC_SESSION_STATE_KEY]: syncSessionState
+  } = await browser.storage.local.get(['googleRefreshToken', SYNC_SESSION_STATE_KEY]);
+  return Boolean(googleRefreshToken || syncSessionState?.hasRefreshToken);
+}
+
+async function ensureBackgroundSyncAlarm() {
+  const syncEnabled = await shouldRunBackgroundSync();
+
+  if (!syncEnabled) {
+    await browser.alarms.clear(BACKGROUND_SYNC_ALARM);
+    return false;
+  }
+
+  const alarms = await browser.alarms.getAll();
+  const existingAlarm = alarms.find(alarm => alarm.name === BACKGROUND_SYNC_ALARM);
+  const hasExpectedPeriod = existingAlarm?.periodInMinutes === BACKGROUND_SYNC_PERIOD_MINUTES;
+
+  if (!hasExpectedPeriod) {
+    if (existingAlarm) {
+      await browser.alarms.clear(BACKGROUND_SYNC_ALARM);
+    }
+
+    browser.alarms.create(BACKGROUND_SYNC_ALARM, {
+      delayInMinutes: BACKGROUND_SYNC_PERIOD_MINUTES,
+      periodInMinutes: BACKGROUND_SYNC_PERIOD_MINUTES
+    });
+  }
+
+  return true;
+}
+
+async function runBackgroundSync() {
+  if (!await shouldRunBackgroundSync()) {
+    await updateSharedSyncSessionState({
+      status: SYNC_SESSION_STATUS.DISABLED,
+      isEnabled: false,
+      hasRefreshToken: false,
+      user: null,
+      error: null
+    });
+    await browser.alarms.clear(BACKGROUND_SYNC_ALARM);
+    return false;
+  }
+
+  await updateSharedSyncSessionState({
+    status: SYNC_SESSION_STATUS.SYNCING,
+    error: null
+  });
+
+  const token = await getAuthToken();
+  if (token === false) {
+    logSyncOperation('error', 'Background sync skipped - failed to get auth token');
+    await updateSharedSyncSessionState({
+      status: SYNC_SESSION_STATUS.AUTH_REFRESHING
+    });
+    return false;
+  }
+
+  const result = await syncData(token);
+  if (result === false) {
+    logSyncOperation('error', 'Background sync failed');
+    await updateSharedSyncSessionState({
+      status: SYNC_SESSION_STATUS.ERROR
+    });
+    return false;
+  }
+
+  logSyncOperation('success', 'Background sync completed', {
+    mode: result === 'already_in_progress' ? 'already_in_progress' : 'sync'
+  });
+  await updateSharedSyncSessionState({
+    status: SYNC_SESSION_STATUS.ACTIVE,
+    error: null
+  });
+  return true;
+}
 
 async function setInitialOptions() {
   const {
     tabsArray,
     chkOpenNewWindow,
+    chkToolbarIconOpensFullPage,
     collectionsToTrack,
     localTimestamp,
     chkEnableTabDiscard,
@@ -119,28 +181,37 @@ async function setInitialOptions() {
   } = await browser.storage.local.get([
     'tabsArray',
     'chkOpenNewWindow',
+    TOOLBAR_FULLPAGE_SETTING_KEY,
     'collectionsToTrack',
     'localTimestamp',
     'chkEnableTabDiscard',
     'currentSortValue',
     'currentSortAscending',
   ]);
-  if (tabsArray === undefined || tabsArray == {}) {
-    await browser.storage.local.set({ tabsArray: [] });
+  if (tabsArray == null) {
+    // Only default tabsArray to empty if indexed storage also has no data,
+    // otherwise the popup migration may read this empty array and skip migration.
+    const index = await loadCollectionsIndexBG();
+    if (Object.keys(index).length === 0) {
+      await browser.storage.local.set({ tabsArray: [] });
+    }
   }
-  if (localTimestamp === undefined || localTimestamp == {}) {
+  if (localTimestamp == null) {
     await browser.storage.local.set({ localTimestamp: 0 });
   }
-  if (collectionsToTrack === undefined || collectionsToTrack == {}) {
+  if (collectionsToTrack == null) {
     await browser.storage.local.set({ collectionsToTrack: [] });
   }
-  if (chkOpenNewWindow === undefined || chkOpenNewWindow == {}) {
+  if (chkOpenNewWindow == null) {
     await browser.storage.local.set({ chkOpenNewWindow: true });
   }
-  if (chkEnableTabDiscard === undefined || chkEnableTabDiscard == {}) {
+  if (chkToolbarIconOpensFullPage == null) {
+    await browser.storage.local.set({ [TOOLBAR_FULLPAGE_SETTING_KEY]: false });
+  }
+  if (chkEnableTabDiscard == null) {
     await browser.storage.local.set({ chkEnableTabDiscard: true });
   }
-  if (currentSortValue === undefined || currentSortValue == {}) {
+  if (currentSortValue == null) {
     await browser.storage.local.set({ currentSortValue: 'DATE' });
   }
   if (currentSortAscending === undefined) {
@@ -270,6 +341,11 @@ async function handleAutoUpdate(windowId, timeDelay = 1, rebuildContextMenus = f
         console.error('Failed to save updated collection using indexed storage');
         return;
       }
+
+      browser.runtime.sendMessage({
+        type: 'collectionAutoUpdated',
+        collection: newCollection
+      }).catch(() => {});
     }
     
     // Note: Legacy storage will be updated during sync operations
@@ -278,7 +354,7 @@ async function handleAutoUpdate(windowId, timeDelay = 1, rebuildContextMenus = f
     if (updateInProgress) { return; }
     updateInProgress = true;
     
-    if (rebuildContextMenus && JSON.stringify(tabsArray[index].chromeGroups) !== JSON.stringify(newCollection.chromeGroups)) {
+    if (rebuildContextMenus && JSON.stringify(existingCollection.chromeGroups || []) !== JSON.stringify(newCollection.chromeGroups || [])) {
       await handleContextMenuCreation();
     }
     
@@ -330,6 +406,9 @@ async function handleRemoteUpdate(retryCount = 0, maxRetries = 2) {
     
     const token = await getAuthToken();
     if (token === false) {
+      await updateSharedSyncSessionState({
+        status: SYNC_SESSION_STATUS.AUTH_REFRESHING
+      });
       if (retryCount < maxRetries) {
         logSyncOperation('info', `Auth token failed, retrying remote update`, { 
           attempt: retryCount + 1, 
@@ -345,13 +424,23 @@ async function handleRemoteUpdate(retryCount = 0, maxRetries = 2) {
       }
     }
     
-    const result = await updateRemote(token);
+    await updateSharedSyncSessionState({
+      status: SYNC_SESSION_STATUS.SYNCING,
+      error: null
+    });
+    const result = await syncData(token);
     if (result === 'already_in_progress') {
       // Operation already in progress, consider it success
       logSyncOperation('info', 'Remote update already in progress');
+      await updateSharedSyncSessionState({
+        status: SYNC_SESSION_STATUS.SYNCING
+      });
       return true;
     }
     if (result === false) {
+      await updateSharedSyncSessionState({
+        status: SYNC_SESSION_STATUS.ERROR
+      });
       if (retryCount < maxRetries) {
         logSyncOperation('info', `Remote update failed, retrying`, { 
           attempt: retryCount + 1, 
@@ -370,8 +459,16 @@ async function handleRemoteUpdate(retryCount = 0, maxRetries = 2) {
     logSyncOperation('success', 'Remote update completed successfully', { 
       attempts: retryCount + 1 
     });
+    await updateSharedSyncSessionState({
+      status: SYNC_SESSION_STATUS.ACTIVE,
+      error: null
+    });
     return true;
   } catch (error) {
+    await updateSharedSyncSessionState({
+      status: SYNC_SESSION_STATUS.ERROR,
+      error: error.message
+    });
     if (retryCount < maxRetries) {
       logSyncOperation('error', `Exception in handleRemoteUpdate, retrying`, { 
         error: error.message, 
@@ -498,7 +595,7 @@ async function isIncognitoEnabled() {
 
 // Optimized openTabs function for better performance with large collections
 // Now with incognito-aware restoration
-async function openTabs(collection, window, newWindow = null) {
+async function openTabs(collection, window, newWindow = null, trackOpenedWindow = true) {
   const startTime = Date.now();
   const totalTabs = collection.tabs.length;
   
@@ -670,13 +767,15 @@ async function openTabs(collection, window, newWindow = null) {
   // Note: Tab groups are not supported in incognito windows
   try {
     if (!isIncognitoWindow) {
-      await Promise.all([
-        applyChromeGroupSettings(window.id, collection),
-        addCollectionToTrack(collection.uid, window.id)
-      ]);
+      const postOpenTasks = [applyChromeGroupSettings(window.id, collection)];
+      if (trackOpenedWindow) {
+        postOpenTasks.push(addCollectionToTrack(collection.uid, window.id));
+      }
+      await Promise.all(postOpenTasks);
     } else {
-      // Only track the collection, skip tab groups in incognito
-      await addCollectionToTrack(collection.uid, window.id);
+      if (trackOpenedWindow) {
+        await addCollectionToTrack(collection.uid, window.id);
+      }
       if (collection.chromeGroups && collection.chromeGroups.length > 0) {
         console.log('Note: Tab groups are not supported in incognito windows - tabs restored ungrouped');
       }
@@ -798,6 +897,15 @@ const handleImportDataBG = async (parsed) => {
     }
 };
 
+const buildImportedCollectionDescriptors = (collections = []) => (
+    collections
+        .filter((collection) => collection?.uid)
+        .map((collection) => ({
+            uid: collection.uid,
+            parentId: collection.parentId || null,
+        }))
+);
+
 const handleFullExportImportBG = async (exportData) => {
     try {
         let importedCollections = [];
@@ -875,6 +983,7 @@ const handleFullExportImportBG = async (exportData) => {
             success: true,
             foldersImported: importedFolders.length,
             collectionsImported: importedCollections.length,
+            importedCollections: buildImportedCollectionDescriptors(importedCollections),
             firstCollectionUid: importedCollections.length > 0 ? importedCollections[0].uid : null,
             message: `Successfully imported ${importedFolders.length} folders and ${importedCollections.length} collections`
         };
@@ -942,6 +1051,7 @@ const handleFolderImportBG = async (folderData) => {
             success: true,
             foldersImported: 1,
             collectionsImported: importedCollections.length,
+            importedCollections: buildImportedCollectionDescriptors(importedCollections),
             firstCollectionUid: importedCollections.length > 0 ? importedCollections[0].uid : null,
             message: `Successfully imported folder "${importedFolder.name}" with ${importedCollections.length} collections`
         };
@@ -995,6 +1105,7 @@ const handleLegacyCollectionsImportBG = async (collections) => {
             success: true,
             foldersImported: 0,
             collectionsImported: importedCollections.length,
+            importedCollections: buildImportedCollectionDescriptors(importedCollections),
             firstCollectionUid: importedCollections.length > 0 ? importedCollections[0].uid : null,
             message: `Successfully imported ${importedCollections.length} collections`
         };
@@ -1080,6 +1191,7 @@ const handleSingleCollectionImportBG = async (collection) => {
             success: true,
             foldersImported: 0,
             collectionsImported: 1,
+            importedCollections: buildImportedCollectionDescriptors([importedCollection]),
             firstCollectionUid: importedCollection.uid,
             message: `Successfully imported collection "${importedCollection.name}"`
         };
@@ -1093,10 +1205,36 @@ try {
   browser.runtime.onMessage.addListener(async (request) => {
     if (request.type === 'checkSyncStatus') {
       try {
-        const { googleUser, syncAuthError } = await browser.storage.local.get(['googleUser', 'syncAuthError']);
-        if (!googleUser) {
-          logSyncOperation('info', 'No Google user found for sync status check');
+        const {
+          googleUser,
+          googleRefreshToken,
+          syncAuthError
+        } = await browser.storage.local.get(['googleUser', 'googleRefreshToken', 'syncAuthError']);
+
+        if (!googleRefreshToken && !googleUser) {
+          logSyncOperation('info', 'No Google credentials found for sync status check');
+          await updateSharedSyncSessionState({
+            status: SYNC_SESSION_STATUS.DISABLED,
+            isEnabled: false,
+            hasRefreshToken: false,
+            user: null,
+            error: null
+          });
           return Promise.resolve(false);
+        }
+
+        if (!googleUser && googleRefreshToken) {
+          logSyncOperation('info', 'Refresh token available but profile missing, reporting reconnecting state');
+          await updateSharedSyncSessionState({
+            status: SYNC_SESSION_STATUS.AUTH_REFRESHING,
+            hasRefreshToken: true,
+            user: null,
+            error: null
+          });
+          return Promise.resolve({
+            syncStatus: 'auth_refreshing',
+            hasRefreshToken: true
+          });
         }
         
         // Check if there's a persistent auth error that requires user action
@@ -1104,6 +1242,10 @@ try {
           logSyncOperation('info', 'Auth error detected, user needs to re-authenticate', {
             errorType: syncAuthError.type,
             age: Date.now() - syncAuthError.timestamp
+          });
+          await updateSharedSyncSessionState({
+            status: SYNC_SESSION_STATUS.AUTH_REQUIRED,
+            error: syncAuthError.message || 'Please sign out and sign back in to restore sync.'
           });
           return Promise.resolve({ 
             ...googleUser, 
@@ -1116,13 +1258,23 @@ try {
         const token = await getAuthToken();
         if (token === false) {
           // Check if we have a refresh token - if so, this might be recoverable
-          const { googleRefreshToken } = await browser.storage.local.get('googleRefreshToken');
           if (googleRefreshToken) {
             logSyncOperation('info', 'Auth token failed but refresh token available, sync may recover automatically');
             // Return user info so UI doesn't completely disable sync
+            await updateSharedSyncSessionState({
+              status: SYNC_SESSION_STATUS.AUTH_REFRESHING,
+              hasRefreshToken: true,
+              error: null
+            });
             return Promise.resolve({ ...googleUser, syncStatus: 'auth_refreshing' });
           } else {
             logSyncOperation('error', 'No auth token and no refresh token available - user must re-authenticate');
+            await updateSharedSyncSessionState({
+              status: SYNC_SESSION_STATUS.AUTH_REQUIRED,
+              isEnabled: false,
+              hasRefreshToken: false,
+              error: 'Your sync session has expired. Please sign out and sign back in.'
+            });
             return Promise.resolve({ 
               ...googleUser, 
               syncStatus: 'auth_required',
@@ -1135,12 +1287,19 @@ try {
         if (syncAuthError) {
           await browser.storage.local.remove('syncAuthError');
         }
+        await updateSharedSyncSessionState({
+          status: SYNC_SESSION_STATUS.SYNCING,
+          error: null
+        });
         
         // Try to verify sync file exists/create it
         const syncFileSuccess = await getOrCreateSyncFile(token);
         if (syncFileSuccess === false) {
           logSyncOperation('error', 'Failed to get or create sync file');
           // Don't return false immediately - sync might still work
+          await updateSharedSyncSessionState({
+            status: SYNC_SESSION_STATUS.SYNC_FILE_ERROR
+          });
           return Promise.resolve({ ...googleUser, syncStatus: 'sync_file_error' });
         }
         
@@ -1149,16 +1308,31 @@ try {
         if (!user) {
           logSyncOperation('error', 'Failed to get user info');
           // Return cached user info with error status
+          await updateSharedSyncSessionState({
+            status: SYNC_SESSION_STATUS.USER_INFO_ERROR
+          });
           return Promise.resolve({ ...googleUser, syncStatus: 'user_info_error' });
         }
         
         logSyncOperation('success', 'Sync status check completed successfully');
+        await updateSharedSyncSessionState({
+          status: SYNC_SESSION_STATUS.ACTIVE,
+          user,
+          hasRefreshToken: true,
+          error: null
+        });
+        await ensureBackgroundSyncAlarm();
         return Promise.resolve({ ...user, syncStatus: 'active' });
         
       } catch (error) {
         logSyncOperation('error', 'Exception in checkSyncStatus', { error: error.message });
         // Return cached user info if available
-        const { googleUser } = await browser.storage.local.get('googleUser');
+        const { googleUser, googleRefreshToken } = await browser.storage.local.get(['googleUser', 'googleRefreshToken']);
+        await updateSharedSyncSessionState({
+          status: googleRefreshToken ? SYNC_SESSION_STATUS.ERROR : SYNC_SESSION_STATUS.DISABLED,
+          hasRefreshToken: Boolean(googleRefreshToken),
+          error: error.message || 'Unknown sync error'
+        });
         if (googleUser) {
           return Promise.resolve({ ...googleUser, syncStatus: 'error' });
         }
@@ -1277,8 +1451,19 @@ try {
         const user = await getGoogleUser(token);
         if (!user) {
           console.error('Failed to get user info during login');
+          await updateSharedSyncSessionState({
+            status: SYNC_SESSION_STATUS.USER_INFO_ERROR,
+            hasRefreshToken: true
+          });
           return Promise.resolve(false);
         }
+
+        await updateSharedSyncSessionState({
+          status: SYNC_SESSION_STATUS.SYNCING,
+          user,
+          hasRefreshToken: true,
+          error: null
+        });
         
         // 🛡️ SAFETY: Check local data state before initial sync
         // For new devices (empty local data), we should prioritize downloading from server
@@ -1295,11 +1480,29 @@ try {
           console.error('Initial sync failed during login');
           // Still return user as login was successful, sync can be retried
           logSyncOperation('error', 'Initial sync failed during login - user can retry manually');
+          await updateSharedSyncSessionState({
+            status: SYNC_SESSION_STATUS.ERROR,
+            user,
+            hasRefreshToken: true
+          });
         } else if (syncResult === 'already_in_progress') {
           logSyncOperation('info', 'Sync already in progress during login, will complete separately');
+          await updateSharedSyncSessionState({
+            status: SYNC_SESSION_STATUS.SYNCING,
+            user,
+            hasRefreshToken: true
+          });
         } else {
           logSyncOperation('success', 'Initial sync completed successfully during login');
+          await updateSharedSyncSessionState({
+            status: SYNC_SESSION_STATUS.ACTIVE,
+            user,
+            hasRefreshToken: true,
+            error: null
+          });
         }
+
+        await ensureBackgroundSyncAlarm();
         
         return Promise.resolve(user);
       } catch (error) {
@@ -1308,7 +1511,12 @@ try {
       }
     }
     if (request.type === 'openTabs') {
-      const result = await openTabs(request.collection, request.window, request.newWindow);
+      const result = await openTabs(
+        request.collection,
+        request.window,
+        request.newWindow,
+        request.trackOpenedWindow !== false
+      );
       // Return the detailed result object for UI feedback
       return Promise.resolve(result);
     }
@@ -1369,6 +1577,11 @@ try {
           logSyncOperation('error', 'No refresh token available for loadFromServer');
           return Promise.resolve(false);
         }
+
+        await updateSharedSyncSessionState({
+          status: SYNC_SESSION_STATUS.SYNCING,
+          error: null
+        });
         
         // Try to get auth token with retries
         let token = false;
@@ -1387,55 +1600,76 @@ try {
         
         if (token === false) {
           logSyncOperation('error', 'Failed to get auth token after all retries for loadFromServer');
+          await updateSharedSyncSessionState({
+            status: SYNC_SESSION_STATUS.AUTH_REFRESHING
+          });
           return Promise.resolve(false);
         }
         
         const newData = await updateLocalDataFromServer(token, request.force);
         console.log('🔄 [SYNC] loadFromServer result:', newData === false ? 'FAILED' : (newData === 'no_update_needed' ? 'NO_UPDATE_NEEDED' : `SUCCESS (${newData?.length || 0} collections)`));
         if (newData === false) {
-          // SAFETY FIX: Do NOT push local data as fallback when server load fails
-          // This was causing data loss when new devices pushed empty data to server
-          // Instead, just log the error and return false - user can retry manually
           logSyncOperation('error', 'Server load failed - NOT pushing local data as fallback to prevent data loss');
-          
-          // Only attempt remote update if we have substantial local data (safety check)
-          const localCollections = await loadAllCollectionsBG(true);
-          if (localCollections && localCollections.length > 0) {
-            logSyncOperation('info', 'Local data exists, attempting remote update as fallback', {
-              localCollectionCount: localCollections.length
-            });
-            const updateResult = await handleRemoteUpdate();
-            if (updateResult === false) {
-              logSyncOperation('error', 'Failed to update remote after failed server load');
-            } else {
-              logSyncOperation('success', 'Successfully updated remote after failed server load');
-            }
-          } else {
-            logSyncOperation('info', 'No local data to push - skipping remote update to prevent data loss');
-          }
+          await updateSharedSyncSessionState({
+            status: SYNC_SESSION_STATUS.ERROR
+          });
         } else if (newData === 'no_update_needed') {
           // No update needed - data is already in sync
           logSyncOperation('info', 'Local data is already in sync, no action needed');
+          await updateSharedSyncSessionState({
+            status: SYNC_SESSION_STATUS.ACTIVE,
+            error: null
+          });
         } else if (newData === 'already_in_progress') {
           // Operation already in progress, no need for fallback
           logSyncOperation('info', 'Server load already in progress');
+          await updateSharedSyncSessionState({
+            status: SYNC_SESSION_STATUS.SYNCING
+          });
         } else {
           // Successfully loaded new data from server
           logSyncOperation('success', 'Successfully loaded data from server');
+          await updateSharedSyncSessionState({
+            status: SYNC_SESSION_STATUS.ACTIVE,
+            error: null
+          });
         }
         
         return Promise.resolve(newData);
       } catch (error) {
         logSyncOperation('error', 'Exception in loadFromServer', { error: error.message });
         console.error('Exception in loadFromServer:', error);
+        await updateSharedSyncSessionState({
+          status: SYNC_SESSION_STATUS.ERROR,
+          error: error.message
+        });
         return Promise.resolve(false);
       }
     }
 
     if (request.type === 'logout') {
       const token = await getAuthToken();
-      if (token === false) return Promise.resolve(true);
-      await browser.storage.local.remove('googleUser');
+      await browser.alarms.clear(BACKGROUND_SYNC_ALARM);
+      if (token === false) {
+        await browser.storage.local.remove(['googleUser', 'googleToken', 'googleRefreshToken', 'tokenExpiryTime', 'syncAuthError']);
+        await updateSharedSyncSessionState({
+          status: SYNC_SESSION_STATUS.DISABLED,
+          isEnabled: false,
+          hasRefreshToken: false,
+          user: null,
+          error: null
+        });
+        await browser.storage.sync.remove('syncFileId');
+        return Promise.resolve(true);
+      }
+      await browser.storage.local.remove(['googleUser', 'googleToken', 'googleRefreshToken', 'tokenExpiryTime', 'syncAuthError']);
+      await updateSharedSyncSessionState({
+        status: SYNC_SESSION_STATUS.DISABLED,
+        isEnabled: false,
+        hasRefreshToken: false,
+        user: null,
+        error: null
+      });
       await browser.storage.sync.remove('syncFileId');
       return Promise.resolve(true);
     }
@@ -1489,6 +1723,7 @@ try {
         });
       }
     }
+
   });
   browser.commands.onCommand.addListener(async (command) => {
     try {
@@ -1536,18 +1771,41 @@ try {
     }
   });
 
+  browser.action.onClicked.addListener(async () => {
+    try {
+      const { [TOOLBAR_FULLPAGE_SETTING_KEY]: openInFullPage } = await browser.storage.local.get(TOOLBAR_FULLPAGE_SETTING_KEY);
+      if (openInFullPage) {
+        await openExtensionFullPage();
+      }
+    } catch (error) {
+      console.error('Error handling toolbar action click:', error);
+    }
+  });
+
+  browser.storage.onChanged.addListener(async (changes, areaName) => {
+    if (areaName !== 'local' || !changes[TOOLBAR_FULLPAGE_SETTING_KEY]) {
+      return;
+    }
+
+    try {
+      await applyToolbarLaunchBehavior();
+    } catch (error) {
+      console.error('Error applying toolbar launch behavior:', error);
+    }
+  });
+
   const handleMenuClick = async (info, tab) => {
     if (info.menuItemId === 'tabox-super') return;
-    // 🚀 NEW: Load from indexed storage
     let tabsArray = await loadAllCollectionsBG(true);
     let tabToAdd = { ...tab };
     const isClickOnTabGroup = info?.menuItemId?.includes('-main');
     const collectionUid = isClickOnTabGroup ? info?.parentMenuItemId?.replace('-main', '') : info.menuItemId;
     const collectionIndex = tabsArray.findIndex(c => c.uid === collectionUid);
+    if (collectionIndex === -1) return;
     if (isClickOnTabGroup) {
-      // add to inside a chrome group
       const groupUid = info.menuItemId.split('|')[1];
       const group = tabsArray[collectionIndex].chromeGroups?.find(cg => cg.uid === groupUid);
+      if (!group) return;
       const indexInTabs = tabsArray[collectionIndex].tabs.findIndex(t => t.groupUid === group.uid);
       tabToAdd.groupId = group.id;
       tabToAdd.groupUid = group.uid;
@@ -1556,7 +1814,8 @@ try {
       tabsArray[collectionIndex]?.tabs?.push(tabToAdd);
     }
 
-    await browser.storage.local.set({ tabsArray });
+    await saveSingleCollectionBG(tabsArray[collectionIndex], true);
+    syncLegacyStorageThrottled();
     await handleRemoteUpdate();
   }
 
@@ -1622,9 +1881,11 @@ try {
     }
     
       await setInitialOptions();
+  await applyToolbarLaunchBehavior();
   await handleContextMenuCreation();
   await handleBadge();
   await handleAutoBackupAlarm();
+  await ensureBackgroundSyncAlarm();
   
   // Clean up large backups on startup (after 5 seconds to not block initialization)
   setTimeout(async () => {
@@ -1635,6 +1896,13 @@ try {
     }
   }, 5000);
   })
+
+  browser.runtime.onStartup.addListener(async () => {
+    await setInitialOptions();
+    await applyToolbarLaunchBehavior();
+    await handleAutoBackupAlarm();
+    await ensureBackgroundSyncAlarm();
+  });
 
   const handleAutoBackup = async () => {
     // Early exit: Check if backup is needed before expensive operations
@@ -1680,12 +1948,16 @@ try {
   browser.alarms.onAlarm.addListener(async (alarm) => {
     if (alarm.name === AUTO_BACKUP_ALARM) {
       await handleAutoBackup();
+      return;
+    }
+
+    if (alarm.name === BACKGROUND_SYNC_ALARM) {
+      await runBackgroundSync();
     }
   });
 
   // window events
   browser.windows.onRemoved.addListener(async windowId => {
-    throttleSessionSave(); // Throttled session save
     let { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack');
     if (!collectionsToTrack || collectionsToTrack.length === 0) { return; }
     collectionsToTrack = collectionsToTrack.filter(c => c.windowId !== windowId);
@@ -1694,7 +1966,6 @@ try {
 
   browser.windows.onCreated.addListener(async () => {
     await handleBadge();
-    throttleSessionSave(); // Throttled session save
   });
 
   browser.windows.onFocusChanged.addListener(async () => {
@@ -1709,10 +1980,8 @@ try {
   browser.tabs.onCreated.addListener(async tab => {
     await handleBadge();
     debounceAutoUpdate(tab.windowId, 2000); // Debounced auto-update
-    throttleSessionSave(true); // Throttled session save
   });
   browser.tabs.onUpdated.addListener(async (_tabId, changeInfo, tab) => {
-    throttleSessionSave(true); // Throttled session save
     const allowedChanges = ['mutedInfo', 'pinned', 'groupId'];
     const allowUpdate = Object.keys(changeInfo).some(key => allowedChanges.includes(key));
     if (('status' in changeInfo && changeInfo.status === 'complete') || allowUpdate) {
@@ -1720,21 +1989,17 @@ try {
     }
   });
   browser.tabs.onDetached.addListener(async (_tabId, detachInfo) => {
-    throttleSessionSave(true); // Throttled session save
     debounceAutoUpdate(detachInfo.oldWindowId, 2000); // Debounced auto-update
     await handleBadge();
   });
   browser.tabs.onAttached.addListener(async (_tabId, attachInfo) => {
-    throttleSessionSave(true); // Throttled session save
     debounceAutoUpdate(attachInfo.newWindowId, 2000); // Debounced auto-update
     await handleBadge();
   });
   browser.tabs.onMoved.addListener(async (_tabId, moveInfo) => {
-    throttleSessionSave(true); // Throttled session save
     debounceAutoUpdate(moveInfo.windowId, 2000); // Debounced auto-update
   });
   browser.tabs.onRemoved.addListener(async (_tabId, removeInfo) => {
-    throttleSessionSave(true); // Throttled session save
     if (removeInfo.isWindowClosing) return;
     await handleBadge();
     debounceAutoUpdate(removeInfo.windowId, 2000); // Debounced auto-update
@@ -1742,15 +2007,12 @@ try {
 
   // tabGroup events
   browser.tabGroups.onCreated.addListener(async (tabGroup) => {
-    throttleSessionSave(true); // Throttled session save
     debounceAutoUpdate(tabGroup.windowId, 2000, true); // Debounced auto-update with context menu rebuild
   });
   browser.tabGroups.onRemoved.addListener(async (tabGroup) => {
-    throttleSessionSave(true); // Throttled session save
     debounceAutoUpdate(tabGroup.windowId, 2000, true); // Debounced auto-update with context menu rebuild
   });
   browser.tabGroups.onUpdated.addListener(async (tabGroup) => {
-    throttleSessionSave(true); // Throttled session save
     debounceAutoUpdate(tabGroup.windowId, 2000, true); // Debounced auto-update with context menu rebuild
   });
 

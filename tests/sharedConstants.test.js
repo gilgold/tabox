@@ -5,6 +5,7 @@ describe('STORAGE_KEYS', () => {
         expect(STORAGE_KEYS.COLLECTIONS_INDEX).toBe('collections_index');
         expect(STORAGE_KEYS.FOLDERS_INDEX).toBe('folders_index');
         expect(STORAGE_KEYS.LEGACY_TABS_ARRAY).toBe('tabsArray');
+        expect(STORAGE_KEYS.DELETED_COLLECTION_TOMBSTONES).toBe('deleted_collection_tombstones');
         expect(STORAGE_KEYS.COLLECTION_PREFIX).toBe('collection_');
         expect(STORAGE_KEYS.FOLDER_PREFIX).toBe('folder_');
         expect(STORAGE_KEYS.STORAGE_VERSION).toBe('tabox_storage_version');
@@ -15,6 +16,7 @@ describe('STORAGE_KEYS', () => {
             'COLLECTIONS_INDEX',
             'FOLDERS_INDEX',
             'LEGACY_TABS_ARRAY',
+            'DELETED_COLLECTION_TOMBSTONES',
             'COLLECTION_PREFIX',
             'FOLDER_PREFIX',
             'STORAGE_VERSION'
@@ -64,4 +66,3 @@ describe('generateUid', () => {
         expect(result.length).toBeGreaterThanOrEqual(10);
     });
 });
-

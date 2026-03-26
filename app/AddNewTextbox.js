@@ -5,10 +5,22 @@ import { searchState } from './atoms/globalAppSettingsState';
 import { highlightedCollectionUidState } from './atoms/animationsState';
 import { getCurrentTabsAndGroups, getAllWindowsTabsAndGroups } from './utils';
 import { browser } from '../static/globals';
+import { triggerBackgroundSync } from './utils/sharedSync';
 import { showErrorToast } from './toastHelpers';
 import { IoClose } from 'react-icons/io5';
 import { HiOutlineDesktopComputer, HiCollection } from 'react-icons/hi';
 
+const FOLDER_COLOR_OPTIONS = [
+    { name: 'Blue', value: '#4facfe' },
+    { name: 'Green', value: '#43e97b' },
+    { name: 'Purple', value: '#a855f7' },
+    { name: 'Orange', value: '#fb923c' },
+    { name: 'Red', value: '#ef4444' },
+    { name: 'Yellow', value: '#eab308' },
+    { name: 'Pink', value: '#ec4899' },
+    { name: 'Teal', value: '#14b8a6' },
+    { name: 'Gray', value: '#6b7280' }
+];
 
 function SaveHighlightedOnlyLabel({ saveMode, windowCount }) {
     const [totalHighlighted, setTotalHighlighted] = useState(0);
@@ -65,6 +77,7 @@ function WindowChoiceToggle({ saveMode, setSaveMode, windowCount }) {
                 className={`mode-toggle-btn ${saveMode === 'current' ? 'active' : ''} ${isDisabled ? 'disabled' : ''}`}
                 onClick={handleCurrentClick}
                 disabled={isDisabled}
+                aria-label="Save current window as collection"
                 data-tooltip-id="main-tooltip" data-tooltip-content={isDisabled ? "Only one window open" : "Save current window as collection"}
                 data-tooltip-class-name="small-tooltip"
             >
@@ -75,6 +88,7 @@ function WindowChoiceToggle({ saveMode, setSaveMode, windowCount }) {
                 className={`mode-toggle-btn ${saveMode === 'all' ? 'active' : ''} ${isDisabled ? 'disabled' : ''}`}
                 onClick={handleAllClick}
                 disabled={isDisabled}
+                aria-label="Save all windows as folder"
                 data-tooltip-id="main-tooltip" data-tooltip-content={isDisabled ? "Only one window open" : "Save all windows as folder"}
                 data-tooltip-class-name="small-tooltip"
             >
@@ -101,6 +115,7 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
     const [hideClear, setHideClear] = useState(true);
     const [saveMode, setSaveMode] = useState('current'); // 'current' or 'all'
     const [windowCount, setWindowCount] = useState(1);
+    const [selectedFolderColor, setSelectedFolderColor] = useState('#4facfe');
 
     useEffect(() => {
         setInputFocus();
@@ -204,7 +219,7 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
         try {
             if (saveMode === 'all' && windowCount > 1) {
                 // Save all windows as a folder with collections
-                const { folder, collections } = await getAllWindowsTabsAndGroups(collectionName);
+                const { folder, collections } = await getAllWindowsTabsAndGroups(collectionName, selectedFolderColor);
                 
                 // First create the folder with collapsed state
                 const createdFolder = await addFolder(folder.name, folder.color, folder.collapsed);
@@ -238,8 +253,7 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
                 // Trigger context menu update once after all collections are added
                 await browser.runtime.sendMessage({ type: 'addCollection' });
                 
-                // Trigger cloud sync (fire and forget - don't block UI)
-                browser.runtime.sendMessage({ type: 'updateRemote' }).catch(() => {});
+                await triggerBackgroundSync();
                 
                 // Force refresh data to update UI
                 if (onDataUpdate) {
@@ -253,6 +267,8 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
                     const { showSuccessToast } = await import('./toastHelpers');
                     showSuccessToast(`Folder created with ${addedCollections.length} collection${addedCollections.length > 1 ? 's' : ''}`);
                 }
+
+                setSelectedFolderColor('#4facfe');
                 
             } else {
                 // Save current window as collection (existing behavior)
@@ -338,6 +354,24 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
                     setSaveMode={setSaveMode} 
                     windowCount={windowCount}
                 />
+                {saveMode === 'all' && windowCount > 1 && (
+                    <div className="folder-color-inline-picker" aria-label="Folder color options">
+                        {FOLDER_COLOR_OPTIONS.map((color) => (
+                            <button
+                                key={color.value}
+                                type="button"
+                                className={`folder-color-inline-option ${selectedFolderColor === color.value ? 'selected' : ''}`}
+                                style={{ backgroundColor: color.value }}
+                                onClick={() => setSelectedFolderColor(color.value)}
+                                aria-label={`Choose ${color.name} folder color`}
+                                title={color.name}
+                                disabled={disabled}
+                            >
+                                {selectedFolderColor === color.value ? '✓' : ''}
+                            </button>
+                        ))}
+                    </div>
+                )}
                 <SaveHighlightedOnlyLabel saveMode={saveMode} windowCount={windowCount} />
             </div>
         </div>

@@ -2,7 +2,8 @@ import {
     COLOR_PALETTE, 
     migrateColor, 
     migrateAllCollectionColors, 
-    getColorValue 
+    getColorValue,
+    normalizeColorKey,
 } from '../app/utils/colorMigration';
 
 describe('COLOR_PALETTE', () => {
@@ -215,3 +216,17 @@ describe('getColorValue', () => {
     });
 });
 
+describe('normalizeColorKey', () => {
+    test('normalizes empty and css-variable default values to the default key', () => {
+        expect(normalizeColorKey(null)).toBe('default');
+        expect(normalizeColorKey(undefined)).toBe('default');
+        expect(normalizeColorKey('')).toBe('default');
+        expect(normalizeColorKey('default')).toBe('default');
+        expect(normalizeColorKey('var(--setting-row-border-color)')).toBe('default');
+    });
+
+    test('normalizes legacy and palette colors to comparable keys', () => {
+        expect(normalizeColorKey('#1D76DB')).toBe('blue');
+        expect(normalizeColorKey('blue')).toBe('blue');
+    });
+});

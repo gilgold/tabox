@@ -8,6 +8,10 @@ build
 !.yarn/sdks
 !.yarn/versions
 .pnp.*
+.codex/
+.claude/
+.cursor/
+api-keys.json
 chrome/api-keys.json
 chrome/api-keys.local.json
 .vscode

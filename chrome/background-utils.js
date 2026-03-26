@@ -9,10 +9,38 @@ const STORAGE_KEYS = {
     COLLECTIONS_INDEX: 'collections_index',
     FOLDERS_INDEX: 'folders_index',
     LEGACY_TABS_ARRAY: 'tabsArray',
+    DELETED_COLLECTION_TOMBSTONES: 'deleted_collection_tombstones',
     COLLECTION_PREFIX: 'collection_',
     FOLDER_PREFIX: 'folder_',
     STORAGE_VERSION: 'tabox_storage_version'
 };
+
+const syncTransportApi = typeof require === 'function'
+    ? require('./sync-transport.js')
+    : globalThis.TaboxSyncTransport;
+const syncMergeApi = typeof require === 'function'
+    ? require('./sync-merge.js')
+    : globalThis.TaboxSyncMerge;
+const syncApplyApi = typeof require === 'function'
+    ? require('./sync-apply.js')
+    : globalThis.TaboxSyncApply;
+
+const {
+    SERVER_FILE_TIMESTAMP_STATE,
+    fetchServerFileTimestampState,
+    getServerFileTimestampOrFalse
+} = syncTransportApi;
+const {
+    normalizeSyncSnapshot,
+    mergeSyncSnapshots
+} = syncMergeApi;
+const {
+    applySyncSnapshotAtomically
+} = syncApplyApi;
+
+const normalizeCollectionRecordBG = (collection = {}) => ({
+    ...collection,
+});
 
 /**
  * Background-compatible functions for new indexed storage
@@ -29,6 +57,16 @@ const loadCollectionsIndexBG = async () => {
     }
 };
 
+const loadDeletedCollectionTombstonesBG = async () => {
+    try {
+        const { [STORAGE_KEYS.DELETED_COLLECTION_TOMBSTONES]: tombstones } = await browser.storage.local.get(STORAGE_KEYS.DELETED_COLLECTION_TOMBSTONES);
+        return tombstones || {};
+    } catch (error) {
+        console.error('Background: Failed to load deleted collection tombstones:', error);
+        return {};
+    }
+};
+
 // Load single collection in background script  
 const loadSingleCollectionBG = async (uid) => {
     try {
@@ -40,7 +78,7 @@ const loadSingleCollectionBG = async (uid) => {
             return null;
         }
         
-        return collection;
+        return normalizeCollectionRecordBG(collection);
     } catch (error) {
         console.error(`Background: Failed to load collection ${uid}:`, error);
         return null;
@@ -53,61 +91,78 @@ const saveSingleCollectionBG = async (collection, forceUpdateTimestamp = false) 
         if (!collection.uid) {
             throw new Error('Collection must have a UID');
         }
-        
-        const collectionKey = `${STORAGE_KEYS.COLLECTION_PREFIX}${collection.uid}`;
+
+        const normalizedIncomingCollection = normalizeCollectionRecordBG(collection);
+        const collectionKey = `${STORAGE_KEYS.COLLECTION_PREFIX}${normalizedIncomingCollection.uid}`;
         const now = Date.now();
         
         // Load existing collection to preserve critical local data like parentId
         let existingCollection = null;
         try {
             const { [collectionKey]: existing } = await browser.storage.local.get(collectionKey);
-            existingCollection = existing;
+            existingCollection = normalizeCollectionRecordBG(existing);
         } catch (error) {
             // Collection doesn't exist yet, that's fine
         }
         
         // Only update lastUpdated if explicitly requested or if it's missing
-        const lastUpdated = forceUpdateTimestamp ? now : (collection.lastUpdated !== null && collection.lastUpdated !== undefined ? collection.lastUpdated : now);
+        const lastUpdated = forceUpdateTimestamp
+            ? now
+            : (normalizedIncomingCollection.lastUpdated !== null && normalizedIncomingCollection.lastUpdated !== undefined
+                ? normalizedIncomingCollection.lastUpdated
+                : now);
         
         // Preserve existing parentId if incoming collection doesn't have one (from cloud sync)
-        const preservedParentId = collection.parentId !== undefined ? collection.parentId : 
+        const preservedParentId = normalizedIncomingCollection.parentId !== undefined ? normalizedIncomingCollection.parentId : 
                                   (existingCollection?.parentId !== undefined ? existingCollection.parentId : null);
-        
-        
+        const tabsToSave = normalizedIncomingCollection.tabs !== undefined
+            ? normalizedIncomingCollection.tabs
+            : (existingCollection?.tabs || []);
+        const groupsToSave = normalizedIncomingCollection.chromeGroups !== undefined
+            ? normalizedIncomingCollection.chromeGroups
+            : (existingCollection?.chromeGroups || []);
+
+        const index = await loadCollectionsIndexBG();
+        const existingOrder = index[normalizedIncomingCollection.uid]?.order;
+        const collectionOrder = normalizedIncomingCollection.order !== undefined ? normalizedIncomingCollection.order : existingOrder;
+        const collectionToSave = normalizeCollectionRecordBG({
+            ...(existingCollection || {}),
+            ...normalizedIncomingCollection,
+            tabs: tabsToSave,
+            chromeGroups: groupsToSave,
+            parentId: preservedParentId,
+            order: collectionOrder,
+        });
+
         // Save collection data
         await browser.storage.local.set({
             [collectionKey]: {
-                uid: collection.uid,
-                name: collection.name,
-                tabs: collection.tabs || [],
-                color: collection.color,
-                createdOn: collection.createdOn || now,
+                uid: collectionToSave.uid,
+                name: collectionToSave.name,
+                tabs: collectionToSave.tabs || [],
+                color: collectionToSave.color,
+                createdOn: collectionToSave.createdOn || now,
                 lastUpdated: lastUpdated,
-                lastOpened: collection.lastOpened !== null && collection.lastOpened !== undefined ? collection.lastOpened : null,
-                chromeGroups: collection.chromeGroups || [],
+                lastOpened: collectionToSave.lastOpened !== null && collectionToSave.lastOpened !== undefined ? collectionToSave.lastOpened : null,
+                chromeGroups: collectionToSave.chromeGroups || [],
                 // Preserve parentId from existing collection if incoming doesn't have it
                 parentId: preservedParentId,
                 // Store any other collection properties
-                ...collection
+                ...collectionToSave
             }
         });
         
         // Update index
-        const index = await loadCollectionsIndexBG();
-        const collectionSize = JSON.stringify(collection).length;
+        const collectionSize = JSON.stringify(collectionToSave).length;
         
-        // Preserve existing order if not provided in the collection data
-        const existingOrder = index[collection.uid]?.order;
-        const collectionOrder = collection.order !== undefined ? collection.order : existingOrder;
-        
-        index[collection.uid] = {
-            name: collection.name,
+        index[collectionToSave.uid] = {
+            name: collectionToSave.name,
             type: 'collection',
-            tabCount: collection.tabs ? collection.tabs.length : 0,
+            tabCount: collectionToSave.tabs ? collectionToSave.tabs.length : 0,
             lastUpdated: lastUpdated,
-            lastOpened: collection.lastOpened !== null && collection.lastOpened !== undefined ? collection.lastOpened : null,
-            createdOn: collection.createdOn || now,
-            color: collection.color || 'default',
+            lastOpened: collectionToSave.lastOpened !== null && collectionToSave.lastOpened !== undefined ? collectionToSave.lastOpened : null,
+            createdOn: collectionToSave.createdOn || now,
+            color: collectionToSave.color || 'default',
             size: collectionSize,
             parentId: preservedParentId,
             order: collectionOrder // Include order in index for proper sorting
@@ -144,7 +199,7 @@ const loadAllCollectionsBG = async (useNewStorageFirst = true) => {
                 uids.forEach(uid => {
                     const key = `${STORAGE_KEYS.COLLECTION_PREFIX}${uid}`;
                     if (results[key]) {
-                        const collection = results[key];
+                        const collection = normalizeCollectionRecordBG(results[key]);
                         // Include order from index if not in collection data
                         if (collection.order === undefined && index[uid].order !== undefined) {
                             collection.order = index[uid].order;
@@ -164,7 +219,7 @@ const loadAllCollectionsBG = async (useNewStorageFirst = true) => {
         if (globalThis.DEBUG_STORAGE) {
         }
         const { [STORAGE_KEYS.LEGACY_TABS_ARRAY]: tabsArray } = await browser.storage.local.get(STORAGE_KEYS.LEGACY_TABS_ARRAY);
-        return tabsArray || [];
+        return (tabsArray || []).map((collection) => normalizeCollectionRecordBG(collection));
         
     } catch (error) {
         console.error('Background: Failed to load collections:', error);
@@ -172,12 +227,10 @@ const loadAllCollectionsBG = async (useNewStorageFirst = true) => {
     }
 };
 
-// Throttled legacy storage sync (prevent excessive updates)
-// BACKWARDS COMPATIBILITY: Keep tabsArray updated for v3.6 compatibility
-// v3.6 relies on tabsArray in local storage - if it's missing, it shows 0 collections
-// and can sync empty data to Google Drive, wiping out all data
+// Throttled tabsArray mirror sync (prevent excessive updates)
+// Keep the local tabsArray mirror available for same-version repair and backup/export flows.
 let legacySyncTimeout = null;
-let legacySyncEnabled = true; // MUST be enabled for v3.6 backwards compatibility
+let legacySyncEnabled = true;
 const syncLegacyStorageThrottled = async () => {
     if (!legacySyncEnabled) return; // Skip if lazy sync is disabled
     if (legacySyncTimeout) return; // Already scheduled
@@ -199,17 +252,17 @@ const syncLegacyStorageThrottled = async () => {
     }, 5000); // Sync legacy storage at most once every 5 seconds
 };
 
-// Enable legacy storage sync (for backwards compatibility or backup operations)
+// Enable tabsArray mirror sync (for repair or backup/export operations)
 const enableLegacyStorageSync = () => {
     legacySyncEnabled = true;
 };
 
-// Disable legacy storage sync (default for performance)
+// Disable tabsArray mirror sync when batching larger write operations
 const disableLegacyStorageSync = () => {
     legacySyncEnabled = false;
 };
 
-// Force immediate legacy storage sync (for backup/export operations)
+// Force immediate tabsArray mirror sync (for backup/export operations)
 const forceLegacyStorageSync = async () => {
     try {
         const collections = await loadAllCollectionsBG(true);
@@ -276,7 +329,8 @@ const updateAllCollectionsBG = async (collections) => {
             const newIndex = { ...index };
             
             // Prepare all updates
-            for (const collection of collections) {
+            for (const rawCollection of collections) {
+                const collection = normalizeCollectionRecordBG(rawCollection);
                 if (!collection.uid) {
                     console.error('Collection missing UID, skipping:', collection.name);
                     continue;
@@ -290,18 +344,18 @@ const updateAllCollectionsBG = async (collections) => {
                 const collectionOrder = collection.order !== undefined ? collection.order : existingOrder;
                 
                 // Prepare collection data (include order)
-                updates[collectionKey] = {
-                    uid: collection.uid,
-                    name: collection.name,
-                    tabs: collection.tabs || [],
+                    updates[collectionKey] = {
+                        uid: collection.uid,
+                        name: collection.name,
+                        tabs: collection.tabs || [],
                     color: collection.color,
-                    createdOn: collection.createdOn || now,
-                    lastUpdated: lastUpdated,
-                    lastOpened: collection.lastOpened !== null && collection.lastOpened !== undefined ? collection.lastOpened : null,
-                    chromeGroups: collection.chromeGroups || [],
-                    parentId: collection.parentId !== undefined ? collection.parentId : null,
-                    ...collection,
-                    order: collectionOrder // Ensure order is preserved in collection data
+                        createdOn: collection.createdOn || now,
+                        lastUpdated: lastUpdated,
+                        lastOpened: collection.lastOpened !== null && collection.lastOpened !== undefined ? collection.lastOpened : null,
+                        chromeGroups: collection.chromeGroups || [],
+                        parentId: collection.parentId !== undefined ? collection.parentId : null,
+                        ...collection,
+                        order: collectionOrder // Ensure order is preserved in collection data
                 };
                 
                 // Update index entry
@@ -526,6 +580,32 @@ const updateAllFoldersBG = async (folders) => {
         
     } catch (error) {
         logSyncOperation('error', 'updateAllFoldersBG failed', { error: error.message });
+        return false;
+    }
+};
+
+// Delete a single collection in background script
+const deleteSingleCollectionBG = async (uid) => {
+    try {
+        if (!uid) {
+            console.error('Background: Cannot delete collection - no UID provided');
+            return false;
+        }
+
+        const collectionKey = `${STORAGE_KEYS.COLLECTION_PREFIX}${uid}`;
+        await browser.storage.local.remove(collectionKey);
+
+        const index = await loadCollectionsIndexBG();
+        if (index[uid]) {
+            delete index[uid];
+            await browser.storage.local.set({
+                [STORAGE_KEYS.COLLECTIONS_INDEX]: index
+            });
+        }
+
+        return true;
+    } catch (error) {
+        console.error(`Background: Failed to delete collection ${uid}:`, error);
         return false;
     }
 };
@@ -1219,21 +1299,70 @@ async function _createNewSyncFile(token) {
 }
 
 async function _getServerFileTimestamp(token, fileId) {
+    const timestampResult = await fetchServerFileTimestampState({
+        token,
+        fileId,
+        fetchImpl: fetch
+    });
+
+    return getServerFileTimestampOrFalse(timestampResult);
+}
+
+async function _getServerFileTimestampState(token, fileId) {
+    return fetchServerFileTimestampState({
+        token,
+        fileId,
+        fetchImpl: fetch
+    });
+}
+
+async function markSuccessfulSyncCompletion() {
+    await browser.storage.local.set({
+        lastSuccessfulSyncTime: Date.now()
+    });
+}
+
+async function uploadPreparedSyncData(token, dataToSync) {
+    await getOrCreateSyncFile(token);
+    const { syncFileId } = await browser.storage.sync.get('syncFileId');
+
+    if (!syncFileId) {
+        logSyncOperation('error', 'No sync file ID available for remote update');
+        return false;
+    }
+
     const init = {
-        method: 'GET',
+        method: 'PATCH',
         async: true,
         headers: {
             Authorization: 'Bearer ' + token,
             'Content-Type': 'application/json'
         },
-        'contentType': 'json'
+        'contentType': 'json',
+        body: JSON.stringify(dataToSync)
     };
-    const response = await handleRequest(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, init)
-    if (response.timestamp === undefined) {
-        const response = await handleRequest(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=json&fields=modifiedByMeTime`, init);
-        return response ? Date.parse(response.modifiedByMeTime) : response;
+
+    logSyncOperation('info', 'Syncing data to cloud', {
+        collections: dataToSync.tabsArray.length,
+        folders: dataToSync.foldersArray?.length || 0,
+        version: dataToSync.syncVersion || SYNC_VERSION
+    });
+
+    const url = `https://www.googleapis.com/upload/drive/v3/files/${syncFileId}?uploadType=media&access_token=${token}`;
+    const response = await handleRequest(url, init);
+
+    if (response !== false) {
+        await browser.storage.local.set({
+            localTimestamp: dataToSync.timestamp,
+            lastSyncTimestamp: dataToSync.timestamp
+        });
+        await markSuccessfulSyncCompletion();
+        logSyncOperation('success', 'Cloud sync completed');
+        return response;
     }
-    return response.timestamp;
+
+    logSyncOperation('error', 'Failed to update remote data');
+    return false;
 }
 
 // Enhanced updateRemote with atomic operations and better error handling
@@ -1273,10 +1402,17 @@ async function updateRemote(token, collections = null, skipLock = false) {
             const { syncFileId } = await browser.storage.sync.get('syncFileId');
             if (syncFileId) {
                 try {
-                    const serverTimestamp = await _getServerFileTimestamp(token, syncFileId);
-                    if (serverTimestamp && serverTimestamp > 0) {
+                    const serverTimestampResult = await _getServerFileTimestampState(token, syncFileId);
+                    if (serverTimestampResult.status === SERVER_FILE_TIMESTAMP_STATE.UNAVAILABLE) {
+                        logSyncOperation('error', 'SAFETY BLOCK: Cannot verify server state before pushing empty data - aborting', {
+                            reason: 'remote_unavailable'
+                        });
+                        return false;
+                    }
+
+                    if (serverTimestampResult.status === SERVER_FILE_TIMESTAMP_STATE.OK && serverTimestampResult.timestamp > 0) {
                         logSyncOperation('error', 'SAFETY BLOCK: Refusing to push empty data to server - server has existing data', {
-                            serverTimestamp,
+                            serverTimestamp: serverTimestampResult.timestamp,
                             localCollectionCount: 0,
                             action: 'Use loadFromServer to download existing data first'
                         });
@@ -1291,47 +1427,8 @@ async function updateRemote(token, collections = null, skipLock = false) {
             }
             logSyncOperation('info', 'Pushing empty data to server (server appears empty or new)');
         }
-        
-        await getOrCreateSyncFile(token);
-        const { syncFileId } = await browser.storage.sync.get('syncFileId');
-        
-        if (!syncFileId) {
-            logSyncOperation('error', 'No sync file ID available for remote update');
-            return false;
-        }
-        
-        const init = {
-            method: 'PATCH',
-            async: true,
-            headers: {
-                Authorization: 'Bearer ' + token,
-                'Content-Type': 'application/json'
-            },
-            'contentType': 'json',
-            body: JSON.stringify(dataToSync)
-        };
-        
-        logSyncOperation('info', 'Syncing data to cloud', { 
-            collections: dataToSync.tabsArray.length,
-            folders: dataToSync.foldersArray?.length || 0,
-            version: dataToSync.syncVersion || 'legacy'
-        });
-        
-        const url = `https://www.googleapis.com/upload/drive/v3/files/${syncFileId}?uploadType=media&access_token=${token}`;
-        const response = await handleRequest(url, init);
-        
-        if (response !== false) {
-            // Only update local timestamp and lastSyncTimestamp after successful remote update
-            await browser.storage.local.set({ 
-                localTimestamp: dataToSync.timestamp,
-                lastSyncTimestamp: dataToSync.timestamp // Store for incremental sync tracking
-            });
-            logSyncOperation('success', 'Cloud sync completed');
-            return response;
-        } else {
-            logSyncOperation('error', 'Failed to update remote data');
-            return false;
-        }
+
+        return await uploadPreparedSyncData(token, dataToSync);
         
     } catch (error) {
         logSyncOperation('error', 'Exception in updateRemote', { error: error.message });
@@ -1343,8 +1440,8 @@ async function updateRemote(token, collections = null, skipLock = false) {
     }
 }
 
-// Enhanced _loadSettingsFile with validation and conflict detection
-async function _loadSettingsFile(token, fileId) {
+// Enhanced remote sync document loader with validation
+async function _readRemoteSyncDocument(token, fileId) {
     try {
         const init = {
             method: 'GET',
@@ -1376,31 +1473,53 @@ async function _loadSettingsFile(token, fileId) {
         const validation = validateCollectionData(data);
         if (!validation.valid) {
             logSyncOperation('error', 'Loaded data failed validation', { error: validation.error });
-            // Try to recover from backup if available
-            return await recoverFromBackup('invalid-remote-data');
-        }
-        
-        logSyncOperation('success', 'Successfully loaded and validated sync file', { 
-            collections: data.tabsArray?.length || 0,
-            folders: data.foldersArray?.length || 0,
-            hasFoldersArray: !!data.foldersArray,
-            timestamp: data.timestamp,
-            syncVersion: data.syncVersion || 'legacy'
-        });
-        
-        // 🚀 NEW: Cross-version compatibility - migrate incoming data to v4.0
-        const migratedCollections = await migrateIncomingSyncData(data);
-        if (migratedCollections === false) {
-            logSyncOperation('error', 'Failed to migrate incoming sync data');
             return false;
         }
-        
-        return updateCollectionsUids(migratedCollections);
+
+        const normalizedData = {
+            ...data,
+            foldersArray: Array.isArray(data.foldersArray)
+                ? data.foldersArray
+                : await loadAllFoldersBG()
+        };
+        const detection = detectSyncDataVersion(normalizedData);
+        if (!detection.valid) {
+            logSyncOperation('error', 'Loaded data uses an unsupported sync version', {
+                version: normalizedData.syncVersion || 'missing'
+            });
+            return false;
+        }
+
+        logSyncOperation('success', 'Successfully loaded and validated sync file', {
+            collections: normalizedData.tabsArray?.length || 0,
+            folders: normalizedData.foldersArray?.length || 0,
+            hasFoldersArray: !!normalizedData.foldersArray,
+            timestamp: normalizedData.timestamp,
+            syncVersion: normalizedData.syncVersion || 'missing'
+        });
+
+        return normalizeSyncSnapshot(normalizedData);
         
     } catch (error) {
         logSyncOperation('error', 'Exception in _loadSettingsFile', { error: error.message });
         return false;
     }
+}
+
+// Enhanced _loadSettingsFile with validation and atomic local apply
+async function _loadSettingsFile(token, fileId) {
+    const remoteSyncData = await _readRemoteSyncDocument(token, fileId);
+    if (remoteSyncData === false) {
+        return false;
+    }
+
+    const migratedCollections = await migrateIncomingSyncData(remoteSyncData);
+    if (migratedCollections === false) {
+        logSyncOperation('error', 'Failed to migrate incoming sync data');
+        return false;
+    }
+
+    return updateCollectionsUids(migratedCollections);
 }
 
 // Recovery function for data corruption scenarios
@@ -1475,13 +1594,20 @@ async function updateLocalDataFromServer(token, force = false, skipLock = false)
         await createPreSyncBackup('before-server-update');
         
         const { syncFileId } = await browser.storage.sync.get('syncFileId');
-        const serverTimestamp = await _getServerFileTimestamp(token, syncFileId);
-        
-        if (serverTimestamp === undefined || serverTimestamp === false) {
+        const timestampResult = await _getServerFileTimestampState(token, syncFileId);
+
+        if (timestampResult.status === SERVER_FILE_TIMESTAMP_STATE.UNAVAILABLE) {
+            logSyncOperation('error', 'Failed to get server timestamp because the remote file is temporarily unavailable');
+            return false;
+        }
+
+        if (timestampResult.status === SERVER_FILE_TIMESTAMP_STATE.MISSING_OR_INVALID) {
             logSyncOperation('error', 'Failed to get server timestamp, creating new sync file');
             await createNewSyncFileAndBackup(token);
             return false;
         }
+
+        const serverTimestamp = timestampResult.timestamp;
         
         let { localTimestamp } = await browser.storage.local.get('localTimestamp');
         if (!localTimestamp) localTimestamp = 0;
@@ -1495,24 +1621,19 @@ async function updateLocalDataFromServer(token, force = false, skipLock = false)
             
             const tabsArray = await _loadSettingsFile(token, syncFileId);
             if (tabsArray !== false) {
-                // 🚀 NEW: Ensure both legacy and indexed storage are updated
-                const updateSuccess = await updateAllCollectionsBG(tabsArray);
-                if (updateSuccess) {
-                    await browser.storage.local.set({ 
-                        localTimestamp: serverTimestamp 
-                    });
-                    logSyncOperation('success', 'Successfully updated local data from server with cross-version compatibility');
-                    return tabsArray;
-                } else {
-                    logSyncOperation('error', 'Failed to update local storage systems');
-                    return false;
-                }
+                await browser.storage.local.set({
+                    localTimestamp: serverTimestamp
+                });
+                await markSuccessfulSyncCompletion();
+                logSyncOperation('success', 'Successfully updated local data from server with cross-version compatibility');
+                return tabsArray;
             } else {
                 logSyncOperation('error', 'Failed to load settings file from server');
                 return false;
             }
         }
         
+        await markSuccessfulSyncCompletion();
         logSyncOperation('info', 'Local data is up to date, no server update needed');
         return 'no_update_needed';
         
@@ -1718,10 +1839,15 @@ async function syncData(token) {
         const { syncFileId } = await browser.storage.sync.get('syncFileId');
         let { localTimestamp } = await browser.storage.local.get('localTimestamp');
         if (!localTimestamp) localTimestamp = 0;
-        
-        const serverTimestamp = await _getServerFileTimestamp(token, syncFileId);
-        
-        if (serverTimestamp === undefined || serverTimestamp === false) {
+
+        const timestampResult = await _getServerFileTimestampState(token, syncFileId);
+
+        if (timestampResult.status === SERVER_FILE_TIMESTAMP_STATE.UNAVAILABLE) {
+            logSyncOperation('error', 'Server timestamp is temporarily unavailable, aborting sync safely');
+            return false;
+        }
+
+        if (timestampResult.status === SERVER_FILE_TIMESTAMP_STATE.MISSING_OR_INVALID) {
             if (localTimestamp === 0) { 
                 logSyncOperation('info', 'No local or remote data, nothing to sync');
                 return true; 
@@ -1733,8 +1859,11 @@ async function syncData(token) {
             const result = await updateRemote(token, null, true);
             return result !== false;
         }
+
+        const serverTimestamp = timestampResult.timestamp;
         
         if (serverTimestamp === localTimestamp) {
+            await markSuccessfulSyncCompletion();
             logSyncOperation('info', 'Local and remote data are in sync');
             return true;
         }
@@ -1753,22 +1882,38 @@ async function syncData(token) {
             if (isConflict) {
                 // Potential conflict - create additional backup
                 await createPreSyncBackup('conflict-before-remote-update');
+
+                const remoteSyncData = await _readRemoteSyncDocument(token, syncFileId);
+                if (remoteSyncData === false) {
+                    logSyncOperation('error', 'Failed to load remote data for conflict merge');
+                    return false;
+                }
+
+                const localSyncData = await prepareSyncDataForUpload();
+                const mergedSyncData = mergeSyncSnapshots({
+                    localSnapshot: localSyncData,
+                    remoteSnapshot: remoteSyncData
+                });
+                mergedSyncData.timestamp = Date.now();
+
+                const mergedCollections = await migrateIncomingSyncData(mergedSyncData);
+                if (mergedCollections === false) {
+                    logSyncOperation('error', 'Failed to apply merged conflict snapshot locally');
+                    return false;
+                }
+
+                const uploadResult = await uploadPreparedSyncData(token, mergedSyncData);
+                return uploadResult !== false;
             }
             
             const tabsArray = await _loadSettingsFile(token, syncFileId);
             if (tabsArray !== false) {
-                // 🚀 NEW: Cross-version sync - update both storage systems
-                const updateSuccess = await updateAllCollectionsBG(tabsArray);
-                if (updateSuccess) {
-                    await browser.storage.local.set({ 
-                        localTimestamp: serverTimestamp 
-                    });
-                    logSyncOperation('success', 'Successfully updated local data from server with cross-version compatibility');
-                    return true;
-                } else {
-                    logSyncOperation('error', 'Failed to update local storage systems during sync');
-                    return false;
-                }
+                await browser.storage.local.set({
+                    localTimestamp: serverTimestamp
+                });
+                await markSuccessfulSyncCompletion();
+                logSyncOperation('success', 'Successfully updated local data from server with cross-version compatibility');
+                return true;
             } else {
                 logSyncOperation('error', 'Failed to load data from server');
                 return false;
@@ -1791,14 +1936,12 @@ async function syncData(token) {
                 // Force download from server to prevent data loss
                 const tabsArray = await _loadSettingsFile(token, syncFileId);
                 if (tabsArray !== false && tabsArray.length > 0) {
-                    const updateSuccess = await updateAllCollectionsBG(tabsArray);
-                    if (updateSuccess) {
-                        await browser.storage.local.set({ 
-                            localTimestamp: serverTimestamp 
-                        });
-                        logSyncOperation('success', 'Safety download completed - recovered data from server');
-                        return true;
-                    }
+                    await browser.storage.local.set({
+                        localTimestamp: serverTimestamp
+                    });
+                    await markSuccessfulSyncCompletion();
+                    logSyncOperation('success', 'Safety download completed - recovered data from server');
+                    return true;
                 }
                 return false;
             }
@@ -1813,6 +1956,28 @@ async function syncData(token) {
             if (isConflict) {
                 // Potential conflict - create additional backup
                 await createPreSyncBackup('conflict-before-local-update');
+
+                const remoteSyncData = await _readRemoteSyncDocument(token, syncFileId);
+                if (remoteSyncData === false) {
+                    logSyncOperation('error', 'Failed to load remote data for conflict merge');
+                    return false;
+                }
+
+                const localSyncData = await prepareSyncDataForUpload();
+                const mergedSyncData = mergeSyncSnapshots({
+                    localSnapshot: localSyncData,
+                    remoteSnapshot: remoteSyncData
+                });
+                mergedSyncData.timestamp = Date.now();
+
+                const mergedCollections = await migrateIncomingSyncData(mergedSyncData);
+                if (mergedCollections === false) {
+                    logSyncOperation('error', 'Failed to apply merged conflict snapshot locally');
+                    return false;
+                }
+
+                const uploadResult = await uploadPreparedSyncData(token, mergedSyncData);
+                return uploadResult !== false;
             }
             
             // Pass skipLock=true since syncData already holds the lock
@@ -1911,184 +2076,65 @@ if (typeof globalThis !== 'undefined') {
 
 // Cross-version sync compatibility functions
 const SYNC_VERSION = '4.0';
-const LEGACY_SYNC_VERSION = '3.5';
 
 /**
  * Enhanced sync data format with version detection
- * v4.0 format: { timestamp, tabsArray, syncVersion: '4.0', storageVersion: 3 }
- * v3.5 format: { timestamp, tabsArray } (no syncVersion field)
+ * Supported format: { timestamp, tabsArray, foldersArray, syncVersion: '4.0', storageVersion: 3 }
  */
 
-// Detect sync data version and format
 const detectSyncDataVersion = (data) => {
     if (!data || typeof data !== 'object') {
         return { version: 'unknown', valid: false };
     }
-    
-    // v4.0+ has explicit version fields
-    if (data.syncVersion) {
-        return { 
-            version: data.syncVersion, 
-            storageVersion: data.storageVersion || 1,
-            valid: true 
+
+    const parsedVersion = Number.parseFloat(data.syncVersion);
+    if (Number.isFinite(parsedVersion) && parsedVersion >= 4.0 && Array.isArray(data.tabsArray)) {
+        return {
+            version: data.syncVersion,
+            storageVersion: data.storageVersion || 3,
+            valid: true
         };
     }
-    
-    // v3.5 and earlier - detect by structure
-    if (data.tabsArray && Array.isArray(data.tabsArray) && data.timestamp) {
-        return { 
-            version: LEGACY_SYNC_VERSION, 
-            storageVersion: 1,
-            valid: true 
-        };
-    }
-    
-    return { version: 'unknown', valid: false };
+
+    return { version: data.syncVersion || 'unknown', valid: false };
 };
 
-// Migrate v3.5 collections to v4.0 indexed storage
 const migrateIncomingSyncData = async (data) => {
     try {
         const detection = detectSyncDataVersion(data);
-        
+
         if (!detection.valid) {
             console.error('❌ Invalid sync data format detected');
             return false;
         }
-        
-        
-        if (detection.version === LEGACY_SYNC_VERSION) {
-            
-            // Validate tabsArray exists and is an array
-            if (!data.tabsArray || !Array.isArray(data.tabsArray)) {
-                console.error('❌ Invalid tabsArray in v3.5 sync data:', data.tabsArray);
-                return [];
-            }
-            
-            // Ensure all collections have required fields for v4.0
-            // BACKWARDS COMPATIBILITY: Fallback to createdOn if lastUpdated is missing
-            const normalizedCollections = data.tabsArray.map(collection => {
-                const fallbackTimestamp = collection.createdOn || Date.now();
-                return {
-                    ...collection,
-                    uid: collection.uid || ((crypto && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)),
-                    name: collection.name || 'Untitled Collection',
-                    tabs: collection.tabs || [],
-                    createdOn: collection.createdOn || Date.now(),
-                    // BACKWARDS COMPATIBILITY: Use createdOn as fallback if lastUpdated is missing
-                    lastUpdated: collection.lastUpdated !== null && collection.lastUpdated !== undefined ? collection.lastUpdated : fallbackTimestamp,
-                    lastOpened: collection.lastOpened || null, // Default to null for synced collections
-                    color: collection.color || 'default',
-                    type: 'collection'
-                };
+
+        const normalizedSyncData = normalizeSyncSnapshot({
+            ...data,
+            foldersArray: Array.isArray(data.foldersArray)
+                ? data.foldersArray
+                : await loadAllFoldersBG()
+        });
+
+        logSyncOperation('info', 'Applying normalized 4.0 sync data', {
+            collections: normalizedSyncData.tabsArray.length,
+            folders: normalizedSyncData.foldersArray.length
+        });
+
+        const applyResult = await applySyncSnapshotAtomically({
+            storageArea: browser.storage.local,
+            syncData: normalizedSyncData
+        });
+
+        if (!applyResult.success) {
+            logSyncOperation('error', 'Atomic sync apply failed', {
+                error: applyResult.error,
+                rollbackSucceeded: applyResult.rollbackSucceeded,
+                rollbackError: applyResult.rollbackError
             });
-            
-            // v3.5 didn't have folders, so no need to sync them (they'll be preserved locally)
-            const success = await updateAllCollectionsBG(normalizedCollections);
-            
-            if (success) {
-                return normalizedCollections;
-            } else {
-                console.error('❌ Failed to migrate v3.5 collections to v4.0 storage');
-                return false;
-            }
-        } else if (detection.version === SYNC_VERSION) {
-            
-            // Validate tabsArray exists and is an array
-            if (!data.tabsArray || !Array.isArray(data.tabsArray)) {
-                console.error('❌ Invalid tabsArray in v4.0 sync data:', data.tabsArray);
-                return [];
-            }
-            
-            // BACKWARDS COMPATIBILITY: Ensure all collections have lastUpdated timestamps
-            logSyncOperation('info', 'Processing collections from sync data', {
-                count: data.tabsArray.length,
-                collectionOrders: data.tabsArray.map(c => ({ name: c.name, order: c.order, parentId: c.parentId }))
-            });
-            
-            const normalizedCollections = data.tabsArray.map((collection, idx) => {
-                const fallbackTimestamp = collection.createdOn || Date.now();
-                return {
-                    ...collection,
-                    // Ensure lastUpdated exists, fallback to createdOn
-                    lastUpdated: collection.lastUpdated !== null && collection.lastUpdated !== undefined ? collection.lastUpdated : fallbackTimestamp,
-                    lastOpened: collection.lastOpened !== null && collection.lastOpened !== undefined ? collection.lastOpened : null,
-                    // Preserve order from sync data (don't add fallback - let sorting logic handle it)
-                    order: collection.order
-                };
-            });
-            
-            // Update collections
-            const collectionsSuccess = await updateAllCollectionsBG(normalizedCollections);
-            
-            // Update folders if they exist in the sync data
-            let foldersSuccess = true;
-            logSyncOperation('info', 'Checking for folders in sync data', {
-                hasFoldersArray: !!data.foldersArray,
-                isArray: Array.isArray(data.foldersArray),
-                foldersCount: data.foldersArray ? data.foldersArray.length : 0
-            });
-            
-            // Get current local folders to detect deletions
-            const localFoldersIndex = await loadFoldersIndexBG();
-            const localFolderUids = Object.keys(localFoldersIndex);
-            const serverFolderUids = (data.foldersArray || []).map(f => f.uid);
-            
-            // Find folders that exist locally but not on server (deleted on another device)
-            const foldersToDelete = localFolderUids.filter(uid => !serverFolderUids.includes(uid));
-            
-            if (foldersToDelete.length > 0) {
-                logSyncOperation('info', 'Deleting folders not present on server', { 
-                    count: foldersToDelete.length,
-                    folderUids: foldersToDelete 
-                });
-                
-                for (const folderUid of foldersToDelete) {
-                    await deleteSingleFolderBG(folderUid);
-                }
-            }
-            
-            if (data.foldersArray && Array.isArray(data.foldersArray) && data.foldersArray.length > 0) {
-                logSyncOperation('info', 'Processing folders from sync data', { 
-                    count: data.foldersArray.length,
-                    folderOrders: data.foldersArray.map(f => ({ name: f.name, order: f.order }))
-                });
-                
-                // BACKWARDS COMPATIBILITY: Ensure all folders have lastUpdated timestamps
-                const normalizedFolders = data.foldersArray.map((folder, idx) => {
-                    const fallbackTimestamp = folder.createdOn || Date.now();
-                    return {
-                        ...folder,
-                        // Ensure lastUpdated exists, fallback to createdOn
-                        lastUpdated: folder.lastUpdated !== null && folder.lastUpdated !== undefined ? folder.lastUpdated : fallbackTimestamp,
-                        // Preserve order from sync data, or use array index as fallback
-                        order: folder.order !== undefined ? folder.order : idx
-                    };
-                });
-                
-                foldersSuccess = await updateAllFoldersBG(normalizedFolders);
-                logSyncOperation('info', 'Folders update completed', { success: foldersSuccess, count: normalizedFolders.length });
-            } else {
-                logSyncOperation('info', 'No folders in sync data to process');
-            }
-            
-            if (collectionsSuccess && foldersSuccess) {
-                // Ensure storage writes are fully committed
-                await new Promise(resolve => setTimeout(resolve, 150));
-                return data.tabsArray;
-            } else {
-                console.error('❌ Failed to update data in indexed storage');
-                console.error(`Collections success: ${collectionsSuccess}, Folders success: ${foldersSuccess}`);
-                return false;
-            }
-        } else {
-            console.warn(`⚠️ Unknown sync version ${detection.version} - attempting legacy migration`);
-            return await migrateIncomingSyncData({ 
-                ...data, 
-                syncVersion: LEGACY_SYNC_VERSION 
-            });
+            return false;
         }
-        
+
+        return applyResult.collections;
     } catch (error) {
         console.error('💥 Error migrating sync data:', error);
         return false;
@@ -2109,7 +2155,7 @@ const loadCollectionsByUids = async (uids) => {
         uids.forEach(uid => {
             const key = `${STORAGE_KEYS.COLLECTION_PREFIX}${uid}`;
             if (results[key]) {
-                collections.push(results[key]);
+                collections.push(normalizeCollectionRecordBG(results[key]));
             }
         });
         
@@ -2120,10 +2166,9 @@ const loadCollectionsByUids = async (uids) => {
     }
 };
 
-// Enhanced data preparation for upload with version info
-// BACKWARDS COMPATIBILITY: Incremental sync disabled by default for v3.6 compatibility
-// v3.6 cannot understand incremental sync - it treats partial data as the full dataset
-// This would cause v3.6 to delete all collections not included in the incremental sync
+// Enhanced data preparation for upload with version info.
+// Sync still emits full 4.0 snapshots by default; incremental sync remains off until the
+// wire contract is upgraded end-to-end for partial updates.
 const prepareSyncDataForUpload = async (collections, useIncrementalSync = false) => {
     try {
         let tabsArray;
@@ -2167,11 +2212,13 @@ const prepareSyncDataForUpload = async (collections, useIncrementalSync = false)
                 } else {
                     foldersArray = [];
                 }
+
+                const normalizedTabsArray = (tabsArray || []).map((collection) => normalizeCollectionRecordBG(collection));
                 
                 // Mark this as incremental sync data
                 const syncData = {
                     timestamp: Date.now(),
-                    tabsArray: tabsArray,
+                    tabsArray: normalizedTabsArray,
                     foldersArray: foldersArray,
                     syncVersion: SYNC_VERSION,
                     storageVersion: 3,
@@ -2179,7 +2226,7 @@ const prepareSyncDataForUpload = async (collections, useIncrementalSync = false)
                         chrome.runtime.getManifest().version : '4.0',
                     isIncrementalSync: true,
                     lastSyncTimestamp: lastSyncTimestamp,
-                    changedCollectionCount: tabsArray.length,
+                    changedCollectionCount: normalizedTabsArray.length,
                     changedFolderCount: foldersArray.length
                 };
                 
@@ -2193,16 +2240,24 @@ const prepareSyncDataForUpload = async (collections, useIncrementalSync = false)
                 foldersArray = await loadAllFoldersBG();
             }
         } else {
-            // Full sync (default for v3.6 backwards compatibility)
+            // Full sync remains the default 4.0+ contract.
             tabsArray = await loadAllCollectionsBG(true);
             foldersArray = await loadAllFoldersBG();
         }
+
+        const normalizedTabsArray = (tabsArray || []).map((collection) => normalizeCollectionRecordBG(collection));
+        const deletedCollectionTombstones = await loadDeletedCollectionTombstonesBG();
+        const deletedCollections = Object.entries(deletedCollectionTombstones).map(([uid, lastUpdated]) => ({
+            uid,
+            lastUpdated
+        }));
         
         // v4.0 enhanced sync format with version detection and folders support
         const syncData = {
             timestamp: Date.now(),
-            tabsArray: tabsArray,
+            tabsArray: normalizedTabsArray,
             foldersArray: foldersArray,
+            deletedCollections,
             syncVersion: SYNC_VERSION,
             storageVersion: 3,
             extensionVersion: (typeof chrome !== 'undefined' && chrome.runtime) ? 
@@ -2210,9 +2265,9 @@ const prepareSyncDataForUpload = async (collections, useIncrementalSync = false)
             isIncrementalSync: false
         };
         
-        console.log('📤 prepareSyncDataForUpload: Preparing sync data with', tabsArray.length, 'collections and', foldersArray.length, 'folders');
+        console.log('📤 prepareSyncDataForUpload: Preparing sync data with', normalizedTabsArray.length, 'collections and', foldersArray.length, 'folders');
         console.log('📤 prepareSyncDataForUpload: Folder order:', foldersArray.map(f => ({ name: f.name, order: f.order })));
-        console.log('📤 prepareSyncDataForUpload: Collection order:', tabsArray.map(c => ({ name: c.name, order: c.order, parentId: c.parentId })));
+        console.log('📤 prepareSyncDataForUpload: Collection order:', normalizedTabsArray.map(c => ({ name: c.name, order: c.order, parentId: c.parentId })));
         
         return syncData;
         
@@ -2221,7 +2276,7 @@ const prepareSyncDataForUpload = async (collections, useIncrementalSync = false)
         // Fallback to legacy format for compatibility
         return {
             timestamp: Date.now(),
-            tabsArray: collections || [],
+            tabsArray: (collections || []).map((collection) => normalizeCollectionRecordBG(collection)),
             foldersArray: [],
             syncVersion: SYNC_VERSION,
             storageVersion: 3,
@@ -2298,4 +2353,51 @@ async function getAuthTokenWithRecovery(operation = 'unknown') {
         // Still try recovery even if there was an exception
         return await attemptAuthRecovery(operation);
     }
+}
+
+const backgroundUtilsApi = {
+    STORAGE_KEYS,
+    SYNC_VERSION,
+    loadCollectionsIndexBG,
+    loadSingleCollectionBG,
+    saveSingleCollectionBG,
+    loadAllCollectionsBG,
+    updateAllCollectionsBG,
+    deleteSingleCollectionBG,
+    loadFoldersIndexBG,
+    loadSingleFolderBG,
+    saveSingleFolderBG,
+    loadAllFoldersBG,
+    updateAllFoldersBG,
+    deleteSingleFolderBG,
+    handleRequest,
+    logSyncOperation,
+    validateCollectionData,
+    detectSyncDataVersion,
+    migrateIncomingSyncData,
+    prepareSyncDataForUpload,
+    getNewAccessToken,
+    validateToken,
+    getAuthToken,
+    getGoogleUser,
+    removeToken,
+    getOrCreateSyncFile,
+    _getServerFileTimestamp,
+    updateRemote,
+    updateLocalDataFromServer,
+    syncData,
+    getAuthTokenWithRecovery,
+    createPreSyncBackup,
+    recoverFromBackup,
+    updateCollection,
+    updateCollectionsUids,
+    createNewSyncFileAndBackup
+};
+
+if (typeof globalThis !== 'undefined') {
+    globalThis.TaboxBackgroundUtils = backgroundUtilsApi;
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = backgroundUtilsApi;
 }

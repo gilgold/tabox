@@ -20,7 +20,7 @@ describe('DeleteWithConfirmationButton', () => {
             <DeleteWithConfirmationButton action={mockAction} group={mockGroup} />
         );
         
-        expect(container.querySelector('.del')).toBeTruthy();
+        expect(container.querySelector('.del-confirm-trigger')).toBeTruthy();
         expect(container.querySelector('svg')).toBeTruthy();
     });
 
@@ -29,8 +29,8 @@ describe('DeleteWithConfirmationButton', () => {
             <DeleteWithConfirmationButton action={mockAction} group={mockGroup} />
         );
         
-        const slider = container.querySelector('.slider');
-        expect(slider.classList.contains('slider-open')).toBe(false);
+        const slide = container.querySelector('.del-confirm-slide');
+        expect(slide.classList.contains('open')).toBe(false);
     });
 
     test('opens slider on delete icon click', () => {
@@ -38,11 +38,11 @@ describe('DeleteWithConfirmationButton', () => {
             <DeleteWithConfirmationButton action={mockAction} group={mockGroup} />
         );
         
-        const delButton = container.querySelector('.del');
+        const delButton = container.querySelector('.del-confirm-trigger');
         fireEvent.click(delButton);
         
-        const slider = container.querySelector('.slider');
-        expect(slider.classList.contains('slider-open')).toBe(true);
+        const slide = container.querySelector('.del-confirm-slide');
+        expect(slide.classList.contains('open')).toBe(true);
     });
 
     test('closes slider on second delete icon click', () => {
@@ -50,15 +50,15 @@ describe('DeleteWithConfirmationButton', () => {
             <DeleteWithConfirmationButton action={mockAction} group={mockGroup} />
         );
         
-        const delButton = container.querySelector('.del');
+        const delButton = container.querySelector('.del-confirm-trigger');
         
         // Open
         fireEvent.click(delButton);
-        expect(container.querySelector('.slider').classList.contains('slider-open')).toBe(true);
+        expect(container.querySelector('.del-confirm-slide').classList.contains('open')).toBe(true);
         
         // Close
         fireEvent.click(delButton);
-        expect(container.querySelector('.slider').classList.contains('slider-open')).toBe(false);
+        expect(container.querySelector('.del-confirm-slide').classList.contains('open')).toBe(false);
     });
 
     test('confirm button is disabled initially', () => {
@@ -66,10 +66,10 @@ describe('DeleteWithConfirmationButton', () => {
             <DeleteWithConfirmationButton action={mockAction} group={mockGroup} />
         );
         
-        const delButton = container.querySelector('.del');
+        const delButton = container.querySelector('.del-confirm-trigger');
         fireEvent.click(delButton);
         
-        const confirmButton = container.querySelector('.slider-button');
+        const confirmButton = container.querySelector('.del-confirm-btn');
         expect(confirmButton.disabled).toBe(true);
     });
 
@@ -78,7 +78,7 @@ describe('DeleteWithConfirmationButton', () => {
             <DeleteWithConfirmationButton action={mockAction} group={mockGroup} />
         );
         
-        const delButton = container.querySelector('.del');
+        const delButton = container.querySelector('.del-confirm-trigger');
         fireEvent.click(delButton);
         
         // Fast-forward the timer
@@ -86,7 +86,7 @@ describe('DeleteWithConfirmationButton', () => {
             jest.advanceTimersByTime(400);
         });
         
-        const confirmButton = container.querySelector('.slider-button');
+        const confirmButton = container.querySelector('.del-confirm-btn');
         expect(confirmButton.disabled).toBe(false);
     });
 
@@ -95,7 +95,7 @@ describe('DeleteWithConfirmationButton', () => {
             <DeleteWithConfirmationButton action={mockAction} group={mockGroup} />
         );
         
-        const delButton = container.querySelector('.del');
+        const delButton = container.querySelector('.del-confirm-trigger');
         fireEvent.click(delButton);
         
         // Enable the button
@@ -103,7 +103,7 @@ describe('DeleteWithConfirmationButton', () => {
             jest.advanceTimersByTime(400);
         });
         
-        const confirmButton = container.querySelector('.slider-button');
+        const confirmButton = container.querySelector('.del-confirm-btn');
         fireEvent.click(confirmButton);
         
         expect(mockAction).toHaveBeenCalledWith('test-uid-123');
@@ -114,18 +114,12 @@ describe('DeleteWithConfirmationButton', () => {
             <DeleteWithConfirmationButton action={mockAction} group={mockGroup} />
         );
         
-        const delButton = container.querySelector('.del');
+        const delButton = container.querySelector('.del-confirm-trigger');
         fireEvent.click(delButton);
         
         // Don't wait for the timeout - button is still disabled
-        const confirmButton = container.querySelector('.slider-button');
+        const confirmButton = container.querySelector('.del-confirm-btn');
         fireEvent.click(confirmButton);
-        
-        // Action should not be called because button is disabled
-        // Note: The click still fires, but the button being disabled should prevent the handler
-        // Actually, the click handler still runs even when disabled in React
-        // Let's check if the disabled state prevents the action
-        // The implementation calls handleDelete regardless, so we'd need the button to be truly non-clickable
     });
 
     test('stops event propagation on clicks', () => {
@@ -137,7 +131,7 @@ describe('DeleteWithConfirmationButton', () => {
             </div>
         );
         
-        const delButton = container.querySelector('.del');
+        const delButton = container.querySelector('.del-confirm-trigger');
         fireEvent.click(delButton);
         
         // Parent click should not be called due to stopPropagation
@@ -153,7 +147,7 @@ describe('DeleteWithConfirmationButton', () => {
             </div>
         );
         
-        const wrapper = container.querySelector('.slider-wrapper');
+        const wrapper = container.querySelector('.del-confirm-wrapper');
         fireEvent.click(wrapper);
         
         expect(parentClickHandler).not.toHaveBeenCalled();
@@ -164,7 +158,7 @@ describe('DeleteWithConfirmationButton', () => {
             <DeleteWithConfirmationButton action={mockAction} group={mockGroup} />
         );
         
-        const delButton = container.querySelector('.del');
+        const delButton = container.querySelector('.del-confirm-trigger');
         expect(delButton.getAttribute('data-tooltip-content')).toBe("Delete group 'Test Group'");
     });
 
@@ -173,7 +167,7 @@ describe('DeleteWithConfirmationButton', () => {
             <DeleteWithConfirmationButton action={mockAction} group={mockGroup} />
         );
         
-        const delButton = container.querySelector('.del');
+        const delButton = container.querySelector('.del-confirm-trigger');
         fireEvent.click(delButton);
         
         expect(delButton.getAttribute('data-tooltip-content')).toBe('Cancel');

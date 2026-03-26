@@ -3,7 +3,7 @@
 exports[`Collection List tests Collection List renders correctly 1`] = `
 <div>
   <section
-    class="collection-list-container settings_body list-view"
+    class="collection-list-container settings_body list-view collection-list-wrapper"
   >
     <div
       class="collection-list"

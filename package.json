@@ -34,6 +34,45 @@
       ".+\\.(css|styl|less|sass|scss|png|jpg|ttf|woff|woff2)$": "jest-transform-stub",
       "^.+\\.js$": "babel-jest"
     },
+    "collectCoverageFrom": [
+      "chrome/sync-transport.js",
+      "chrome/sync-merge.js",
+      "chrome/sync-apply.js",
+      "chrome/sync-session-state.js",
+      "app/utils/migrationSupport40.js"
+    ],
+    "coverageThreshold": {
+      "./chrome/sync-transport.js": {
+        "branches": 100,
+        "functions": 100,
+        "lines": 100,
+        "statements": 100
+      },
+      "./chrome/sync-merge.js": {
+        "branches": 100,
+        "functions": 100,
+        "lines": 100,
+        "statements": 100
+      },
+      "./chrome/sync-apply.js": {
+        "branches": 100,
+        "functions": 100,
+        "lines": 100,
+        "statements": 100
+      },
+      "./chrome/sync-session-state.js": {
+        "branches": 100,
+        "functions": 100,
+        "lines": 100,
+        "statements": 100
+      },
+      "./app/utils/migrationSupport40.js": {
+        "branches": 100,
+        "functions": 100,
+        "lines": 100,
+        "statements": 100
+      }
+    },
     "reporters": [
       "default",
       [

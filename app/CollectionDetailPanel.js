@@ -1,13 +1,13 @@
 import React, { useEffect, useState, useMemo, useRef, useEffectEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { MdClose, MdCenterFocusWeak, MdEdit, MdOutlineRefresh, MdContentCopy, MdDelete } from 'react-icons/md';
+import { MdClose, MdCenterFocusWeak, MdEdit, MdOutlineRefresh, MdContentCopy, MdDelete, MdSearch } from 'react-icons/md';
 import { FaPlay } from 'react-icons/fa';
 import { FaStop } from 'react-icons/fa6';
 import { BsIncognito } from 'react-icons/bs';
 import { CiExport } from 'react-icons/ci';
 import TimeAgo from 'javascript-time-ago';
 import { useSetAtom, useAtomValue } from 'jotai';
-import { deletingCollectionUidsState, highlightedCollectionUidState, draggingTabState, draggingGroupState } from './atoms/animationsState';
+import { deletingCollectionUidsState, highlightedCollectionUidState } from './atoms/animationsState';
 import { trackingStateVersion } from './atoms/globalAppSettingsState';
 import { showSuccessToast, showErrorToast } from './toastHelpers';
 import { useCollectionOperations } from './useCollectionOperations';
@@ -15,6 +15,7 @@ import { browser } from '../static/globals';
 import ColorPicker from './ColorPicker';
 import ExpandedCollectionData from './ExpandedCollectionData';
 import { AutoSaveTextbox } from './AutoSaveTextbox';
+import { getColorValue } from './utils/colorMigration';
 import './CollectionDetailPanel.css';
 
 function CollectionDetailPanel({
@@ -26,14 +27,18 @@ function CollectionDetailPanel({
     updateRemoteData,
     addCollection,
     onDataUpdate,
-    index = 0
+    index = 0,
+    renderInline = false
 }) {
     const [isAnimatingOut, setIsAnimatingOut] = useState(false);
     const [collectionName, setCollectionName] = useState(collection?.name || '');
     const [isAutoUpdate, setIsAutoUpdate] = useState(false);
     const [isEditingName, setIsEditingName] = useState(false);
+    const [localColor, setLocalColor] = useState(collection?.color || 'default');
+    const [tabSearch, setTabSearch] = useState('');
     const mountedRef = useRef(true);
     const panelRef = useRef(null);
+    const searchInputRef = useRef(null);
 
     const deletingCollectionUids = useAtomValue(deletingCollectionUidsState);
     const setDeletingCollectionUids = useSetAtom(deletingCollectionUidsState);
@@ -60,12 +65,21 @@ function CollectionDetailPanel({
         onDataUpdate
     });
 
-    // Sync collection name when collection changes
+    // Sync local state when collection changes
     useEffect(() => {
         if (collection?.name) {
             setCollectionName(collection.name);
         }
-    }, [collection?.name]);
+        setLocalColor(collection?.color || 'default');
+        setTabSearch('');
+    }, [collection?.uid]);
+
+    // Keep local color in sync when the prop updates (e.g. from external changes)
+    useEffect(() => {
+        if (collection?.color !== undefined) {
+            setLocalColor(collection.color || 'default');
+        }
+    }, [collection?.color]);
 
     // Cleanup on unmount
     useEffect(() => {
@@ -118,11 +132,11 @@ function CollectionDetailPanel({
     useEffect(() => {
         const handleClickOutside = (e) => {
             if (isOpen && panelRef.current && !panelRef.current.contains(e.target)) {
-                // Don't close if clicking on a collection (for drag and drop)
                 const isCollectionClick = e.target.closest('[data-collection-drop-zone]') || 
                                          e.target.closest('.setting_row') ||
                                          e.target.closest('.collection-tile');
-                if (!isCollectionClick) {
+                const isPopoverClick = e.target.closest('.modern-color-popover');
+                if (!isCollectionClick && !isPopoverClick) {
                     handleClose();
                 }
             }
@@ -134,6 +148,7 @@ function CollectionDetailPanel({
     const handleClose = () => {
         setIsAnimatingOut(true);
         setIsEditingName(false);
+        setTabSearch('');
         setTimeout(() => {
             setIsAnimatingOut(false);
             onClose();
@@ -142,6 +157,7 @@ function CollectionDetailPanel({
 
     const handleSaveCollectionColor = async (color) => {
         if (!collection) return;
+        setLocalColor(color || 'default');
         let newCollectionItem = { ...collection };
         newCollectionItem.color = color;
         newCollectionItem.lastUpdated = Date.now();
@@ -214,8 +230,8 @@ function CollectionDetailPanel({
                     <div 
                         className="panel-color-bar"
                         style={{ 
-                            backgroundColor: collection.color && collection.color !== 'default' 
-                                ? collection.color 
+                            backgroundColor: localColor && localColor !== 'default' 
+                                ? getColorValue(localColor) 
                                 : 'var(--primary-color)' 
                         }}
                     />
@@ -291,7 +307,7 @@ function CollectionDetailPanel({
                     <div className="panel-actions">
                         <div className="panel-action-group">
                             <ColorPicker
-                                currentColor={collection.color}
+                                currentColor={localColor}
                                 tooltip="Change collection color"
                                 action={handleSaveCollectionColor}
                             />
@@ -356,19 +372,56 @@ function CollectionDetailPanel({
                     </div>
                 </div>
 
+                {/* Tab Search */}
+                {tabCount > 0 && (
+                    <div className="panel-search-bar">
+                        <MdSearch size={16} className="panel-search-icon" />
+                        <input
+                            ref={searchInputRef}
+                            type="text"
+                            className="panel-search-input"
+                            placeholder={`Search ${tabCount} tab${tabCount !== 1 ? 's' : ''}...`}
+                            value={tabSearch}
+                            onChange={(e) => setTabSearch(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Escape') {
+                                    if (tabSearch) {
+                                        e.stopPropagation();
+                                        setTabSearch('');
+                                    }
+                                }
+                            }}
+                        />
+                        {tabSearch && (
+                            <button
+                                className="panel-search-clear"
+                                onClick={() => { setTabSearch(''); searchInputRef.current?.focus(); }}
+                            >
+                                <MdClose size={14} />
+                            </button>
+                        )}
+                    </div>
+                )}
+
                 {/* Tabs Content */}
                 <div className="panel-content">
                     <ExpandedCollectionData
                         collection={collection}
                         updateCollection={updateCollection}
                         updateRemoteData={updateRemoteData}
+                        search={tabSearch}
                     />
                 </div>
             </div>
         </div>
     );
 
-    // Render in portal to avoid z-index issues
+    // In fullpage mode, render inline (no portal needed)
+    if (renderInline) {
+        return panelContent;
+    }
+
+    // In popup mode, render in portal to avoid z-index issues
     return createPortal(panelContent, document.body);
 }
 

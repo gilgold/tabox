@@ -3,6 +3,10 @@ import { render, fireEvent, act } from '@testing-library/react';
 import Switch from '../app/Switch';
 
 describe('Switch', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
     test('renders switch with labels', async () => {
         let container;
         await act(async () => {
@@ -121,6 +125,34 @@ describe('Switch', () => {
         expect(wrapper.classList.contains('custom-class')).toBe(true);
     });
 
+    test('manual animation mode stays still on load and only animates after click', async () => {
+        browser.storage.local.get.mockResolvedValue({ testSwitch: true });
+
+        let container;
+        await act(async () => {
+            const result = render(
+                <Switch id="testSwitch" textOn="ON" textOff="OFF" animateOnUserToggleOnly={true} />
+            );
+            container = result.container;
+            await new Promise(resolve => setTimeout(resolve, 0));
+        });
+
+        const wrapper = container.querySelector('.switch');
+        const checkbox = container.querySelector('input[type="checkbox"]');
+
+        expect(checkbox.checked).toBe(true);
+        expect(wrapper.classList.contains('switch--manual-animation')).toBe(true);
+        expect(wrapper.classList.contains('switch--animate-on')).toBe(false);
+        expect(wrapper.classList.contains('switch--animate-off')).toBe(false);
+
+        await act(async () => {
+            fireEvent.click(checkbox);
+            await new Promise(resolve => setTimeout(resolve, 0));
+        });
+
+        expect(wrapper.classList.contains('switch--animate-off')).toBe(true);
+    });
+
     test('has correct CSS classes', async () => {
         let container;
         await act(async () => {
@@ -135,4 +167,3 @@ describe('Switch', () => {
         expect(container.querySelector('.switch-label')).toBeTruthy();
     });
 });
-

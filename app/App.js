@@ -7,23 +7,31 @@ import Header from './Header';
 import AddNewTextbox from './AddNewTextbox';
 import CollectionList from './CollectionList';
 import Footer from './Footer';
+import FPLayout from './fullpage/FPLayout';
+import CommandPalette from './CommandPalette';
 import { useAtom, useSetAtom, useAtomValue } from 'jotai';
 import { highlightedCollectionUidState } from './atoms/animationsState';
+import { commandPaletteOpenState } from './atoms/commandPaletteState';
+import { sidebarNavigationState } from './atoms/fullpageState';
 import {
     settingsDataState,
     themeState,
     isLoggedInState,
     syncInProgressState,
     lastSyncTimeState,
+    syncSessionStateState,
     searchState,
     listKeyState,
     trackingStateVersion,
+    viewContextState,
+    detailPanelOpenState,
 } from './atoms/globalAppSettingsState';
 
 import { browser } from '../static/globals';
+import { normalizeColorKey } from './utils/colorMigration';
 import TimeAgo from 'javascript-time-ago';
 import en from 'javascript-time-ago/locale/en';
-import { showSuccessToast, showErrorToast } from './toastHelpers';
+import { showSuccessToast, showErrorToast, setToastViewContext } from './toastHelpers';
 import { Tooltip } from 'react-tooltip';
 import { CollectionListOptions } from './CollectionListOptions';
 
@@ -41,9 +49,13 @@ import {
     loadAllFolders,
     updateFoldersOrder,
     repairOrphanCollections,
+    sortCollectionsForDisplay,
     STORAGE_KEYS,
     CURRENT_STORAGE_VERSION
 } from './utils/storageUtils';
+import { applyFolderCollapsedState, getFolderCollapseStorageKey } from './utils/folderViewState';
+import { openOrFocusFullPageInCurrentWindow } from './utils/openFullPage';
+import { openCollectionTabs } from './useCollectionOperations';
 
 // Folder operations
 import { createFolder } from './utils/folderOperations';
@@ -51,8 +63,26 @@ import { createFolder } from './utils/folderOperations';
 // Migration system imports - wrapped in try/catch for compatibility
 const PERF_NAMESPACE = 'tabox:popup';
 const PERF_MEASURE_PREFIX = `${PERF_NAMESPACE}:measure:`;
+const DEFAULT_COLLECTION_FILTERS = { recentlyOpenedActual: false, color: null };
 
 const makeMarkName = (label) => `${PERF_NAMESPACE}:${label}`;
+
+const escapeSearchRegex = (value) => value.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+
+const matchesCollectionSearch = (collection, search) => {
+  if (!search || !search.trim()) {
+    return true;
+  }
+
+  const searchRegex = new RegExp(escapeSearchRegex(search.trim()), 'i');
+
+  return Boolean(
+    collection?.name?.match(searchRegex) ||
+    (collection?.tabs || []).some((tab) => (
+      tab.title?.match(searchRegex) || tab.url?.match(searchRegex)
+    ))
+  );
+};
 
 const markPerformancePoint = (label) => {
   if (typeof performance === 'undefined' || typeof performance.mark !== 'function') {
@@ -123,6 +153,24 @@ const shouldAutoLogPerformance = () => {
 const INITIAL_COLLECTION_BATCH_SIZE = 20;
 const HYDRATION_BATCH_SIZE = 50;
 const MIGRATION_SESSION_KEY = 'tabox:migrationChecked';
+const SYNC_SESSION_STATE_KEY = 'syncSessionState';
+const DEFAULT_SYNC_SESSION_STATE = {
+  isEnabled: false,
+  status: 'disabled',
+  user: null,
+  hasRefreshToken: false,
+  error: null,
+  lastCheckedAt: 0
+};
+
+const normalizeSyncSessionState = (syncSessionState = {}) => ({
+  ...DEFAULT_SYNC_SESSION_STATE,
+  ...(syncSessionState || {})
+});
+
+const isSyncSessionEnabled = (syncSessionState = {}) => (
+  Boolean(syncSessionState.isEnabled || syncSessionState.hasRefreshToken || syncSessionState.user)
+);
 
 const runWhenIdle = () => {
   return new Promise((resolve) => {
@@ -184,19 +232,25 @@ if (typeof window !== 'undefined') {
 
 let migrationSystemAvailable = false;
 let assessMigrationNeeds, executeMigration, isDataSafe;
-
-function App() {
+let timeAgoLocaleInitialized = false;
+function App({ mode = 'popup' }) {
+  const isFullPage = mode === 'fullpage';
   const [settingsData, setSettingsData] = useAtom(settingsDataState);
   const setHighlightedCollectionUid = useSetAtom(highlightedCollectionUidState);
   const [themeMode, setThemeMode] = useAtom(themeState);
   const [isLoggedIn, setIsLoggedIn] = useAtom(isLoggedInState);
+  const [, setSyncSessionState] = useAtom(syncSessionStateState);
   const setSyncInProgress = useSetAtom(syncInProgressState);
   const setLastSyncTime = useSetAtom(lastSyncTimeState);
+  const setViewContext = useSetAtom(viewContextState);
+  const isPanelOpen = useAtomValue(detailPanelOpenState);
+  const setCommandPaletteOpen = useSetAtom(commandPaletteOpenState);
+  const setSidebarNavigation = useSetAtom(sidebarNavigationState);
   const search = useAtomValue(searchState);
   const [listKey, setListKey] = useAtom(listKeyState);
   const [sortValue, setSortValue] = useState(null);
-  const [viewMode, setViewMode] = useState('list'); // 'list' or 'grid'
-  const [filters, setFilters] = useState({ recentlyOpenedActual: false, color: null });
+  const [viewMode, setViewMode] = useState(isFullPage ? 'grid' : 'list');
+  const [filters, setFilters] = useState(DEFAULT_COLLECTION_FILTERS);
   
   // Global tracking state version - incremented when tracking changes
   const [trackingVersion, setTrackingVersion] = useAtom(trackingStateVersion);
@@ -210,21 +264,163 @@ function App() {
   const [dataLoading, setDataLoading] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
 
-  // Lightning effect state for manually updated collections
-  const [lightningEffectUid, setLightningEffectUid] = useState(null);
-  
   // Lightning effect state for folders when collections are dropped into them
   const [lightningEffectFolderUid, setLightningEffectFolderUid] = useState(null);
 
   // Storage performance tracking
   const [storageStats, setStorageStats] = useState(null);
+  const [trackedCollectionUids, setTrackedCollectionUids] = useState(new Set());
 
   // Folders state management
   const [foldersData, setFoldersData] = useState([]);
+  const [folderCollapsedState, setFolderCollapsedState] = useState({});
   const [performanceDataReady, setPerformanceDataReady] = useState(false);
   const [performanceSummaryLogged, setPerformanceSummaryLogged] = useState(false);
   const performanceMarksRef = useRef({ critical: false, data: false });
   const metadataUidOrderRef = useRef([]);
+  const settingsDataRef = useRef([]);
+  const dataLoadedRef = useRef(false);
+  const storageReloadTimeoutRef = useRef(null);
+  const folderCollapseStorageKey = getFolderCollapseStorageKey(isFullPage ? 'fullpage' : 'popup');
+
+  useEffect(() => {
+    settingsDataRef.current = settingsData || [];
+  }, [settingsData]);
+
+  useEffect(() => {
+    dataLoadedRef.current = dataLoaded;
+  }, [dataLoaded]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadFolderCollapsedState = async () => {
+      try {
+        const stored = await browser.storage.local.get(folderCollapseStorageKey);
+        if (!isMounted) return;
+
+        const nextState = stored?.[folderCollapseStorageKey];
+        setFolderCollapsedState(
+          nextState && typeof nextState === 'object' && !Array.isArray(nextState)
+            ? nextState
+            : {}
+        );
+      } catch (error) {
+        console.error(`Error loading ${folderCollapseStorageKey}:`, error);
+        if (isMounted) {
+          setFolderCollapsedState({});
+        }
+      }
+    };
+
+    loadFolderCollapsedState();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [folderCollapseStorageKey]);
+
+  const getCurrentCollectionSortOptions = useCallback(async () => {
+    const { currentSortValue, currentSortAscending } = await browser.storage.local.get(['currentSortValue', 'currentSortAscending']);
+    const selectedSortValue = currentSortValue || 'DATE';
+    const sortAscending = currentSortAscending !== undefined ? currentSortAscending : true;
+    const sortFieldMap = { 'DATE': 'lastUpdated', 'NAME': 'name', 'COLOR': 'color' };
+
+    return {
+      sortBy: sortFieldMap[selectedSortValue] || 'lastUpdated',
+      sortOrder: sortAscending ? 'asc' : 'desc'
+    };
+  }, []);
+
+  const applyCollectionUpdates = useCallback(async (updatedCollectionsInput = []) => {
+    const updatedCollections = updatedCollectionsInput.filter(Boolean);
+
+    if (updatedCollections.length === 0 || !dataLoadedRef.current || settingsDataRef.current.length === 0) {
+      return;
+    }
+    const { sortBy, sortOrder } = await getCurrentCollectionSortOptions();
+    const updatedCollectionUids = new Set(updatedCollections.map(collection => collection.uid));
+
+    setSettingsData(prevSettingsData => {
+      const currentCollections = prevSettingsData || [];
+      const unchangedCollections = currentCollections.filter(collection => !updatedCollectionUids.has(collection.uid));
+
+      if (updatedCollections.length === 0 && unchangedCollections.length === currentCollections.length) {
+        return currentCollections;
+      }
+
+      return sortCollectionsForDisplay(
+        [...unchangedCollections, ...updatedCollections],
+        { sortBy, sortOrder }
+      );
+    });
+  }, [getCurrentCollectionSortOptions, setSettingsData]);
+
+  const reloadCollectionsAndFoldersFromStorage = useCallback(async ({ updateSyncTime = false } = {}) => {
+    try {
+      const { sortBy, sortOrder } = await getCurrentCollectionSortOptions();
+      const [collections, folders] = await Promise.all([
+        loadAllCollections({ metadataOnly: false, sortBy, sortOrder }),
+        loadAllFolders({ metadataOnly: false, sortBy: 'order', sortOrder: 'asc' })
+      ]);
+
+      setSettingsData(collections);
+      setFoldersData(folders);
+
+      if (updateSyncTime && isLoggedIn) {
+        await refreshLastSyncTimeFromStorage({ fallbackToNow: true });
+      }
+    } catch (error) {
+      console.error('Error reloading data from storage:', error);
+    }
+  }, [getCurrentCollectionSortOptions, isLoggedIn, refreshLastSyncTimeFromStorage, setSettingsData]);
+
+  const scheduleStorageDrivenReload = useCallback(() => {
+    if (!dataLoadedRef.current) {
+      return;
+    }
+
+    if (storageReloadTimeoutRef.current) {
+      clearTimeout(storageReloadTimeoutRef.current);
+    }
+
+    storageReloadTimeoutRef.current = setTimeout(() => {
+      storageReloadTimeoutRef.current = null;
+      reloadCollectionsAndFoldersFromStorage();
+    }, 25);
+  }, [reloadCollectionsAndFoldersFromStorage]);
+
+  const loadTrackedCollectionUids = useCallback(async () => {
+    const { chkEnableAutoUpdate, collectionsToTrack } = await browser.storage.local.get([
+      'chkEnableAutoUpdate',
+      'collectionsToTrack'
+    ]);
+
+    if (!chkEnableAutoUpdate) {
+      setTrackedCollectionUids(new Set());
+      return;
+    }
+
+    setTrackedCollectionUids(new Set((collectionsToTrack || []).map(item => item.collectionUid)));
+  }, []);
+
+  const refreshLastSyncTimeFromStorage = useCallback(async ({ fallbackToNow = false } = {}) => {
+    const { lastSuccessfulSyncTime } = await browser.storage.local.get('lastSuccessfulSyncTime');
+
+    if (lastSuccessfulSyncTime) {
+      setLastSyncTime(lastSuccessfulSyncTime);
+      return lastSuccessfulSyncTime;
+    }
+
+    if (fallbackToNow) {
+      const now = Date.now();
+      setLastSyncTime(now);
+      return now;
+    }
+
+    setLastSyncTime(null);
+    return null;
+  }, [setLastSyncTime]);
   
   const markDataHydrationComplete = useCallback(() => {
     if (!performanceMarksRef.current.data) {
@@ -350,34 +546,17 @@ function App() {
     };
   }
 
-  const checkSyncStatus = async () => {
-    // Phase 4: Show cached status immediately
-    const { googleUser, googleRefreshToken } = await browser.storage.local.get(['googleUser', 'googleRefreshToken']);
-    if (isMountedRef.current) {
-      setIsLoggedIn(!!googleUser); // Show cached status
-    }
-    
-    // Then check actual status in background
-    if (!googleRefreshToken) return;
-    
-    browser.runtime.sendMessage({ type: 'checkSyncStatus' }).then(async (response) => {
-      if (isMountedRef.current) {
-        // Convert response to boolean to prevent object reference re-renders
-        setIsLoggedIn(response ? true : false);
-        if (response) await applyDataFromServer();
-      }
-    });
-  }
-
   const _handleSyncError = async () => {
     await browser.storage.local.remove('googleToken');
     await browser.storage.local.remove('googleUser');
+    setSyncSessionState(normalizeSyncSessionState());
     setIsLoggedIn(false);
     showErrorToast('Error syncing data, please enable sync again');
   }
 
   const logout = async () => {
     browser.runtime.sendMessage({ type: 'logout' }).then(() => {
+      setSyncSessionState(normalizeSyncSessionState());
       setIsLoggedIn(false);
     })
   };
@@ -390,13 +569,7 @@ function App() {
       if (response !== false) {
         // Use new storage system for server data
         
-        // Load user's sort preferences
-        const { currentSortValue, currentSortAscending } = await browser.storage.local.get(['currentSortValue', 'currentSortAscending']);
-        const sortValue = currentSortValue || 'DATE';
-        const sortAscending = currentSortAscending !== undefined ? currentSortAscending : true;
-        const sortFieldMap = { 'DATE': 'lastUpdated', 'NAME': 'name', 'COLOR': 'color' };
-        const sortBy = sortFieldMap[sortValue] || 'lastUpdated';
-        const sortOrder = sortAscending ? 'asc' : 'desc';
+        const { sortBy, sortOrder } = await getCurrentCollectionSortOptions();
         
         console.log('📥 applyDataFromServer: Response type:', typeof response, 'Is array:', Array.isArray(response), 'Length:', response?.length);
         
@@ -418,7 +591,7 @@ function App() {
             
             setSettingsData(updatedCollections);
             setFoldersData(updatedFolders);
-            setLastSyncTime(Date.now());
+            await refreshLastSyncTimeFromStorage({ fallbackToNow: true });
           } else {
             console.error('❌ Failed to save server data');
           }
@@ -428,7 +601,7 @@ function App() {
           const folders = await loadAllFolders({ metadataOnly: false });
           console.log('📥 applyDataFromServer: Loaded', folders.length, 'folders');
           setFoldersData(folders);
-          setLastSyncTime(Date.now());
+          await refreshLastSyncTimeFromStorage({ fallbackToNow: true });
         } else {
           // Server returned empty collections - still load folders from storage
           // (folders are saved by migrateIncomingSyncData in the background)
@@ -444,7 +617,7 @@ function App() {
           
           setSettingsData(updatedCollections);
           setFoldersData(updatedFolders);
-          setLastSyncTime(Date.now());
+          await refreshLastSyncTimeFromStorage({ fallbackToNow: true });
         }
       }
     }).catch(async (err) => {
@@ -456,12 +629,71 @@ function App() {
 
   const _update = async () => {
     setSyncInProgress(true);
-    browser.runtime.sendMessage({ type: 'updateRemote' }).then(() => {
-      setLastSyncTime(Date.now());
+    browser.runtime.sendMessage({ type: 'updateRemote' }).then(async (response) => {
+      if (response !== false) {
+        await reloadCollectionsAndFoldersFromStorage({ updateSyncTime: true });
+        return;
+      }
+
+      await refreshLastSyncTimeFromStorage({ fallbackToNow: false });
     }).catch(async (err) => {
       await _handleSyncError(err)
     }).finally(() => {
       setSyncInProgress(false);
+    });
+  }
+
+  const checkSyncStatus = async () => {
+    const {
+      [SYNC_SESSION_STATE_KEY]: storedSyncSessionState,
+      googleUser,
+      googleRefreshToken
+    } = await browser.storage.local.get([SYNC_SESSION_STATE_KEY, 'googleUser', 'googleRefreshToken']);
+    const cachedSyncSessionState = normalizeSyncSessionState(
+      storedSyncSessionState || {
+        user: googleUser || null,
+        hasRefreshToken: Boolean(googleRefreshToken),
+        isEnabled: Boolean(googleUser || googleRefreshToken),
+        status: googleRefreshToken ? 'auth_refreshing' : 'disabled',
+        error: null,
+        lastCheckedAt: 0
+      }
+    );
+
+    if (isMountedRef.current) {
+      setSyncSessionState(cachedSyncSessionState);
+      setIsLoggedIn(isSyncSessionEnabled(cachedSyncSessionState));
+    }
+    
+    // Then check actual status in background
+    if (!cachedSyncSessionState.hasRefreshToken && !googleRefreshToken) return;
+    
+    browser.runtime.sendMessage({ type: 'checkSyncStatus' }).then(async (response) => {
+      if (isMountedRef.current) {
+        if (response === undefined) {
+          return;
+        }
+
+        if (response === false) {
+          const disabledState = normalizeSyncSessionState();
+          setSyncSessionState(disabledState);
+          setIsLoggedIn(false);
+          return;
+        }
+
+        const nextSyncSessionState = normalizeSyncSessionState({
+          ...cachedSyncSessionState,
+          user: response.displayName || response.emailAddress ? response : cachedSyncSessionState.user,
+          hasRefreshToken: true,
+          isEnabled: response.syncStatus !== 'disabled',
+          status: response.syncStatus || 'active',
+          error: response.syncError || null,
+          lastCheckedAt: Date.now()
+        });
+        setSyncSessionState(nextSyncSessionState);
+        setIsLoggedIn(isSyncSessionEnabled(nextSyncSessionState));
+        if (response.syncStatus === 'active') await _update();
+      }
     });
   }
 
@@ -527,11 +759,9 @@ function App() {
           return newList;
         });
         
-        // Trigger lightning effect for manual updates
+        // Highlight the updated collection instead of replaying the whole grid
         if (isManualUpdate) {
-          setLightningEffectUid(newCollection.uid);
-          // Clear the effect after animation duration
-          setTimeout(() => setLightningEffectUid(null), 700);
+          setHighlightedCollectionUid(newCollection.uid);
         }
         
         // Continue with sync if logged in
@@ -697,39 +927,58 @@ function App() {
 
   // Function to refresh both collections and folders data
   const refreshDataAfterFolderOperation = async () => {
-    try {
-      // Load user's sort preferences
-      const { currentSortValue, currentSortAscending } = await browser.storage.local.get(['currentSortValue', 'currentSortAscending']);
-      const sortValue = currentSortValue || 'DATE';
-      const sortAscending = currentSortAscending !== undefined ? currentSortAscending : true;
-      const sortFieldMap = { 'DATE': 'lastUpdated', 'NAME': 'name', 'COLOR': 'color' };
-      const sortBy = sortFieldMap[sortValue] || 'lastUpdated';
-      const sortOrder = sortAscending ? 'asc' : 'desc';
-      
-      // Reload both collections and folders to reflect changes
-      const [collections, folders] = await Promise.all([
-        loadAllCollections({ metadataOnly: false, sortBy, sortOrder }),
-        loadAllFolders({ metadataOnly: false })
-      ]);
-      
-      setSettingsData(collections);
-      setFoldersData(folders);
-      
-      // Update sync time in footer (sync is already fired by folder operations)
-      if (isLoggedIn) {
-        setLastSyncTime(Date.now());
-      }
-    } catch (error) {
-      console.error('Error refreshing data:', error);
+    await reloadCollectionsAndFoldersFromStorage({ updateSyncTime: true });
+  };
+
+  const applyOptimisticFolderUpdate = useCallback((folderUid, updates = {}) => {
+    if (!folderUid || !updates || typeof updates !== 'object') {
+      return;
     }
-  };
+
+    setFoldersData((currentFolders) => currentFolders.map((folder) => (
+      folder.uid === folderUid
+        ? {
+            ...folder,
+            ...updates,
+          }
+        : folder
+    )));
+  }, []);
   
-  // Lightweight function to update a single folder in state (for UI-only changes like collapsed state)
-  const updateSingleFolderInState = (updatedFolder) => {
-    setFoldersData(prevFolders => 
-      prevFolders.map(f => f.uid === updatedFolder.uid ? updatedFolder : f)
-    );
-  };
+  const updateFolderCollapsedPreference = useCallback((updatedFolder) => {
+    if (!updatedFolder?.uid) {
+      return;
+    }
+
+    const nextCollapsed = !!updatedFolder.collapsed;
+
+    setFolderCollapsedState((prevState) => {
+      if (prevState[updatedFolder.uid] === nextCollapsed) {
+        return prevState;
+      }
+
+      const nextState = {
+        ...prevState,
+        [updatedFolder.uid]: nextCollapsed,
+      };
+
+      browser.storage.local.set({
+        [folderCollapseStorageKey]: nextState,
+      }).catch((error) => {
+        console.error(`Error saving ${folderCollapseStorageKey}:`, error);
+      });
+
+      return nextState;
+    });
+  }, [folderCollapseStorageKey]);
+
+  const displayFolders = useMemo(() => {
+    return applyFolderCollapsedState({
+      folders: foldersData,
+      collapsedState: folderCollapsedState,
+      viewContext: isFullPage ? 'fullpage' : 'popup',
+    });
+  }, [folderCollapsedState, foldersData, isFullPage]);
 
   const hydrateCollectionsInBatches = useCallback(async (metadataList, startIndex = 0) => {
     if (!metadataList || metadataList.length === 0) {
@@ -740,6 +989,7 @@ function App() {
 
     const metadataLookup = new Map(metadataList.map((item) => [item.uid, item]));
     let currentIndex = Math.max(startIndex, 0);
+    const missingUids = [];
 
     if (currentIndex >= metadataList.length) {
       setDataLoaded(true);
@@ -753,6 +1003,12 @@ function App() {
 
       if (chunkUids.length) {
         const chunkDataMap = await loadMultipleCollections(chunkUids);
+
+        for (const uid of chunkUids) {
+          if (!chunkDataMap[uid]) {
+            missingUids.push(uid);
+          }
+        }
 
         setSettingsData((previousCollections = []) => {
           const collectionMap = new Map();
@@ -781,6 +1037,27 @@ function App() {
 
       currentIndex += HYDRATION_BATCH_SIZE;
       await runWhenIdle();
+    }
+
+    // Repair index-storage mismatches: remove orphan index entries that have
+    // no backing collection_<uid> record so they don't silently hide data.
+    if (missingUids.length > 0) {
+      console.warn(`Hydration: ${missingUids.length} collection(s) in index but missing from storage — cleaning index`, missingUids);
+      try {
+        const index = await loadCollectionsIndex();
+        let repaired = false;
+        for (const uid of missingUids) {
+          if (index[uid]) {
+            delete index[uid];
+            repaired = true;
+          }
+        }
+        if (repaired) {
+          await browser.storage.local.set({ [STORAGE_KEYS.COLLECTIONS_INDEX]: index });
+        }
+      } catch (repairError) {
+        console.warn('Non-critical: index repair after hydration failed:', repairError);
+      }
     }
 
     setDataLoaded(true);
@@ -852,6 +1129,8 @@ function App() {
         
         if (storageeMigrationResult.success && storageeMigrationResult.migrated) {
           showSuccessToast(`Upgraded storage system for ${storageeMigrationResult.count} collections - faster performance!`);
+        } else if (storageeMigrationResult.unsupportedPre40) {
+          showErrorToast('Automatic migration is now limited to 4.0+ local data. Your older local data was left untouched.');
         } else if (!storageeMigrationResult.success) {
           console.warn('⚠️ Storage migration failed, using legacy system');
         }
@@ -916,19 +1195,7 @@ function App() {
   // Optimized data loading function
   const loadDataWithNewSystem = async () => {
     try {
-      // Load user's sort preferences to respect their saved choice
-      const { currentSortValue, currentSortAscending } = await browser.storage.local.get(['currentSortValue', 'currentSortAscending']);
-      const sortValue = currentSortValue || 'DATE';
-      const sortAscending = currentSortAscending !== undefined ? currentSortAscending : true;
-      
-      // Map user sort preference to storage field name
-      const sortFieldMap = {
-        'DATE': 'lastUpdated',
-        'NAME': 'name',
-        'COLOR': 'color'
-      };
-      const sortBy = sortFieldMap[sortValue] || 'lastUpdated';
-      const sortOrder = sortAscending ? 'asc' : 'desc';
+      const { sortBy, sortOrder } = await getCurrentCollectionSortOptions();
       
       const [metadata, folders] = await Promise.all([
         loadAllCollections({
@@ -976,56 +1243,57 @@ function App() {
       
     } catch (error) {
       console.error('❌ Failed to load data with new system, falling back to legacy:', error);
-      
-      // Fallback to legacy loading (collections only)
       await loadDataLegacy();
-      // Initialize empty folders array for fallback
-      setFoldersData([]);
     }
   };
 
   // Legacy data loading (fallback)
   const loadDataLegacy = async () => {
-    const { tabsArray } = await browser.storage.local.get('tabsArray');
+    // Try to load folders from indexed storage even in legacy mode
+    let legacyFolders = [];
+    try {
+      legacyFolders = await loadAllFolders({ metadataOnly: false });
+    } catch (folderError) {
+      console.warn('Could not load folders in legacy fallback:', folderError);
+    }
+    const hasFolders = legacyFolders.length > 0;
+    const folderUids = new Set(legacyFolders.map(f => f.uid));
+
+    const { [STORAGE_KEYS.LEGACY_TABS_ARRAY]: tabsArray } = await browser.storage.local.get(STORAGE_KEYS.LEGACY_TABS_ARRAY);
     let newCollections = [];
     
     if (tabsArray && tabsArray.length > 0) {
-      // Clean up any corrupted or duplicate collections
       const cleanedCollections = [];
       const seenUids = new Set();
       
       tabsArray.forEach((collection) => {
-        // Skip if no UID or duplicate UID
         if (!collection.uid || seenUids.has(collection.uid)) {
           console.warn('Skipping duplicate or invalid collection:', collection.uid);
           return;
         }
         
-        // Clean up folder-related fields if they exist
-        const cleanedCollection = { ...collection };
-        delete cleanedCollection.parentId;
-        if (cleanedCollection.type === 'folder') {
-          console.warn('Skipping folder item:', cleanedCollection.uid);
+        if (collection.type === 'folder') {
+          console.warn('Skipping folder item in tabsArray:', collection.uid);
           return;
         }
-        cleanedCollection.type = 'collection';
+
+        const cleanedCollection = { ...collection, type: 'collection' };
+        // Preserve parentId when the referenced folder actually exists
+        if (cleanedCollection.parentId && !hasFolders) {
+          delete cleanedCollection.parentId;
+        } else if (cleanedCollection.parentId && !folderUids.has(cleanedCollection.parentId)) {
+          delete cleanedCollection.parentId;
+        }
         
         seenUids.add(collection.uid);
         cleanedCollections.push(cleanedCollection);
       });
       
-      // Save cleaned collections back to storage if we removed anything
-      if (cleanedCollections.length !== tabsArray.length) {
-        await browser.storage.local.set({ tabsArray: cleanedCollections });
-        
-        // Also clear any folder storage
-        await browser.storage.local.remove('foldersArray');
-      }
-      
       newCollections = cleanedCollections;
     }
     
     setSettingsData(newCollections);
+    setFoldersData(legacyFolders);
     setDataLoaded(true);
     markDataHydrationComplete();
   };
@@ -1321,10 +1589,15 @@ function App() {
     
     const initializeApp = async () => {
       // Initialize TimeAgo locale once for the entire app
-      TimeAgo.addDefaultLocale(en);
+      if (!timeAgoLocaleInitialized) {
+        TimeAgo.addDefaultLocale(en);
+        timeAgoLocaleInitialized = true;
+      }
       
       // Phase 2: Batch all initial storage reads
       const updateFlags = await loadInitialSettings();
+      await refreshLastSyncTimeFromStorage();
+      await loadTrackedCollectionUids();
       
       // Phase 3: Defer data loading until after initial render
       // This allows the popup window to open immediately
@@ -1344,7 +1617,7 @@ function App() {
             if (isMounted) {
               await checkSyncStatus();
             }
-          }, 1000);
+          }, isFullPage ? 1000 : 0);
           timeouts.push(timeout3);
         }
       }, 100);
@@ -1358,16 +1631,78 @@ function App() {
       isMounted = false;
       timeouts.forEach(timeout => clearTimeout(timeout));
     };
-  }, []); // Only run once on mount
+  }, [loadTrackedCollectionUids, refreshLastSyncTimeFromStorage]); // Only run once on mount
 
   // PERFORMANCE FIX: Single global storage listener for tracking changes
   // This replaces individual listeners in every collection/folder component
   // Reduces 50+ listeners to just 1 listener
   useEffect(() => {
-    const handleStorageChange = (changes, areaName) => {
-      if (areaName === 'local' && (changes.collectionsToTrack || changes.chkEnableAutoUpdate)) {
-        // Increment version to trigger re-checks in child components
-        setTrackingVersion(prev => prev + 1);
+    const handleStorageChange = async (changes, areaName) => {
+      try {
+        if (areaName !== 'local') {
+          return;
+        }
+
+        const changedKeys = Object.keys(changes);
+        const syncDataChanged = changedKeys.some((key) => (
+          key === STORAGE_KEYS.COLLECTIONS_INDEX ||
+          key === STORAGE_KEYS.FOLDERS_INDEX ||
+          key.startsWith(STORAGE_KEYS.COLLECTION_PREFIX) ||
+          key.startsWith(STORAGE_KEYS.FOLDER_PREFIX)
+        ));
+
+        if (syncDataChanged) {
+          scheduleStorageDrivenReload();
+        }
+
+        if (changes.lastSuccessfulSyncTime) {
+          setLastSyncTime(changes.lastSuccessfulSyncTime.newValue || null);
+        }
+
+        if (changes[SYNC_SESSION_STATE_KEY]) {
+          const nextSyncSessionState = normalizeSyncSessionState(changes[SYNC_SESSION_STATE_KEY].newValue);
+          setSyncSessionState(nextSyncSessionState);
+          setIsLoggedIn(isSyncSessionEnabled(nextSyncSessionState));
+        } else if (changes.googleUser || changes.googleRefreshToken) {
+          const nextGoogleUser = changes.googleUser
+            ? changes.googleUser.newValue
+            : (await browser.storage.local.get('googleUser')).googleUser;
+          const nextGoogleRefreshToken = changes.googleRefreshToken
+            ? changes.googleRefreshToken.newValue
+            : (await browser.storage.local.get('googleRefreshToken')).googleRefreshToken;
+          const currentStoredSyncSessionState = normalizeSyncSessionState(
+            (await browser.storage.local.get(SYNC_SESSION_STATE_KEY))[SYNC_SESSION_STATE_KEY]
+          );
+          const nextSyncSessionState = normalizeSyncSessionState({
+            ...currentStoredSyncSessionState,
+            user: nextGoogleUser || currentStoredSyncSessionState.user,
+            hasRefreshToken: Boolean(nextGoogleRefreshToken),
+            isEnabled: Boolean(nextGoogleUser || nextGoogleRefreshToken || currentStoredSyncSessionState.isEnabled),
+            status: nextGoogleUser || nextGoogleRefreshToken ? currentStoredSyncSessionState.status : 'disabled'
+          });
+          setSyncSessionState(nextSyncSessionState);
+          setIsLoggedIn(isSyncSessionEnabled(nextSyncSessionState));
+        }
+
+        if (changes.collectionsToTrack || changes.chkEnableAutoUpdate) {
+          const trackingEnabled = changes.chkEnableAutoUpdate
+            ? Boolean(changes.chkEnableAutoUpdate.newValue)
+            : Boolean((await browser.storage.local.get('chkEnableAutoUpdate')).chkEnableAutoUpdate);
+          const trackedEntries = changes.collectionsToTrack
+            ? (changes.collectionsToTrack.newValue || [])
+            : (await browser.storage.local.get('collectionsToTrack')).collectionsToTrack || [];
+
+          setTrackedCollectionUids(
+            trackingEnabled
+              ? new Set(trackedEntries.map(item => item.collectionUid))
+              : new Set()
+          );
+
+          // Increment version to trigger re-checks in child components
+          setTrackingVersion(prev => prev + 1);
+        }
+      } catch (error) {
+        console.error('Error handling storage change:', error);
       }
     };
     
@@ -1376,11 +1711,29 @@ function App() {
     return () => {
       browser.storage.onChanged.removeListener(handleStorageChange);
     };
-  }, []); // Only run once on mount
+  }, [scheduleStorageDrivenReload, setIsLoggedIn, setLastSyncTime, setTrackingVersion]); // Only app-level listener, uses refs for latest data
 
-  const escapeRegex = string => {
-    return string.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-  }
+  useEffect(() => {
+    const handleRuntimeMessage = async (request) => {
+      try {
+        if (request?.type !== 'collectionAutoUpdated' || !request.collection) {
+          return undefined;
+        }
+
+        await applyCollectionUpdates([request.collection]);
+        return undefined;
+      } catch (error) {
+        console.error('Error handling runtime collection update:', error);
+        return undefined;
+      }
+    };
+
+    browser.runtime.onMessage.addListener(handleRuntimeMessage);
+
+    return () => {
+      browser.runtime.onMessage.removeListener(handleRuntimeMessage);
+    };
+  }, [applyCollectionUpdates]);
 
   // Check if any filters are currently active
   const hasActiveFilters = useMemo(() => {
@@ -1398,19 +1751,7 @@ function App() {
     
     // Apply search filter
     if (search && search.trim() !== '') {
-      const searchRegex = new RegExp(escapeRegex(search), 'i');
-      filteredCollections = filteredCollections.filter(collection => {
-        // Search in collection name
-        const nameMatch = collection.name.match(searchRegex);
-        
-        // Search in tab titles and URLs
-        const tabMatch = collection.tabs && collection.tabs.some(tab => 
-          tab.title?.match(searchRegex) || 
-          tab.url?.match(searchRegex)
-        );
-        
-        return nameMatch || tabMatch;
-      });
+      filteredCollections = filteredCollections.filter((collection) => matchesCollectionSearch(collection, search));
     }
     
     // Apply recently opened filter (last 3 hours)
@@ -1424,11 +1765,10 @@ function App() {
     // Apply color filter
     if (filters.color) {
       filteredCollections = filteredCollections.filter(collection => {
-        return collection.color === filters.color;
+        return normalizeColorKey(collection.color) === normalizeColorKey(filters.color);
       });
     }
-    
-    
+
     return filteredCollections;
   }, [
     search,
@@ -1437,37 +1777,254 @@ function App() {
   ]);
 
   const handleFiltersChange = useCallback((newFilters) => {
-    setFilters(newFilters);
+    setFilters({
+      ...DEFAULT_COLLECTION_FILTERS,
+      ...newFilters,
+    });
   }, []);
 
   // Cleanup effect to prevent memory leaks
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
+      if (storageReloadTimeoutRef.current) {
+        clearTimeout(storageReloadTimeoutRef.current);
+        storageReloadTimeoutRef.current = null;
+      }
     };
   }, []);
 
+  // Set up fullpage mode class and view context
+  useEffect(() => {
+    if (isFullPage) {
+      document.documentElement.classList.add('fullpage-mode');
+      setViewContext('fullpage');
+      setToastViewContext('fullpage');
+    }
+    return () => {
+      document.documentElement.classList.remove('fullpage-mode');
+    };
+  }, [isFullPage, setViewContext]);
+
+  // Command Palette: global Cmd/Ctrl+K shortcut
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setCommandPaletteOpen(prev => !prev);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [setCommandPaletteOpen]);
+
+  // Build folder name lookup map for command palette hints
+  const folderNameMap = useMemo(() => {
+    const map = {};
+    (foldersData || []).forEach(f => { map[f.uid] = f.name; });
+    return map;
+  }, [foldersData]);
+
+  // Command palette action handlers
+  const cmdCreateFolder = useCallback(() => {
+    const event = new CustomEvent('tabox:open-create-folder');
+    window.dispatchEvent(event);
+  }, []);
+
+  const cmdImport = useCallback(() => {
+    const event = new CustomEvent('tabox:open-import');
+    window.dispatchEvent(event);
+  }, []);
+
+  const cmdExportAll = useCallback(async () => {
+    try {
+      const { downloadTextFile } = await import('./utils');
+      const collections = await loadAllCollections();
+      const folders = await loadAllFolders();
+      const exportData = {
+        type: 'full_export',
+        collections,
+        folders,
+        exportedAt: new Date().toISOString(),
+        version: '2.0',
+        stats: {
+          totalCollections: collections.length,
+          totalFolders: folders.length,
+          collectionsInFolders: collections.filter(c => c.parentId).length,
+          rootCollections: collections.filter(c => !c.parentId).length
+        }
+      };
+      downloadTextFile(JSON.stringify(exportData, null, 2), `tabox-full-export-${Date.now()}`);
+    } catch (error) {
+      console.error('Error exporting all data:', error);
+      showErrorToast('Export failed');
+    }
+  }, []);
+
+  const cmdOpenFullPage = useCallback(async () => {
+    await openOrFocusFullPageInCurrentWindow();
+    window.close();
+  }, []);
+
+  const cmdRestoreSession = useCallback(() => {
+    if (isFullPage) {
+      setSidebarNavigation('sessions');
+    } else {
+      const event = new CustomEvent('tabox:open-restore-session');
+      window.dispatchEvent(event);
+    }
+  }, [isFullPage, setSidebarNavigation]);
+
+  const cmdCollectionAction = useCallback(async (collection, actionId, payload) => {
+    switch (actionId) {
+      case 'open': {
+        await openCollectionTabs({
+          collectionToOpen: collection,
+          updateCollection
+        });
+        break;
+      }
+      case 'rename': {
+        const newName = payload?.newName;
+        if (!newName || newName === collection.name) break;
+        const updated = { ...collection, name: newName };
+        await updateCollection(updated);
+        showSuccessToast(`Renamed to "${newName}"`);
+        break;
+      }
+      case 'move': {
+        const { moveCollectionToFolder, removeCollectionFromFolder } = await import('./utils/folderOperations');
+        const targetFolderId = payload?.targetFolderId;
+        let success;
+        if (targetFolderId === null) {
+          success = await removeCollectionFromFolder(collection.uid);
+        } else {
+          success = await moveCollectionToFolder(collection.uid, targetFolderId);
+        }
+        if (success) {
+          await refreshDataAfterFolderOperation();
+          const targetName = targetFolderId === null ? 'root' : (folderNameMap[targetFolderId] || 'folder');
+          showSuccessToast(`Moved "${collection.name}" to ${targetName}`);
+        } else {
+          showErrorToast('Failed to move collection');
+        }
+        break;
+      }
+      case 'duplicate': {
+        const { generateCopyName, applyUid } = await import('./utils');
+        const TaboxCollection = (await import('./model/TaboxCollection')).default;
+        const allCollections = await loadAllCollections();
+        const newName = generateCopyName(collection.name, allCollections);
+        const copy = new TaboxCollection(
+          newName,
+          JSON.parse(JSON.stringify(collection.tabs || [])),
+          collection.chromeGroups ? JSON.parse(JSON.stringify(collection.chromeGroups)) : [],
+          collection.color,
+          null,
+          collection.window,
+          null,
+          null
+        );
+        const copiedCollection = applyUid(copy);
+        copiedCollection.parentId = collection.parentId;
+        await addCollection(copiedCollection);
+        showSuccessToast(`Duplicated as "${newName}"`);
+        break;
+      }
+      case 'export': {
+        const { downloadTextFile } = await import('./utils');
+        downloadTextFile(JSON.stringify(collection, null, 2), collection.name);
+        break;
+      }
+      case 'delete': {
+        const { deleteSingleCollection, updateFolderCollectionCount } = await import('./utils/storageUtils');
+        const parentFolderId = collection.parentId;
+        await deleteSingleCollection(collection.uid);
+        const freshCollections = await loadAllCollections();
+        await updateRemoteData(freshCollections);
+        if (parentFolderId) {
+          await updateFolderCollectionCount(parentFolderId);
+          await refreshDataAfterFolderOperation();
+        }
+        showSuccessToast(`Deleted "${collection.name}"`);
+        break;
+      }
+    }
+  }, [addCollection, updateCollection, updateRemoteData, refreshDataAfterFolderOperation, folderNameMap]);
+
+  const tooltipPortal = ReactDOM.createPortal(
+    <Tooltip
+      id="main-tooltip"
+      delayShow={200}
+      variant={themeMode === 'light' ? 'dark' : 'light'}
+      place="bottom"
+      style={{ zIndex: 2147483647, whiteSpace: 'pre-line' }}
+    />,
+    document.body
+  );
+
+  const commandPaletteEl = (
+    <CommandPalette
+      collections={settingsData}
+      folders={foldersData}
+      folderNameMap={folderNameMap}
+      onCreateFolder={cmdCreateFolder}
+      onImport={cmdImport}
+      onExportAll={cmdExportAll}
+      onOpenFullPage={cmdOpenFullPage}
+      onRestoreSession={cmdRestoreSession}
+      onCollectionAction={cmdCollectionAction}
+    />
+  );
+
+  if (isFullPage) {
+    return <>
+      {tooltipPortal}
+      {commandPaletteEl}
+      <FPLayout
+        folders={displayFolders}
+        collections={collectionsToShow}
+        allCollections={settingsData}
+        logout={logout}
+        applyDataFromServer={applyDataFromServer}
+        updateRemoteData={updateRemoteData}
+        addCollection={addCollection}
+        removeCollection={removeCollection}
+        updateCollection={updateCollection}
+        addFolder={addFolder}
+        onFolderOptimisticUpdate={applyOptimisticFolderUpdate}
+        onDataUpdate={refreshDataAfterFolderOperation}
+        onFolderStateChange={updateFolderCollapsedPreference}
+        updateFolders={updateFolders}
+        triggerSync={triggerSync}
+        viewMode={viewMode}
+        sortValue={sortValue}
+        onViewModeChange={setViewMode}
+        onFiltersChange={handleFiltersChange}
+        filters={filters}
+        hasActiveFilters={hasActiveFilters}
+        lightningEffectFolderUid={lightningEffectFolderUid}
+        triggerFolderLightningEffect={triggerFolderLightningEffect}
+        trackedCollectionUids={trackedCollectionUids}
+        listKey={listKey}
+      />
+    </>;
+  }
+
   return <>
-    {ReactDOM.createPortal(
-      <Tooltip
-        id="main-tooltip"
-        delayShow={200}
-        variant={themeMode === 'light' ? 'dark' : 'light'}
-        place="bottom"
-        style={{ zIndex: 2147483647, whiteSpace: 'pre-line' }}
-      />,
-      document.body
-    )}
-    <div className="App">
+    {tooltipPortal}
+    {commandPaletteEl}
+    <div className={`App${isFullPage ? ' fullpage' : ''}`}>
     <Header
+      isFullPage={isFullPage}
       applyDataFromServer={applyDataFromServer}
       updateRemoteData={updateRemoteData}
       logout={logout} />
-    <div className="main-content-wrapper">
+    <div className={`main-content-wrapper${isFullPage && isPanelOpen ? ' panel-open' : ''}`}>
               <AddNewTextbox addCollection={addCollection} addFolder={addFolder} updateRemoteData={updateRemoteData} onDataUpdate={refreshDataAfterFolderOperation} />
-      <CollectionListOptions 
+      <CollectionListOptions
         key={`${sortValue}-select`}
-        updateRemoteData={updateRemoteData} 
+        updateRemoteData={updateRemoteData}
         selected={sortValue}
         addCollection={addCollection}
         addFolder={addFolder}
@@ -1477,19 +2034,19 @@ function App() {
       />
       <CollectionList
         key={`collection-list-${listKey}`}
+        isFullPage={isFullPage}
         updateRemoteData={updateRemoteData}
         collections={collectionsToShow}
-        folders={foldersData}
+        folders={displayFolders}
         updateCollection={updateCollection}
         removeCollection={removeCollection}
         addCollection={addCollection}
         onDataUpdate={refreshDataAfterFolderOperation}
-        onFolderStateChange={updateSingleFolderInState}
+        onFolderStateChange={updateFolderCollapsedPreference}
         updateFolders={updateFolders}
         triggerSync={triggerSync}
         viewMode={viewMode}
         hasActiveFilters={hasActiveFilters}
-        lightningEffectUid={lightningEffectUid}
         lightningEffectFolderUid={lightningEffectFolderUid}
         triggerFolderLightningEffect={triggerFolderLightningEffect} />
       <div className="bottom-fade-overlay"></div>

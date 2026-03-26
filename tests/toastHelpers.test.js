@@ -3,9 +3,17 @@ import toast from 'react-hot-toast';
 
 // Mock react-hot-toast (already mocked in jest.setup.js, but let's verify behavior)
 jest.mock('react-hot-toast', () => ({
+    __esModule: true,
+    default: {
+        custom: jest.fn(),
+        success: jest.fn(),
+        error: jest.fn(),
+        dismiss: jest.fn(),
+    },
     custom: jest.fn(),
     success: jest.fn(),
     error: jest.fn(),
+    dismiss: jest.fn(),
 }));
 
 describe('toastHelpers', () => {
@@ -99,4 +107,3 @@ describe('toastHelpers', () => {
         });
     });
 });
-

@@ -179,7 +179,6 @@ function FolderContainer({
     const {
         handleUpdateFolderName,
         handleUpdateFolderColor,
-        handleToggleCollapsed,
         handleDeleteFolder
     } = useFolderOperations({
         folder,
@@ -188,12 +187,10 @@ function FolderContainer({
         onFolderDelete: onFolderDelete || (() => {})
     });
     
-    const toggleExpanded = async () => {
-        const newCollapsed = await handleToggleCollapsed();
+    const toggleExpanded = () => {
+        const newCollapsed = localExpanded;
         if (isMountedRef.current) {
             setLocalExpanded(!newCollapsed);
-            // Use lightweight state update for UI-only changes (collapsed state)
-            // This prevents unnecessary reloads of all data
             if (onFolderStateChange) {
                 const updatedFolder = { ...folder, collapsed: newCollapsed };
                 onFolderStateChange(updatedFolder);
@@ -243,6 +240,32 @@ function FolderContainer({
 
     const collectionCount = folder?.collectionCount || 0;
     const folderColor = React.useMemo(() => getFolderColor(), [getFolderColor]);
+    const folderAccentSoft = React.useMemo(() => {
+        const normalizedHex = folderColor.replace('#', '');
+
+        if (normalizedHex.length !== 6) {
+            return 'rgba(79, 172, 254, 0.14)';
+        }
+
+        const red = parseInt(normalizedHex.slice(0, 2), 16);
+        const green = parseInt(normalizedHex.slice(2, 4), 16);
+        const blue = parseInt(normalizedHex.slice(4, 6), 16);
+
+        return `rgba(${red}, ${green}, ${blue}, 0.14)`;
+    }, [folderColor]);
+    const folderAccentStrong = React.useMemo(() => {
+        const normalizedHex = folderColor.replace('#', '');
+
+        if (normalizedHex.length !== 6) {
+            return 'rgba(79, 172, 254, 0.28)';
+        }
+
+        const red = parseInt(normalizedHex.slice(0, 2), 16);
+        const green = parseInt(normalizedHex.slice(2, 4), 16);
+        const blue = parseInt(normalizedHex.slice(4, 6), 16);
+
+        return `rgba(${red}, ${green}, ${blue}, 0.28)`;
+    }, [folderColor]);
 
     
     // Early return if folder is invalid
@@ -253,6 +276,9 @@ function FolderContainer({
 
     // Styles
     const containerStyle = {
+        '--folder-accent-color': folderColor,
+        '--folder-accent-soft': folderAccentSoft,
+        '--folder-accent-strong': folderAccentStrong,
         margin: '1px 0 1px 10px', // Tighter spacing between folders
         padding: '1px 4px', // Minimal folder padding
         borderRadius: '6px',
@@ -771,12 +797,12 @@ function FolderContainer({
                                         fontWeight: '500',
                                         color: 'var(--text-color)',
                                         userSelect: 'none'
-                                    }}>
+                                    }} className="folder-title-text">
                                         {folder.name || 'New Folder'}
                                     </span>
                                 </div>
                             )}
-                            <span style={folderStatsStyle}>
+                            <span style={folderStatsStyle} className="folder-stats-text">
                                 {collectionCount} collection{collectionCount !== 1 ? 's' : ''}
                             </span>
                         </div>

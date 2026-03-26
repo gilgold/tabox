@@ -113,6 +113,35 @@ footer:hover {
 	opacity: 0.9;
 }
 
+.footer-sync-dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	flex-shrink: 0;
+	transition: all 0.3s ease;
+}
+
+.footer-sync-dot.connected {
+	background: #34c759;
+	box-shadow: 0 0 6px rgba(52, 199, 89, 0.5);
+}
+
+.footer-sync-dot.syncing {
+	background: #ffcc00;
+	box-shadow: 0 0 6px rgba(255, 204, 0, 0.5);
+	animation: pulse-footer-dot 1.4s ease-in-out infinite;
+}
+
+.footer-sync-dot.disconnected {
+	background: #8e8e93;
+	box-shadow: none;
+}
+
+@keyframes pulse-footer-dot {
+	0%, 100% { opacity: 1; transform: scale(1); }
+	50% { opacity: 0.5; transform: scale(0.85); }
+}
+
 footer svg {
 	height: 1.2em;
 	width: 1.2em;

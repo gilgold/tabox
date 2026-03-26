@@ -270,3 +270,21 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.3),
     inset 0 -1px 0 rgba(255, 255, 255, 0.15);
 }
+
+.switch.switch--manual-animation .switch-input:checked + .switch-label:after {
+  left: 5px;
+  transform: translate(80%, -50%);
+  animation: none;
+}
+
+.switch.switch--manual-animation .switch-input:not(:checked) + .switch-label:after {
+  animation: none;
+}
+
+.switch.switch--manual-animation.switch--animate-on .switch-input:checked + .switch-label:after {
+  animation: liquid-stretch-on 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+.switch.switch--manual-animation.switch--animate-off .switch-input:not(:checked) + .switch-label:after {
+  animation: liquid-stretch-off 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
