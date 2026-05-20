@@ -18,9 +18,9 @@
     width: min(calc(100% - 16px), 760px);
     padding: 5px 7px;
     border-radius: 14px;
-    background: rgba(248, 250, 252, 0.58);
-    backdrop-filter: saturate(1.25) blur(18px);
-    -webkit-backdrop-filter: saturate(1.25) blur(18px);
+    background: rgba(248, 250, 252, 0.38);
+    backdrop-filter: saturate(1.6) blur(20px);
+    -webkit-backdrop-filter: saturate(1.6) blur(20px);
     border: 1px solid rgba(15, 23, 42, 0.10);
     box-shadow:
         0 14px 34px rgba(15, 23, 42, 0.16),
@@ -30,9 +30,9 @@
 }
 
 [data-theme="dark"] .collections-toolbar {
-    background: rgba(43, 43, 43, 0.58);
-    backdrop-filter: saturate(1.25) blur(18px);
-    -webkit-backdrop-filter: saturate(1.25) blur(18px);
+    background: rgba(43, 43, 43, 0.45);
+    backdrop-filter: saturate(1.6) blur(20px);
+    -webkit-backdrop-filter: saturate(1.6) blur(20px);
     border: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow:
         0 14px 30px rgba(0, 0, 0, 0.26),
