@@ -19,3 +19,4 @@ chrome/api-keys.local.json
 *.zip
 coverage
 test-results
+.superpowers/
