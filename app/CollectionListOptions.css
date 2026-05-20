@@ -304,15 +304,14 @@
     justify-content: center;
     width: 38px;
     height: 38px;
-    border-radius: var(--fp-radius-sm, 10px);
-    border: 1px solid var(--fp-border, var(--divider-color));
+    border-radius: 9px;
+    border: none;
     background: transparent;
     color: var(--text-color);
     cursor: pointer;
     flex-shrink: 0;
     transition:
         background var(--fp-duration, 0.2s) var(--fp-ease, ease),
-        border-color var(--fp-duration, 0.2s) var(--fp-ease, ease),
         color var(--fp-duration, 0.2s) var(--fp-ease, ease),
         box-shadow var(--fp-duration, 0.2s) var(--fp-ease, ease),
         transform 0.1s var(--fp-ease, ease);
@@ -329,8 +328,7 @@
 }
 
 .fp-toolbar-btn:hover {
-    background: var(--setting-row-hover-bg-color);
-    border-color: var(--fp-border-strong, var(--setting-row-border-color));
+    background: rgba(15, 23, 42, 0.06);
 }
 
 .fp-toolbar-btn:disabled {
@@ -341,7 +339,6 @@
 
 .fp-toolbar-btn:disabled:hover {
     background: transparent;
-    border-color: var(--fp-border, var(--divider-color));
     color: var(--text-color);
 }
 
@@ -358,6 +355,10 @@
 
 [data-theme="dark"] .fp-toolbar-btn.active {
     box-shadow: 0 0 0 2px rgba(58, 119, 216, 0.12);
+}
+
+[data-theme="dark"] .fp-toolbar-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
 }
 
 @media (max-width: 720px) {
