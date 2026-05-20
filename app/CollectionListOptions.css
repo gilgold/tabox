@@ -85,8 +85,8 @@
     gap: 7px;
     height: 38px;
     padding: 0 16px;
-    border-radius: var(--fp-radius-xl, 20px);
-    border: 1px solid var(--fp-border, var(--divider-color));
+    border-radius: 9px;
+    border: 0;
     background: transparent;
     color: var(--text-color);
     font-family: var(--fp-font-body, -apple-system, 'Segoe UI', system-ui, BlinkMacSystemFont, 'Helvetica Neue', sans-serif);
@@ -97,14 +97,12 @@
     flex-shrink: 0;
     transition:
         background var(--fp-duration, 0.2s) var(--fp-ease, ease),
-        border-color var(--fp-duration, 0.2s) var(--fp-ease, ease),
         color var(--fp-duration, 0.2s) var(--fp-ease, ease),
         box-shadow var(--fp-duration, 0.2s) var(--fp-ease, ease);
 }
 
 .fp-toolbar-pill:hover {
-    background: var(--setting-row-hover-bg-color);
-    border-color: var(--fp-border-strong, var(--setting-row-border-color));
+    background: rgba(15, 23, 42, 0.06);
 }
 
 .fp-toolbar-pill.active {
@@ -124,15 +122,15 @@
     gap: 4px;
     height: 38px;
     padding: 0 10px;
-    border-radius: var(--fp-radius-xl, 20px);
-    border: 1px solid var(--fp-border, var(--divider-color));
+    border-radius: 9px;
+    border: 0;
     background: transparent;
     flex-shrink: 0;
-    transition: border-color var(--fp-duration, 0.2s) var(--fp-ease, ease);
+    transition: background var(--fp-duration, 0.2s) var(--fp-ease, ease);
 }
 
 .fp-toolbar-color-picker:hover {
-    border-color: var(--fp-border-strong, var(--setting-row-border-color));
+    background: rgba(15, 23, 42, 0.06);
 }
 
 .fp-toolbar-color-icon {
@@ -167,8 +165,8 @@
 
 .fp-toolbar-segment {
     display: flex;
-    border-radius: var(--fp-radius-md, 12px);
-    border: 1px solid var(--fp-border, var(--divider-color));
+    border-radius: 9px;
+    border: 0;
     overflow: hidden;
     background: transparent;
 }
@@ -194,7 +192,7 @@
 }
 
 .fp-toolbar-segment-btn:hover {
-    background: var(--setting-row-hover-bg-color);
+    background: rgba(15, 23, 42, 0.06);
 }
 
 .fp-toolbar-segment-btn.active {
@@ -204,6 +202,18 @@
 
 [data-theme="dark"] .fp-toolbar-segment-btn.active {
     background: rgba(58, 119, 216, 0.15);
+}
+
+[data-theme="dark"] .fp-toolbar-pill:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .fp-toolbar-color-picker:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .fp-toolbar-segment-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
 }
 
 .toolbar-select-shell {
@@ -359,7 +369,6 @@
 
 .fp-toolbar-btn.active {
     background: var(--primary-hover-bg);
-    border-color: var(--primary-color);
     color: var(--primary-color);
     box-shadow: 0 0 0 2px rgba(22, 152, 226, 0.08);
 }
