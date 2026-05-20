@@ -211,30 +211,38 @@
 .toolbar-select__control {
     min-height: 38px !important;
     height: 38px !important;
-    border-radius: var(--fp-radius-md, 12px) !important;
-    border: 1px solid var(--fp-border, var(--divider-color)) !important;
-    background: transparent !important;
+    border-radius: 9px !important;
+    border: 0 !important;
+    background: rgba(15, 23, 42, 0.05) !important;
     box-shadow: none !important;
     cursor: pointer !important;
     transition:
         background var(--fp-duration, 0.2s) var(--fp-ease, ease),
-        border-color var(--fp-duration, 0.2s) var(--fp-ease, ease),
-        box-shadow var(--fp-duration, 0.2s) var(--fp-ease, ease) !important;
+        color var(--fp-duration, 0.2s) var(--fp-ease, ease) !important;
 }
 
 .toolbar-select__control:hover,
 .toolbar-select__control--menu-is-open {
-    background: var(--setting-row-hover-bg-color) !important;
-    border-color: var(--fp-border-strong, var(--setting-row-border-color)) !important;
+    background: rgba(15, 23, 42, 0.06) !important;
 }
 
 .toolbar-select__control--is-focused {
-    border-color: var(--primary-color) !important;
-    box-shadow: 0 0 0 2px rgba(22, 152, 226, 0.08) !important;
+    background: rgba(15, 23, 42, 0.06) !important;
+    box-shadow: none !important;
 }
 
 [data-theme="dark"] .toolbar-select__control--is-focused {
     box-shadow: 0 0 0 2px rgba(58, 119, 216, 0.12) !important;
+}
+
+[data-theme="dark"] .toolbar-select__control {
+    background: rgba(255, 255, 255, 0.10) !important;
+}
+
+[data-theme="dark"] .toolbar-select__control:hover,
+[data-theme="dark"] .toolbar-select__control--menu-is-open,
+[data-theme="dark"] .toolbar-select__control--is-focused {
+    background: rgba(255, 255, 255, 0.08) !important;
 }
 
 .toolbar-select__value-container {
