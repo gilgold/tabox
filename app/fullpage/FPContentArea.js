@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback, lazy, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { useAtomValue, useSetAtom } from 'jotai';
+import Select, { components } from 'react-select';
 import {
     searchState,
     detailPanelOpenState,
@@ -39,15 +40,17 @@ import FPCurrentWindowCard from './FPCurrentWindowCard';
 import FPSessionCard from './FPSessionCard';
 import FPSingleTabSessionRow from './FPSingleTabSessionRow';
 import FPEmptyState from './FPEmptyState';
+import FPBadge from './FPBadge';
 import {
     updateFolderCollectionCount,
     loadAllCollections,
     batchDeleteCollections,
 } from '../utils/storageUtils';
-import { getColorValue } from '../utils/colorMigration';
+import { getColorValue, normalizeColorKey } from '../utils/colorMigration';
 import {
     MdArrowUpward,
     MdArrowDownward,
+    MdAccessTime,
     MdViewList,
     MdOpenInNew,
     MdOpenInBrowser,
@@ -64,6 +67,7 @@ import {
     MdDoneAll,
     MdDriveFileMoveOutline,
     MdOutlineHome,
+    MdSortByAlpha,
 } from 'react-icons/md';
 import { FaPlay } from 'react-icons/fa';
 import { FaStop } from 'react-icons/fa6';
@@ -102,6 +106,7 @@ import {
     normalizeCollectionParentId,
     resolveCollectionDropOperation,
     resolveCollectionDropTarget,
+    sortCollectionsWithinParent,
 } from '../utils/collectionSectionDragEngine';
 import { persistCollectionLayoutChanges } from '../utils/sharedCollectionSync';
 import { getMatchingSessionWindows } from '../utils/searchUtils';
@@ -119,6 +124,32 @@ const SessionsModal = lazy(() => import('../SessionsModal').then(m => ({ default
 const SaveCollectionModal = lazy(() => import('./SaveCollectionModal'));
 const BulkMoveCollectionsModal = lazy(() => import('./BulkMoveCollectionsModal'));
 const BulkDeleteCollectionsModal = lazy(() => import('./BulkDeleteCollectionsModal'));
+
+function SortOption(props) {
+    const { icon: Icon } = props.data;
+
+    return (
+        <components.Option {...props}>
+            <div className="toolbar-select-option">
+                <Icon size={16} />
+                <span>{props.label}</span>
+            </div>
+        </components.Option>
+    );
+}
+
+function SortSingleValue(props) {
+    const { icon: Icon } = props.data;
+
+    return (
+        <components.SingleValue {...props}>
+            <div className="toolbar-select-single-value">
+                <Icon size={16} />
+                <span>{props.data.label}</span>
+            </div>
+        </components.SingleValue>
+    );
+}
 const LegacyImportPreviewModal = lazy(() => import('./LegacyImportPreviewModal'));
 
 const buildRevealBatchPayload = (collectionsToReveal) => {
@@ -784,9 +815,9 @@ function SortableFPCard({
         opacity: isDragging && !hideWhileDragging ? 0.5 : undefined,
         ...(isRevealActive ? {
             '--fp-reveal-index': revealIndex,
-            '--fp-reveal-color': collection.color && collection.color !== 'default'
+            '--fp-reveal-color': normalizeColorKey(collection.color) !== 'default'
                 ? getColorValue(collection.color)
-                : 'var(--primary-color)',
+                : 'var(--collection-default-color)',
         } : null),
         ...hiddenWhileDraggingStyle,
     };
@@ -838,6 +869,7 @@ const MemoizedSortableFPCard = React.memo(SortableFPCard, (prev, next) => {
         prev.folderColor === next.folderColor &&
         prev.onSelect === next.onSelect &&
         prev.onCardContextMenu === next.onCardContextMenu &&
+        prev.isInteractionActive === next.isInteractionActive &&
         prev.bulkSelectionActive === next.bulkSelectionActive &&
         prev.isBulkSelected === next.isBulkSelected &&
         prev.onToggleBulkSelected === next.onToggleBulkSelected &&
@@ -879,6 +911,8 @@ function FPContentArea({
     const [showEntranceAnimation, setShowEntranceAnimation] = useState(true);
     const [activeCollection, setActiveCollection] = useState(null);
     const [previewTarget, setPreviewTarget] = useState(null);
+    const previewTargetRef = useRef(null);
+    const lastMeaningfulDropTargetRef = useRef(null);
     const [activeSectionReveal, setActiveSectionReveal] = useState(null);
     const [activeCardReveal, setActiveCardReveal] = useState(null);
     const activeDragRectRef = useRef(null);
@@ -1091,6 +1125,12 @@ function FPContentArea({
 
     const sourceCollections = optimisticCollections || collections;
     const hasSearchQuery = !!search?.trim();
+    const disableCollectionDragAndDrop = disableDrag || hasSelectedCollections || hasSearchQuery;
+    const viewModeToggleTooltip = hasSearchQuery
+        ? 'View mode is unavailable while search is active'
+        : viewMode === 'grid'
+            ? 'Switch to list'
+            : 'Switch to grid';
     const sortByField = sortFieldMap[sortType] || 'lastUpdated';
     const sortOrder = sortAscending ? 'asc' : 'desc';
     const shouldRenderGroupedAllCollections = sidebarNavigation === 'all' && !hasActiveFilters && !hasSearchQuery;
@@ -1108,19 +1148,32 @@ function FPContentArea({
 
     // Sidebar filtering
     const filteredCollections = useMemo(() => {
+        const currentFolderUidSet = new Set(folders.map((folder) => folder.uid));
+
         switch (sidebarNavigation) {
             case 'all': return shouldRenderGroupedAllCollections ? sourceCollections : flatSortCollections(sourceCollections);
             case 'unorganized': {
-                const folderUids = new Set(folders.map(f => f.uid));
-                return sourceCollections.filter(c => !c.parentId || !folderUids.has(c.parentId));
+                return sortCollectionsWithinParent({
+                    collections: sourceCollections,
+                    folderUidSet: currentFolderUidSet,
+                    parentId: null,
+                    sortBy: sortByField,
+                    sortOrder,
+                });
             }
             case 'current-windows':
             case 'sessions':
                 return [];
             default: // folder UID
-                return sourceCollections.filter(c => c.parentId === sidebarNavigation);
+                return sortCollectionsWithinParent({
+                    collections: sourceCollections,
+                    folderUidSet: currentFolderUidSet,
+                    parentId: sidebarNavigation,
+                    sortBy: sortByField,
+                    sortOrder,
+                });
         }
-    }, [sourceCollections, sidebarNavigation, folders, flatSortCollections, shouldRenderGroupedAllCollections]);
+    }, [sourceCollections, sidebarNavigation, folders, flatSortCollections, shouldRenderGroupedAllCollections, sortByField, sortOrder]);
 
     const filteredCurrentWindows = useMemo(() => (
         filterCurrentWindowsBySearch(currentWindows, search)
@@ -1622,22 +1675,9 @@ function FPContentArea({
             }
         }
 
-        let targetSectionId = null;
-        let scrollTargetElement = null;
-
-        if (shouldRenderGroupedAllCollections) {
-            targetSectionId = normalizedParentId || ROOT_LEVEL_SECTION_ID;
-            scrollTargetElement = (
-                getSectionHeaderElement(targetSectionId) ||
-                getCollectionShellElement(highlightedCollectionUid)
-            );
-        } else {
-            scrollTargetElement = getCollectionShellElement(highlightedCollectionUid);
-        }
-
-        if (!scrollTargetElement) {
-            return;
-        }
+        const targetSectionId = shouldRenderGroupedAllCollections
+            ? normalizedParentId || ROOT_LEVEL_SECTION_ID
+            : null;
 
         const revealRunId = `highlight-${highlightedCollectionUid}-${Date.now()}`;
         const revealItems = [{ uid: highlightedCollectionUid, parentId: normalizedParentId }];
@@ -1651,23 +1691,11 @@ function FPContentArea({
             revealRunRef.current !== revealRunId ||
             !isMountedRef.current
         );
-        const scrollContainer = getRevealScrollContainer(contentScrollRef.current, scrollTargetElement);
-        const scrollTargetTop = scrollRevealTargetIntoView({
-            container: scrollContainer,
-            target: scrollTargetElement,
-            reducedMotion,
-            align: targetSectionId ? 'start' : 'nearest',
-        });
         const revealDelay = reducedMotion ? 0 : 120;
         const sectionDuration = reducedMotion ? 1500 : 900;
         const cardDuration = reducedMotion ? 1500 : 1500;
 
-        void waitForScrollSettled({
-            container: scrollContainer,
-            targetTop: scrollTargetTop,
-            reducedMotion,
-            isCancelled,
-        }).then(() => {
+        Promise.resolve().then(() => {
             if (isCancelled()) {
                 return;
             }
@@ -2131,12 +2159,15 @@ function FPContentArea({
     const resetDragState = useCallback(() => {
         setActiveCollection(null);
         setPreviewTarget(null);
+        previewTargetRef.current = null;
+        lastMeaningfulDropTargetRef.current = null;
         setDraggingCollection(null);
         activeDragRectRef.current = null;
     }, [setDraggingCollection]);
 
     const handleDragStart = (event) => {
-        if (dragSession) {
+        if (dragSession || hasSearchQuery) {
+            resetDragState();
             return;
         }
 
@@ -2147,6 +2178,8 @@ function FPContentArea({
         }
         activeDragRectRef.current = null;
         setPreviewTarget(null);
+        previewTargetRef.current = null;
+        lastMeaningfulDropTargetRef.current = null;
 
         // Measure the original card so the overlay matches its grid size.
         const activeId = String(event.active.id);
@@ -2177,7 +2210,8 @@ function FPContentArea({
     };
 
     const handleDragOver = (event) => {
-        if (dragSession) {
+        if (dragSession || hasSearchQuery) {
+            resetDragState();
             return;
         }
 
@@ -2231,12 +2265,12 @@ function FPContentArea({
 
         if (!nextTarget || !activeCollection) {
             setPreviewTarget(null);
+            previewTargetRef.current = null;
             return;
         }
 
         if (nextTarget.kind === collectionDropKinds.collection) {
             if (nextTarget.collectionId === activeCollection.uid) {
-                setPreviewTarget(null);
                 return;
             }
 
@@ -2247,14 +2281,20 @@ function FPContentArea({
                 rect,
             });
 
-            setPreviewTarget({
+            const resolvedTarget = {
                 ...nextTarget,
                 side,
-            });
+            };
+
+            setPreviewTarget(resolvedTarget);
+            previewTargetRef.current = resolvedTarget;
+            lastMeaningfulDropTargetRef.current = resolvedTarget;
             return;
         }
 
         setPreviewTarget(nextTarget);
+        previewTargetRef.current = nextTarget;
+        lastMeaningfulDropTargetRef.current = nextTarget;
     };
 
     const findSidebarDropTarget = (x, y) => {
@@ -2276,7 +2316,7 @@ function FPContentArea({
     };
 
     const handleDragEnd = async (event) => {
-        if (dragSession) {
+        if (dragSession || hasSearchQuery) {
             resetDragState();
             return;
         }
@@ -2330,7 +2370,9 @@ function FPContentArea({
             return;
         }
 
-        if (!previewTarget || !draggedCollection) {
+        const finalPreviewTarget = previewTargetRef.current || lastMeaningfulDropTargetRef.current;
+
+        if (!finalPreviewTarget || !draggedCollection) {
             resetDragState();
             return;
         }
@@ -2339,7 +2381,7 @@ function FPContentArea({
             collections: sourceCollections,
             folders,
             activeId: active.id,
-            target: previewTarget,
+            target: finalPreviewTarget,
             viewMode,
             sortBy: sortByField,
             sortOrder,
@@ -2356,11 +2398,11 @@ function FPContentArea({
             await persistCollectionChanges(nextCollections, getAffectedCollectionParentIds(operation));
             setHighlightedCollectionUid(draggedCollection.uid);
             if (
-                previewTarget.parentId &&
-                previewTarget.parentId !== draggedParentId &&
+                finalPreviewTarget.parentId &&
+                finalPreviewTarget.parentId !== draggedParentId &&
                 triggerFolderLightningEffect
             ) {
-                triggerFolderLightningEffect(previewTarget.parentId);
+                triggerFolderLightningEffect(finalPreviewTarget.parentId);
             }
         }
 
@@ -2394,6 +2436,10 @@ function FPContentArea({
     };
 
     const toggleViewMode = async () => {
+        if (hasSearchQuery) {
+            return;
+        }
+
         const newMode = viewMode === 'list' ? 'grid' : 'list';
         setViewMode(newMode);
         await browser.storage.local.set({ fpViewMode: newMode });
@@ -2923,10 +2969,11 @@ function FPContentArea({
     );
 
     const sortOptions = [
-        { value: 'DATE', label: 'Date' },
-        { value: 'NAME', label: 'Name' },
-        { value: 'COLOR', label: 'Color' },
+        { value: 'DATE', label: 'Date', icon: MdAccessTime },
+        { value: 'NAME', label: 'Name', icon: MdSortByAlpha },
+        { value: 'COLOR', label: 'Color', icon: MdPalette },
     ];
+    const menuPortalTarget = typeof document !== 'undefined' ? document.body : null;
 
     const renderSessionEntry = ({ sessionTimestamp, collection, matchingTabs = null, sessionEntryKey = null, sourceType = null }) => {
         const entrySourceType = sourceType || collection?.sourceType || 'window';
@@ -2966,11 +3013,13 @@ function FPContentArea({
                     <div className="fp-toolbar-group fp-toolbar-group-selection">
                         <button
                             type="button"
-                            className="fp-toolbar-btn fp-toolbar-btn-label"
+                            className="fp-toolbar-btn"
                             onClick={handleToggleSelectAllCollections}
+                            aria-label="Select All"
+                            data-tooltip-id="main-tooltip"
+                            data-tooltip-content="Select all visible collections"
                         >
                             <MdDoneAll size={16} />
-                            <span>Select All</span>
                         </button>
                     </div>
 
@@ -3019,20 +3068,34 @@ function FPContentArea({
             <div className="fp-toolbar-divider" />
 
             <div className="fp-toolbar-group">
-                <div className="fp-toolbar-segment">
-                    {sortOptions.map(opt => (
-                        <button
-                            key={opt.value}
-                            className={`fp-toolbar-segment-btn ${sortType === opt.value ? 'active' : ''}`}
-                            onClick={() => handleSortTypeChange(opt.value)}
-                        >
-                            {opt.label}
-                        </button>
-                    ))}
+                <div id="fp-toolbar-sort-select" className="toolbar-select-shell">
+                    <Select
+                        className="toolbar-select"
+                        classNamePrefix="toolbar-select"
+                        value={sortOptions.find((option) => option.value === sortType)}
+                        onChange={(selectedOption) => handleSortTypeChange(selectedOption.value)}
+                        options={sortOptions}
+                        isSearchable={false}
+                        isClearable={false}
+                        components={{
+                            Option: SortOption,
+                            SingleValue: SortSingleValue,
+                        }}
+                        aria-label="Sort collections"
+                        menuPortalTarget={menuPortalTarget}
+                        menuPosition="fixed"
+                        styles={{
+                            menuPortal: (base) => ({
+                                ...base,
+                                zIndex: 1000001,
+                            }),
+                        }}
+                    />
                 </div>
                 <button
                     className="fp-toolbar-btn"
                     onClick={toggleSortDirection}
+                    aria-label={sortAscending ? 'Ascending' : 'Descending'}
                     data-tooltip-id="main-tooltip"
                     data-tooltip-content={sortAscending ? 'Ascending' : 'Descending'}
                 >
@@ -3046,6 +3109,7 @@ function FPContentArea({
                 <button
                     className={`fp-toolbar-btn ${openInNewWindow ? 'active' : ''}`}
                     onClick={toggleNewWindow}
+                    aria-label={openInNewWindow ? 'Open in new window' : 'Open in current window'}
                     data-tooltip-id="main-tooltip"
                     data-tooltip-content={openInNewWindow ? 'Open in new window' : 'Open in current window'}
                 >
@@ -3054,19 +3118,21 @@ function FPContentArea({
                 <button
                     className="fp-toolbar-btn"
                     onClick={toggleViewMode}
+                    aria-label={viewModeToggleTooltip}
                     data-tooltip-id="main-tooltip"
-                    data-tooltip-content={viewMode === 'grid' ? 'Switch to list' : 'Switch to grid'}
+                    data-tooltip-content={viewModeToggleTooltip}
+                    disabled={hasSearchQuery}
                 >
                     {viewMode === 'grid' ? <MdViewList size={20} /> : <PiGridNineFill size={20} />}
                 </button>
                 <button
-                    className="fp-toolbar-btn fp-toolbar-btn-label"
+                    className="fp-toolbar-btn"
                     onClick={() => fileInputRef.current?.click()}
+                    aria-label="Import collections from file"
                     data-tooltip-id="main-tooltip"
                     data-tooltip-content="Import collections from file"
                 >
                     <TbFileImport size={18} />
-                    <span>Import</span>
                 </button>
             </div>
         </>
@@ -3081,47 +3147,52 @@ function FPContentArea({
             <div className="fp-toolbar-group fp-toolbar-group-selection fp-toolbar-group-collection-selection">
                 <button
                     type="button"
-                    className={`fp-toolbar-btn fp-toolbar-btn-label ${allVisibleCollectionsSelected ? 'active' : ''}`}
+                    className={`fp-toolbar-btn ${allVisibleCollectionsSelected ? 'active' : ''}`}
                     onClick={handleToggleSelectAllCollections}
+                    aria-label={allVisibleCollectionsSelected ? 'Unselect All' : 'Select All'}
+                    data-tooltip-id="main-tooltip"
+                    data-tooltip-content={allVisibleCollectionsSelected ? 'Unselect all visible collections' : 'Select all visible collections'}
                 >
                     <MdDoneAll size={16} />
-                    <span>{allVisibleCollectionsSelected ? 'Unselect All' : 'Select All'}</span>
                 </button>
 
-                <div className="fp-toolbar-session-selection-pill fp-toolbar-collection-selection-pill">
+                <FPBadge accent="info" className="fp-toolbar-session-selection-pill fp-toolbar-collection-selection-pill">
                     <span className="fp-toolbar-session-selection-count">
                         {selectedVisibleCollections.length} selected
                     </span>
-                    <span className="fp-toolbar-session-selection-label">
-                        Collections
-                    </span>
-                </div>
+                </FPBadge>
 
                 <button
                     type="button"
-                    className="fp-toolbar-btn fp-toolbar-btn-label fp-toolbar-primary-btn"
+                    className="fp-toolbar-btn fp-toolbar-primary-btn"
                     onClick={handleBulkOpenSelectedCollections}
+                    aria-label="Open Selected"
+                    data-tooltip-id="main-tooltip"
+                    data-tooltip-content="Open selected collections"
                 >
-                    <MdOpenInBrowser size={16} />
-                    <span>Open Selected</span>
+                    <MdOpenInBrowser size={20} />
                 </button>
                 <button
                     type="button"
-                    className="fp-toolbar-btn fp-toolbar-btn-label"
+                    className="fp-toolbar-btn"
                     onClick={handleOpenBulkMoveModal}
                     disabled={folders.length === 0}
+                    aria-label="Move to Folder"
+                    data-tooltip-id="main-tooltip"
+                    data-tooltip-content={folders.length === 0 ? 'Create a folder before moving collections' : 'Move selected collections to a folder'}
                 >
-                    <MdDriveFileMoveOutline size={16} />
-                    <span>Move to Folder</span>
+                    <MdDriveFileMoveOutline size={20} />
                 </button>
                 <button
                     type="button"
-                    className="fp-toolbar-btn fp-toolbar-btn-label"
+                    className="fp-toolbar-btn"
                     onClick={handleBulkRemoveFromFolder}
                     disabled={!hasSelectedCollectionsInFolders}
+                    aria-label="Remove from Folder"
+                    data-tooltip-id="main-tooltip"
+                    data-tooltip-content={hasSelectedCollectionsInFolders ? 'Move selected collections to the root level' : 'Selected collections are already at the root level'}
                 >
-                    <MdOutlineHome size={16} />
-                    <span>Remove from Folder</span>
+                    <MdOutlineHome size={20} />
                 </button>
                 <div
                     className="fp-toolbar-color-picker fp-toolbar-bulk-color-picker"
@@ -3138,27 +3209,33 @@ function FPContentArea({
                 </div>
                 <button
                     type="button"
-                    className="fp-toolbar-btn fp-toolbar-btn-label"
+                    className="fp-toolbar-btn"
                     onClick={handleBulkExportSelectedCollections}
+                    aria-label="Export"
+                    data-tooltip-id="main-tooltip"
+                    data-tooltip-content="Export selected collections"
                 >
                     <CiExport size={16} />
-                    <span>Export</span>
                 </button>
                 <button
                     type="button"
-                    className="fp-toolbar-btn fp-toolbar-btn-label fp-toolbar-danger-btn"
+                    className="fp-toolbar-btn fp-toolbar-danger-btn"
                     onClick={handleOpenBulkDeleteModal}
+                    aria-label="Delete"
+                    data-tooltip-id="main-tooltip"
+                    data-tooltip-content="Delete selected collections"
                 >
                     <MdDelete size={16} />
-                    <span>Delete</span>
                 </button>
                 <button
                     type="button"
-                    className="fp-toolbar-btn fp-toolbar-btn-label fp-toolbar-session-clear-btn"
+                    className="fp-toolbar-btn fp-toolbar-session-clear-btn"
                     onClick={clearSelectedCollections}
+                    aria-label="Clear"
+                    data-tooltip-id="main-tooltip"
+                    data-tooltip-content="Clear selected collections"
                 >
                     <MdClear size={16} />
-                    <span>Clear</span>
                 </button>
             </div>
         );
@@ -3175,56 +3252,66 @@ function FPContentArea({
                     {visibleSingleTabSessionEntries.length > 0 && (
                         <button
                             type="button"
-                            className={`fp-toolbar-btn fp-toolbar-btn-label ${allVisibleTabSessionsSelected ? 'active' : ''}`}
+                            className={`fp-toolbar-btn ${allVisibleTabSessionsSelected ? 'active' : ''}`}
                             onClick={handleToggleSelectAllTabSessions}
+                            aria-label={allVisibleTabSessionsSelected ? 'Unselect All' : 'Select All'}
+                            data-tooltip-id="main-tooltip"
+                            data-tooltip-content={allVisibleTabSessionsSelected ? 'Unselect all visible single tabs' : 'Select all visible single tabs'}
                         >
                             <MdDoneAll size={16} />
-                            <span>{allVisibleTabSessionsSelected ? 'Unselect All' : 'Select All'}</span>
                         </button>
                     )}
 
                     {hasSelectedTabSessions && (
                         <>
-                            <div className="fp-toolbar-session-selection-pill">
+                            <FPBadge accent="session" className="fp-toolbar-session-selection-pill">
                                 <span className="fp-toolbar-session-selection-count">
                                     {selectedVisibleTabSessionEntries.length} selected
                                 </span>
                                 <span className="fp-toolbar-session-selection-label">
                                     Single tabs
                                 </span>
-                            </div>
+                            </FPBadge>
 
                             <button
                                 type="button"
-                                className="fp-toolbar-btn fp-toolbar-btn-label fp-toolbar-primary-btn"
+                                className="fp-toolbar-btn fp-toolbar-primary-btn"
                                 onClick={handleBulkRestoreSelectedTabs}
+                                aria-label="Restore"
+                                data-tooltip-id="main-tooltip"
+                                data-tooltip-content="Restore selected tabs"
                             >
                                 <MdOpenInNew size={16} />
-                                <span>Restore</span>
                             </button>
                             <button
                                 type="button"
-                                className="fp-toolbar-btn fp-toolbar-btn-label"
+                                className="fp-toolbar-btn"
                                 onClick={handleBulkSaveSelectedTabs}
+                                aria-label="Save as Collection"
+                                data-tooltip-id="main-tooltip"
+                                data-tooltip-content="Save selected tabs as a collection"
                             >
                                 <MdSave size={16} />
-                                <span>Save as Collection</span>
                             </button>
                             <button
                                 type="button"
-                                className="fp-toolbar-btn fp-toolbar-btn-label"
+                                className="fp-toolbar-btn"
                                 onClick={handleBulkExportSelectedTabs}
+                                aria-label="Export to File"
+                                data-tooltip-id="main-tooltip"
+                                data-tooltip-content="Export selected tabs to file"
                             >
                                 <CiExport size={16} />
-                                <span>Export to File</span>
                             </button>
                             <button
                                 type="button"
-                                className="fp-toolbar-btn fp-toolbar-btn-label fp-toolbar-session-clear-btn"
+                                className="fp-toolbar-btn fp-toolbar-session-clear-btn"
                                 onClick={clearSelectedTabSessions}
+                                aria-label="Clear"
+                                data-tooltip-id="main-tooltip"
+                                data-tooltip-content="Clear selected tabs"
                             >
                                 <MdClear size={16} />
-                                <span>Clear</span>
                             </button>
                         </>
                     )}
@@ -3286,6 +3373,7 @@ function FPContentArea({
     const renderCurrentWindowsContent = () => {
         const currentWindowsLayoutClassName = [
             'fp-session-group-cards',
+            'fp-current-window-group-cards',
             search?.trim() ? 'fp-content-search-mode' : viewMode === 'list' ? 'fp-content-list-mode' : '',
         ].filter(Boolean).join(' ');
 
@@ -3394,7 +3482,7 @@ function FPContentArea({
                     collection={collection}
                     index={collectionIndexMap.get(collection.uid) ?? -1}
                     activeId={cardActiveId}
-                    disableDrag={disableDrag || hasSelectedCollections}
+                    disableDrag={disableCollectionDragAndDrop}
                     suppressTransforms={!shouldUseSortableTransforms}
                     hideWhileDragging={shouldHideGroupedSourceCard && activeCollection?.uid === collection.uid}
                     collapseWhileDragging={shouldRenderGroupedAllCollections && viewMode === 'list'}
@@ -3412,9 +3500,11 @@ function FPContentArea({
                     isAutoUpdate={trackedCollectionUids?.has(collection.uid) === true}
                     viewMode={viewMode}
                     search={search}
+                    enableDropZone={!hasSearchQuery}
                     folderName={!hideFolderMeta && collection.parentId ? folderNameMap[collection.parentId] : null}
                     folderColor={!hideFolderMeta && collection.parentId ? folderColorMap[collection.parentId] : null}
                     onCardContextMenu={hasSelectedCollections ? undefined : handleCardContextMenu}
+                    isInteractionActive={cardCtxMenu?.collection?.uid === collection.uid}
                     bulkSelectionActive={hasSelectedCollections}
                     isBulkSelected={selectedCollectionUids.has(collection.uid)}
                     onToggleBulkSelected={handleToggleCollectionSelection}
@@ -3610,12 +3700,12 @@ function FPContentArea({
     return (
         <div className="fp-content">
             <div
-                className="fp-content-title-row"
+                className="fp-content-title-row fp-floating-header-row"
                 style={{ '--fp-heading-accent': contentHeading.accentColor }}
             >
-                <div className="fp-content-heading">
+                <div className="fp-content-heading fp-content-heading-compact fp-floating-header-shell">
                     <div className="fp-content-heading-meta">
-                        <span className="fp-content-heading-badge">{contentHeading.badge}</span>
+                        <FPBadge accent={contentHeading.accentColor} className="fp-content-heading-badge">{contentHeading.badge}</FPBadge>
                         {contentHeading.showColorIndicator && (
                             <span
                                 className="fp-content-heading-color-indicator"
@@ -3623,51 +3713,63 @@ function FPContentArea({
                             />
                         )}
                     </div>
-                    <div className="fp-content-heading-main">
+                    <div className="fp-content-heading-main fp-content-heading-main-inline">
                         <h2 className="fp-content-title">{contentHeading.title}</h2>
-                        <span className="fp-content-heading-count">{contentHeading.countLabel}</span>
+                        <div className="fp-content-heading-supporting fp-content-heading-supporting-inline">
+                            <span className="fp-content-heading-count">{contentHeading.countLabel}</span>
+                            {contentHeading.subtitle && (
+                                <p className="fp-content-heading-subtitle">{contentHeading.subtitle}</p>
+                            )}
+                        </div>
                     </div>
-                    {contentHeading.subtitle && (
-                        <p className="fp-content-heading-subtitle">{contentHeading.subtitle}</p>
-                    )}
                 </div>
             </div>
 
             {/* Centered floating toolbar — hidden for lightweight live views */}
             {!isLightweightView && (
-                <div className="fp-toolbar-wrapper">
-                    <div className="fp-toolbar">
-                        {hasSelectedCollections
-                            ? renderSelectedCollectionToolbarControls()
-                            : renderDefaultCollectionToolbarControls()}
+                <div className="fp-toolbar-wrapper fp-toolbar-wrapper-floating fp-toolbar-stack">
+                    <div className="fp-toolbar fp-toolbar-default">
+                        {renderDefaultCollectionToolbarControls()}
+                    </div>
+                    <div
+                        className={`fp-bulk-toolbar-slot${hasSelectedCollections ? ' is-visible' : ''}`}
+                        aria-hidden={!hasSelectedCollections}
+                    >
+                        {hasSelectedCollections && (
+                            <div className="fp-toolbar fp-bulk-toolbar">
+                                {renderSelectedCollectionToolbarControls()}
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
 
             {/* Lightweight views: minimal toolbar with view toggle */}
             {isLightweightView && (
-                <div className="fp-toolbar-wrapper">
+                <div className="fp-toolbar-wrapper fp-toolbar-wrapper-floating">
                     <div className="fp-toolbar">
                         {renderSelectedTabToolbarControls()}
 
                         <div className="fp-toolbar-group">
                             {isCurrentWindowsView && currentWindows.length > 0 && (
                                 <button
-                                    className="fp-toolbar-btn fp-toolbar-btn-label fp-toolbar-primary-btn"
+                                    className="fp-toolbar-btn fp-toolbar-primary-btn"
                                     onClick={() => setIsSaveAllWindowsModalOpen(true)}
+                                    aria-label="Save All Windows"
                                     data-tooltip-id="main-tooltip"
                                     data-tooltip-content="Save all open windows as a new folder"
                                 >
                                     <MdSave size={18} />
-                                    <span>Save All Windows</span>
                                 </button>
                             )}
                             {isCurrentWindowsView && (
                                 <button
                                     className="fp-toolbar-btn"
                                     onClick={toggleViewMode}
+                                    aria-label={viewModeToggleTooltip}
                                     data-tooltip-id="main-tooltip"
-                                    data-tooltip-content={viewMode === 'grid' ? 'Switch to list' : 'Switch to grid'}
+                                    data-tooltip-content={viewModeToggleTooltip}
+                                    disabled={hasSearchQuery}
                                 >
                                     {viewMode === 'grid' ? <MdViewList size={20} /> : <PiGridNineFill size={20} />}
                                 </button>
@@ -3688,7 +3790,7 @@ function FPContentArea({
 
             {/* Lightweight live views */}
             {isLightweightView ? (
-                <div className="fp-content-sessions">
+                <div className={`fp-content-sessions ${isCurrentWindowsView ? 'fp-content-sessions-current-windows' : ''}`.trim()}>
                     {isSessionsView ? renderSessionsContent() : renderCurrentWindowsContent()}
                 </div>
             ) : (

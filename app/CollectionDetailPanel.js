@@ -13,8 +13,8 @@ import { showSuccessToast, showErrorToast } from './toastHelpers';
 import { useCollectionOperations } from './useCollectionOperations';
 import { browser } from '../static/globals';
 import ColorPicker from './ColorPicker';
+import CollectionDeleteConfirmModal from './CollectionDeleteConfirmModal';
 import ExpandedCollectionData from './ExpandedCollectionData';
-import { AutoSaveTextbox } from './AutoSaveTextbox';
 import { getColorValue } from './utils/colorMigration';
 import './CollectionDetailPanel.css';
 
@@ -36,9 +36,12 @@ function CollectionDetailPanel({
     const [isEditingName, setIsEditingName] = useState(false);
     const [localColor, setLocalColor] = useState(collection?.color || 'default');
     const [tabSearch, setTabSearch] = useState('');
+    const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
     const mountedRef = useRef(true);
     const panelRef = useRef(null);
     const searchInputRef = useRef(null);
+    const titleInputRef = useRef(null);
+    const skipTitleBlurRef = useRef(false);
 
     const deletingCollectionUids = useAtomValue(deletingCollectionUidsState);
     const setDeletingCollectionUids = useSetAtom(deletingCollectionUidsState);
@@ -72,7 +75,15 @@ function CollectionDetailPanel({
         }
         setLocalColor(collection?.color || 'default');
         setTabSearch('');
+        setIsEditingName(false);
     }, [collection?.uid]);
+
+    useEffect(() => {
+        if (isEditingName && titleInputRef.current) {
+            titleInputRef.current.focus();
+            titleInputRef.current.select();
+        }
+    }, [isEditingName]);
 
     // Keep local color in sync when the prop updates (e.g. from external changes)
     useEffect(() => {
@@ -120,17 +131,26 @@ function CollectionDetailPanel({
     // Handle escape key to close panel
     useEffect(() => {
         const handleKeyDown = (e) => {
+            if (e.key === 'Escape' && isDeleteConfirmOpen) {
+                setIsDeleteConfirmOpen(false);
+                return;
+            }
+
             if (e.key === 'Escape' && isOpen) {
                 handleClose();
             }
         };
         document.addEventListener('keydown', handleKeyDown);
         return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [isOpen]);
+    }, [isDeleteConfirmOpen, isOpen]);
 
     // Handle click outside to close (only if not clicking on a collection or dragging)
     useEffect(() => {
         const handleClickOutside = (e) => {
+            if (isDeleteConfirmOpen) {
+                return;
+            }
+
             if (isOpen && panelRef.current && !panelRef.current.contains(e.target)) {
                 const isCollectionClick = e.target.closest('[data-collection-drop-zone]') || 
                                          e.target.closest('.setting_row') ||
@@ -143,11 +163,12 @@ function CollectionDetailPanel({
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [isOpen]);
+    }, [isDeleteConfirmOpen, isOpen]);
 
     const handleClose = () => {
         setIsAnimatingOut(true);
         setIsEditingName(false);
+        setIsDeleteConfirmOpen(false);
         setTabSearch('');
         setTimeout(() => {
             setIsAnimatingOut(false);
@@ -164,22 +185,42 @@ function CollectionDetailPanel({
         await updateCollection(newCollectionItem, true);
     };
 
-    const handleCollectionNameChange = (val) => {
-        setCollectionName(val.trim());
-        if (val.trim() === "") {
+    const handleCollectionNameChange = async (val) => {
+        const trimmedName = val.trim();
+        if (trimmedName === "") {
             showErrorToast("Please enter a name for the collection");
             setCollectionName(collection.name);
             return;
         }
+        setCollectionName(trimmedName);
         let currentCollection = { ...collection };
-        currentCollection.name = val;
+        currentCollection.name = trimmedName;
         currentCollection.lastUpdated = Date.now();
-        updateCollection(currentCollection, true);
-        showSuccessToast(`Collection name updated to '${val}'!`);
+        await updateCollection(currentCollection, true);
+        showSuccessToast(`Collection name updated to '${trimmedName}'!`);
+    };
+
+    const handleTitleBlur = async () => {
+        if (skipTitleBlurRef.current) {
+            skipTitleBlurRef.current = false;
+            return;
+        }
+        if (!isEditingName) return;
+        await handleCollectionNameChange(collectionName);
         setIsEditingName(false);
     };
 
+    const handleEditButtonClick = async () => {
+        if (isEditingName) {
+            await handleCollectionNameChange(collectionName);
+            setIsEditingName(false);
+            return;
+        }
+        setIsEditingName(true);
+    };
+
     const handleDeleteAndClose = async () => {
+        setIsDeleteConfirmOpen(false);
         await _handleDelete();
         handleClose();
     };
@@ -239,30 +280,53 @@ function CollectionDetailPanel({
                     {/* Title and metadata */}
                     <div className="panel-title-section">
                         <div className="panel-title-row">
-                            {isEditingName ? (
-                                <div className="panel-title-edit">
-                                    <AutoSaveTextbox
-                                        onChange={setCollectionName}
-                                        maxLength={50}
-                                        initValue={collection.name}
-                                        item={collection}
-                                        action={handleCollectionNameChange}
-                                        autoFocus
-                                    />
-                                </div>
-                            ) : (
-                                <>
+                            <button
+                                className={`panel-edit-btn ${isEditingName ? 'active' : ''}`}
+                                onMouseDown={(e) => {
+                                    if (isEditingName) {
+                                        skipTitleBlurRef.current = true;
+                                        e.preventDefault();
+                                    }
+                                }}
+                                onClick={handleEditButtonClick}
+                                data-tooltip-id="main-tooltip"
+                                data-tooltip-content={isEditingName ? 'Stop editing collection name' : 'Edit collection name'}
+                                aria-label="Edit collection name"
+                            >
+                                <MdEdit size={16} />
+                            </button>
+                            <div className="panel-title-slot">
+                                {isEditingName ? (
+                                    <div className="panel-title-edit panel-title-edit-active">
+                                        <div className="panel-title-autosave">
+                                            <input
+                                                ref={titleInputRef}
+                                                type="text"
+                                                className="panel-title-input"
+                                                value={collectionName}
+                                                maxLength={50}
+                                                onChange={(e) => setCollectionName(e.target.value)}
+                                                onBlur={handleTitleBlur}
+                                                onClick={(e) => e.stopPropagation()}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        e.currentTarget.blur();
+                                                    }
+                                                    if (e.key === 'Escape') {
+                                                        e.preventDefault();
+                                                        setCollectionName(collection.name);
+                                                        setIsEditingName(false);
+                                                    }
+                                                }}
+                                                aria-label="Collection name"
+                                            />
+                                        </div>
+                                    </div>
+                                ) : (
                                     <h2 className="panel-title">{collectionName}</h2>
-                                    <button 
-                                        className="panel-edit-btn"
-                                        onClick={() => setIsEditingName(true)}
-                                        data-tooltip-id="main-tooltip"
-                                        data-tooltip-content="Edit collection name"
-                                    >
-                                        <MdEdit size={16} />
-                                    </button>
-                                </>
-                            )}
+                                )}
+                            </div>
                             {wasFromIncognito && (
                                 <span 
                                     className="panel-incognito-badge"
@@ -352,9 +416,10 @@ function CollectionDetailPanel({
 
                             <button
                                 className="panel-action-btn danger"
-                                onClick={handleDeleteAndClose}
+                                onClick={() => setIsDeleteConfirmOpen(true)}
                                 data-tooltip-id="main-tooltip"
                                 data-tooltip-content="Delete collection"
+                                aria-label="Delete collection"
                             >
                                 <MdDelete size={16} />
                             </button>
@@ -416,13 +481,25 @@ function CollectionDetailPanel({
         </div>
     );
 
+    const contentWithModal = (
+        <>
+            {panelContent}
+            <CollectionDeleteConfirmModal
+                isOpen={isDeleteConfirmOpen}
+                onClose={() => setIsDeleteConfirmOpen(false)}
+                onConfirm={handleDeleteAndClose}
+                collectionName={collectionName}
+            />
+        </>
+    );
+
     // In fullpage mode, render inline (no portal needed)
     if (renderInline) {
-        return panelContent;
+        return contentWithModal;
     }
 
     // In popup mode, render in portal to avoid z-index issues
-    return createPortal(panelContent, document.body);
+    return createPortal(contentWithModal, document.body);
 }
 
 export default CollectionDetailPanel;

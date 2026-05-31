@@ -41,6 +41,14 @@ import { persistCollectionLayoutChanges } from './utils/sharedCollectionSync';
 
 const LIST_ROW_HEIGHT = 76;
 
+const reindexCollectionSiblings = (collections, parentId) => (
+    collections.map((collection, order) => ({
+        ...collection,
+        parentId,
+        order,
+    }))
+);
+
 function SearchTitle({ searchTerm }) {
     return <h2 className="search-title"><BsSearch size="14" /> &nbsp;Showing results for: <strong>{searchTerm}</strong></h2>
 }
@@ -334,6 +342,37 @@ function CollectionList({
             
             // Get dragged collection info for collision logic
             const draggedCollection = collections.find(c => c.uid === active.id);
+            const isCollectionCollision = (collision) => collections.some(c => c.uid === collision.id);
+            const isFolderContainerCollision = (collision) => folders.some(f => f.uid === collision.id);
+            const isFolderDropZoneCollision = (collision) => {
+                const collisionId = typeof collision.id === 'string' ? collision.id : '';
+                const data = collision.data?.current;
+                return data?.type === 'folder' ||
+                    collisionId.startsWith('folder-') ||
+                    collisionId.startsWith('folder-content-');
+            };
+            const getFolderDropZoneUid = (collision) => {
+                const dataFolderUid = collision.data?.current?.folder?.uid;
+                if (dataFolderUid) {
+                    return dataFolderUid;
+                }
+
+                const collisionId = typeof collision.id === 'string' ? collision.id : '';
+                if (collisionId.startsWith('folder-content-')) {
+                    return collisionId.slice('folder-content-'.length);
+                }
+                if (collisionId.startsWith('folder-')) {
+                    return collisionId.slice('folder-'.length);
+                }
+                return null;
+            };
+            const getCollectionCollisions = (collisions) => (
+                collisions.filter(collision => (
+                    isCollectionCollision(collision) &&
+                    !isFolderContainerCollision(collision) &&
+                    !isFolderDropZoneCollision(collision)
+                ))
+            );
             
             // Check if dragging within the same folder
             const isDraggingWithinSameFolder = !!draggedCollection?.parentId;
@@ -341,16 +380,29 @@ function CollectionList({
             if (isDraggingWithinSameFolder) {
                 // When dragging within a folder, we want to reorder.
                 // Prioritize collection targets and ignore folder-level drop zones.
-                const collectionTargets = pointerCollisions.filter(collision => {
-                    const isCollection = collections.some(c => c.uid === collision.id);
-                    const isOwnParent = collision.id === `folder-content-${draggedCollection.parentId}`;
-                    const isFolderContainer = folders.some(f => f.uid === collision.id);
-                    return isCollection && !isOwnParent && !isFolderContainer;
-                });
+                const collectionTargets = getCollectionCollisions(pointerCollisions);
                 
                 if (collectionTargets.length > 0) {
                     return collectionTargets;
                 }
+
+                const externalFolderDropZones = pointerCollisions.filter(collision => (
+                    isFolderDropZoneCollision(collision) &&
+                    !isFolderContainerCollision(collision) &&
+                    !isCollectionCollision(collision) &&
+                    getFolderDropZoneUid(collision) !== draggedCollection.parentId
+                ));
+
+                if (externalFolderDropZones.length > 0) {
+                    return externalFolderDropZones;
+                }
+
+                const closestCollectionTargets = getCollectionCollisions(closestCorners(args));
+                if (closestCollectionTargets.length > 0) {
+                    return closestCollectionTargets;
+                }
+
+                return [];
             } else {
                 // When dragging from the root, prioritize collections first, then folder drop zones
                 // This prevents folders from highlighting when dragging over collections
@@ -656,7 +708,10 @@ function CollectionList({
                 const newIndex = rootCollections.findIndex(c => c.uid === targetItem.uid);
                 
                 if (oldIndex !== -1 && newIndex !== -1) {
-                    const reorderedRootCollections = arrayMove(rootCollections, oldIndex, newIndex);
+                    const reorderedRootCollections = reindexCollectionSiblings(
+                        arrayMove(rootCollections, oldIndex, newIndex),
+                        null
+                    );
 
                     // Rebuild the complete collections array with new order
                     const folderCollections = collections.filter(c => c.parentId);
@@ -680,7 +735,10 @@ function CollectionList({
             
                 
                 if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
-                    const reorderedFolderCollections = arrayMove(folderCollections, oldIndex, newIndex);
+                    const reorderedFolderCollections = reindexCollectionSiblings(
+                        arrayMove(folderCollections, oldIndex, newIndex),
+                        draggedItem.parentId
+                    );
                     
                     // Rebuild the complete collections array with new order
                     const otherCollections = collections.filter(c => 

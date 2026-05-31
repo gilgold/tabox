@@ -9,6 +9,7 @@ import { commandPaletteOpenState } from '../atoms/commandPaletteState';
 import { searchState } from '../atoms/globalAppSettingsState';
 import { draggingCollectionState } from '../atoms/animationsState';
 import { downloadTextFile } from '../utils';
+import { loadAllCollections } from '../utils/storageUtils';
 import { getColorValue } from '../utils/colorMigration';
 import { browser } from '../../static/globals';
 import { showSuccessToast, showErrorToast } from '../toastHelpers';
@@ -35,11 +36,18 @@ import {
 } from 'react-icons/md';
 import { CiExport } from 'react-icons/ci';
 import { HiCollection } from 'react-icons/hi';
+import FPBadge from './FPBadge';
 import './FPSidebar.css';
 
 const CreateFolderModal = lazy(() => import('../CreateFolderModal'));
 const FolderDeleteConfirmModal = lazy(() => import('../FolderDeleteConfirmModal'));
 const SaveCollectionModal = lazy(() => import('./SaveCollectionModal'));
+
+function SidebarCounter({ value, className = '' }) {
+    return (
+        <FPBadge accent="neutral" className={`fp-sidebar-counter ${className}`.trim()}>{value}</FPBadge>
+    );
+}
 
 function SortableSidebarFolderItem({
     folder,
@@ -89,7 +97,7 @@ function SortableSidebarFolderItem({
             >
                 <MdFolder size={20} className="fp-sidebar-folder-icon" style={{ color }} />
                 <span className="fp-sidebar-folder-name">{folder.name}</span>
-                <span className="fp-sidebar-folder-count">{count}</span>
+                <SidebarCounter value={count} className="fp-sidebar-folder-count" />
             </button>
         </div>
     );
@@ -512,6 +520,9 @@ function FPSidebar({
                 <button
                     className="fp-sidebar-save-btn"
                     onClick={() => { setSearch(null); setSaveModalOpen(true); }}
+                    aria-label="Save Current Tabs"
+                    data-tooltip-id="main-tooltip"
+                    data-tooltip-content="Save Current Tabs"
                 >
                     <MdSave size={18} />
                     {!collapsed && <span>Save Current Tabs</span>}
@@ -534,7 +545,7 @@ function FPSidebar({
                             {!collapsed && (
                                 <>
                                     <span className="fp-sidebar-nav-label">{item.label}</span>
-                                    <span className="fp-sidebar-nav-count">{item.count}</span>
+                                    <SidebarCounter value={item.count} className="fp-sidebar-nav-count" />
                                 </>
                             )}
                         </button>
@@ -571,7 +582,7 @@ function FPSidebar({
                                     <span className="fp-sidebar-folder-name">Root Level</span>
                                     <span className="fp-sidebar-root-description">Collections not saved in any folder</span>
                                 </span>
-                                <span className="fp-sidebar-folder-count">{unorganizedCount}</span>
+                                <SidebarCounter value={unorganizedCount} className="fp-sidebar-folder-count" />
                             </button>
                         </div>
                     </div>

@@ -90,6 +90,36 @@ describe('App sync status state', () => {
         });
     });
 
+    test('keeps cached sync enabled state when checkSyncStatus returns null', async () => {
+        browser = createBrowserHarness({
+            localData: {
+                collections_index: {},
+                folders_index: {},
+                tabox_storage_version: 3,
+                googleRefreshToken: 'refresh-token'
+            },
+            runtimeSendMessageImpl: async (message) => {
+                if (message?.type === 'checkSyncStatus') {
+                    return null;
+                }
+
+                return undefined;
+            }
+        });
+        global.browser = browser;
+        global.chrome = { runtime: browser.runtime };
+
+        render(
+            <Provider store={createStore()}>
+                <App />
+            </Provider>
+        );
+
+        await waitFor(() => {
+            expect(screen.getByTestId('sync-enabled')).toHaveTextContent('true');
+        });
+    });
+
     test('updates sync enabled state when stored sync credentials change', async () => {
         browser = createBrowserHarness({
             localData: {

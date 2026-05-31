@@ -107,13 +107,15 @@ export const AutoSaveTextbox = (props) => {
     }, [value]);
 
     return (
-        <div className="autosave-wrapper" onClick={(e) => e.stopPropagation()}>
-            <div className="edit-icon" onClick={(e) => { e.stopPropagation(); inputRef.current.focus(); }}>
-                <AiFillEdit size="14px" color="var(--text-color)" />
-            </div>
+        <div className={`autosave-wrapper ${props.wrapperClassName || ''}`.trim()} onClick={(e) => e.stopPropagation()}>
+            {!props.hideEditIcon && (
+                <div className="edit-icon" onClick={(e) => { e.stopPropagation(); inputRef.current.focus(); }}>
+                    <AiFillEdit size="14px" color="var(--text-color)" />
+                </div>
+            )}
             <input 
                 ref={inputRef} 
-                className="autosave-textbox" 
+                className={`autosave-textbox ${props.inputClassName || ''}`.trim()}
                 placeholder={props.placeholder || "Enter name..."} 
                 maxLength={props.maxLength ?? -1}
                 onChange={handleOnChange} 

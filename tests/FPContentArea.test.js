@@ -1,6 +1,8 @@
 /* global browser */
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import fs from 'fs';
+import path from 'path';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { Provider, createStore } from 'jotai';
 const mockDownloadTextFile = jest.fn();
@@ -66,13 +68,24 @@ jest.mock('../app/fullpage/FPCollectionCard', () => function MockFPCollectionCar
     isBulkSelected,
     onToggleBulkSelected,
     onCardContextMenu,
+    isInteractionActive,
 }) {
     return (
         <div
-            className={`fp-card ${isBulkSelected ? 'fp-card-bulk-selected' : ''}`}
+            className={`fp-card ${isBulkSelected ? 'fp-card-bulk-selected' : ''} ${isInteractionActive ? 'fp-card-interaction-active' : ''}`}
             data-testid={`collection-${collection.uid}`}
             data-bulk-active={bulkSelectionActive ? 'true' : 'false'}
             data-context-menu={onCardContextMenu ? 'enabled' : 'disabled'}
+            data-interaction-active={isInteractionActive ? 'true' : 'false'}
+            onContextMenu={(event) => onCardContextMenu?.(event, collection, false, {
+                _handleOpenTabs: jest.fn(),
+                _handleFocusWindow: jest.fn(),
+                _handleUpdate: jest.fn(),
+                _handleDelete: jest.fn(),
+                _handleDuplicate: jest.fn(),
+                _exportCollectionToFile: jest.fn(),
+                _handleStopTracking: jest.fn(),
+            })}
         >
             <button
                 type="button"
@@ -472,6 +485,177 @@ describe('FPContentArea grouped all collections view', () => {
         expect(leadingSlot.lastElementChild).toHaveClass('fp-toolbar-leading-divider');
     });
 
+    test('renders default full-page toolbar actions as icon controls with a sort dropdown', async () => {
+        const { container } = renderWithStore(
+            <FPContentArea
+                {...baseProps}
+                collections={[
+                    { uid: 'root-1', name: 'Root Collection', parentId: null, order: 0, lastUpdated: 10, tabs: [] },
+                ]}
+            />,
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Root Collection')).toBeInTheDocument();
+        });
+
+        const toolbar = container.querySelector('.fp-toolbar-default');
+
+        expect(toolbar.querySelector('.fp-toolbar-segment')).not.toBeInTheDocument();
+        expect(toolbar.querySelector('#fp-toolbar-sort-select .toolbar-select__control')).toBeInTheDocument();
+        expect(within(toolbar).getByRole('button', { name: 'Select All' })).not.toHaveTextContent('Select All');
+        expect(within(toolbar).getByRole('button', { name: /opened/i })).toHaveTextContent('Opened');
+        expect(within(toolbar).getByRole('button', { name: 'Import collections from file' })).not.toHaveTextContent('Import');
+    });
+
+    test('keeps the selected collections toolbar compact before mobile wrapping', () => {
+        const cssPath = path.join(__dirname, '../app/fullpage/FPContentArea.css');
+        const css = fs.readFileSync(cssPath, 'utf8');
+        const toolbarRule = css.match(/\.fp-toolbar\s*{[^}]+}/)?.[0] || '';
+        const darkToolbarRule = css.match(/\[data-theme="dark"\] \.fp-toolbar\s*{[^}]+}/)?.[0] || '';
+        const toolbarButtonRule = css.match(/\.fp-toolbar-btn\s*{[^}]+}/)?.[0] || '';
+        const toolbarButtonActiveRule = css.match(/\.fp-toolbar-btn\.active\s*{[^}]+}/)?.[0] || '';
+        const toolbarPillRule = css.match(/\.fp-toolbar-pill\s*{[^}]+}/)?.[0] || '';
+        const toolbarSelectRule = css.match(/\.toolbar-select__control\s*{[^}]+}/)?.[0] || '';
+        const dividerRule = css.match(/\.fp-toolbar-divider\s*{[^}]+}/)?.[0] || '';
+        const toolbarStackRule = css.match(/\.fp-toolbar-stack\s*{[^}]+}/)?.[0] || '';
+        const bulkSlotRule = css.match(/\.fp-bulk-toolbar-slot\s*{[^}]+}/)?.[0] || '';
+        const collectionSelectionRule = css.match(/\.fp-toolbar-group-collection-selection\s*{[^}]+}/)?.[0] || '';
+        const compactRule = css.match(/\.fp-toolbar-group-collection-selection \.fp-toolbar-btn-label\s*{[^}]+}/)?.[0] || '';
+        const clearRule = css.match(/\.fp-toolbar-group-collection-selection \.fp-toolbar-session-clear-btn span\s*{[^}]+}/)?.[0] || '';
+        const mobileRule = css.match(/@media \(max-width: 900px\)\s*{[\s\S]+?\.fp-toolbar-group-selection\s*{[^}]+}[\s\S]+?}/)?.[0] || '';
+        const fullPageBorderlessRule = css.match(/html\.fullpage-mode \.fp-content \.fp-toolbar \.fp-toolbar-btn,[\s\S]+?\.toolbar-select__control\s*{[^}]+}/)?.[0] || '';
+        const fullPageActiveRule = css.match(/html\.fullpage-mode \.fp-content \.fp-toolbar \.fp-toolbar-btn\.active,[\s\S]+?\.fp-toolbar-primary-btn\s*{[^}]+}/)?.[0] || '';
+
+        expect(toolbarRule).toContain('max-width: calc(100% - 48px)');
+        expect(toolbarRule).toContain('border-radius: 14px');
+        expect(toolbarRule).toContain('background: var(--fp-toolbar-bg)');
+        expect(toolbarRule).toContain('border: 1px solid var(--fp-toolbar-border)');
+        expect(darkToolbarRule).toContain('--fp-toolbar-bg: rgba(43, 43, 43, 0.58)');
+        expect(toolbarButtonRule).toContain('border: 0');
+        expect(toolbarButtonRule).toContain('background: transparent');
+        expect(toolbarButtonActiveRule).toContain('background: transparent');
+        expect(toolbarButtonActiveRule).toContain('color: var(--primary-color)');
+        expect(toolbarButtonActiveRule).toContain('box-shadow: none');
+        expect(toolbarPillRule).toContain('border: 0');
+        expect(toolbarPillRule).toContain('border-radius: 9px');
+        expect(toolbarSelectRule).toContain('border: 0 !important');
+        expect(toolbarSelectRule).toContain('background: var(--fp-toolbar-select-bg) !important');
+        expect(dividerRule).toContain('background: var(--fp-toolbar-divider)');
+        expect(toolbarStackRule).toContain('flex-direction: column');
+        expect(bulkSlotRule).toContain('height: var(--fp-bulk-toolbar-slot-height)');
+        expect(bulkSlotRule).toContain('opacity: 0');
+        expect(collectionSelectionRule).toContain('flex-wrap: nowrap');
+        expect(collectionSelectionRule).toContain('width: auto');
+        expect(compactRule).toContain('height: 34px');
+        expect(compactRule).toContain('font-size: 12px');
+        expect(clearRule).toContain('display: none');
+        expect(mobileRule).toMatch(/\.fp-toolbar-group-selection\s*{[^}]*width:\s*100%/);
+        expect(fullPageBorderlessRule).toContain('border: 0 !important');
+        expect(fullPageBorderlessRule).toContain('box-shadow: none !important');
+        expect(fullPageActiveRule).toContain('background: transparent !important');
+        expect(fullPageActiveRule).toContain('color: var(--primary-color) !important');
+    });
+
+    test('reserves enough compact vertical space for the heading above the floating toolbar', () => {
+        const cssPath = path.join(__dirname, '../app/fullpage/FPContentArea.css');
+        const css = fs.readFileSync(cssPath, 'utf8');
+        expect(css).toContain('--fp-floating-title-height: 112px');
+        expect(css).toMatch(/@media \(max-width: 900px\)\s*{[\s\S]+?\.fp-toolbar\s*{[^}]*max-width:\s*calc\(100% - 16px\)[^}]*flex-wrap:\s*wrap/);
+        expect(css).toMatch(/@media \(max-width: 900px\)\s*{[\s\S]+?\.fp-toolbar-leading:not\(\.is-visible\)\s*{[^}]*display:\s*none/);
+    });
+
+    test('keeps the default toolbar stable and shows bulk actions in a separate reserved row', async () => {
+        const { container } = renderWithStore(
+            <FPContentArea
+                {...baseProps}
+                collections={[
+                    { uid: 'bulk-separate', name: 'Separate Bar', parentId: 'folder-1', order: 0, lastUpdated: 10, tabs: [] },
+                ]}
+                folders={[
+                    { uid: 'folder-1', name: 'Folder One', collapsed: false, color: 'blue' },
+                    { uid: 'folder-2', name: 'Folder Two', collapsed: false, color: 'green' },
+                ]}
+            />,
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Separate Bar')).toBeInTheDocument();
+        });
+
+        const toolbarStack = container.querySelector('.fp-toolbar-stack');
+        const defaultToolbar = container.querySelector('.fp-toolbar-default');
+        const bulkSlot = container.querySelector('.fp-bulk-toolbar-slot');
+
+        expect(toolbarStack).toBeInTheDocument();
+        expect(defaultToolbar).toBeInTheDocument();
+        expect(bulkSlot).toBeInTheDocument();
+        expect(bulkSlot).not.toHaveClass('is-visible');
+        expect(within(defaultToolbar).getByRole('button', { name: /import/i })).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'toggle-collection-bulk-separate' }));
+
+        expect(container.querySelector('.fp-toolbar-default')).toBe(defaultToolbar);
+        expect(defaultToolbar).toContainElement(within(defaultToolbar).getByRole('button', { name: /import/i }));
+        expect(bulkSlot).toHaveClass('is-visible');
+        expect(within(bulkSlot).getByRole('button', { name: 'Open Selected' })).toBeInTheDocument();
+    });
+
+    test('uses icon-only buttons for selected collection bulk actions', async () => {
+        renderWithStore(
+            <FPContentArea
+                {...baseProps}
+                collections={[
+                    { uid: 'bulk-compact', name: 'Compact Me', parentId: 'folder-1', order: 0, lastUpdated: 10, tabs: [] },
+                ]}
+                folders={[
+                    { uid: 'folder-1', name: 'Folder One', collapsed: false, color: 'blue' },
+                    { uid: 'folder-2', name: 'Folder Two', collapsed: false, color: 'green' },
+                ]}
+            />,
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Compact Me')).toBeInTheDocument();
+        });
+
+        fireEvent.click(screen.getByRole('button', { name: 'toggle-collection-bulk-compact' }));
+
+        expect(screen.getByRole('button', { name: 'Unselect All' })).not.toHaveTextContent('Unselect');
+        expect(screen.getByRole('button', { name: 'Open Selected' })).not.toHaveTextContent('Open');
+        expect(screen.getByRole('button', { name: 'Move to Folder' })).not.toHaveTextContent('Move');
+        expect(screen.getByRole('button', { name: 'Remove from Folder' })).not.toHaveTextContent('Remove');
+        expect(screen.getByRole('button', { name: 'Clear' })).not.toHaveTextContent('Clear');
+        expect(screen.queryByText(/^Collections$/)).not.toBeInTheDocument();
+    });
+
+    test('emphasizes primary selection toolbar icons and keeps delete as red icon only', async () => {
+        const { container } = renderWithStore(
+            <FPContentArea
+                {...baseProps}
+                collections={[
+                    { uid: 'bulk-icon-size', name: 'Icon Size', parentId: 'folder-1', order: 0, lastUpdated: 10, tabs: [] },
+                ]}
+                folders={[
+                    { uid: 'folder-1', name: 'Folder One', collapsed: false, color: 'blue' },
+                    { uid: 'folder-2', name: 'Folder Two', collapsed: false, color: 'green' },
+                ]}
+            />,
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Icon Size')).toBeInTheDocument();
+        });
+
+        fireEvent.click(screen.getByRole('button', { name: 'toggle-collection-bulk-icon-size' }));
+
+        expect(screen.getByRole('button', { name: 'Open Selected' }).querySelector('svg')).toHaveAttribute('height', '20');
+        expect(screen.getByRole('button', { name: 'Move to Folder' }).querySelector('svg')).toHaveAttribute('height', '20');
+        expect(screen.getByRole('button', { name: 'Remove from Folder' }).querySelector('svg')).toHaveAttribute('height', '20');
+        expect(screen.getByRole('button', { name: 'Delete' })).toHaveClass('fp-toolbar-danger-btn');
+        expect(container.querySelector('.fp-toolbar-danger-btn svg')).toBeInTheDocument();
+    });
+
     test('keeps filtered all collections results flat instead of sectioned', async () => {
         renderWithStore(
             <FPContentArea
@@ -516,7 +700,71 @@ describe('FPContentArea grouped all collections view', () => {
         expect(screen.queryByText('Folder One')).not.toBeInTheDocument();
     });
 
-    test('renders the folder heading above the toolbar with the folder color indicator', async () => {
+    test('disables the full-page view toggle while collection search results are shown', async () => {
+        const onViewModeChange = jest.fn();
+        const { container } = renderWithStore(
+            <FPContentArea
+                {...baseProps}
+                viewMode="grid"
+                onViewModeChange={onViewModeChange}
+                collections={[
+                    { uid: 'root-1', name: 'Search Result', parentId: null, order: 0, lastUpdated: 10, tabs: [] },
+                ]}
+            />,
+            { search: 'Search' },
+        );
+
+        await waitFor(() => {
+            expect(screen.getByTestId('collection-root-1')).toBeInTheDocument();
+        });
+
+        const viewToggleButton = container.querySelector('button[data-tooltip-content="View mode is unavailable while search is active"]');
+
+        expect(viewToggleButton).toBeDisabled();
+        onViewModeChange.mockClear();
+
+        fireEvent.click(viewToggleButton);
+
+        expect(onViewModeChange).not.toHaveBeenCalled();
+    });
+
+    test('disables the lightweight current windows view toggle while search results are shown', async () => {
+        const onViewModeChange = jest.fn();
+        const { container } = renderWithStore(
+            <FPContentArea
+                {...baseProps}
+                viewMode="grid"
+                onViewModeChange={onViewModeChange}
+                currentWindows={[
+                    {
+                        windowId: 17,
+                        name: 'Workspace Window',
+                        tabs: [
+                            { id: 1, title: 'Search Match', url: 'https://example.com/search' },
+                        ],
+                        chromeGroups: [],
+                        isCurrentWindow: true,
+                    },
+                ]}
+            />,
+            { navigation: 'current-windows', search: 'Search' },
+        );
+
+        await waitFor(() => {
+            expect(screen.getByTestId('current-window-17')).toBeInTheDocument();
+        });
+
+        const viewToggleButton = container.querySelector('button[data-tooltip-content="View mode is unavailable while search is active"]');
+
+        expect(viewToggleButton).toBeDisabled();
+        onViewModeChange.mockClear();
+
+        fireEvent.click(viewToggleButton);
+
+        expect(onViewModeChange).not.toHaveBeenCalled();
+    });
+
+    test('renders the folder heading above the detached floating toolbar with the folder color indicator', async () => {
         const { container } = renderWithStore(
             <FPContentArea
                 {...baseProps}
@@ -539,6 +787,7 @@ describe('FPContentArea grouped all collections view', () => {
         const colorIndicator = container.querySelector('.fp-content-heading-color-indicator');
 
         expect(toolbar).toBeInTheDocument();
+        expect(toolbar).toHaveClass('fp-toolbar-wrapper-floating');
         expect(titleRow).toBeInTheDocument();
         expect(colorIndicator).toBeInTheDocument();
         expect(titleRow).toHaveStyle('--fp-heading-accent: #2563EB');
@@ -567,6 +816,49 @@ describe('FPContentArea grouped all collections view', () => {
         });
 
         expect(container.querySelector('.fp-content-title-row')).toHaveStyle(`--fp-heading-accent: ${CURRENT_WINDOWS_ACCENT_COLOR}`);
+    });
+
+    test('applies the floating glass shell only to the top full-page heading above the toolbar', async () => {
+        const { container } = renderWithStore(
+            <FPContentArea
+                {...baseProps}
+                collections={[
+                    { uid: 'folder-collection', name: 'Folder Collection', parentId: 'folder-1', order: 0, lastUpdated: 10, tabs: [] },
+                    { uid: 'root-collection', name: 'Root Collection', parentId: null, order: 0, lastUpdated: 9, tabs: [] },
+                ]}
+                folders={[
+                    { uid: 'folder-1', name: 'Design References', collapsed: false, color: 'blue' },
+                ]}
+            />,
+        );
+
+        await waitFor(() => {
+            expect(screen.getByRole('heading', { name: 'All Collections' })).toBeInTheDocument();
+        });
+
+        expect(container.querySelector('.fp-content-title-row')).toHaveClass('fp-floating-header-row');
+        expect(container.querySelector('.fp-content-heading')).toHaveClass('fp-floating-header-shell');
+        expect(container.querySelector('[data-section-id="folder-1"]')).not.toHaveClass('fp-floating-header-shell');
+        expect(container.querySelector('[data-section-id="__root__"]')).not.toHaveClass('fp-floating-header-shell');
+    });
+
+    test('renders the top full-page heading in a compact inline layout', async () => {
+        const { container } = renderWithStore(
+            <FPContentArea
+                {...baseProps}
+                collections={[
+                    { uid: 'collection-1', name: 'Alpha', parentId: null, order: 0, lastUpdated: 10, tabs: [] },
+                ]}
+            />,
+        );
+
+        await waitFor(() => {
+            expect(screen.getByRole('heading', { name: 'All Collections' })).toBeInTheDocument();
+        });
+
+        expect(container.querySelector('.fp-content-heading')).toHaveClass('fp-content-heading-compact');
+        expect(container.querySelector('.fp-content-heading-main')).toHaveClass('fp-content-heading-main-inline');
+        expect(container.querySelector('.fp-content-heading-supporting')).toHaveClass('fp-content-heading-supporting-inline');
     });
 
     test('toggles folder collapse using the view-scoped folder state callback', async () => {
@@ -616,6 +908,30 @@ describe('FPContentArea grouped all collections view', () => {
         expect(screen.getByText('Delete Folder')).toBeInTheDocument();
     });
 
+    test('keeps the right-clicked collection card active while its context menu is open', async () => {
+        renderWithStore(
+            <FPContentArea
+                {...baseProps}
+                collections={[
+                    { uid: 'collection-1', name: 'Alpha', parentId: null, order: 0, lastUpdated: 10, tabs: [] },
+                    { uid: 'collection-2', name: 'Beta', parentId: null, order: 1, lastUpdated: 9, tabs: [] },
+                ]}
+            />,
+        );
+
+        const alphaCard = await screen.findByTestId('collection-collection-1');
+        const betaCard = screen.getByTestId('collection-collection-2');
+
+        expect(alphaCard).toHaveAttribute('data-interaction-active', 'false');
+        expect(betaCard).toHaveAttribute('data-interaction-active', 'false');
+
+        fireEvent.contextMenu(alphaCard);
+
+        expect(await screen.findByText('Open Tabs')).toBeInTheDocument();
+        expect(alphaCard).toHaveAttribute('data-interaction-active', 'true');
+        expect(betaCard).toHaveAttribute('data-interaction-active', 'false');
+    });
+
     test('reveals the root section and the new root collection card in grouped all collections', async () => {
         jest.useFakeTimers();
 
@@ -648,6 +964,7 @@ describe('FPContentArea grouped all collections view', () => {
         const revealShell = container.querySelector('[data-sortable-collection-id="root-1"]');
         expect(revealShell).toHaveAttribute('data-collection-reveal', 'true');
         expect(revealShell).toHaveAttribute('data-collection-reveal-index', '0');
+        expect(revealShell).toHaveStyle('--fp-reveal-color: var(--collection-default-color)');
     });
 
     test('expands a collapsed target folder before revealing imported folder collections', async () => {
@@ -816,7 +1133,7 @@ describe('FPContentArea grouped all collections view', () => {
         expect(container.querySelector('[data-section-id="__root__"]')).toHaveClass('fp-grouped-section-header-reveal', 'reduced-motion');
     });
 
-    test('reveals highlighted updated collections after the content scroll settles', async () => {
+    test('reveals highlighted updated collections without changing scroll position', async () => {
         jest.useFakeTimers();
 
         const { container } = renderWithStore(
@@ -835,7 +1152,7 @@ describe('FPContentArea grouped all collections view', () => {
             jest.advanceTimersByTime(110);
         });
 
-        expect(scrollToMock).toHaveBeenCalled();
+        expect(scrollToMock).not.toHaveBeenCalled();
         expect(container.querySelector('[data-section-id="__root__"]')).toHaveAttribute('data-section-reveal', 'true');
 
         await act(async () => {
@@ -996,10 +1313,10 @@ describe('FPContentArea grouped all collections view', () => {
         );
 
         await waitFor(() => {
-            expect(screen.getByText('Save All Windows')).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: 'Save All Windows' })).toBeInTheDocument();
         });
 
-        fireEvent.click(screen.getByText('Save All Windows'));
+        fireEvent.click(screen.getByRole('button', { name: 'Save All Windows' }));
 
         expect(screen.getByText('Save All Windows Modal')).toBeInTheDocument();
     });
@@ -1047,8 +1364,34 @@ describe('FPContentArea grouped all collections view', () => {
             expect(screen.getByText('Current Window')).toBeInTheDocument();
         });
 
-        expect(container.querySelector('.fp-session-group-cards.fp-content-list-mode')).toBeInTheDocument();
+        expect(container.querySelector('.fp-session-group-cards.fp-current-window-group-cards.fp-content-list-mode')).toBeInTheDocument();
         expect(container.querySelector('.fp-session-group-cards .fp-card.fp-current-window-card')).toBeInTheDocument();
+    });
+
+    test('adds the standard top content spacing to the current windows live view', async () => {
+        const { container } = renderWithStore(
+            <FPContentArea
+                {...baseProps}
+                currentWindows={[
+                    {
+                        uid: 'current-window-1',
+                        windowId: 1,
+                        name: 'Current Window',
+                        tabs: [{ uid: 'tab-1', title: 'Docs', url: 'https://openai.com/docs' }],
+                        chromeGroups: [],
+                        window: { id: 1 },
+                        isCurrentWindow: true,
+                    },
+                ]}
+            />,
+            { navigation: 'current-windows' },
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Current Window')).toBeInTheDocument();
+        });
+
+        expect(container.querySelector('.fp-content-sessions')).toHaveClass('fp-content-sessions-current-windows');
     });
 
     test('renders browser sessions and opens the session panel target on click', async () => {
@@ -1288,7 +1631,9 @@ describe('FPContentArea grouped all collections view', () => {
 
         expect(screen.getByText('1 selected')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Open Selected' })).toBeInTheDocument();
-        expect(screen.queryByText('Opened')).not.toBeInTheDocument();
+        expect(screen.getByText('Opened')).toBeInTheDocument();
+        expect(screen.getByText('Opened').closest('.fp-toolbar')).toHaveClass('fp-toolbar-default');
+        expect(screen.getByRole('button', { name: 'Open Selected' }).closest('.fp-bulk-toolbar-slot')).toHaveClass('is-visible');
     });
 
     test('prunes selected collections when their section is collapsed', async () => {

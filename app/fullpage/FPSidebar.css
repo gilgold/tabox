@@ -113,6 +113,10 @@
     transform: scale(0.97);
 }
 
+.fp-sidebar-save-btn svg {
+    flex-shrink: 0;
+}
+
 .fp-sidebar.fp-sidebar-collapsed .fp-sidebar-save-btn {
     padding: 11px;
 }
@@ -170,25 +174,24 @@
     text-overflow: ellipsis;
 }
 
-.fp-sidebar-nav-count {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--settings-row-text-color);
-    background: var(--fp-border, var(--section-bg-color));
-    padding: 2px 9px;
-    border-radius: 10px;
+.fp-sidebar-counter {
     flex-shrink: 0;
     min-width: 26px;
+    min-height: 22px;
+    padding: 2px 9px;
+    font-size: 12px;
+    font-weight: 600;
     text-align: center;
 }
 
-.fp-sidebar-nav-item.active .fp-sidebar-nav-count {
-    background: rgba(22, 152, 226, 0.12);
-    color: var(--primary-color);
+.fp-sidebar-nav-item.active .fp-sidebar-counter,
+.fp-sidebar-folder-item.active .fp-sidebar-counter {
+    --fp-badge-accent: var(--primary-color);
 }
 
-[data-theme="dark"] .fp-sidebar-nav-item.active .fp-sidebar-nav-count {
-    background: rgba(58, 119, 216, 0.18);
+[data-theme="dark"] .fp-sidebar-nav-item.active .fp-sidebar-counter,
+[data-theme="dark"] .fp-sidebar-folder-item.active .fp-sidebar-counter {
+    --fp-badge-accent: var(--primary-color);
 }
 
 /* Collapsed nav */
@@ -404,17 +407,8 @@
     white-space: normal;
 }
 
-.fp-sidebar-folder-count {
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--settings-row-text-color);
-    opacity: 0.5;
-    flex-shrink: 0;
-}
-
 .fp-sidebar-root-item .fp-sidebar-folder-count {
     align-self: center;
-    opacity: 0.75;
 }
 
 .fp-sidebar-no-folders {
@@ -618,7 +612,7 @@
 }
 
 .fp-sidebar-ctx-item:hover {
-    background: var(--fp-border, var(--setting-row-hover-bg-color));
+    background: color-mix(in srgb, var(--text-color) 8%, transparent);
 }
 
 .fp-sidebar-ctx-item svg {
@@ -662,6 +656,15 @@
 @media (max-width: 1100px) {
     .fp-sidebar {
         width: var(--fp-sidebar-collapsed, 60px);
+    }
+    .fp-sidebar .fp-sidebar-save-section {
+        padding: 48px 10px 12px;
+    }
+    .fp-sidebar .fp-sidebar-save-btn {
+        width: 40px;
+        height: 44px;
+        padding: 0;
+        margin: 0 auto;
     }
     .fp-sidebar .fp-sidebar-nav-label,
     .fp-sidebar .fp-sidebar-nav-count,

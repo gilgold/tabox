@@ -14,8 +14,10 @@ function FPCardBase({
     titleText,
     titleLeading = null,
     titleBadges = null,
+    titleRowClassName = '',
     topBadge = null,
     meta = null,
+    footerLeadingMeta = null,
     timeLabel = null,
     tabs = [],
     matchingTabs = [],
@@ -26,6 +28,8 @@ function FPCardBase({
     matchClassName = 'fp-card-search-match',
     actionMenu = null,
     actions = null,
+    actionsClassName = '',
+    actionsProps = {},
     dragAttributes,
     dragListeners,
 }) {
@@ -56,7 +60,7 @@ function FPCardBase({
             )}
 
             <div className="fp-card-body">
-                <div className="fp-card-title-row">
+                <div className={['fp-card-title-row', titleRowClassName].filter(Boolean).join(' ')}>
                     {titleLeading}
                     <h3 className="fp-card-title" title={titleText || (typeof title === 'string' ? title : undefined)}>
                         {title}
@@ -65,6 +69,12 @@ function FPCardBase({
                 </div>
 
                 <div className="fp-card-footer">
+                    {footerLeadingMeta && (
+                        <div className="fp-card-footer-leading-meta">
+                            {footerLeadingMeta}
+                        </div>
+                    )}
+
                     {!hasSearchMatches && (
                         <FPCardFaviconPreview tabs={tabs} />
                     )}
@@ -106,10 +116,11 @@ function FPCardBase({
 
             {actions && (
                 <div
-                    className="fp-card-actions"
+                    className={['fp-card-actions', actionsClassName].filter(Boolean).join(' ')}
                     onClick={(event) => event.stopPropagation()}
                     onMouseDown={(event) => event.stopPropagation()}
                     onPointerDown={(event) => event.stopPropagation()}
+                    {...actionsProps}
                 >
                     {actions}
                 </div>

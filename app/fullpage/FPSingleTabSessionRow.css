@@ -99,13 +99,7 @@
 }
 
 .fp-single-tab-session-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
     padding: 4px 8px;
-    border-radius: 999px;
-    background: rgba(245, 158, 11, 0.14);
-    color: #b45309;
     font-size: 10px;
     font-weight: 800;
     letter-spacing: 0.05em;
@@ -192,8 +186,7 @@
 }
 
 [data-theme="dark"] .fp-single-tab-session-badge {
-    background: rgba(245, 158, 11, 0.2);
-    color: #fbbf24;
+    --fp-badge-accent: #fbbf24;
 }
 
 @media (max-width: 960px) {

@@ -7,6 +7,7 @@ import { browser } from '../../static/globals';
 import { getMatchingTabs } from '../utils/searchUtils';
 import { getBrowserSessionEntryKey, restoreBrowserSession } from '../utils/browserSessions';
 import FPCardBase from './FPCardBase';
+import FPBadge from './FPBadge';
 import './FPSessionCard.css';
 
 function FPSessionCard({
@@ -55,22 +56,25 @@ function FPSessionCard({
             titleText={title}
             titleBadges={(
                 <div className="fp-card-badges">
-                    <div className="fp-card-badge fp-card-badge-label">
-                        <MdHistory size={12} />
+                    <FPBadge
+                        accent="session"
+                        className="fp-card-badge fp-card-badge-label"
+                        leading={<MdHistory size={12} />}
+                    >
                         <span>Recently closed</span>
-                    </div>
+                    </FPBadge>
                 </div>
             )}
             meta={(
                 <>
-                    <span className="fp-card-meta-chip tabs">{tabCount} tab{tabCount !== 1 ? 's' : ''}</span>
+                    <FPBadge accent="tabs" className="fp-card-meta-chip tabs">{tabCount} tab{tabCount !== 1 ? 's' : ''}</FPBadge>
                     {groupCount > 0 && (
-                        <span className="fp-card-meta-chip groups">{groupCount} group{groupCount !== 1 ? 's' : ''}</span>
+                        <FPBadge accent="groups" className="fp-card-meta-chip groups">{groupCount} group{groupCount !== 1 ? 's' : ''}</FPBadge>
                     )}
                     {!!search?.trim() && matchingTabs.length > 0 && (
-                        <span className="fp-card-meta-chip fp-card-meta-match-badge">
+                        <FPBadge accent="match" className="fp-card-meta-chip fp-card-meta-match-badge">
                             {matchingTabs.length} tab match{matchingTabs.length !== 1 ? 'es' : ''}
-                        </span>
+                        </FPBadge>
                     )}
                 </>
             )}

@@ -8,6 +8,7 @@ const buildPreviewCollection = (collection = {}, index, parentId = null) => ({
     sourceIndex: index,
     sourceParentId: parentId,
     name: collection?.name || `Collection ${index + 1}`,
+    color: collection?.color || null,
     tabCount: (collection?.tabs || []).length,
     groupCount: (collection?.chromeGroups || []).length,
     previewTabs: (collection?.tabs || []).slice(0, 8).map((tab) => ({

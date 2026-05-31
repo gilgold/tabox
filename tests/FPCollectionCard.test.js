@@ -30,16 +30,30 @@ jest.mock('../app/useCollectionOperations', () => ({
     })),
 }));
 
-jest.mock('../app/DroppableCollection', () => function MockDroppableCollection({ children }) {
-    return <>{children}</>;
+jest.mock('../app/DroppableCollection', () => function MockDroppableCollection({ children, disabled = false }) {
+    return (
+        <div data-testid="droppable-collection" data-disabled={disabled ? 'true' : 'false'}>
+            {children}
+        </div>
+    );
 });
 
-jest.mock('../app/ContextMenu', () => function MockContextMenu() {
-    return <span>Menu</span>;
+jest.mock('../app/ContextMenu', () => function MockContextMenu({ onOpenChange }) {
+    return (
+        <>
+            <button type="button" onClick={() => onOpenChange?.(true)}>Open Menu</button>
+            <button type="button" onClick={() => onOpenChange?.(false)}>Close Menu</button>
+        </>
+    );
 });
 
-jest.mock('../app/ColorPicker', () => function MockColorPicker() {
-    return <span>Color Picker</span>;
+jest.mock('../app/ColorPicker', () => function MockColorPicker({ onOpenChange }) {
+    return (
+        <>
+            <button type="button" onClick={() => onOpenChange?.(true)}>Open Color Picker</button>
+            <button type="button" onClick={() => onOpenChange?.(false)}>Close Color Picker</button>
+        </>
+    );
 });
 
 describe('FPCollectionCard keyboard navigation', () => {
@@ -86,10 +100,94 @@ describe('FPCollectionCard keyboard navigation', () => {
         expect(screen.getByText('Update').closest('button')).toHaveAttribute('tabindex', '-1');
         expect(screen.getByText('Delete').closest('button')).toHaveAttribute('tabindex', '-1');
         expect(screen.getByRole('link', { name: /OpenAI Docs/i })).toHaveAttribute('tabindex', '-1');
+        expect(document.querySelector('.fp-card-actions')).toHaveClass('fp-card-hover-menu');
+        expect(document.querySelector('.fp-card-menu-option')).toContainElement(screen.getByText('Open Menu'));
+        expect(document.querySelector('.fp-card-color-picker')).toContainElement(screen.getByText('Open Color Picker'));
+        expect(screen.getByText('Open').closest('button')).toHaveClass('fp-card-rail-open');
+        expect(screen.getByText('Update').closest('button')).toHaveClass('fp-card-rail-update');
+        expect(screen.getByText('Delete').closest('button')).toHaveClass('fp-card-rail-delete');
 
         fireEvent.keyDown(card, { key: 'Enter' });
         expect(onSelect).toHaveBeenCalledWith(baseCollection);
     });
+
+    test('disables collection drop targets when the card is rendered without drop support', () => {
+        render(
+            <Provider>
+                <FPCollectionCard
+                    collection={baseCollection}
+                    index={0}
+                    onSelect={jest.fn()}
+                    updateCollection={jest.fn()}
+                    removeCollection={jest.fn()}
+                    updateRemoteData={jest.fn()}
+                    addCollection={jest.fn()}
+                    onDataUpdate={jest.fn()}
+                    enableDropZone={false}
+                />
+            </Provider>,
+        );
+
+        expect(screen.getByTestId('droppable-collection')).toHaveAttribute('data-disabled', 'true');
+    });
+
+    test('uses the shared default collection color token for uncolored collections', () => {
+        render(
+            <Provider>
+                <FPCollectionCard
+                    collection={{ ...baseCollection, color: 'var(--collection-default-color)' }}
+                    index={0}
+                    onSelect={jest.fn()}
+                    updateCollection={jest.fn()}
+                    removeCollection={jest.fn()}
+                    updateRemoteData={jest.fn()}
+                    addCollection={jest.fn()}
+                    onDataUpdate={jest.fn()}
+                />
+            </Provider>,
+        );
+
+        expect(screen.getByRole('button', { name: 'Open collection Collection One' })).toHaveStyle('--card-color: var(--collection-default-color)');
+    });
+
+    test('renders tab and group count badges in the footer leading slot', () => {
+        const collectionWithGroups = {
+            ...baseCollection,
+            tabs: [
+                ...baseCollection.tabs,
+                {
+                    uid: 'tab-2',
+                    title: 'Grouped Tab',
+                    url: 'https://example.com/grouped',
+                    groupUid: 'group-1',
+                },
+            ],
+            chromeGroups: [{ uid: 'group-1', name: 'Work', color: 'blue' }],
+        };
+
+        const { container } = render(
+            <Provider>
+                <FPCollectionCard
+                    collection={collectionWithGroups}
+                    index={0}
+                    onSelect={jest.fn()}
+                    updateCollection={jest.fn()}
+                    removeCollection={jest.fn()}
+                    updateRemoteData={jest.fn()}
+                    addCollection={jest.fn()}
+                    onDataUpdate={jest.fn()}
+                />
+            </Provider>,
+        );
+
+        const leadingMeta = container.querySelector('.fp-card-footer-leading-meta');
+        expect(leadingMeta).toContainElement(screen.getByText('2 tabs'));
+        expect(leadingMeta).toContainElement(screen.getByText('1 group'));
+        expect(screen.getByText('2 tabs')).toHaveClass('fp-card-count-chip', 'tabs');
+        expect(screen.getByText('1 group')).toHaveClass('fp-card-count-chip', 'groups');
+        expect(container.querySelector('.fp-collection-card')).toBeInTheDocument();
+    });
+
     test('renders a bulk selection checkbox without triggering card selection', () => {
         const onSelect = jest.fn();
         const onToggleBulkSelected = jest.fn();
@@ -142,6 +240,58 @@ describe('FPCollectionCard keyboard navigation', () => {
         expect(screen.getByRole('button', { name: 'Deselect collection Collection One' })).toBeInTheDocument();
         expect(screen.queryByText('Open')).not.toBeInTheDocument();
         expect(screen.queryByText('Delete')).not.toBeInTheDocument();
+    });
+
+    test('keeps the card active while the action menu is open', () => {
+        render(
+            <Provider>
+                <FPCollectionCard
+                    collection={baseCollection}
+                    index={0}
+                    onSelect={jest.fn()}
+                    updateCollection={jest.fn()}
+                    removeCollection={jest.fn()}
+                    updateRemoteData={jest.fn()}
+                    addCollection={jest.fn()}
+                    onDataUpdate={jest.fn()}
+                />
+            </Provider>,
+        );
+
+        const card = screen.getByRole('button', { name: 'Open collection Collection One' });
+        expect(card).not.toHaveClass('fp-card-interaction-active');
+
+        fireEvent.click(screen.getByText('Open Menu'));
+        expect(card).toHaveClass('fp-card-interaction-active');
+
+        fireEvent.click(screen.getByText('Close Menu'));
+        expect(card).not.toHaveClass('fp-card-interaction-active');
+    });
+
+    test('keeps the card active while the color picker is open', () => {
+        render(
+            <Provider>
+                <FPCollectionCard
+                    collection={baseCollection}
+                    index={0}
+                    onSelect={jest.fn()}
+                    updateCollection={jest.fn()}
+                    removeCollection={jest.fn()}
+                    updateRemoteData={jest.fn()}
+                    addCollection={jest.fn()}
+                    onDataUpdate={jest.fn()}
+                />
+            </Provider>,
+        );
+
+        const card = screen.getByRole('button', { name: 'Open collection Collection One' });
+        expect(card).not.toHaveClass('fp-card-interaction-active');
+
+        fireEvent.click(screen.getByText('Open Color Picker'));
+        expect(card).toHaveClass('fp-card-interaction-active');
+
+        fireEvent.click(screen.getByText('Close Color Picker'));
+        expect(card).not.toHaveClass('fp-card-interaction-active');
     });
 
     test('shows all favicons and hides the overflow counter when there is enough space', () => {
@@ -270,6 +420,26 @@ describe('FPCollectionCard keyboard navigation', () => {
         expect(renderedFavicons).toHaveLength(2);
         expect(renderedFavicons[1]).toHaveAttribute('src', './images/favicon-fallback.png');
         expect(container.querySelector('.fp-card-favicon-more')).not.toBeInTheDocument();
+    });
+
+    test('adds a centered title-row class in full-page list mode', () => {
+        const { container } = render(
+            <Provider>
+                <FPCollectionCard
+                    collection={baseCollection}
+                    index={0}
+                    onSelect={jest.fn()}
+                    updateCollection={jest.fn()}
+                    removeCollection={jest.fn()}
+                    updateRemoteData={jest.fn()}
+                    addCollection={jest.fn()}
+                    onDataUpdate={jest.fn()}
+                    viewMode="list"
+                />
+            </Provider>,
+        );
+
+        expect(container.querySelector('.fp-card-title-row')).toHaveClass('fp-card-title-row-list');
     });
 
     test('shows an overflow counter only when the favicon area runs out of space', () => {

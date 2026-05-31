@@ -2,9 +2,10 @@ import React from 'react';
 import { useAtomValue } from 'jotai';
 import { dragSessionState } from './atoms/animationsState';
 
-function DroppableCollection({ collection, children }) {
+function DroppableCollection({ collection, children, disabled = false }) {
     const dragSession = useAtomValue(dragSessionState);
     const showDropZone = dragSession
+        && !disabled
         && dragSession.sourceCollectionUid !== collection.uid
         && dragSession.overCollectionUid === collection.uid;
 
@@ -22,8 +23,8 @@ function DroppableCollection({ collection, children }) {
     return (
         <div
             style={style}
-            data-collection-drop-zone="true"
-            data-collection-uid={collection.uid}
+            data-collection-drop-zone={disabled ? undefined : 'true'}
+            data-collection-uid={disabled ? undefined : collection.uid}
         >
             {children}
         </div>

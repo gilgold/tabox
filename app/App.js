@@ -681,6 +681,10 @@ function App({ mode = 'popup' }) {
           return;
         }
 
+        if (!response || typeof response !== 'object') {
+          return;
+        }
+
         const nextSyncSessionState = normalizeSyncSessionState({
           ...cachedSyncSessionState,
           user: response.displayName || response.emailAddress ? response : cachedSyncSessionState.user,
@@ -1714,18 +1718,24 @@ function App({ mode = 'popup' }) {
   }, [scheduleStorageDrivenReload, setIsLoggedIn, setLastSyncTime, setTrackingVersion]); // Only app-level listener, uses refs for latest data
 
   useEffect(() => {
-    const handleRuntimeMessage = async (request) => {
-      try {
-        if (request?.type !== 'collectionAutoUpdated' || !request.collection) {
-          return undefined;
-        }
-
-        await applyCollectionUpdates([request.collection]);
-        return undefined;
-      } catch (error) {
-        console.error('Error handling runtime collection update:', error);
+    const handleRuntimeMessage = (request) => {
+      // Only handle our own message type. We must return `undefined`
+      // synchronously for everything else: webextension-polyfill treats any
+      // returned Promise as "I will respond" and sends back `undefined`. Since
+      // this listener runs in every open extension page, an async listener
+      // would respond `undefined` to foreign messages (e.g. importData) and,
+      // when a full-page tab is open while importing from the popup, that stray
+      // response wins the race against the background's real result — causing
+      // the popup import to resolve to `null` ("Import failed").
+      if (request?.type !== 'collectionAutoUpdated' || !request.collection) {
         return undefined;
       }
+
+      // Fire-and-forget: we don't send a response, so don't return a Promise.
+      applyCollectionUpdates([request.collection]).catch((error) => {
+        console.error('Error handling runtime collection update:', error);
+      });
+      return undefined;
     };
 
     browser.runtime.onMessage.addListener(handleRuntimeMessage);
@@ -2055,5 +2065,21 @@ function App({ mode = 'popup' }) {
   </div>
   </>;
 }
+
+export {
+  DEFAULT_SYNC_SESSION_STATE,
+  escapeSearchRegex,
+  matchesCollectionSearch,
+  markPerformancePoint,
+  measurePerformanceSegment,
+  logPerformanceSummary,
+  shouldAutoLogPerformance,
+  normalizeSyncSessionState,
+  isSyncSessionEnabled,
+  runWhenIdle,
+  hasSessionMigrationCheck,
+  markSessionMigrationComplete,
+  shouldExposeDebugUtilities,
+};
 
 export default App;

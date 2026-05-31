@@ -12,6 +12,7 @@ import {
 } from 'react-icons/md';
 import MultiSelectCheckbox from '../MultiSelectCheckbox';
 import { highlightText } from '../utils/searchUtils';
+import FPBadge from './FPBadge';
 import '../Modal.css';
 import './LegacyImportPreviewModal.css';
 
@@ -334,7 +335,7 @@ function LegacyImportPreviewModal({
                                                         <FolderIcon size={18} className="legacy-import-preview-folder-icon" />
                                                     </>
                                                 ) : (
-                                                    <span className="legacy-import-preview-root-badge">Root</span>
+                                                    <FPBadge accent="neutral" className="legacy-import-preview-root-badge">Root</FPBadge>
                                                 )}
                                                 <span className="legacy-import-preview-section-title">{section.title}</span>
                                             </div>

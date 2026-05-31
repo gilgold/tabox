@@ -1,11 +1,13 @@
 import React, { useCallback, useMemo } from 'react';
 import { useAtomValue } from 'jotai';
-import { MdCenterFocusWeak, MdClose, MdOpenInBrowser } from 'react-icons/md';
+import { MdCenterFocusWeak, MdClose, MdOpenInBrowser, MdSave } from 'react-icons/md';
 import { selectedCurrentWindowIdState } from '../atoms/globalAppSettingsState';
 import { browser } from '../../static/globals';
 import { getMatchingTabs } from '../utils/searchUtils';
 import FPCardBase from './FPCardBase';
+import FPCardHoverActions, { FP_CARD_HOVER_MENU_CLASS } from './FPCardHoverActions';
 import { CURRENT_WINDOWS_ACCENT_COLOR } from './fpAccentColors';
+import FPBadge from './FPBadge';
 import './FPSessionCard.css';
 import './FPCurrentWindowCard.css';
 
@@ -61,26 +63,32 @@ function FPCurrentWindowCard({
             titleText={windowSnapshot.name}
             titleBadges={(
                 <div className="fp-card-badges">
-                    <div className="fp-card-badge fp-card-badge-label">
-                        <MdOpenInBrowser size={12} />
+                    <FPBadge
+                        accent="current-window"
+                        className="fp-card-badge fp-card-badge-label"
+                        leading={<MdOpenInBrowser size={12} />}
+                    >
                         <span>Live Window</span>
-                    </div>
+                    </FPBadge>
                 </div>
             )}
             meta={(
                 <>
-                    <span className="fp-card-meta-chip tabs">{tabCount} tab{tabCount !== 1 ? 's' : ''}</span>
+                    <FPBadge accent="tabs" className="fp-card-meta-chip tabs">{tabCount} tab{tabCount !== 1 ? 's' : ''}</FPBadge>
                     {groupCount > 0 && (
-                        <span className="fp-card-meta-chip groups">{groupCount} group{groupCount !== 1 ? 's' : ''}</span>
+                        <FPBadge accent="groups" className="fp-card-meta-chip groups">{groupCount} group{groupCount !== 1 ? 's' : ''}</FPBadge>
                     )}
                     {!!search?.trim() && matchingTabs.length > 0 && (
-                        <span className="fp-card-meta-chip fp-card-meta-match-badge">
+                        <FPBadge accent="match" className="fp-card-meta-chip fp-card-meta-match-badge">
                             {matchingTabs.length} tab match{matchingTabs.length !== 1 ? 'es' : ''}
-                        </span>
+                        </FPBadge>
                     )}
-                    <span className={`fp-card-meta-chip current-window-status ${windowSnapshot.isCurrentWindow ? 'active' : ''}`}>
+                    <FPBadge
+                        accent={windowSnapshot.isCurrentWindow ? 'success' : 'neutral'}
+                        className={`fp-card-meta-chip current-window-status ${windowSnapshot.isCurrentWindow ? 'active' : ''}`}
+                    >
                         {windowSnapshot.isCurrentWindow ? 'Focused' : 'Background'}
-                    </span>
+                    </FPBadge>
                 </>
             )}
             timeLabel="Live now"
@@ -90,35 +98,36 @@ function FPCurrentWindowCard({
             onOpenMatchingTab={handleOpenMatchingTab}
             matchingTabsResetKey={windowSnapshot.windowId}
             actions={(
-                <>
-                    <button
-                        className="fp-card-action-btn primary"
-                        onClick={handleAction(onFocusWindow)}
-                        data-tooltip-id="main-tooltip"
-                        data-tooltip-content="Focus this window"
-                    >
-                        <MdCenterFocusWeak size={14} />
-                        <span>Focus</span>
-                    </button>
-                    <button
-                        className="fp-card-action-btn save"
-                        onClick={handleAction(onSaveAsCollection)}
-                        data-tooltip-id="main-tooltip"
-                        data-tooltip-content="Save this window as a collection"
-                    >
-                        <span>Save</span>
-                    </button>
-                    <button
-                        className="fp-card-action-btn close"
-                        onClick={handleAction(onCloseWindow)}
-                        data-tooltip-id="main-tooltip"
-                        data-tooltip-content="Close this window"
-                    >
-                        <MdClose size={14} />
-                        <span>Close</span>
-                    </button>
-                </>
+                <FPCardHoverActions
+                    items={[
+                        {
+                            key: 'focus',
+                            className: 'fp-card-rail-open fp-card-rail-focus',
+                            label: 'Focus',
+                            tooltip: 'Focus this window',
+                            icon: <MdCenterFocusWeak size={14} />,
+                            onClick: handleAction(onFocusWindow),
+                        },
+                        {
+                            key: 'save',
+                            className: 'fp-card-rail-save',
+                            label: 'Save',
+                            tooltip: 'Save this window as a collection',
+                            icon: <MdSave size={13} />,
+                            onClick: handleAction(onSaveAsCollection),
+                        },
+                        {
+                            key: 'close',
+                            className: 'fp-card-rail-delete fp-card-rail-close',
+                            label: 'Close',
+                            tooltip: 'Close this window',
+                            icon: <MdClose size={14} />,
+                            onClick: handleAction(onCloseWindow),
+                        },
+                    ]}
+                />
             )}
+            actionsClassName={FP_CARD_HOVER_MENU_CLASS}
         />
     );
 }

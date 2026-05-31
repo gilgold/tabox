@@ -26,7 +26,7 @@ describe('TaboxCollection', () => {
     test('uses default color if not provided', () => {
         const collection = new TaboxCollection('Test', [], []);
         
-        expect(collection.color).toBe('var(--setting-row-border-color)');
+        expect(collection.color).toBe('var(--collection-default-color)');
     });
 
     test('uses provided color', () => {

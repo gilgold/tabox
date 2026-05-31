@@ -23,6 +23,7 @@ function CollectionListItem(props) {
     const [collectionName, setCollectionName] = useState(props.collection.name);
     const [isAutoUpdate, setIsAutoUpdate] = useState(false);
     const [showAllMatchingTabs, setShowAllMatchingTabs] = useState(false);
+    const [isInteractionActive, setIsInteractionActive] = useState(false);
     const mountedRef = useRef(true);
     
     // Prevent expansion when dragging a tab or group (unless it's from this collection)
@@ -245,7 +246,17 @@ function CollectionListItem(props) {
         <DroppableCollection collection={props.collection}>
             <div
                 onClick={_handleRowClick}
-                className={`row setting_row collection-list-item ${isAutoUpdate && 'active-auto-tracking'} ${isHighlighted ? 'collection-item-highlight' : ''} ${isDeleting ? 'collection-item-deleting' : ''} ${props.lightningEffect ? 'lightning-effect' : ''} ${matchingTabs.length > 0 ? 'has-matching-tabs' : ''}`}
+                className={[
+                    'row',
+                    'setting_row',
+                    'collection-list-item',
+                    isAutoUpdate ? 'active-auto-tracking' : '',
+                    isHighlighted ? 'collection-item-highlight' : '',
+                    isDeleting ? 'collection-item-deleting' : '',
+                    props.lightningEffect ? 'lightning-effect' : '',
+                    matchingTabs.length > 0 ? 'has-matching-tabs' : '',
+                    isInteractionActive ? 'collection-item-interaction-active' : '',
+                ].filter(Boolean).join(' ')}
                 style={{
                     ...style,
                     border: '2px solid var(--setting-row-border-color)'
@@ -266,6 +277,7 @@ function CollectionListItem(props) {
                         currentColor={props.collection.color}
                         tooltip="Change collection color"
                         action={handleSaveCollectionColor}
+                        onOpenChange={setIsInteractionActive}
                     />
                 </div>
             
@@ -360,6 +372,7 @@ function CollectionListItem(props) {
                         onDuplicate: _handleDuplicate
                     })}
                     tooltip="Collection options"
+                    onOpenChange={setIsInteractionActive}
                 />
                 
                 {/* Chevron indicator for panel */}

@@ -28,22 +28,19 @@
 }
 
 .fp-session-card .fp-card-badge.fp-card-badge-label {
-    background: rgba(245, 158, 11, 0.14);
-    color: #b45309;
+    --fp-badge-accent: #f59e0b;
 }
 
 [data-theme="dark"] .fp-session-card .fp-card-badge.fp-card-badge-label {
-    background: rgba(245, 158, 11, 0.22);
-    color: #fbbf24;
+    --fp-badge-accent: #fbbf24;
 }
 
 .fp-session-card .fp-card-meta-chip.tabs {
-    background: rgba(245, 158, 11, 0.12);
+    --fp-badge-accent: #f59e0b;
 }
 
 [data-theme="dark"] .fp-session-card .fp-card-meta-chip.tabs {
-    background: rgba(245, 158, 11, 0.2);
-    color: rgba(255, 255, 255, 0.88);
+    --fp-badge-accent: #fbbf24;
 }
 
 .fp-session-card .fp-card-actions {

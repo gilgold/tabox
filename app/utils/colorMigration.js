@@ -5,7 +5,7 @@
 
 // New color system with names and hex values
 export const COLOR_PALETTE = {
-    'default': 'var(--setting-row-border-color)',
+    'default': 'var(--collection-default-color)',
     'red': '#DC2626',
     'orange-red': '#EA580C', 
     'yellow': '#F59E0B',
@@ -54,7 +54,8 @@ const LEGACY_COLOR_MAPPING = {
     '#B499F7': 'light-purple',  // Alternative old light purple
     
     // Additional legacy colors that might exist
-    'var(--setting-row-border-color)': 'default'
+    'var(--setting-row-border-color)': 'default',
+    'var(--collection-default-color)': 'default'
 };
 
 /**
@@ -222,7 +223,7 @@ export const getColorValue = (colorName) => {
  * @returns {string}
  */
 export const normalizeColorKey = (colorName) => {
-    if (!colorName || colorName === COLOR_PALETTE['default']) {
+    if (!colorName || colorName === COLOR_PALETTE['default'] || colorName === 'var(--setting-row-border-color)') {
         return 'default';
     }
 

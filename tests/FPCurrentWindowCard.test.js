@@ -37,6 +37,7 @@ describe('FPCurrentWindowCard', () => {
         );
 
         expect(container.querySelector('.fp-card.fp-current-window-card')).toHaveStyle(`--fp-current-windows-accent: ${CURRENT_WINDOWS_ACCENT_COLOR}`);
+        expect(container.querySelector('.fp-card-actions')).toHaveClass('fp-card-hover-menu');
         expect(screen.getByText('Live Window')).toBeInTheDocument();
         expect(screen.getByText('Focused')).toBeInTheDocument();
     });
@@ -73,6 +74,10 @@ describe('FPCurrentWindowCard', () => {
         expect(onFocusWindow).toHaveBeenCalledWith(windowSnapshot);
         expect(onSaveAsCollection).toHaveBeenCalledWith(windowSnapshot);
         expect(onCloseWindow).toHaveBeenCalledWith(windowSnapshot);
+        expect(screen.getByText('Focus').closest('button')).toHaveClass('fp-card-rail-focus');
+        expect(screen.getByText('Save').closest('button')).toHaveClass('fp-card-rail-save');
+        expect(screen.getByText('Close').closest('button')).toHaveClass('fp-card-rail-close');
+        expect(screen.getByText('Focus').closest('button')).toHaveAttribute('data-tooltip-place', 'right');
     });
 
     test('renders matching tabs in search mode and focuses the clicked live tab', async () => {

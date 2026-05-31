@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo } from 'react';
-import { MdCenterFocusWeak, MdOutlineRefresh } from 'react-icons/md';
-import { FaTrash, FaPlay } from 'react-icons/fa';
+import React, { useEffect, useMemo, useState } from 'react';
+import { MdCenterFocusWeak, MdOutlineLaunch, MdOutlineRefresh } from 'react-icons/md';
+import { FaTrash } from 'react-icons/fa';
 import { BsIncognito } from 'react-icons/bs';
 import ContextMenu from '../ContextMenu';
 import { createCollectionMenuItems } from '../utils/contextMenuItems';
@@ -8,13 +8,15 @@ import TimeAgo from 'javascript-time-ago';
 import { useSetAtom, useAtomValue } from 'jotai';
 import { highlightedCollectionUidState, deletingCollectionUidsState } from '../atoms/animationsState';
 import { selectedCollectionUidState } from '../atoms/globalAppSettingsState';
-import { getColorValue } from '../utils/colorMigration';
+import { getColorValue, normalizeColorKey } from '../utils/colorMigration';
 import ColorPicker from '../ColorPicker';
 import { useCollectionOperations } from '../useCollectionOperations';
 import DroppableCollection from '../DroppableCollection';
 import { highlightText, getMatchingTabs } from '../utils/searchUtils';
 import FPCardBase from './FPCardBase';
+import FPCardHoverActions, { FP_CARD_HOVER_MENU_CLASS } from './FPCardHoverActions';
 import MultiSelectCheckbox from '../MultiSelectCheckbox';
+import FPBadge from './FPBadge';
 
 function FPCollectionCard({
     collection,
@@ -33,11 +35,14 @@ function FPCollectionCard({
     folderColor,
     dragAttributes,
     dragListeners,
+    enableDropZone = true,
     onCardContextMenu,
     bulkSelectionActive = false,
     isBulkSelected = false,
     onToggleBulkSelected,
     bulkSelectionAccentColor = null,
+    viewMode = 'grid',
+    isInteractionActive = false,
 }) {
     const highlightedCollectionUid = useAtomValue(highlightedCollectionUidState);
     const setHighlightedCollectionUid = useSetAtom(highlightedCollectionUidState);
@@ -49,6 +54,8 @@ function FPCollectionCard({
     const isDeleting = deletingCollectionUids.has(collection.uid);
     const isSelected = selectedCollectionUid === collection.uid;
     const showBulkSelection = typeof onToggleBulkSelected === 'function';
+    const [isLocalInteractionActive, setIsLocalInteractionActive] = useState(false);
+    const shouldShowInteractionState = isInteractionActive || isLocalInteractionActive;
 
     const {
         _handleDelete,
@@ -120,9 +127,10 @@ function FPCollectionCard({
 
     const wasFromIncognito = collection.savedFromIncognito === true;
 
-    const colorValue = collection.color && collection.color !== 'default'
+    const hasCustomCollectionColor = normalizeColorKey(collection.color) !== 'default';
+    const colorValue = hasCustomCollectionColor
         ? getColorValue(collection.color)
-        : 'var(--primary-color)';
+        : 'var(--collection-default-color)';
 
     const folderDotColor = folderColor || colorValue;
     const highlightedName = useMemo(() => (
@@ -145,22 +153,27 @@ function FPCollectionCard({
         </div>
     ) : null;
 
+    const countMeta = (
+        <>
+            <FPBadge accent="tabs" className="fp-card-meta-chip fp-card-count-chip tabs">{tabCount} tab{tabCount !== 1 ? 's' : ''}</FPBadge>
+            {groupCount > 0 && (
+                <FPBadge accent="groups" className="fp-card-meta-chip fp-card-count-chip groups">{groupCount} group{groupCount !== 1 ? 's' : ''}</FPBadge>
+            )}
+        </>
+    );
+
     const meta = (
         <>
-            <span className="fp-card-meta-chip tabs">{tabCount} tab{tabCount !== 1 ? 's' : ''}</span>
-            {groupCount > 0 && (
-                <span className="fp-card-meta-chip groups">{groupCount} group{groupCount !== 1 ? 's' : ''}</span>
-            )}
             {folderName && (
-                <span className="fp-card-meta-chip folder">
+                <FPBadge accent={folderDotColor} className="fp-card-meta-chip folder">
                     <span className="fp-card-folder-dot" style={{ backgroundColor: folderDotColor }} />
                     {folderName}
-                </span>
+                </FPBadge>
             )}
             {!!search?.trim() && matchingTabs.length > 0 && (
-                <span className="fp-card-meta-chip fp-card-meta-match-badge">
+                <FPBadge accent="match" className="fp-card-meta-chip fp-card-meta-match-badge">
                     {matchingTabs.length} tab match{matchingTabs.length !== 1 ? 'es' : ''}
-                </span>
+                </FPBadge>
             )}
         </>
     );
@@ -176,63 +189,71 @@ function FPCollectionCard({
                 onDuplicate: _handleDuplicate,
             })}
             tooltip="More options"
+            tooltipPlace="right"
+            onOpenChange={setIsLocalInteractionActive}
         />
     );
 
     const actions = bulkSelectionActive ? null : (
-        <>
-            <div className="fp-card-color-picker">
-                <ColorPicker
-                    currentColor={collection.color}
-                    action={(newColor) => {
-                        const updated = { ...collection, color: newColor, lastUpdated: Date.now() };
-                        updateCollection(updated, true);
-                    }}
-                    tooltip="Change color"
-                />
-            </div>
-            <button
-                type="button"
-                className="fp-card-action-btn primary"
-                tabIndex={-1}
-                onClick={() => isAutoUpdate ? _handleFocusWindow() : _handleOpenTabs()}
-                data-tooltip-id="main-tooltip"
-                data-tooltip-content={isAutoUpdate ? 'Focus window' : 'Open tabs'}
-            >
-                {isAutoUpdate ? <MdCenterFocusWeak size={14} /> : <FaPlay size={10} />}
-                <span>{isAutoUpdate ? 'Focus' : 'Open'}</span>
-            </button>
-            <div className="fp-card-action-secondary">
-                <button
-                    type="button"
-                    className="fp-card-action-btn secondary"
-                    tabIndex={-1}
-                    onClick={_handleUpdate}
-                    data-tooltip-id="main-tooltip"
-                    data-tooltip-content="Update with current tabs"
-                >
-                    <MdOutlineRefresh size={13} />
-                    <span>Update</span>
-                </button>
-                <button
-                    type="button"
-                    className="fp-card-action-btn secondary danger"
-                    tabIndex={-1}
-                    onClick={_handleDelete}
-                    data-tooltip-id="main-tooltip"
-                    data-tooltip-content="Delete"
-                >
-                    <FaTrash size={10} />
-                    <span>Delete</span>
-                </button>
-            </div>
-        </>
+        <FPCardHoverActions
+            items={[
+                {
+                    key: 'open',
+                    className: 'fp-card-rail-open',
+                    label: isAutoUpdate ? 'Focus' : 'Open',
+                    tooltip: isAutoUpdate ? 'Focus window' : 'Open tabs',
+                    ariaLabel: isAutoUpdate ? 'Focus window' : 'Open tabs',
+                    icon: isAutoUpdate ? <MdCenterFocusWeak size={14} /> : <MdOutlineLaunch size={14} />,
+                    onClick: () => isAutoUpdate ? _handleFocusWindow() : _handleOpenTabs(),
+                },
+                {
+                    key: 'update',
+                    className: 'fp-card-rail-update',
+                    label: 'Update',
+                    tooltip: 'Update with current tabs',
+                    icon: <MdOutlineRefresh size={13} />,
+                    onClick: _handleUpdate,
+                },
+                {
+                    key: 'more',
+                    className: 'fp-card-menu-option',
+                    label: 'More',
+                    render: () => actionMenu,
+                },
+                {
+                    key: 'color',
+                    className: 'fp-card-color-picker',
+                    label: 'Color',
+                    render: () => (
+                        <ColorPicker
+                            currentColor={collection.color}
+                            action={(newColor) => {
+                                const updated = { ...collection, color: newColor, lastUpdated: Date.now() };
+                                updateCollection(updated, true);
+                            }}
+                            tooltip="Change color"
+                            tooltipPlace="right"
+                            onOpenChange={setIsLocalInteractionActive}
+                        />
+                    ),
+                },
+                {
+                    key: 'delete',
+                    className: 'fp-card-rail-delete',
+                    label: 'Delete',
+                    tooltip: 'Delete',
+                    icon: <FaTrash size={10} />,
+                    onClick: _handleDelete,
+                },
+            ]}
+        />
     );
 
     return (
-        <DroppableCollection collection={collection}>
+        <DroppableCollection collection={collection} disabled={!enableDropZone}>
             <FPCardBase
                 className={[
+                    'fp-collection-card',
                     activeId === collection.uid ? 'fp-card-dragging' : '',
                     isAutoUpdate ? 'fp-card-tracking' : '',
                     isHighlighted ? 'fp-card-highlighted' : '',
@@ -241,6 +262,7 @@ function FPCollectionCard({
                     isSelected ? 'fp-card-selected' : '',
                     bulkSelectionActive ? 'fp-card-bulk-mode' : '',
                     isBulkSelected ? 'fp-card-bulk-selected' : '',
+                    shouldShowInteractionState ? 'fp-card-interaction-active' : '',
                 ].filter(Boolean).join(' ')}
                 style={{
                     '--card-color': colorValue,
@@ -252,6 +274,7 @@ function FPCollectionCard({
                 ariaLabel={`Open collection ${collection.name}`}
                 title={highlightedName !== null ? highlightedName : collection.name}
                 titleText={collection.name}
+                titleRowClassName={viewMode === 'list' ? 'fp-card-title-row-list' : ''}
                 titleLeading={(
                     <>
                         {showBulkSelection && (
@@ -275,6 +298,7 @@ function FPCollectionCard({
                 )}
                 titleBadges={titleBadges}
                 meta={meta}
+                footerLeadingMeta={countMeta}
                 timeLabel={formatTimeAgo(collection.lastUpdated || collection.createdOn)}
                 tabs={collection.tabs || []}
                 matchingTabs={matchingTabs}
@@ -286,8 +310,9 @@ function FPCollectionCard({
                 }}
                 matchingTabsResetKey={collection.uid}
                 matchingTabsTabIndex={-1}
-                actionMenu={actionMenu}
+                actionMenu={null}
                 actions={actions}
+                actionsClassName={FP_CARD_HOVER_MENU_CLASS}
                 dragAttributes={dragAttributes}
                 dragListeners={dragListeners}
             />

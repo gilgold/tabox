@@ -3,13 +3,7 @@
 }
 
 .current-window-live-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
     padding: 4px 10px;
-    border-radius: 999px;
-    background: rgba(22, 152, 226, 0.12);
-    color: var(--primary-color);
     font-size: 12px;
     font-weight: 700;
 }

@@ -374,6 +374,7 @@ function FPLayout({
     ]);
 
     const browserSessionCount = useMemo(() => getBrowserSessionCount(browserSessions), [browserSessions]);
+    const shouldShowDetailPanel = isPanelOpen && !!(selectedCurrentWindow || selectedSessionEntry || selectedCollection);
 
     return (
         <div className="fp-layout">
@@ -381,10 +382,11 @@ function FPLayout({
                 logout={logout}
                 applyDataFromServer={applyDataFromServer}
                 updateRemoteData={updateRemoteData}
+                onDataUpdate={onDataUpdate}
                 triggerSync={triggerSync}
             />
 
-            <div className={`fp-body ${isPanelOpen ? 'fp-body-panel-open' : ''}`}>
+            <div className={`fp-body ${shouldShowDetailPanel ? 'fp-body-panel-open' : ''}`}>
                 <FPSidebar
                     folders={folders}
                     collections={allCollections || collections}
@@ -428,8 +430,11 @@ function FPLayout({
                     onSelectSession={handleSelectSession}
                 />
 
-                {isPanelOpen && selectedCurrentWindow && (
-                    <div className="fp-detail-panel">
+                <div
+                    className={`fp-detail-panel ${shouldShowDetailPanel ? 'open' : ''}`}
+                    aria-hidden={!shouldShowDetailPanel}
+                >
+                    {selectedCurrentWindow && (
                         <FPCurrentWindowPanel
                             windowSnapshot={selectedCurrentWindow}
                             isOpen={isPanelOpen}
@@ -439,11 +444,9 @@ function FPLayout({
                             onCloseWindow={handleRequestCloseCurrentWindow}
                             onTabsChanged={refreshCurrentWindows}
                         />
-                    </div>
-                )}
+                    )}
 
-                {isPanelOpen && !selectedCurrentWindow && selectedSessionEntry && (
-                    <div className="fp-detail-panel">
+                    {!selectedCurrentWindow && selectedSessionEntry && (
                         <FPSessionPanel
                             sessionCollection={selectedSessionEntry.collection}
                             sessionTimestamp={selectedSessionEntry.sessionTimestamp}
@@ -452,11 +455,9 @@ function FPLayout({
                             onSaveAsCollection={setSaveCurrentWindowTarget}
                             onRestoreWindow={refreshBrowserSessions}
                         />
-                    </div>
-                )}
+                    )}
 
-                {isPanelOpen && !selectedCurrentWindow && !selectedSessionEntry && selectedCollection && (
-                    <div className="fp-detail-panel">
+                    {!selectedCurrentWindow && !selectedSessionEntry && selectedCollection && (
                         <CollectionDetailPanel
                             collection={selectedCollection}
                             isOpen={isPanelOpen}
@@ -468,8 +469,8 @@ function FPLayout({
                             onDataUpdate={onDataUpdate}
                             renderInline={true}
                         />
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
 
             <SaveCollectionModal

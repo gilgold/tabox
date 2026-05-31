@@ -283,7 +283,9 @@ function GroupContainer({
                                     initValue={group.title}
                                     item={group}
                                     action={onSaveGroupName}
-                                    className="group-title-input"
+                                    inputClassName="group-title-input"
+                                    wrapperClassName="group-title-autosave-wrapper"
+                                    hideEditIcon
                                 />
                                 <span style={groupStatsStyle}>
                                     {tabCount} tab{tabCount !== 1 ? 's' : ''}
@@ -293,19 +295,6 @@ function GroupContainer({
                     </div>
                     
                     <div style={actionsStyle} className="group-actions" onClick={(e) => e.stopPropagation()}>
-                        <button
-                            type="button"
-                            style={openButtonStyle}
-                            className="group-open-button"
-                            onClick={() => onOpenGroupTabs?.(group)}
-                            title="Open all tabs in group"
-                            aria-label={`Open all tabs in ${group.title || 'group'}`}
-                            data-tooltip-id="main-tooltip"
-                            data-tooltip-content="Open all tabs in this group"
-                            disabled={tabCount === 0}
-                        >
-                            Open group
-                        </button>
                         <ColorPicker
                             colorList={tabGrooupColorChart}
                             tooltip="Choose a color for this group"

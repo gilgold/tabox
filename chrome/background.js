@@ -122,6 +122,205 @@ async function ensureBackgroundSyncAlarm() {
   return true;
 }
 
+const BACKUP_GROUP_TITLES = {
+  auto: 'Auto Backups',
+  preSync: 'Pre-Sync Backups',
+  version: 'Version Backups'
+};
+
+function isFullCollectionSnapshot(backup) {
+  return Array.isArray(backup?.tabsArray)
+    && (backup.tabsArray.length === 0 || Array.isArray(backup.tabsArray[0]?.tabs));
+}
+
+function synthesizeBackupFolders(backup = {}, fallbackFolders = []) {
+  const existingFolders = Array.isArray(backup.foldersArray) ? backup.foldersArray : [];
+  const fallbackById = new Map((fallbackFolders || []).map((folder) => [folder.uid, folder]));
+  const knownFolderIds = new Set(existingFolders.map((folder) => folder.uid).filter(Boolean));
+  const syntheticFolders = [];
+
+  (backup.tabsArray || []).forEach((collection) => {
+    if (collection?.parentId && !knownFolderIds.has(collection.parentId)) {
+      knownFolderIds.add(collection.parentId);
+      const fallbackFolder = fallbackById.get(collection.parentId);
+      syntheticFolders.push({
+        uid: collection.parentId,
+        name: fallbackFolder?.name || 'Unknown Folder',
+        color: fallbackFolder?.color || null,
+        collapsed: fallbackFolder?.collapsed || false
+      });
+    }
+  });
+
+  return [...existingFolders, ...syntheticFolders];
+}
+
+function buildBackupDescriptor(backup, source, index = 0) {
+  const fullSnapshot = isFullCollectionSnapshot(backup);
+  const folders = fullSnapshot ? synthesizeBackupFolders(backup) : [];
+  const collectionCount = backup?.collectionCount ?? backup?.tabsArray?.length ?? 0;
+
+  return {
+    id: source === 'version' ? 'version' : `${source}:${index}`,
+    source,
+    index,
+    label: backup?.label || backup?.reason || (source === 'version' ? `Version ${backup?.version || 'backup'}` : null),
+    timestamp: backup?.timestamp || Date.now(),
+    collectionCount,
+    folderCount: backup?.folderCount ?? folders.length,
+    canPreview: Array.isArray(backup?.tabsArray),
+    canSelectiveRestore: fullSnapshot,
+    canOverwrite: fullSnapshot,
+    previewType: fullSnapshot ? 'full_export' : 'metadata_only'
+  };
+}
+
+function buildGroupedBackupOptions({ preSyncBackups = [], autoBackups = [], backup = null }) {
+  const groups = [];
+  const pushGroup = (key, items) => {
+    if (items.length > 0) {
+      groups.push({
+        key,
+        title: BACKUP_GROUP_TITLES[key],
+        items
+      });
+    }
+  };
+
+  pushGroup('auto', autoBackups.map((item, index) => buildBackupDescriptor(item, 'auto', index)));
+  pushGroup('preSync', preSyncBackups.map((item, index) => buildBackupDescriptor(item, 'preSync', index)));
+  if (backup) {
+    pushGroup('version', [buildBackupDescriptor(backup, 'version', 0)]);
+  }
+
+  return groups;
+}
+
+async function resolveBackupById(backupId) {
+  const { preSyncBackups = [], autoBackups = [], backup } = await browser.storage.local.get(['preSyncBackups', 'autoBackups', 'backup']);
+
+  if (backupId === 'version') {
+    return { source: 'version', index: 0, backup };
+  }
+
+  const [source, rawIndex] = String(backupId || '').split(':');
+  const index = Number(rawIndex);
+
+  if (source === 'auto' && Number.isInteger(index)) {
+    return { source, index, backup: autoBackups[index] || null };
+  }
+
+  if (source === 'preSync' && Number.isInteger(index)) {
+    return { source, index, backup: preSyncBackups[index] || null };
+  }
+
+  return { source: null, index: -1, backup: null };
+}
+
+async function buildBackupPreviewResponse(backupId) {
+  const { backup } = await resolveBackupById(backupId);
+
+  if (!backup || !Array.isArray(backup.tabsArray)) {
+    return undefined;
+  }
+
+  if (!isFullCollectionSnapshot(backup)) {
+    return {
+      kind: 'metadata_only',
+      items: backup.tabsArray
+    };
+  }
+
+  const currentFolders = await loadAllFoldersBG();
+
+  return {
+    kind: 'full_export',
+    payload: {
+      type: 'full_export',
+      folders: synthesizeBackupFolders(backup, currentFolders),
+      collections: backup.tabsArray
+    }
+  };
+}
+
+async function createEmergencySelectionBackup(reason) {
+  const [tabsArray, foldersArray] = await Promise.all([
+    loadAllCollectionsBG(true),
+    loadAllFoldersBG()
+  ]);
+  const { autoBackups = [] } = await browser.storage.local.get('autoBackups');
+  const nextAutoBackups = [{
+    timestamp: Date.now(),
+    reason,
+    tabsArray,
+    foldersArray
+  }, ...autoBackups].slice(0, 3);
+
+  await browser.storage.local.set({ autoBackups: nextAutoBackups });
+}
+
+async function overwriteBackupSelection(payload = {}) {
+  const selectedCollections = Array.isArray(payload.collections) ? payload.collections : [];
+  const selectedFolders = Array.isArray(payload.folders) ? payload.folders : [];
+  const currentFolders = await loadAllFoldersBG();
+  const currentCollections = await loadAllCollectionsBG(true);
+
+  await createEmergencySelectionBackup('Before selective overwrite restore');
+
+  const currentFolderIds = new Set(currentFolders.map((folder) => folder.uid));
+  const selectedFolderIds = new Set(selectedFolders.map((folder) => folder.uid));
+  const validFolderIds = new Set([...currentFolderIds, ...selectedFolderIds]);
+  const impactedFolderIds = new Set(selectedFolders.map((folder) => folder.uid));
+
+  let overwrittenCollections = 0;
+  let overwrittenFolders = 0;
+
+  for (const collection of selectedCollections) {
+    const existingCollection = currentCollections.find((entry) => entry.uid === collection.uid);
+    if (existingCollection?.parentId) {
+      impactedFolderIds.add(existingCollection.parentId);
+    }
+
+    const normalizedParentId = collection.parentId && validFolderIds.has(collection.parentId)
+      ? collection.parentId
+      : null;
+
+    await saveSingleCollectionBG({
+      ...collection,
+      parentId: normalizedParentId
+    }, true);
+
+    if (normalizedParentId) {
+      impactedFolderIds.add(normalizedParentId);
+    }
+
+    overwrittenCollections++;
+  }
+
+  for (const folder of selectedFolders) {
+    await saveSingleFolderBG(folder, true);
+    overwrittenFolders++;
+  }
+
+  for (const folderId of impactedFolderIds) {
+    if (!folderId) continue;
+    const folder = selectedFolders.find((entry) => entry.uid === folderId)
+      || currentFolders.find((entry) => entry.uid === folderId)
+      || await loadSingleFolderBG(folderId);
+    if (folder) {
+      await saveSingleFolderBG(folder);
+    }
+  }
+
+  await forceLegacyStorageSync();
+
+  return {
+    success: true,
+    overwrittenCollections,
+    overwrittenFolders
+  };
+}
+
 async function runBackgroundSync() {
   if (!await shouldRunBackgroundSync()) {
     await updateSharedSyncSessionState({
@@ -1355,13 +1554,39 @@ try {
       try {
         const { preSyncBackups = [], autoBackups = [], backup } = await browser.storage.local.get(['preSyncBackups', 'autoBackups', 'backup']);
         return Promise.resolve({
+          groups: buildGroupedBackupOptions({ preSyncBackups, autoBackups, backup }),
           preSyncBackups,
           autoBackups,
           versionBackup: backup
         });
       } catch (error) {
         console.error('Error getting backup options:', error);
-        return Promise.resolve({ preSyncBackups: [], autoBackups: [], versionBackup: null });
+        return Promise.resolve({ groups: [], preSyncBackups: [], autoBackups: [], versionBackup: null });
+      }
+    }
+
+    if (request.type === 'getBackupPreview') {
+      try {
+        return Promise.resolve(await buildBackupPreviewResponse(request.backupId));
+      } catch (error) {
+        console.error('Error getting backup preview:', error);
+        return Promise.resolve(undefined);
+      }
+    }
+
+    if (request.type === 'restoreBackupSelection') {
+      try {
+        if (request.mode === 'overwrite') {
+          return Promise.resolve(await overwriteBackupSelection(request.payload));
+        }
+
+        return Promise.resolve(await handleImportDataBG(request.payload));
+      } catch (error) {
+        console.error('Error restoring backup selection:', error);
+        return Promise.resolve({
+          success: false,
+          error: error?.message || 'Restore failed'
+        });
       }
     }
     
@@ -1849,11 +2074,13 @@ try {
         // Create version backup (existing behavior)
         // 🚀 NEW: Load from indexed storage
         let tabsArray = await loadAllCollectionsBG(true);
+        const foldersArray = await loadAllFoldersBG();
         if (tabsArray && tabsArray.length > 0) {
           tabsArray = updateCollectionsUids(tabsArray);
           const backupObj = {
             version: previousVersion,
             tabsArray: tabsArray,
+            foldersArray,
             timestamp: Date.now()
           }
           await browser.storage.local.set({ backup: backupObj });
@@ -1914,7 +2141,10 @@ try {
     }
     
     // 🚀 NEW: Load from indexed storage only when backup is actually needed
-    const tabsArray = await loadAllCollectionsBG(true);
+    const [tabsArray, foldersArray] = await Promise.all([
+      loadAllCollectionsBG(true),
+      loadAllFoldersBG()
+    ]);
     
     if (!tabsArray || tabsArray.length === 0) {
       return; // No collections to backup
@@ -1923,7 +2153,8 @@ try {
     const finalAutoBackups = autoBackups || [];
     const backupObj = {
       timestamp: localTimestamp || Date.now(),
-      tabsArray
+      tabsArray,
+      foldersArray
     }
     finalAutoBackups.unshift(backupObj);
     

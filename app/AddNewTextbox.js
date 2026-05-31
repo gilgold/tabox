@@ -10,18 +10,6 @@ import { showErrorToast } from './toastHelpers';
 import { IoClose } from 'react-icons/io5';
 import { HiOutlineDesktopComputer, HiCollection } from 'react-icons/hi';
 
-const FOLDER_COLOR_OPTIONS = [
-    { name: 'Blue', value: '#4facfe' },
-    { name: 'Green', value: '#43e97b' },
-    { name: 'Purple', value: '#a855f7' },
-    { name: 'Orange', value: '#fb923c' },
-    { name: 'Red', value: '#ef4444' },
-    { name: 'Yellow', value: '#eab308' },
-    { name: 'Pink', value: '#ec4899' },
-    { name: 'Teal', value: '#14b8a6' },
-    { name: 'Gray', value: '#6b7280' }
-];
-
 function SaveHighlightedOnlyLabel({ saveMode, windowCount }) {
     const [totalHighlighted, setTotalHighlighted] = useState(0);
 
@@ -115,7 +103,6 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
     const [hideClear, setHideClear] = useState(true);
     const [saveMode, setSaveMode] = useState('current'); // 'current' or 'all'
     const [windowCount, setWindowCount] = useState(1);
-    const [selectedFolderColor, setSelectedFolderColor] = useState('#4facfe');
 
     useEffect(() => {
         setInputFocus();
@@ -219,7 +206,7 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
         try {
             if (saveMode === 'all' && windowCount > 1) {
                 // Save all windows as a folder with collections
-                const { folder, collections } = await getAllWindowsTabsAndGroups(collectionName, selectedFolderColor);
+                const { folder, collections } = await getAllWindowsTabsAndGroups(collectionName);
                 
                 // First create the folder with collapsed state
                 const createdFolder = await addFolder(folder.name, folder.color, folder.collapsed);
@@ -267,9 +254,6 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
                     const { showSuccessToast } = await import('./toastHelpers');
                     showSuccessToast(`Folder created with ${addedCollections.length} collection${addedCollections.length > 1 ? 's' : ''}`);
                 }
-
-                setSelectedFolderColor('#4facfe');
-                
             } else {
                 // Save current window as collection (existing behavior)
                 const newItem = await getCurrentTabsAndGroups(collectionName);
@@ -354,24 +338,6 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
                     setSaveMode={setSaveMode} 
                     windowCount={windowCount}
                 />
-                {saveMode === 'all' && windowCount > 1 && (
-                    <div className="folder-color-inline-picker" aria-label="Folder color options">
-                        {FOLDER_COLOR_OPTIONS.map((color) => (
-                            <button
-                                key={color.value}
-                                type="button"
-                                className={`folder-color-inline-option ${selectedFolderColor === color.value ? 'selected' : ''}`}
-                                style={{ backgroundColor: color.value }}
-                                onClick={() => setSelectedFolderColor(color.value)}
-                                aria-label={`Choose ${color.name} folder color`}
-                                title={color.name}
-                                disabled={disabled}
-                            >
-                                {selectedFolderColor === color.value ? '✓' : ''}
-                            </button>
-                        ))}
-                    </div>
-                )}
                 <SaveHighlightedOnlyLabel saveMode={saveMode} windowCount={windowCount} />
             </div>
         </div>

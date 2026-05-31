@@ -9,7 +9,7 @@ import './FPTopBar.css';
 
 const SettingsMenu = lazy(() => import('../SettingsMenu'));
 
-function FPTopBar({ logout, applyDataFromServer, updateRemoteData, triggerSync }) {
+function FPTopBar({ logout, applyDataFromServer, updateRemoteData, onDataUpdate, triggerSync }) {
     const [search, setSearch] = useAtom(searchState);
     const sidebarNavigation = useAtomValue(sidebarNavigationState);
     const inputRef = useRef(null);
@@ -93,6 +93,7 @@ function FPTopBar({ logout, applyDataFromServer, updateRemoteData, triggerSync }
                             variant="fullpage"
                             updateRemoteData={updateRemoteData}
                             applyDataFromServer={applyDataFromServer}
+                            onDataUpdate={onDataUpdate}
                         />
                     </Suspense>
                 </div>

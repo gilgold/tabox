@@ -3,11 +3,9 @@
 }
 
 .session-panel-badge {
-    background: rgba(245, 158, 11, 0.14);
-    color: #b45309;
+    --fp-badge-accent: #f59e0b;
 }
 
 [data-theme="dark"] .session-panel-badge {
-    background: rgba(245, 158, 11, 0.22);
-    color: #fbbf24;
+    --fp-badge-accent: #fbbf24;
 }

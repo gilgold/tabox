@@ -15,14 +15,14 @@
     align-items: stretch;
     min-width: 360px;
     max-width: 480px;
-    background: var(--fp-surface-elevated);
-    border: 1px solid var(--fp-border);
-    border-radius: var(--fp-radius-md);
-    box-shadow: var(--fp-shadow-lg);
+    background: var(--fp-surface-elevated, var(--settings-bg-color));
+    border: 1px solid var(--fp-border, rgba(0, 0, 0, 0.08));
+    border-radius: var(--fp-radius-md, 12px);
+    box-shadow: var(--fp-shadow-lg, 0 12px 32px rgba(0, 0, 0, 0.16), 0 4px 8px rgba(0, 0, 0, 0.08));
     overflow: hidden;
     user-select: none;
-    animation: fpToastSlideIn 0.3s var(--fp-ease);
-    font-family: var(--fp-font-body);
+    animation: fpToastSlideIn 0.3s var(--fp-ease, ease);
+    font-family: var(--fp-font-body, "Helvetica Neue", Helvetica, Arial, "Lucida Grande", sans-serif);
 }
 
 .fp-toast *,
@@ -46,7 +46,7 @@
 .fp-toast-accent {
     width: 4px;
     flex-shrink: 0;
-    border-radius: var(--fp-radius-md) 0 0 var(--fp-radius-md);
+    border-radius: var(--fp-radius-md, 12px) 0 0 var(--fp-radius-md, 12px);
 }
 
 /* ---------- Body layout ---------- */
@@ -131,15 +131,15 @@
     align-items: center;
     gap: 6px;
     padding: 6px 14px;
-    border: 1px solid var(--fp-border-strong);
+    border: 1px solid var(--fp-border-strong, rgba(0, 0, 0, 0.12));
     border-radius: 100px;
     background: transparent;
     color: var(--fp-toast-accent-success);
-    font-family: var(--fp-font-body);
+    font-family: var(--fp-font-body, "Helvetica Neue", Helvetica, Arial, "Lucida Grande", sans-serif);
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
-    transition: all var(--fp-duration) var(--fp-ease);
+    transition: all var(--fp-duration, 0.2s) var(--fp-ease, ease);
     white-space: nowrap;
     line-height: 1;
 }
@@ -168,12 +168,12 @@
     opacity: 0.5;
     cursor: pointer;
     padding: 0;
-    transition: all var(--fp-duration) var(--fp-ease);
+    transition: all var(--fp-duration, 0.2s) var(--fp-ease, ease);
     flex-shrink: 0;
 }
 
 .fp-toast-close-btn:hover {
-    background: var(--fp-border);
+    background: var(--fp-border, rgba(0, 0, 0, 0.08));
     opacity: 0.8;
 }
 
@@ -193,7 +193,7 @@
 
 .fp-toast-countdown-bg {
     fill: none;
-    stroke: var(--fp-border);
+    stroke: var(--fp-border, rgba(0, 0, 0, 0.08));
     stroke-width: 1.5;
 }
 

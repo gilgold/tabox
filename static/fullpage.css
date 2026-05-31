@@ -11,11 +11,7 @@ html.fullpage-mode body {
 }
 
 html.fullpage-mode body {
-  background: #eaeaea;
-}
-
-html.fullpage-mode[data-theme="dark"] body {
-  background: #373a43;
+  background: var(--color-background, #FAFAFA);
 }
 
 /* ---------- Reduced-Motion Safety ---------- */

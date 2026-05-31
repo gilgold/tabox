@@ -36,7 +36,8 @@
 		transition: none;
 	}
 
-	.setting_row:hover:not(.expanded) {
+	.setting_row:hover:not(.expanded),
+	.setting_row.collection-item-interaction-active:not(.expanded) {
 		transform: none;
 	}
 }
@@ -102,14 +103,16 @@
 }
 
 /* Enhanced Modern Liquid Glass Hover Effect for List Items - but not for expanded items */
-.setting_row:hover:not(.expanded) {
+.setting_row:hover:not(.expanded),
+.setting_row.collection-item-interaction-active:not(.expanded) {
 	background: rgba(255, 255, 255, 0.18);
 	border: 1px solid rgba(255, 255, 255, 0.28);
 	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
 }
 
 /* Enhanced Dark Mode List Item Hover */
-[data-theme="dark"] .setting_row:hover:not(.expanded) {
+[data-theme="dark"] .setting_row:hover:not(.expanded),
+[data-theme="dark"] .setting_row.collection-item-interaction-active:not(.expanded) {
 	background: rgba(255, 255, 255, 0.07);
 	border: 1px solid rgba(255, 255, 255, 0.2);
 	box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
@@ -271,7 +274,8 @@
 	margin-left: 4px;
 }
 
-.setting_row:hover .collection-chevron {
+.setting_row:hover .collection-chevron,
+.setting_row.collection-item-interaction-active .collection-chevron {
 	opacity: 0.8;
 	transform: translateX(2px);
 	color: var(--primary-color);
@@ -350,7 +354,8 @@
 	transform-origin: left center;
 }
 
-.setting_row:hover .collection-counts {
+.setting_row:hover .collection-counts,
+.setting_row.collection-item-interaction-active .collection-counts {
 	transform: scale(1.08);
 	opacity: 0.85;
 }
@@ -730,7 +735,7 @@
 }
 
 .context-menu-item:hover {
-	background: rgba(255, 255, 255, 0.15);
+	background: color-mix(in srgb, var(--text-color) 8%, transparent);
 	color: var(--text-color);
 }
 
@@ -752,9 +757,7 @@
 	border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-[data-theme="dark"] .context-menu-item:hover {
-	background: rgba(255, 255, 255, 0.1);
-}
+
 
 #nothing_message {
 	margin: 6px auto;
@@ -1314,8 +1317,23 @@
     box-shadow: inset 0 0 0 1px rgba(107, 114, 128, 0.12);
 }
 
+/* Group title autosave wrapper — keep layout, strip visible box */
+.group-title-autosave-wrapper,
+.group-title-autosave-wrapper:hover {
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.group-title-autosave-wrapper:focus-within {
+    background: rgba(var(--primary-color-rgb, 52, 152, 219), 0.08) !important;
+    box-shadow: 0 0 0 1px rgba(var(--primary-color-rgb, 52, 152, 219), 0.4) !important;
+    transform: none !important;
+}
+
 .group-title-input {
     background: transparent !important;
+    -webkit-appearance: none !important;
+    appearance: none !important;
     border: none !important;
     color: var(--text-color) !important;
     font-weight: 600 !important;
@@ -1326,10 +1344,8 @@
 }
 
 .group-title-input:focus {
-    outline: 1px solid var(--primary-color) !important;
-    border-radius: 4px !important;
+    outline: none !important;
     padding: 2px 6px !important;
-    background: var(--section-bg-color) !important;
 }
 
 /* Tab styling within groups */

@@ -1,4 +1,4 @@
-function sanitizeUrl(url) {
+export function sanitizeUrl(url) {
     try {
         if (!url || typeof url !== 'string') {
             return '#';
@@ -31,9 +31,9 @@ function sanitizeUrl(url) {
     }
 }
 
-function extractUrlParams() {
+export function extractUrlParams(href = window.location.href) {
     try {
-        const url = new URL(window.location.href);
+        const url = new URL(href);
         const urlParams = url.searchParams;
         return Object.fromEntries(urlParams.entries());
     } catch (error) {
@@ -42,56 +42,8 @@ function extractUrlParams() {
     }
 }
 
-const params = extractUrlParams();
-const sanitizedUrl = sanitizeUrl(params.url);
-const sanitizedFavicon = sanitizeUrl(params.favicon);
-
-// Validation check
-if (sanitizedUrl === '#') {
-    console.error('Invalid or missing URL parameter');
-    document.body.innerHTML = `
-        <div style="text-align: center; padding: 50px; color: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
-            <h2>Error Loading Content</h2>
-            <p>This tab cannot be loaded due to an invalid URL.</p>
-            <button onclick="window.close()" style="margin-top: 20px; padding: 10px 20px; background: #177CB6; color: white; border: none; border-radius: 6px; cursor: pointer;">Close Tab</button>
-        </div>
-    `;
-    throw new Error('Invalid URL - stopping execution');
-}
-
-// Focus-driven loading only
-let redirected = false;
-let redirectAttempts = 0;
-const maxRedirectAttempts = 3;
-
-// Safe redirect function with retry logic
-function safeRedirect(url) {
-    if (redirected || redirectAttempts >= maxRedirectAttempts) {
-        return;
-    }
-    
-    redirectAttempts++;
-    redirected = true;
-    
-    try {
-        // Try window.location.replace first (cleanest)
-        window.location.replace(url);
-    } catch (error) {
-        console.warn('Redirect attempt failed:', error);
-        
-        // Fallback to window.location.href
-        try {
-            window.location.href = url;
-        } catch (fallbackError) {
-            console.error('All redirect methods failed:', fallbackError);
-            // Show manual link as last resort
-            showManualRedirectOption(url);
-        }
-    }
-}
-
-function showManualRedirectOption(url) {
-    const container = document.querySelector('.defer-container');
+export function showManualRedirectOption(url, doc = document) {
+    const container = doc.querySelector('.defer-container');
     if (container) {
         container.innerHTML = `
             <div class="tabox-icon">⚠</div>
@@ -102,40 +54,80 @@ function showManualRedirectOption(url) {
     }
 }
 
-// 1. Load when tab receives focus (primary trigger)
-window.addEventListener("focus", () => {
-    if (sanitizedUrl === '#' || redirected) return;
-    console.log('Tab focused - loading content');
-    safeRedirect(sanitizedUrl);
-});
+export function initializeDeferredLoading({
+    win = window,
+    doc = document,
+    logger = console,
+} = {}) {
+    const params = extractUrlParams(win.location.href);
+    const sanitizedUrl = sanitizeUrl(params.url);
+    const sanitizedFavicon = sanitizeUrl(params.favicon);
 
-// 2. Load when tab becomes visible (switched to)
-document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && sanitizedUrl !== '#' && !redirected) {
-        console.log('Tab became visible - loading content');
-        safeRedirect(sanitizedUrl);
+    if (sanitizedUrl === '#') {
+        logger.error('Invalid or missing URL parameter');
+        doc.body.innerHTML = `
+            <div style="text-align: center; padding: 50px; color: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+                <h2>Error Loading Content</h2>
+                <p>This tab cannot be loaded due to an invalid URL.</p>
+                <button onclick="window.close()" style="margin-top: 20px; padding: 10px 20px; background: #177CB6; color: white; border: none; border-radius: 6px; cursor: pointer;">Close Tab</button>
+            </div>
+        `;
+        throw new Error('Invalid URL - stopping execution');
     }
-});
 
-// 3. Load on any user interaction with the page
-['click', 'keydown', 'touchstart', 'mousedown'].forEach(event => {
-    document.addEventListener(event, () => {
+    let redirected = false;
+    let redirectAttempts = 0;
+    const maxRedirectAttempts = 3;
+
+    const safeRedirect = (url) => {
+        if (redirected || redirectAttempts >= maxRedirectAttempts) {
+            return;
+        }
+
+        redirectAttempts++;
+        redirected = true;
+
+        try {
+            win.location.replace(url);
+        } catch (error) {
+            logger.warn('Redirect attempt failed:', error);
+
+            try {
+                win.location.href = url;
+            } catch (fallbackError) {
+                logger.error('All redirect methods failed:', fallbackError);
+                showManualRedirectOption(url, doc);
+            }
+        }
+    };
+
+    win.addEventListener('focus', () => {
         if (sanitizedUrl === '#' || redirected) return;
-        console.log('User interaction detected - loading content');
+        logger.log('Tab focused - loading content');
         safeRedirect(sanitizedUrl);
-    }, { once: true });
-});
+    });
 
-// 4. Page setup and manual reload button
-(() => {
+    doc.addEventListener('visibilitychange', () => {
+        if (!doc.hidden && sanitizedUrl !== '#' && !redirected) {
+            logger.log('Tab became visible - loading content');
+            safeRedirect(sanitizedUrl);
+        }
+    });
+
+    ['click', 'keydown', 'touchstart', 'mousedown'].forEach((event) => {
+        doc.addEventListener(event, () => {
+            if (sanitizedUrl === '#' || redirected) return;
+            logger.log('User interaction detected - loading content');
+            safeRedirect(sanitizedUrl);
+        }, { once: true });
+    });
+
     try {
-        // Set favicon with fallback
-        let link = document.querySelector("link[rel~='icon']");
+        let link = doc.querySelector("link[rel~='icon']");
         if (link) {
             if (sanitizedFavicon && sanitizedFavicon !== '#') {
                 link.href = sanitizedFavicon;
             } else {
-                // Fallback to Google's favicon service
                 try {
                     const urlObj = new URL(sanitizedUrl);
                     link.href = `https://www.google.com/s2/favicons?domain=${urlObj.hostname}&sz=32`;
@@ -144,31 +136,42 @@ document.addEventListener('visibilitychange', () => {
                 }
             }
         }
-        
-        // Set page title with fallback
+
         try {
             const urlObj = new URL(sanitizedUrl);
-            document.title = `${urlObj.hostname} (click to load)`;
+            doc.title = `${urlObj.hostname} (click to load)`;
         } catch (error) {
-            document.title = 'Click to load content';
+            doc.title = 'Click to load content';
         }
-        
-        // Setup manual redirect button
-        const redirectButton = document.getElementById("redirect-button");
+
+        const redirectButton = doc.getElementById('redirect-button');
         if (redirectButton) {
             redirectButton.href = sanitizedUrl;
-            redirectButton.addEventListener('click', (e) => {
-                e.preventDefault();
+            redirectButton.addEventListener('click', (event) => {
+                event.preventDefault();
                 if (sanitizedUrl === '#') return;
-                console.log('Manual load button clicked');
+                logger.log('Manual load button clicked');
                 safeRedirect(sanitizedUrl);
             });
         }
-        
     } catch (error) {
-        console.error('Error setting up deferred loading page:', error);
+        logger.error('Error setting up deferred loading page:', error);
     }
-})();
 
-// No automatic timers - purely user-driven loading
-console.log('Deferred loading page ready - waiting for user interaction or focus');
+    logger.log('Deferred loading page ready - waiting for user interaction or focus');
+
+    return {
+        sanitizedUrl,
+        sanitizedFavicon,
+        safeRedirect,
+        getRedirectState: () => ({
+            redirected,
+            redirectAttempts,
+            maxRedirectAttempts,
+        }),
+    };
+}
+
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    initializeDeferredLoading();
+}

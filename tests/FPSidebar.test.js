@@ -1,5 +1,7 @@
 /* global browser */
 import React from 'react';
+import fs from 'fs';
+import path from 'path';
 import { act, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { Provider, createStore } from 'jotai';
@@ -185,5 +187,56 @@ describe('FPSidebar folder reorder', () => {
         expect(screen.getByRole('button', { name: /Root Level/i })).toBeInTheDocument();
         expect(screen.getByText('Collections not saved in any folder')).toBeInTheDocument();
         expect(screen.getByText('Folder One')).toBeInTheDocument();
+    });
+
+    test('renders nav and folder counts through the shared sidebar counter', async () => {
+        browser.windows.getAll.mockResolvedValue([{ id: 1 }, { id: 2 }, { id: 3 }]);
+
+        renderWithStore(
+            <FPSidebar
+                folders={[
+                    { uid: 'folder-1', name: 'Folder One', color: 'blue' },
+                    { uid: 'folder-2', name: 'Folder Two', color: 'green' },
+                ]}
+                collections={[
+                    { uid: 'collection-1', name: 'Root Collection' },
+                    { uid: 'collection-2', name: 'Folder Collection A', parentId: 'folder-1' },
+                    { uid: 'collection-3', name: 'Folder Collection B', parentId: 'folder-1' },
+                ]}
+                sessionCount={25}
+                addCollection={jest.fn()}
+                addFolder={jest.fn()}
+                onDataUpdate={jest.fn()}
+                updateFolders={jest.fn()}
+                triggerSync={jest.fn()}
+                triggerFolderLightningEffect={jest.fn()}
+            />,
+        );
+
+        await screen.findByText('All Collections');
+
+        const counterValues = ['3', '25', '1', '2', '0'];
+        counterValues.forEach((value) => {
+            expect(screen.getAllByText(value).some((counter) => (
+                counter.classList.contains('fp-sidebar-counter')
+            ))).toBe(true);
+        });
+
+        expect(screen.getByText('Recently Closed').closest('button').querySelector('.fp-sidebar-counter')).toHaveTextContent('25');
+        expect(screen.getByText('Root Level').closest('button').querySelector('.fp-sidebar-counter')).toHaveTextContent('1');
+        expect(screen.getByText('Folder One').closest('button').querySelector('.fp-sidebar-counter')).toHaveTextContent('2');
+        expect(screen.getByText('Folder Two').closest('button').querySelector('.fp-sidebar-counter')).toHaveTextContent('0');
+    });
+
+    test('keeps the responsive save action as a visible icon-only button', () => {
+        const cssPath = path.join(__dirname, '../app/fullpage/FPSidebar.css');
+        const css = fs.readFileSync(cssPath, 'utf8');
+        const saveIconRule = css.match(/\.fp-sidebar-save-btn svg\s*{[^}]+}/)?.[0] || '';
+        const compactRule = css.match(/@media \(max-width: 1100px\)\s*{[\s\S]+?\.fp-sidebar \.fp-sidebar-toggle\s*{[^}]+}[\s\S]+?}/)?.[0] || '';
+
+        expect(saveIconRule).toContain('flex-shrink: 0');
+        expect(compactRule).toMatch(/\.fp-sidebar \.fp-sidebar-save-section\s*{[^}]*padding:\s*48px 10px 12px/);
+        expect(compactRule).toMatch(/\.fp-sidebar \.fp-sidebar-save-btn\s*{[^}]*width:\s*40px/);
+        expect(compactRule).toMatch(/\.fp-sidebar \.fp-sidebar-save-btn\s*{[^}]*padding:\s*0/);
     });
 });

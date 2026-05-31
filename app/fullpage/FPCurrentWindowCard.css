@@ -3,8 +3,7 @@
 }
 
 .fp-current-window-card .fp-card-badge.fp-card-badge-label {
-    background: color-mix(in srgb, var(--fp-current-windows-accent, #84CC16) 14%, transparent);
-    color: var(--fp-current-windows-accent, #84CC16);
+    --fp-badge-accent: var(--fp-current-windows-accent, #84CC16);
 }
 
 .fp-current-window-card.fp-card.fp-card-selected {
@@ -15,7 +14,7 @@
 }
 
 [data-theme="dark"] .fp-current-window-card .fp-card-badge.fp-card-badge-label {
-    background: color-mix(in srgb, var(--fp-current-windows-accent, #84CC16) 18%, rgba(255, 255, 255, 0.04));
+    --fp-badge-accent: var(--fp-current-windows-accent, #84CC16);
 }
 
 [data-theme="dark"] .fp-current-window-card.fp-card.fp-card-selected {
@@ -25,13 +24,11 @@
 }
 
 .fp-current-window-card .fp-card-meta-chip.current-window-status {
-    background: rgba(148, 163, 184, 0.14);
-    color: var(--settings-row-text-color);
+    --fp-badge-accent: #94a3b8;
 }
 
 .fp-current-window-card .fp-card-meta-chip.current-window-status.active {
-    background: rgba(34, 197, 94, 0.14);
-    color: #15803d;
+    --fp-badge-accent: #22c55e;
 }
 
 .fp-current-window-card .fp-card-matching-tab-title .fp-card-search-match {
@@ -51,7 +48,24 @@
 }
 
 [data-theme="dark"] .fp-current-window-card .fp-card-meta-chip.current-window-status.active {
-    color: #86efac;
+    --fp-badge-accent: #4ade80;
+}
+
+.fp-current-window-card .fp-card-actions.fp-card-hover-menu {
+    gap: var(--rail-item-gap, 2px);
+    align-items: flex-end;
+    opacity: 0;
+    transform: translate(10px, -50%) scale(0.96);
+    transition:
+        opacity 0.22s var(--fp-ease, ease),
+        transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.fp-current-window-card.fp-card:hover .fp-card-actions.fp-card-hover-menu,
+.fp-current-window-card.fp-card:focus-within .fp-card-actions.fp-card-hover-menu {
+    opacity: 1;
+    transform: translate(0, -50%) scale(1);
+    pointer-events: auto;
 }
 
 .fp-current-window-card .fp-card-action-btn.close {

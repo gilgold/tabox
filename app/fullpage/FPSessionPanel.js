@@ -7,6 +7,7 @@ import { browser } from '../../static/globals';
 import { showErrorToast } from '../toastHelpers';
 import { restoreBrowserSession } from '../utils/browserSessions';
 import ClickableTabUrl from './ClickableTabUrl';
+import FPBadge from './FPBadge';
 import '../CollectionDetailPanel.css';
 import './FPCurrentWindowPanel.css';
 import './FPSessionPanel.css';
@@ -246,10 +247,13 @@ function FPSessionPanel({
                     <div className="panel-title-section">
                         <div className="panel-title-row">
                             <h2 className="panel-title">{sessionCollection.name || 'Recently closed item'}</h2>
-                            <span className="current-window-live-badge session-panel-badge">
-                                <MdHistory size={14} />
+                            <FPBadge
+                                accent="session"
+                                className="current-window-live-badge session-panel-badge"
+                                leading={<MdHistory size={14} />}
+                            >
                                 <span>Recently Closed</span>
-                            </span>
+                            </FPBadge>
                         </div>
 
                         <div className="panel-meta">

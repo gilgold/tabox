@@ -28,7 +28,7 @@ describe('COLOR_PALETTE', () => {
     });
 
     test('default color is CSS variable', () => {
-        expect(COLOR_PALETTE['default']).toBe('var(--setting-row-border-color)');
+        expect(COLOR_PALETTE['default']).toBe('var(--collection-default-color)');
     });
 
     test('colors are valid hex codes or CSS variables', () => {
@@ -88,6 +88,7 @@ describe('migrateColor', () => {
 
     test('migrates CSS variable for default', () => {
         expect(migrateColor('var(--setting-row-border-color)')).toBe('default');
+        expect(migrateColor('var(--collection-default-color)')).toBe('default');
     });
 
     test('finds closest color for unknown hex codes', () => {
@@ -223,6 +224,7 @@ describe('normalizeColorKey', () => {
         expect(normalizeColorKey('')).toBe('default');
         expect(normalizeColorKey('default')).toBe('default');
         expect(normalizeColorKey('var(--setting-row-border-color)')).toBe('default');
+        expect(normalizeColorKey('var(--collection-default-color)')).toBe('default');
     });
 
     test('normalizes legacy and palette colors to comparable keys', () => {

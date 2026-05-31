@@ -4,6 +4,7 @@ import TimeAgo from 'javascript-time-ago';
 import MultiSelectCheckbox from '../MultiSelectCheckbox';
 import { highlightText } from '../utils/searchUtils';
 import { restoreBrowserSession } from '../utils/browserSessions';
+import FPBadge from './FPBadge';
 import './FPSingleTabSessionRow.css';
 
 const formatUrlPreview = (url) => {
@@ -88,10 +89,13 @@ function FPSingleTabSessionRow({
 
             <div className="fp-single-tab-session-main">
                 <div className="fp-single-tab-session-title-row">
-                    <span className="fp-single-tab-session-badge">
-                        <MdHistory size={12} />
+                    <FPBadge
+                        accent="session"
+                        className="fp-single-tab-session-badge"
+                        leading={<MdHistory size={12} />}
+                    >
                         <span>Tab</span>
-                    </span>
+                    </FPBadge>
                     <span className="fp-single-tab-session-title" title={title}>
                         {highlightText(title, search, 'fp-single-tab-session-search-match') || title}
                     </span>

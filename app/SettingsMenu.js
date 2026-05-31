@@ -3,15 +3,17 @@ import ReactDOM from 'react-dom';
 import Modal from 'react-modal';
 import './SettingsMenu.css';
 import Switch from './Switch';
+import { ToastViewport } from './ToastViewport';
 import { themeState, isLoggedInState, listKeyState } from './atoms/globalAppSettingsState';
 import { useAtomValue, useSetAtom, useAtom } from 'jotai';
 import { browser } from '../static/globals';
-import { showUndoToast } from './toastHelpers';
+import { showUndoToast, setToastViewContext } from './toastHelpers';
 import { UNDO_TIME } from './constants';
 import { downloadTextFile } from './utils';
+import SyncDebugRecoveryPanel from './SyncDebugRecoveryPanel';
 import { RiFolderAddFill, RiEdit2Line, RiSettings5Fill } from 'react-icons/ri';
 import { ImNewTab } from 'react-icons/im';
-import { MdOutlineSyncAlt, MdSettingsBackupRestore, MdClose, MdExpandMore, MdExpandLess, MdBugReport } from 'react-icons/md';
+import { MdOutlineSyncAlt, MdSettingsBackupRestore, MdClose, MdExpandMore, MdExpandLess, MdBugReport, MdFileDownload } from 'react-icons/md';
 import { FaRegCheckCircle } from 'react-icons/fa';
 import { IoMoon, IoSunny } from 'react-icons/io5';
 
@@ -92,6 +94,10 @@ export default function SettingsMenu(props) {
     useEffect(() => {
         onBadgeChange();
     }, [badgeEnabled]);
+
+    useEffect(() => {
+        setToastViewContext(isFullPageVariant ? 'fullpage' : 'popup');
+    }, [isFullPageVariant]);
 
     const handleDarkModeToggle = async () => {
         const newMode = themeMode === 'dark' ? 'light' : 'dark';
@@ -201,7 +207,7 @@ export default function SettingsMenu(props) {
         }));
     };
 
-    const settingsSections = [
+    const commonSettingsSections = [
         {
             key: 'general',
             title: 'General Settings',
@@ -399,10 +405,45 @@ export default function SettingsMenu(props) {
                 },
             ],
         },
+    ];
+
+    const popupBackupSection = {
+        key: 'backup',
+        title: 'Backup & Restore',
+        icon: MdSettingsBackupRestore,
+        items: [
+            {
+                type: 'button',
+                key: 'export-all',
+                title: 'Export all collections & folders',
+                description: 'Download a full backup of every collection and folder.',
+                onClick: handleExport,
+                content: 'Export all collections & folders',
+            },
+            {
+                type: 'button',
+                key: 'sync-debug',
+                title: 'Sync Debug & Recovery',
+                description: 'Open sync diagnostics and recovery tools for your Google Drive data.',
+                onClick: handleSyncDebug,
+                isVisible: isLoggedIn,
+                content: (
+                    <>
+                        <MdBugReport size="14" style={{ marginRight: '8px' }} />
+                        Sync Debug & Recovery
+                    </>
+                ),
+            },
+        ],
+    };
+
+    const fullPageSettingsSections = [
+        ...commonSettingsSections,
         {
-            key: 'backup',
-            title: 'Backup & Restore',
-            icon: MdSettingsBackupRestore,
+            key: 'export-all',
+            title: 'Export All Collections',
+            icon: MdFileDownload,
+            description: 'Create a full portable export of every saved collection and folder in one file.',
             items: [
                 {
                     type: 'button',
@@ -412,23 +453,49 @@ export default function SettingsMenu(props) {
                     onClick: handleExport,
                     content: 'Export all collections & folders',
                 },
-                {
-                    type: 'button',
-                    key: 'sync-debug',
-                    title: 'Sync Debug & Recovery',
-                    description: 'Open sync diagnostics and recovery tools for your Google Drive data.',
-                    onClick: handleSyncDebug,
-                    isVisible: isLoggedIn,
-                    content: (
-                        <>
-                            <MdBugReport size="14" style={{ marginRight: '8px' }} />
-                            Sync Debug & Recovery
-                        </>
-                    ),
-                },
             ],
         },
+        {
+            key: 'recovery',
+            title: 'Recovery',
+            icon: MdSettingsBackupRestore,
+            description: 'Restore a full backup or choose specific saved collections to recover.',
+            items: [],
+            renderFullPageContent: () => (
+                <SyncDebugRecoveryPanel
+                    isActive={isDrawerOpen && activeCategory === 'recovery'}
+                    isSyncEnabled={isLoggedIn}
+                    mode="recovery"
+                    applyDataFromServer={props.applyDataFromServer}
+                    updateRemoteData={props.updateRemoteData}
+                    onDataUpdate={props.onDataUpdate}
+                    feedbackToasterId={isFullPageVariant ? 'settings-modal' : undefined}
+                />
+            ),
+        },
+        {
+            key: 'diagnostics',
+            title: 'Diagnostics',
+            icon: MdBugReport,
+            description: 'Review sync logs, export diagnostics, and run Google Drive sync recovery actions.',
+            items: [],
+            renderFullPageContent: () => (
+                <SyncDebugRecoveryPanel
+                    isActive={isDrawerOpen && activeCategory === 'diagnostics'}
+                    isSyncEnabled={isLoggedIn}
+                    mode="diagnostics"
+                    applyDataFromServer={props.applyDataFromServer}
+                    updateRemoteData={props.updateRemoteData}
+                    onDataUpdate={props.onDataUpdate}
+                    feedbackToasterId={isFullPageVariant ? 'settings-modal' : undefined}
+                />
+            ),
+        },
     ];
+
+    const settingsSections = isFullPageVariant
+        ? fullPageSettingsSections
+        : [...commonSettingsSections, popupBackupSection];
 
     const visibleItemsForSection = (section) => section.items.filter((item) => item.isVisible !== false);
     const activeSection = settingsSections.find((section) => section.key === activeCategory) || settingsSections[0];
@@ -539,6 +606,11 @@ export default function SettingsMenu(props) {
                     shouldCloseOnEsc={true}
                 >
                     <div className="fp-settings-modal-shell">
+                        <ToastViewport
+                            context="fullpage"
+                            toasterId="settings-modal"
+                            disablePortal={true}
+                        />
                         <aside className="fp-settings-sidebar" aria-label="Settings categories">
                             <div className="fp-settings-sidebar-header">
                                 <h2><RiSettings5Fill /> Settings</h2>
@@ -569,7 +641,7 @@ export default function SettingsMenu(props) {
                             <div className="fp-settings-main-header">
                                 <div className="fp-settings-main-heading">
                                     <h3><ActiveSectionIcon /> {activeSection.title}</h3>
-                                    <p>Review and update the settings in this category without changing their current behavior.</p>
+                                    <p>{activeSection.description || 'Review and update the settings in this category without changing their current behavior.'}</p>
                                 </div>
 
                                 <button className="close-button" onClick={closeMenu}>
@@ -578,31 +650,35 @@ export default function SettingsMenu(props) {
                             </div>
 
                             <div className="fp-settings-main-content">
-                                {visibleItemsForSection(activeSection).map(renderFullPageItem)}
+                                {typeof activeSection.renderFullPageContent === 'function'
+                                    ? activeSection.renderFullPageContent()
+                                    : visibleItemsForSection(activeSection).map(renderFullPageItem)}
                             </div>
                         </div>
                     </div>
                 </Modal>
             )}
 
-            <Modal
-                isOpen={isSyncDebugModalOpen}
-                onRequestClose={closeSyncDebugModal}
-                contentLabel="Sync Debug Modal"
-                className="modal-content"
-                overlayClassName="modal-overlay"
-                ariaHideApp={false}
-            >
-                <Suspense fallback={<div style={{ padding: '20px', textAlign: 'center' }}>Loading...</div>}>
-                    <SyncDebugModal
-                        isOpen={isSyncDebugModalOpen}
-                        onClose={closeSyncDebugModal}
-                        applyDataFromServer={props.applyDataFromServer}
-                        updateRemoteData={props.updateRemoteData}
-                        onRecoverySuccess={showRecoverySuccess}
-                    />
-                </Suspense>
-            </Modal>
+            {!isFullPageVariant && (
+                <Modal
+                    isOpen={isSyncDebugModalOpen}
+                    onRequestClose={closeSyncDebugModal}
+                    contentLabel="Sync Debug Modal"
+                    className="modal-content"
+                    overlayClassName="modal-overlay"
+                    ariaHideApp={false}
+                >
+                    <Suspense fallback={<div style={{ padding: '20px', textAlign: 'center' }}>Loading...</div>}>
+                        <SyncDebugModal
+                            isOpen={isSyncDebugModalOpen}
+                            onClose={closeSyncDebugModal}
+                            applyDataFromServer={props.applyDataFromServer}
+                            updateRemoteData={props.updateRemoteData}
+                            onRecoverySuccess={showRecoverySuccess}
+                        />
+                    </Suspense>
+                </Modal>
+            )}
         </>
     );
 }

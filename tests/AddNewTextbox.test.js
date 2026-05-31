@@ -42,7 +42,7 @@ describe('Add new collection textbox tests', () => {
     expect(container).toMatchSnapshot();
   });
 
-  test('uses the selected folder color when saving all windows as a folder', async () => {
+  test('uses the default folder color and hides folder color options when saving all windows as a folder', async () => {
     const addFolder = jest.fn().mockResolvedValue({ uid: 'folder-1' });
     const addCollection = jest.fn().mockResolvedValue(true);
     const onDataUpdate = jest.fn().mockResolvedValue(undefined);
@@ -59,11 +59,14 @@ describe('Add new collection textbox tests', () => {
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Project' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save all windows as folder' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Choose Gray folder color' }));
+
+    expect(screen.queryByLabelText('Folder color options')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Choose .* folder color/i })).not.toBeInTheDocument();
+
     fireEvent.click(screen.getByRole('button', { name: 'Add Folder' }));
 
     await waitFor(() => {
-      expect(getAllWindowsTabsAndGroups).toHaveBeenCalledWith('Project', '#6b7280');
+      expect(getAllWindowsTabsAndGroups).toHaveBeenCalledWith('Project');
     });
 
     expect(addFolder).toHaveBeenCalledWith('Project', '#6b7280', true);

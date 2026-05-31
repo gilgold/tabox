@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "jest --transformIgnorePatterns \"node_modules/(?!@toolz/allow-react)/\" --env=jsdom --coverage",
+    "test:coverage:all": "jest --config jest.coverage-all.config.js --runInBand",
     "dev": "INLINE_RUNTIME_CHUNK=false NODE_ENV=development webpack --mode development --config webpack.js --watch",
     "build": "INLINE_RUNTIME_CHUNK=false NODE_ENV=production webpack --mode production --config webpack.js",
     "build:debug": "INLINE_RUNTIME_CHUNK=false NODE_ENV=production webpack --mode production --config webpack.js --env sourcemap=true",

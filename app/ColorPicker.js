@@ -4,15 +4,17 @@ import { COLOR_PALETTE } from './utils/colorMigration';
 
 function ColorPicker(props) {
 
-    const [color, setColor] = useState(props?.currentColor ?? 'var(--setting-row-border-color)');
+    const [color, setColor] = useState(props?.currentColor ?? 'var(--collection-default-color)');
     const [showPicker, setShowPicker] = useState(false);
     const [selectedColorCircle, setSelectedColorCircle] = useState(0);
 
     const colorList = props.colorList ?? COLOR_PALETTE;
+    const showTriggerTooltip = props.showTriggerTooltip !== false;
+    const showOptionTooltips = props.showOptionTooltips !== false;
 
     // Helper function to get actual color value (supports both new names and legacy hex codes)
     const getActualColor = (color) => {
-        if (!color) return 'var(--setting-row-border-color)';
+        if (!color) return 'var(--collection-default-color)';
         
         // If it's a color name from our palette, get its hex value
         if (COLOR_PALETTE[color]) {
@@ -58,17 +60,21 @@ function ColorPicker(props) {
         setSelectedColorCircle(index);
         props.action(colorName, props.group ?? null); // Pass color name for storage
         setShowPicker(false); // Close picker after selection
+        props.onOpenChange?.(false);
     };
 
     const handleClick = (e) => {
         e.stopPropagation();
         e.preventDefault();
-        setShowPicker(!showPicker);
+        const nextShowPicker = !showPicker;
+        setShowPicker(nextShowPicker);
+        props.onOpenChange?.(nextShowPicker);
     };
 
     const handleClose = (e) => {
         if (e && ['colorOption', 'modern-color-option', 'color-grid'].includes(e.target.className)) return;
         setShowPicker(false);
+        props.onOpenChange?.(false);
     };
 
     const size = props.size === 'small' ? 'small' : 'normal';
@@ -94,8 +100,9 @@ function ColorPicker(props) {
                                 backgroundColor: colorValue,
                                 '--color-value': colorValue 
                             }}
-                            data-tooltip-id="main-tooltip" data-tooltip-content={colorName.replace('-', ' ')}
-                            data-for="color-tooltip">
+                            data-tooltip-id={showOptionTooltips ? 'main-tooltip' : undefined}
+                            data-tooltip-content={showOptionTooltips ? colorName.replace('-', ' ') : undefined}
+                            data-for={showOptionTooltips ? 'color-tooltip' : undefined}>
                             {index === selectedColorCircle && (
                                 <div className="selection-indicator">
                                     <svg width="8" height="8" viewBox="0 0 12 12" fill="none">
@@ -108,7 +115,14 @@ function ColorPicker(props) {
                 </div>
             </div>}
     >
-        <div onClick={handleClick} className={`modern-color-picker-wrapper ${size}`} data-tooltip-hidden={showPicker} data-tooltip-id="main-tooltip" data-tooltip-content={props.tooltip}>
+        <div
+            onClick={handleClick}
+            className={`modern-color-picker-wrapper ${size}`}
+            data-tooltip-hidden={showTriggerTooltip ? showPicker : undefined}
+            data-tooltip-id={showTriggerTooltip ? 'main-tooltip' : undefined}
+            data-tooltip-content={showTriggerTooltip ? props.tooltip : undefined}
+            data-tooltip-place={showTriggerTooltip ? props.tooltipPlace : undefined}
+        >
             <div className={`modern-color-picker ${showPicker ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); handleClick(e); }}>
                 <div className="current-color-preview" style={{ backgroundColor: color }} />
             </div>

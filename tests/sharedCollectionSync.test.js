@@ -29,8 +29,8 @@ describe('persistCollectionLayoutChanges', () => {
         });
 
         expect(updateCollectionsOrder).toHaveBeenNthCalledWith(1, [
-            { uid: 'collection-1', name: 'One', parentId: 'folder-1', order: 1, lastUpdated: 10 },
             { uid: 'collection-2', name: 'Two', parentId: 'folder-1', order: 0, lastUpdated: 20 },
+            { uid: 'collection-1', name: 'One', parentId: 'folder-1', order: 1, lastUpdated: 10 },
         ]);
         expect(updateCollectionsOrder).toHaveBeenNthCalledWith(2, [
             { uid: 'collection-3', name: 'Three', parentId: null, order: 0, lastUpdated: 30 },
@@ -40,11 +40,11 @@ describe('persistCollectionLayoutChanges', () => {
         expect(updateRemoteData).toHaveBeenCalledWith(nextCollections);
     });
 
-    test('preserves dragged sibling order even when collection order fields are stale', async () => {
+    test('persists reordered siblings by their explicit order instead of stale global array position', async () => {
         const updateRemoteData = jest.fn(async () => true);
         const nextCollections = [
-            { uid: 'collection-2', name: 'Two', parentId: null, order: 1, lastUpdated: 20 },
-            { uid: 'collection-1', name: 'One', parentId: null, order: 0, lastUpdated: 10 },
+            { uid: 'collection-1', name: 'One', parentId: null, order: 1, lastUpdated: 10 },
+            { uid: 'collection-2', name: 'Two', parentId: null, order: 0, lastUpdated: 20 },
             { uid: 'collection-3', name: 'Three', parentId: 'folder-1', order: 0, lastUpdated: 30 },
         ];
 
@@ -56,8 +56,8 @@ describe('persistCollectionLayoutChanges', () => {
         });
 
         expect(updateCollectionsOrder).toHaveBeenCalledWith([
-            { uid: 'collection-2', name: 'Two', parentId: null, order: 1, lastUpdated: 20 },
-            { uid: 'collection-1', name: 'One', parentId: null, order: 0, lastUpdated: 10 },
+            { uid: 'collection-2', name: 'Two', parentId: null, order: 0, lastUpdated: 20 },
+            { uid: 'collection-1', name: 'One', parentId: null, order: 1, lastUpdated: 10 },
         ]);
         expect(updateRemoteData).toHaveBeenCalledWith(nextCollections);
     });

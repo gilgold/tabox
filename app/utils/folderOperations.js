@@ -175,45 +175,34 @@ export const deleteFolder = async (folderId, force = false, deleteCollections = 
         // If forcing delete, either delete collections or move them to root
         if (collectionsInFolder.length > 0 && force) {
             if (deleteCollections) {
-                for (const collectionMeta of collectionsInFolder) {
-                    if (!collectionMeta.uid) {
-                        console.error('⚠️ Skipping collection with undefined UID:', collectionMeta);
-                        continue;
-                    }
-                    
-                    const success = await deleteSingleCollection(collectionMeta.uid);
-                    if (success) {
-                        collectionsDeleted++;
-                    } else {
-                        console.warn(`⚠️ Failed to delete collection ${collectionMeta.uid}`);
-                    }
-                }
+                const validMetas = collectionsInFolder.filter(m => {
+                    if (!m.uid) { console.error('⚠️ Skipping collection with undefined UID:', m); return false; }
+                    return true;
+                });
+                const results = await Promise.all(validMetas.map(m => deleteSingleCollection(m.uid)));
+                collectionsDeleted = results.filter(Boolean).length;
+                results.forEach((ok, i) => { if (!ok) console.warn(`⚠️ Failed to delete collection ${validMetas[i].uid}`); });
             } else {
-                for (const collectionMeta of collectionsInFolder) {
-                    if (!collectionMeta.uid) {
-                        console.error('⚠️ Skipping collection with undefined UID:', collectionMeta);
-                        continue;
-                    }
-                    
-                    const collection = await loadSingleCollection(collectionMeta.uid);
-                    if (collection) {
-                        collection.parentId = null;
-                        await saveSingleCollection(collection, true);
-                        collectionsMovedToRoot++;
-                    } else {
-                        console.warn(`⚠️ Collection ${collectionMeta.uid} not found in storage, skipping`);
-                    }
-                }
+                const validMetas = collectionsInFolder.filter(m => {
+                    if (!m.uid) { console.error('⚠️ Skipping collection with undefined UID:', m); return false; }
+                    return true;
+                });
+                const loaded = await Promise.all(validMetas.map(m => loadSingleCollection(m.uid)));
+                const savePromises = loaded.map((collection, i) => {
+                    if (!collection) { console.warn(`⚠️ Collection ${validMetas[i].uid} not found in storage, skipping`); return Promise.resolve(false); }
+                    collection.parentId = null;
+                    return saveSingleCollection(collection, true);
+                });
+                const saved = await Promise.all(savePromises);
+                collectionsMovedToRoot = saved.filter(Boolean).length;
             }
         }
 
         const success = await deleteSingleFolder(folderId);
 
         if (success) {
-            // Ensure storage is committed before triggering sync
-            await new Promise(resolve => setTimeout(resolve, 100));
-            await triggerBackgroundSync();
-            
+            triggerBackgroundSync();
+
             return { success: true, collectionsMovedToRoot, collectionsDeleted };
         } else {
             console.error(`❌ Failed to delete folder: ${folderId}`);
@@ -280,35 +269,22 @@ export const duplicateFolder = async (folderId) => {
 
             for (const collection of collectionsInFolder) {
                 try {
-                    // Generate unique name for the duplicated collection
                     const collectionNewName = generateCopyName(collection.name, allCollections);
-                    
-                    // Deep clone tabs and chromeGroups to avoid read-only property errors
                     const clonedTabs = JSON.parse(JSON.stringify(collection.tabs || []));
                     const clonedGroups = JSON.parse(JSON.stringify(collection.chromeGroups || []));
-
-                    // Create new collection with same data but new UID, name, and parent
                     let duplicateCollection = new TaboxCollection(
                         collectionNewName,
                         clonedTabs,
                         clonedGroups,
                         collection.color,
-                        null, // createdOn - will be set to now
+                        null,
                         collection.window,
-                        null, // lastUpdated - will be set to now
-                        null // lastOpened - null for new duplicate
+                        null,
+                        null
                     );
-
-                    // Apply unique IDs to tabs and groups
                     duplicateCollection = applyUid(duplicateCollection);
-
-                    // Set parent to the new folder
                     duplicateCollection.parentId = newFolder.uid;
-
-                    // Save the duplicated collection
                     await saveSingleCollection(duplicateCollection, true);
-                    
-                    // Add to allCollections for unique name generation in subsequent iterations
                     allCollections.push(duplicateCollection);
                     duplicatedCollections++;
                 } catch (collectionError) {
@@ -320,8 +296,7 @@ export const duplicateFolder = async (folderId) => {
         // Update folder collection count
         await updateFolderCollectionCount(newFolder.uid);
 
-        // Trigger sync (fire and forget - don't block UI)
-        await triggerBackgroundSync();
+        triggerBackgroundSync();
 
         return { 
             success: true, 

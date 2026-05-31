@@ -1,4 +1,6 @@
 import React from 'react';
+import fs from 'fs';
+import path from 'path';
 import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { Provider, createStore } from 'jotai';
@@ -42,6 +44,20 @@ const renderWithNavigation = (navigation, overrideProps = {}) => {
 };
 
 describe('FPTopBar', () => {
+    test('keeps search and sync controls in separate responsive lanes', () => {
+        const cssPath = path.join(__dirname, '../app/fullpage/FPTopBar.css');
+        const css = fs.readFileSync(cssPath, 'utf8');
+        const topbarRule = css.match(/\.fp-topbar\s*{[^}]+}/)?.[0] || '';
+        const searchRule = css.match(/\.fp-search-bar\s*{[^}]+}/)?.[0] || '';
+        const compactRule = css.match(/@media \(max-width: 1280px\)\s*{[\s\S]+?\.fp-control-strip \.sync-label\s*{[^}]+}[\s\S]+?}/)?.[0] || '';
+
+        expect(topbarRule).toContain('display: grid');
+        expect(topbarRule).toMatch(/grid-template-columns:\s*minmax\(max-content,\s*1fr\)\s+minmax\(260px,\s*580px\)\s+minmax\(max-content,\s*1fr\)/);
+        expect(searchRule).not.toMatch(/position:\s*absolute/);
+        expect(searchRule).toContain('width: 100%');
+        expect(compactRule).toMatch(/\.fp-control-strip \.sync-label\s*{[^}]*display:\s*none/);
+    });
+
     test('shows a sessions-specific search placeholder', async () => {
         renderWithNavigation('sessions');
         await screen.findByText('Settings Menu fullpage');

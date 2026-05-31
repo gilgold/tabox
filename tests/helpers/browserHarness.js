@@ -52,12 +52,30 @@ const resolveStorageGet = async (keys, storage) => {
     return {};
 };
 
-const createStorageArea = (eventBus, areaName, initialData = {}) => {
+const createStorageArea = (eventBus, areaName, initialData = {}, behavior = {}) => {
     let store = cloneValue(initialData) || {};
 
     const area = {
-        get: jest.fn(async (keys) => resolveStorageGet(keys, store)),
+        get: jest.fn(async (keys) => {
+            if (behavior.getError) {
+                throw behavior.getError;
+            }
+
+            if (behavior.getImpl) {
+                return behavior.getImpl(keys, store);
+            }
+
+            return resolveStorageGet(keys, store);
+        }),
         set: jest.fn(async (items) => {
+            if (behavior.setError) {
+                throw behavior.setError;
+            }
+
+            if (behavior.setImpl) {
+                return behavior.setImpl(items, store);
+            }
+
             const changes = {};
 
             Object.entries(items).forEach(([key, value]) => {
@@ -72,6 +90,14 @@ const createStorageArea = (eventBus, areaName, initialData = {}) => {
             }
         }),
         remove: jest.fn(async (keys) => {
+            if (behavior.removeError) {
+                throw behavior.removeError;
+            }
+
+            if (behavior.removeImpl) {
+                return behavior.removeImpl(keys, store);
+            }
+
             const targetKeys = Array.isArray(keys) ? keys : [keys];
             const changes = {};
 
@@ -87,6 +113,14 @@ const createStorageArea = (eventBus, areaName, initialData = {}) => {
             }
         }),
         clear: jest.fn(async () => {
+            if (behavior.clearError) {
+                throw behavior.clearError;
+            }
+
+            if (behavior.clearImpl) {
+                return behavior.clearImpl(store);
+            }
+
             const changes = {};
 
             Object.keys(store).forEach((key) => {
@@ -97,7 +131,8 @@ const createStorageArea = (eventBus, areaName, initialData = {}) => {
             if (Object.keys(changes).length > 0) {
                 await eventBus.trigger(changes, areaName);
             }
-        })
+        }),
+        getBytesInUse: jest.fn(async () => JSON.stringify(store).length)
     };
 
     Object.defineProperty(area, '_data', {
@@ -117,15 +152,24 @@ const createBrowserHarness = (options = {}) => {
         localData = {},
         syncData = {},
         manifestVersion = '4.1',
-        runtimeSendMessageImpl = null
+        runtimeSendMessageImpl = null,
+        localStorageBehavior = {},
+        syncStorageBehavior = {},
+        displays = [
+            {
+                bounds: { left: 0, top: 0, width: 1920, height: 1080 }
+            }
+        ]
     } = options;
 
     const storageChanged = createEventMock();
     const runtimeOnMessage = createEventMock();
     const alarmsOnAlarm = createEventMock();
-    const local = createStorageArea(storageChanged, 'local', localData);
-    const sync = createStorageArea(storageChanged, 'sync', syncData);
+    const local = createStorageArea(storageChanged, 'local', localData, localStorageBehavior);
+    const sync = createStorageArea(storageChanged, 'sync', syncData, syncStorageBehavior);
     const alarms = [];
+    let nextTabId = 1;
+    let nextWindowId = 100;
 
     const browser = {
         runtime: {
@@ -184,10 +228,17 @@ const createBrowserHarness = (options = {}) => {
         },
         identity: {
             getRedirectURL: jest.fn(() => 'https://example.test/redirect'),
-            launchWebAuthFlow: jest.fn()
+            launchWebAuthFlow: jest.fn(),
+            getAuthToken: jest.fn(async () => 'token-123'),
+            removeCachedAuthToken: jest.fn(async () => undefined)
         },
         extension: {
             isAllowedIncognitoAccess: jest.fn(async () => true)
+        },
+        system: {
+            display: {
+                getInfo: jest.fn(async () => cloneValue(displays))
+            }
         },
         action: {
             setPopup: jest.fn(async () => {}),
@@ -209,7 +260,11 @@ const createBrowserHarness = (options = {}) => {
             get: jest.fn(async (windowId) => ({ id: windowId, tabs: [] })),
             getCurrent: jest.fn(async () => ({ id: 1, focused: true, tabs: [] })),
             getLastFocused: jest.fn(async () => ({ id: 1, focused: true, tabs: [] })),
-            create: jest.fn(async (options = {}) => ({ id: 100, tabs: [{ id: 1000, url: 'about:blank' }], ...options })),
+            create: jest.fn(async (options = {}) => ({
+                id: nextWindowId++,
+                tabs: [{ id: nextTabId++, url: 'about:blank' }],
+                ...options
+            })),
             update: jest.fn(async (windowId, updates) => ({ id: windowId, ...updates })),
             onCreated: createEventMock(),
             onRemoved: createEventMock(),
@@ -218,10 +273,17 @@ const createBrowserHarness = (options = {}) => {
         },
         tabs: {
             query: jest.fn(async () => []),
-            create: jest.fn(async (properties) => ({ id: Math.floor(Math.random() * 10000), ...properties })),
+            create: jest.fn(async (properties) => ({ id: nextTabId++, ...properties })),
             update: jest.fn(async (tabId, properties) => ({ id: tabId, ...properties })),
+            get: jest.fn(async (tabId) => ({ id: tabId, url: 'https://example.com' })),
+            move: jest.fn(async (tabIds, moveProperties) => ({ tabIds, ...moveProperties })),
+            highlight: jest.fn(async () => undefined),
+            reload: jest.fn(async () => undefined),
             remove: jest.fn(async () => {}),
+            discard: jest.fn(async () => undefined),
+            sendMessage: jest.fn(async () => undefined),
             group: jest.fn(async () => 1),
+            ungroup: jest.fn(async () => undefined),
             onCreated: createEventMock(),
             onRemoved: createEventMock(),
             onUpdated: createEventMock(),

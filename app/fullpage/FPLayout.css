@@ -12,7 +12,7 @@
     --fp-topbar-height: 60px;
     --fp-statusbar-height: 38px;
     --fp-card-min-width: 320px;
-    --fp-card-radius: 14px;
+    --fp-card-radius: 12px;
     --fp-panel-width: 45vw;
 
     /* Typography — system stacks only (external fonts blocked by extension CSP) */
@@ -21,10 +21,10 @@
 
     /* Radii */
     --fp-radius-xs: 6px;
-    --fp-radius-sm: 8px;
+    --fp-radius-sm: 12px;
     --fp-radius-md: 12px;
     --fp-radius-lg: 16px;
-    --fp-radius-xl: 20px;
+    --fp-radius-xl: 24px;
 
     /* Transitions */
     --fp-ease: cubic-bezier(0.25, 0.46, 0.45, 0.94);
@@ -89,7 +89,7 @@
     transition: width var(--fp-duration-slow) var(--fp-ease);
 }
 
-.fp-body-panel-open .fp-detail-panel {
+.fp-detail-panel.open {
     width: var(--fp-panel-width);
     overflow-y: auto;
     overflow-x: hidden;
@@ -134,7 +134,7 @@
     padding: 8px 16px;
     font-size: 13.5px;
     gap: 6px;
-    border-radius: 8px;
+    border-radius: var(--fp-radius-sm);
 }
 
 /* Title section */
@@ -183,7 +183,7 @@
     padding: 9px 14px;
     font-size: 13.5px;
     gap: 8px;
-    border-radius: 10px;
+    border-radius: var(--fp-radius-sm);
 }
 
 .fp-detail-panel .panel-action-btn.secondary {
@@ -216,7 +216,7 @@
 
 .fp-detail-panel .collection-draggable-tab {
     --tab-drop-indicator-height: 60px;
-    --tab-drop-indicator-radius: 10px;
+    --tab-drop-indicator-radius: var(--fp-radius-sm);
 }
 
 .fp-detail-panel .favicon-col {
@@ -227,7 +227,7 @@
 .fp-detail-panel .tab-favicon {
     width: 24px;
     height: 24px;
-    border-radius: 5px;
+    border-radius: var(--fp-radius-xs);
 }
 
 .fp-detail-panel .tab-title-wrapper {
@@ -251,7 +251,7 @@
 .fp-detail-panel .single-tab-row .tab-action-btn {
     width: 36px;
     height: 36px;
-    border-radius: 10px;
+    border-radius: var(--fp-radius-sm);
 }
 
 .fp-detail-panel .single-tab-row .tab-action-btn svg {
@@ -264,7 +264,7 @@
 .fp-detail-panel .single-tab-row .del-tab {
     width: 34px;
     height: 34px;
-    border-radius: 8px;
+    border-radius: var(--fp-radius-sm);
 }
 
 .fp-detail-panel .single-tab-row .action-button svg,
@@ -340,7 +340,7 @@
         box-shadow: var(--fp-shadow-xl);
     }
 
-    .fp-body-panel-open .fp-detail-panel {
+    .fp-detail-panel.open {
         width: min(var(--fp-panel-width), 90vw);
     }
 }
@@ -349,4 +349,1493 @@
     .fp-detail-panel {
         transition: none !important;
     }
+}
+
+/* ========================================
+   PipelinePro full-page design layer
+   Centralized UI-only overrides for the full-page view.
+   ======================================== */
+
+html.fullpage-mode {
+    --color-primary: #4F46E5;
+    --color-primary-hover: #4338CA;
+    --color-primary-active: #3730A3;
+    --color-secondary: #06B6D4;
+    --color-tertiary: #F97316;
+    --color-success: #22C55E;
+    --color-warning: #F59E0B;
+    --color-error: #EF4444;
+    --color-info: #4F46E5;
+    --color-background: #FAFAFA;
+    --color-surface: #FFFFFF;
+    --color-surface-raised: #FFFFFF;
+    --color-surface-muted: #F4F4F5;
+    --color-text: #18181B;
+    --color-text-muted: #71717A;
+    --color-text-subtle: #A1A1AA;
+    --color-text-inverse: #FFFFFF;
+    --color-border: #E4E4E7;
+    --color-border-strong: #D4D4D8;
+    --color-focus-ring: rgb(79 70 229 / 12%);
+    --color-selected-bg: #EEF2FF;
+    --color-hover-bg: #F4F4F5;
+    --color-tooltip-bg: #18181B;
+    --color-tooltip-text: #FAFAFA;
+    --color-success-bg: #F0FDF4;
+    --color-success-text: #16A34A;
+    --color-success-border: #BBF7D0;
+    --color-risk-bg: #FFF7ED;
+    --color-risk-text: #EA580C;
+    --color-risk-border: #FED7AA;
+    --color-lost-bg: #FEF2F2;
+    --color-lost-text: #DC2626;
+    --color-lost-border: #FECACA;
+
+    --primary-color: var(--color-primary);
+    --primary-hover-bg: var(--color-selected-bg);
+    --gradient-blue: var(--color-primary);
+    --gradient-purple: var(--color-secondary);
+    --gradient-orange: var(--color-tertiary);
+    --divider-color: var(--color-border);
+    --text-color: var(--color-text);
+    --text-secondary-color: var(--color-text-muted);
+    --bg-color: var(--color-background);
+    --settings-bg-color: var(--color-surface);
+    --setting-row-border-color: var(--color-border);
+    --setting-row-hover-bg-color: var(--color-hover-bg);
+    --settings-row-text-color: var(--color-text-muted);
+    --section-bg-color: var(--color-surface-muted);
+    --input-bg-color: var(--color-surface);
+    --single-tab-row-hover-color: var(--color-hover-bg);
+    --tooltip-bg-color: var(--color-tooltip-bg);
+    --tooltip-text-color: var(--color-tooltip-text);
+    --tooltip-border-color: transparent;
+    --tooltip-shadow-color: rgb(24 24 27 / 18%);
+    --delete-button-color: var(--color-error);
+
+    --fp-font-display: Outfit, Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --fp-font-body: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --fp-font-mono: "Source Code Pro", "SF Mono", Monaco, Consolas, monospace;
+    --fp-card-radius: 12px;
+    --fp-radius-xs: 6px;
+    --fp-radius-sm: 12px;
+    --fp-radius-md: 12px;
+    --fp-radius-lg: 16px;
+    --fp-radius-xl: 24px;
+    --fp-surface: var(--color-surface);
+    --fp-surface-solid: var(--color-surface);
+    --fp-surface-elevated: var(--color-surface-raised);
+    --fp-border: var(--color-border);
+    --fp-border-strong: var(--color-border-strong);
+    --fp-shadow-xs: 0 1px 2px rgb(24 24 27 / 5%);
+    --fp-shadow-sm: 0 1px 2px rgb(24 24 27 / 5%);
+    --fp-shadow-md: 0 4px 6px -1px rgb(24 24 27 / 7%), 0 2px 4px -2px rgb(24 24 27 / 5%);
+    --fp-shadow-lg: 0 10px 15px -3px rgb(24 24 27 / 8%), 0 4px 6px -4px rgb(24 24 27 / 4%);
+    --fp-shadow-xl: 0 20px 25px -5px rgb(24 24 27 / 12%), 0 8px 10px -6px rgb(24 24 27 / 6%);
+}
+
+html.fullpage-mode[data-theme="dark"] {
+    color-scheme: dark;
+    --color-primary: #1490f1;
+    --color-primary-hover: #A5B4FC;
+    --color-primary-active: #C7D2FE;
+    --color-secondary: #22D3EE;
+    --color-tertiary: #FB923C;
+    --color-success: #4ADE80;
+    --color-warning: #FBBF24;
+    --color-error: #F87171;
+    --color-info: #1490f1;
+    --color-background: #09090B;
+    --color-surface: #18181B;
+    --color-surface-raised: #27272A;
+    --color-surface-muted: #27272A;
+    --color-text: #FAFAFA;
+    --color-text-muted: #A1A1AA;
+    --color-text-subtle: #71717A;
+    --color-text-inverse: #18181B;
+    --color-border: #3F3F46;
+    --color-border-strong: #52525B;
+    --color-focus-ring: rgb(129 140 248 / 24%);
+    --color-selected-bg: #0c2953;
+    --color-hover-bg: #27272A;
+    --color-tooltip-bg: #FAFAFA;
+    --color-tooltip-text: #18181B;
+    --color-success-bg: #052E16;
+    --color-success-text: #86EFAC;
+    --color-success-border: #166534;
+    --color-risk-bg: #431407;
+    --color-risk-text: #FDBA74;
+    --color-risk-border: #9A3412;
+    --color-lost-bg: #450A0A;
+    --color-lost-text: #FCA5A5;
+    --color-lost-border: #991B1B;
+    --fp-shadow-xs: 0 1px 2px rgb(0 0 0 / 24%);
+    --fp-shadow-sm: 0 1px 2px rgb(0 0 0 / 24%);
+    --fp-shadow-md: 0 8px 16px -8px rgb(0 0 0 / 45%);
+    --fp-shadow-lg: 0 18px 32px -18px rgb(0 0 0 / 60%);
+    --fp-shadow-xl: 0 24px 48px -24px rgb(0 0 0 / 70%);
+}
+
+html.fullpage-mode body,
+html.fullpage-mode .fp-layout {
+    background: var(--color-background);
+    color: var(--color-text);
+    font-family: var(--fp-font-body);
+}
+
+html.fullpage-mode .fp-layout {
+    letter-spacing: 0;
+}
+
+html.fullpage-mode .fp-topbar,
+html.fullpage-mode .fp-sidebar {
+    background: var(--color-surface);
+    border-color: var(--color-border);
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
+html.fullpage-mode .fp-topbar {
+    border-bottom: 1px solid var(--color-border);
+}
+
+html.fullpage-mode .fp-sidebar {
+    border-right: 1px solid var(--color-border);
+}
+
+html.fullpage-mode .fp-topbar-logo {
+    background: linear-gradient(135deg, var(--gradient-blue) 0%, var(--gradient-purple) 50%, var(--gradient-orange) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    color: transparent;
+    font-family: var(--fp-font-display);
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: 0;
+}
+
+html.fullpage-mode .fp-topbar-version,
+html.fullpage-mode .fp-content-heading-badge,
+html.fullpage-mode .fp-sidebar-folders-title,
+html.fullpage-mode .fp-sidebar-stat-label,
+html.fullpage-mode .legacy-import-preview-section-title,
+html.fullpage-mode .legacy-import-preview-root-badge,
+html.fullpage-mode .fp-single-tab-session-badge,
+html.fullpage-mode .fp-card-badge.fp-card-badge-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
+html.fullpage-mode .fp-search-bar,
+html.fullpage-mode .panel-search-bar,
+html.fullpage-mode .legacy-import-preview-search {
+    min-height: 38px;
+    height: 38px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--fp-radius-sm);
+    background: var(--color-surface);
+    box-shadow: none;
+    padding: 0 12px;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
+html.fullpage-mode .fp-search-bar:hover,
+html.fullpage-mode .panel-search-bar:hover,
+html.fullpage-mode .legacy-import-preview-search:hover {
+    border-color: var(--color-border-strong);
+    background: var(--color-surface);
+    box-shadow: none;
+}
+
+html.fullpage-mode .fp-search-bar:focus-within,
+html.fullpage-mode .fp-search-bar.fp-search-bar-active,
+html.fullpage-mode .fp-search-bar.fp-search-bar-active:focus-within,
+html.fullpage-mode .panel-search-bar:focus-within,
+html.fullpage-mode .legacy-import-preview-search:focus-within {
+    border: 1px solid var(--color-primary);
+    background: var(--color-surface);
+    box-shadow: 0 0 0 3px var(--color-focus-ring);
+}
+
+html.fullpage-mode input.fp-search-input,
+html.fullpage-mode .panel-search-input,
+html.fullpage-mode .legacy-import-preview-search input {
+    color: var(--color-text);
+    font-family: var(--fp-font-body);
+    font-size: 14px;
+    font-weight: 400;
+    letter-spacing: 0;
+}
+
+html.fullpage-mode .fp-search-input::placeholder,
+html.fullpage-mode .panel-search-input::placeholder,
+html.fullpage-mode .legacy-import-preview-search input::placeholder {
+    color: var(--color-text-subtle);
+    opacity: 1;
+}
+
+html.fullpage-mode .fp-search-icon,
+html.fullpage-mode .panel-search-icon,
+html.fullpage-mode .fp-toolbar-color-icon {
+    color: var(--color-text-muted);
+    opacity: 1;
+}
+
+html.fullpage-mode .fp-search-bar:focus-within .fp-search-icon,
+html.fullpage-mode .fp-search-bar.fp-search-bar-active .fp-search-icon,
+html.fullpage-mode .panel-search-bar:focus-within .panel-search-icon {
+    color: var(--color-primary);
+    transform: none;
+}
+
+html.fullpage-mode .fp-search-clear,
+html.fullpage-mode .panel-search-clear,
+html.fullpage-mode .legacy-import-preview-search-clear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    background: var(--color-surface-muted);
+    color: var(--color-text-muted);
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1;
+    transform: none;
+    transition: color 0.15s ease;
+}
+
+html.fullpage-mode .fp-search-clear:hover,
+html.fullpage-mode .panel-search-clear:hover,
+html.fullpage-mode .legacy-import-preview-search-clear:hover {
+    background: var(--color-surface-muted);
+    color: var(--color-primary);
+    transform: none;
+}
+
+html.fullpage-mode .fp-search-clear:active,
+html.fullpage-mode .panel-search-clear:active,
+html.fullpage-mode .legacy-import-preview-search-clear:active {
+    transform: none;
+}
+
+html.fullpage-mode .fp-control-strip,
+html.fullpage-mode .fp-control-strip:hover {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
+html.fullpage-mode .fp-search-kbd,
+html.fullpage-mode .fp-sidebar-shortcut-hint kbd,
+html.fullpage-mode .save-collection-keyboard-hint kbd,
+html.fullpage-mode .bulk-collection-keyboard-hint kbd,
+html.fullpage-mode .delete-confirm-keyboard-hint kbd {
+    background: var(--color-surface-muted);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+    font-family: var(--fp-font-mono);
+    border-radius: var(--fp-radius-xs);
+}
+
+html.fullpage-mode .fp-sidebar-save-btn,
+html.fullpage-mode .fp-toolbar .fp-toolbar-btn.fp-toolbar-primary-btn,
+html.fullpage-mode .fp-card-action-btn.primary,
+html.fullpage-mode .fp-session-action-btn-restore,
+html.fullpage-mode .save-collection-btn-save,
+html.fullpage-mode .bulk-collection-btn-primary,
+html.fullpage-mode .current-window-close-btn-primary,
+html.fullpage-mode .legacy-import-preview-action-btn:not(.secondary) {
+    min-height: 38px;
+    border: 1px solid var(--color-primary);
+    border-radius: var(--fp-radius-sm);
+    background: var(--color-primary);
+    color: var(--color-text-inverse);
+    -webkit-text-fill-color: var(--color-text-inverse);
+    box-shadow: none;
+    filter: none;
+    font-family: var(--fp-font-body);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0;
+}
+
+html.fullpage-mode .fp-sidebar-save-btn:hover,
+html.fullpage-mode .fp-toolbar .fp-toolbar-btn.fp-toolbar-primary-btn:hover,
+html.fullpage-mode .fp-card-action-btn.primary:hover,
+html.fullpage-mode .fp-session-action-btn-restore:hover,
+html.fullpage-mode .save-collection-btn-save:hover,
+html.fullpage-mode .bulk-collection-btn-primary:hover,
+html.fullpage-mode .current-window-close-btn-primary:hover,
+html.fullpage-mode .legacy-import-preview-action-btn:not(.secondary):hover {
+    background: var(--color-primary-hover);
+    border-color: var(--color-primary-hover);
+    color: var(--color-text-inverse);
+    box-shadow: none;
+    filter: none;
+    transform: none;
+}
+
+html.fullpage-mode .fp-sidebar-save-btn:active,
+html.fullpage-mode .fp-toolbar-btn:active,
+html.fullpage-mode .fp-card-action-btn:active,
+html.fullpage-mode .fp-session-action-btn:active,
+html.fullpage-mode .save-collection-btn:active,
+html.fullpage-mode .bulk-collection-btn:active,
+html.fullpage-mode .current-window-close-btn:active,
+html.fullpage-mode .legacy-import-preview-action-btn:active {
+    transform: scale(0.98);
+}
+
+html.fullpage-mode .fp-toolbar-btn,
+html.fullpage-mode .fp-card-action-btn,
+html.fullpage-mode .fp-session-action-btn,
+html.fullpage-mode .save-collection-btn,
+html.fullpage-mode .bulk-collection-btn,
+html.fullpage-mode .delete-confirm-btn,
+html.fullpage-mode .current-window-close-btn,
+html.fullpage-mode .legacy-import-preview-action-btn,
+html.fullpage-mode .fp-empty-action-btn,
+html.fullpage-mode .panel-action-btn,
+html.fullpage-mode .panel-close-btn,
+html.fullpage-mode .save-collection-mode-btn,
+html.fullpage-mode .fp-toolbar-pill,
+html.fullpage-mode .fp-toolbar-segment-btn,
+html.fullpage-mode .fp-search-clear,
+html.fullpage-mode .panel-search-clear,
+html.fullpage-mode .legacy-import-preview-search-clear,
+html.fullpage-mode .current-window-group-toggle,
+html.fullpage-mode .fp-toast-undo-btn,
+html.fullpage-mode .fp-toast-close-btn,
+html.fullpage-mode .save-collection-modal-close,
+html.fullpage-mode .bulk-collection-modal-close,
+html.fullpage-mode .delete-confirm-modal-close,
+html.fullpage-mode .current-window-close-modal-close {
+    border-radius: var(--fp-radius-sm);
+    font-family: var(--fp-font-body);
+    letter-spacing: 0;
+}
+
+html.fullpage-mode .fp-toolbar-btn,
+html.fullpage-mode .fp-card-action-btn.secondary,
+html.fullpage-mode .fp-session-action-btn-clear,
+html.fullpage-mode .save-collection-btn-cancel,
+html.fullpage-mode .bulk-collection-btn-cancel,
+html.fullpage-mode .delete-confirm-btn-cancel,
+html.fullpage-mode .current-window-close-btn-cancel,
+html.fullpage-mode .legacy-import-preview-action-btn.secondary,
+html.fullpage-mode .fp-empty-action-btn,
+html.fullpage-mode .panel-action-btn.secondary {
+    border: 1px solid var(--color-border);
+    background: transparent;
+    color: var(--color-text-muted);
+    box-shadow: none;
+}
+
+html.fullpage-mode .fp-toolbar-btn:hover:not(:disabled),
+html.fullpage-mode .fp-card-action-btn.secondary:hover,
+html.fullpage-mode .fp-session-action-btn-clear:hover,
+html.fullpage-mode .save-collection-btn-cancel:hover,
+html.fullpage-mode .bulk-collection-btn-cancel:hover,
+html.fullpage-mode .delete-confirm-btn-cancel:hover,
+html.fullpage-mode .current-window-close-btn-cancel:hover,
+html.fullpage-mode .legacy-import-preview-action-btn.secondary:hover,
+html.fullpage-mode .fp-empty-action-btn:hover,
+html.fullpage-mode .panel-action-btn.secondary:hover {
+    background: var(--color-hover-bg);
+    border-color: var(--color-border-strong);
+    color: var(--color-text);
+    box-shadow: none;
+    transform: none;
+}
+
+html.fullpage-mode .fp-toolbar-btn.active,
+html.fullpage-mode .fp-toolbar-pill.active,
+html.fullpage-mode .fp-toolbar-segment-btn.active,
+html.fullpage-mode .save-collection-mode-btn.active {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: var(--color-text-inverse);
+    box-shadow: none;
+}
+
+html.fullpage-mode .fp-toolbar-clear,
+html.fullpage-mode .fp-toolbar-danger-btn,
+html.fullpage-mode .fp-card-action-btn.secondary.danger,
+html.fullpage-mode .delete-confirm-btn-danger,
+html.fullpage-mode .current-window-close-btn-secondary,
+html.fullpage-mode .current-window-close-btn.close,
+html.fullpage-mode .fp-current-window-card .fp-card-action-btn.close {
+    border-color: var(--color-lost-border);
+    background: var(--color-lost-bg);
+    color: var(--color-lost-text);
+}
+
+html.fullpage-mode .fp-sidebar-ctx-danger,
+html.fullpage-mode .fp-card-ctx-danger,
+html.fullpage-mode .fp-tab-ctx-item.danger {
+    color: var(--color-lost-text);
+}
+
+html.fullpage-mode .fp-toolbar-danger-btn,
+html.fullpage-mode .delete-confirm-btn-danger,
+html.fullpage-mode .current-window-close-btn-secondary {
+    background: var(--color-error);
+    border-color: var(--color-error);
+    color: #FFFFFF;
+}
+
+html.fullpage-mode .fp-toolbar-clear:hover,
+html.fullpage-mode .fp-toolbar-danger-btn:hover,
+html.fullpage-mode .fp-card-action-btn.secondary.danger:hover,
+html.fullpage-mode .delete-confirm-btn-danger:hover,
+html.fullpage-mode .current-window-close-btn-secondary:hover,
+html.fullpage-mode .fp-current-window-card .fp-card-action-btn.close:hover {
+    background: color-mix(in srgb, var(--color-error) 14%, var(--color-surface));
+    border-color: var(--color-error);
+    color: var(--color-error);
+}
+
+html.fullpage-mode .fp-toolbar-danger-btn:hover,
+html.fullpage-mode .delete-confirm-btn-danger:hover,
+html.fullpage-mode .current-window-close-btn-secondary:hover {
+    background: #DC2626;
+    border-color: #DC2626;
+    color: #FFFFFF;
+}
+
+html.fullpage-mode .fp-sidebar-nav-item,
+html.fullpage-mode .fp-sidebar-folder-item {
+    min-height: 44px;
+    padding: 10px 12px;
+    border-radius: var(--fp-radius-sm);
+    border: 1px solid transparent;
+    border-left: 2px solid transparent;
+    color: var(--color-text);
+    gap: 10px;
+}
+
+html.fullpage-mode .fp-sidebar-nav-item:hover,
+html.fullpage-mode .fp-sidebar-folder-item:hover,
+html.fullpage-mode .fp-sidebar-shortcut-hint:hover {
+    background: var(--color-hover-bg);
+}
+
+html.fullpage-mode .fp-sidebar-nav-item.active,
+html.fullpage-mode .fp-sidebar-folder-item.active,
+html.fullpage-mode .fp-sidebar-root-item.active {
+    background: var(--color-selected-bg);
+    border-left-color: var(--color-primary);
+    color: var(--color-primary);
+    font-weight: 600;
+}
+
+html.fullpage-mode .fp-sidebar-nav-icon,
+html.fullpage-mode .fp-sidebar-folder-icon {
+    width: 18px;
+    height: 18px;
+    opacity: 1;
+}
+
+html.fullpage-mode .fp-sidebar-counter,
+html.fullpage-mode .fp-content-heading-count,
+html.fullpage-mode .fp-card-meta-chip,
+html.fullpage-mode .current-window-group-count,
+html.fullpage-mode .legacy-import-preview-root-badge {
+    --fp-badge-accent: var(--color-text-muted);
+    --fp-badge-bg: var(--color-surface-muted);
+    --fp-badge-border: var(--color-border);
+    --fp-badge-text: var(--color-text-muted);
+    border-radius: var(--fp-radius-xs);
+}
+
+html.fullpage-mode .fp-sidebar-root-item,
+html.fullpage-mode .fp-sidebar-stat-card,
+html.fullpage-mode .fp-sidebar-shortcut-hint {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--fp-radius-sm);
+    box-shadow: none;
+}
+
+html.fullpage-mode .fp-sidebar-root-icon-shell {
+    background: var(--color-selected-bg);
+    color: var(--color-primary);
+    border-radius: var(--fp-radius-sm);
+}
+
+html.fullpage-mode .fp-sidebar-stat-value {
+    color: var(--color-primary);
+    font-family: var(--fp-font-display);
+    font-weight: 800;
+}
+
+html.fullpage-mode .fp-content-heading,
+html.fullpage-mode .fp-toolbar,
+html.fullpage-mode .fp-card,
+html.fullpage-mode .fp-single-tab-session-row,
+html.fullpage-mode .current-window-group,
+html.fullpage-mode .legacy-import-preview-summary,
+html.fullpage-mode .legacy-import-preview-item,
+html.fullpage-mode .fp-empty-state {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--fp-card-radius);
+    box-shadow: var(--fp-shadow-sm);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
+html.fullpage-mode .fp-content-heading,
+html.fullpage-mode .fp-toolbar {
+    background: color-mix(in srgb, var(--color-surface) 52%, transparent);
+    border-color: color-mix(in srgb, var(--color-border) 58%, transparent);
+    box-shadow: var(--fp-shadow-sm), inset 0 1px 0 rgb(255 255 255 / 6%);
+    backdrop-filter: saturate(1.35) blur(18px);
+    -webkit-backdrop-filter: saturate(1.35) blur(18px);
+}
+
+html.fullpage-mode .fp-content-heading {
+    border-left: 4px solid var(--fp-heading-accent, var(--color-primary));
+    border-left-color: var(--fp-heading-accent, var(--color-primary));
+}
+
+html.fullpage-mode .fp-content-heading::before {
+    background: var(--fp-heading-accent, var(--color-primary));
+    display: none;
+}
+
+html.fullpage-mode .fp-content-title,
+html.fullpage-mode .panel-title,
+html.fullpage-mode .current-window-close-modal-title,
+html.fullpage-mode .save-collection-modal-title,
+html.fullpage-mode .bulk-collection-modal-title,
+html.fullpage-mode .delete-confirm-modal-title,
+html.fullpage-mode .fp-empty-title {
+    color: var(--color-text);
+    font-family: var(--fp-font-display);
+    font-weight: 700;
+    letter-spacing: 0;
+}
+
+html.fullpage-mode .fp-content-heading-subtitle,
+html.fullpage-mode .fp-card-time,
+html.fullpage-mode .fp-empty-description,
+html.fullpage-mode .panel-meta,
+html.fullpage-mode .legacy-import-preview-copy,
+html.fullpage-mode .bulk-collection-modal-copy,
+html.fullpage-mode .current-window-close-copy,
+html.fullpage-mode .delete-confirm-question {
+    color: var(--color-text-muted);
+    opacity: 1;
+}
+
+html.fullpage-mode .fp-content-grid {
+    background: var(--color-background);
+}
+
+html.fullpage-mode .fp-card {
+    border-left: 4px solid var(--card-color, var(--color-primary));
+    min-height: 165px;
+    transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+html.fullpage-mode .fp-card::before,
+html.fullpage-mode .fp-card::after {
+    display: none;
+}
+
+html.fullpage-mode .fp-card:hover,
+html.fullpage-mode .fp-card.fp-card-interaction-active,
+html.fullpage-mode .fp-single-tab-session-row:hover,
+html.fullpage-mode .fp-single-tab-session-row:focus-visible {
+    background: var(--color-surface);
+    border-color: var(--color-border-strong);
+    border-left-color: var(--card-color, var(--color-primary));
+    box-shadow: var(--fp-shadow-lg);
+}
+
+html.fullpage-mode .fp-card.fp-card-selected,
+html.fullpage-mode .fp-card.fp-card-bulk-selected,
+html.fullpage-mode .fp-single-tab-session-row.is-selected {
+    background: var(--color-selected-bg);
+    border-color: var(--color-primary);
+    border-left-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-focus-ring), var(--fp-shadow-md);
+}
+
+html.fullpage-mode .fp-card-title {
+    color: var(--color-text);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0;
+}
+
+html.fullpage-mode .fp-card-body {
+    padding: 16px;
+    gap: 12px;
+}
+
+html.fullpage-mode .fp-card-badge.recent,
+html.fullpage-mode .fp-toast--success .fp-toast-accent {
+    background: var(--color-success);
+}
+
+html.fullpage-mode .fp-card-badge.tracking,
+html.fullpage-mode .fp-toast--info .fp-toast-accent {
+    background: var(--color-primary);
+}
+
+html.fullpage-mode .fp-card-meta-chip.tabs:not(.fp-card-count-chip),
+html.fullpage-mode .fp-card-meta-chip.current-window-status.active,
+html.fullpage-mode .current-window-live-badge {
+    --fp-badge-bg: var(--color-success-bg);
+    --fp-badge-border: var(--color-success-border);
+    --fp-badge-text: var(--color-success-text);
+    border-radius: var(--fp-radius-xs);
+}
+
+html.fullpage-mode .fp-card-meta-chip.groups:not(.fp-card-count-chip),
+html.fullpage-mode .session-panel-badge,
+html.fullpage-mode .fp-session-card .fp-card-badge.fp-card-badge-label,
+html.fullpage-mode .fp-single-tab-session-badge {
+    --fp-badge-bg: var(--color-risk-bg);
+    --fp-badge-border: var(--color-risk-border);
+    --fp-badge-text: var(--color-risk-text);
+    border-radius: var(--fp-radius-xs);
+}
+
+html.fullpage-mode .fp-card-actions {
+    box-sizing: border-box;
+    min-width: 0;
+    background: var(--color-surface-raised);
+    border-top: 1px solid var(--color-border);
+    gap: 5px;
+    padding: 8px;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
+html.fullpage-mode .fp-card-action-secondary {
+    align-items: center;
+    flex: 0 0 auto;
+    min-width: max-content;
+    gap: 5px;
+}
+
+html.fullpage-mode .fp-card-actions .fp-card-color-picker,
+html.fullpage-mode .fp-card-actions .modern-color-picker-wrapper {
+    flex: 0 0 auto;
+}
+
+html.fullpage-mode .fp-card-actions .modern-color-picker {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--fp-radius-sm);
+    background: transparent;
+}
+
+html.fullpage-mode .fp-card-actions .modern-color-picker:hover,
+html.fullpage-mode .fp-card-actions .modern-color-picker.active {
+    transform: none;
+}
+
+html.fullpage-mode .fp-card-actions .current-color-preview {
+    width: 18px;
+    height: 18px;
+    border-radius: var(--fp-radius-xs);
+}
+
+html.fullpage-mode .fp-card-actions .fp-card-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    flex: 1 1 0;
+    height: 32px;
+    min-height: 32px;
+    min-width: 0;
+    padding: 0 8px;
+    border-radius: var(--fp-radius-sm);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0;
+    white-space: nowrap;
+    box-shadow: none;
+}
+
+html.fullpage-mode .fp-card-actions .fp-card-action-btn svg {
+    width: 13px;
+    height: 13px;
+    flex: 0 0 auto;
+}
+
+html.fullpage-mode .fp-card-actions .fp-card-action-btn span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+html.fullpage-mode .fp-card-actions .fp-card-action-btn.primary {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0 8px;
+    font-size: 12px;
+    font-weight: 600;
+    box-shadow: none;
+}
+
+html.fullpage-mode .fp-card-actions .fp-card-action-btn.secondary {
+    flex: 0 0 84px;
+    min-width: 84px;
+    padding: 0 8px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+html.fullpage-mode .fp-card:hover .fp-card-favicon,
+html.fullpage-mode .fp-card.fp-card-interaction-active .fp-card-favicon,
+html.fullpage-mode .fp-card:hover .fp-card-favicon-more,
+html.fullpage-mode .fp-card.fp-card-interaction-active .fp-card-favicon-more {
+    filter: none;
+    opacity: 1;
+}
+
+html.fullpage-mode .fp-content-list-mode .fp-card {
+    min-height: 44px;
+    max-height: 56px;
+    flex-direction: row;
+    align-items: center;
+    overflow: visible;
+}
+
+html.fullpage-mode .fp-content-list-mode .fp-card:hover,
+html.fullpage-mode .fp-content-list-mode .fp-card.fp-card-interaction-active {
+    box-shadow: var(--fp-shadow-xs);
+    transform: none;
+}
+
+html.fullpage-mode .fp-content-list-mode .fp-card-body {
+    min-height: 44px;
+    padding: 6px 12px;
+    gap: 12px;
+}
+
+html.fullpage-mode .fp-content-list-mode .fp-card.fp-card-has-top-badge .fp-card-body {
+    padding: 6px 12px;
+}
+
+html.fullpage-mode .fp-content-list-mode .fp-card-title-row {
+    align-items: center;
+}
+
+html.fullpage-mode .fp-content-list-mode .fp-card-title {
+    font-size: 14px;
+    line-height: 1.35;
+}
+
+html.fullpage-mode .fp-content-list-mode .fp-card-favicons {
+    min-height: 24px;
+    max-width: 220px;
+    flex-basis: 220px;
+    padding-right: 8px;
+}
+
+html.fullpage-mode .fp-content-list-mode .fp-card-favicon {
+    width: 18px;
+    height: 18px;
+}
+
+html.fullpage-mode .fp-content-list-mode .fp-card-meta-chip {
+    min-height: 26px;
+    padding: 3px 10px;
+}
+
+html.fullpage-mode .fp-content-list-mode .fp-card-actions {
+    min-height: 44px;
+    padding: 0 8px;
+    background: transparent;
+    border-top: 0;
+}
+
+html.fullpage-mode .fp-content-list-mode .fp-card-action-btn,
+html.fullpage-mode .fp-content-list-mode .fp-card-action-btn.primary {
+    min-height: 32px;
+    height: 32px;
+    padding: 6px 12px;
+    font-size: 12px;
+}
+
+html.fullpage-mode .fp-content-list-mode .fp-card-action-menu {
+    margin-right: 4px;
+}
+
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu {
+    --rail-item-size: 28px;
+    --rail-item-gap: 2px;
+    --rail-pad: 5px;
+    position: absolute;
+    top: 50%;
+    right: 8px;
+    bottom: auto;
+    left: auto;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--rail-item-gap);
+    width: auto;
+    min-width: 0;
+    min-height: 0;
+    padding: var(--rail-pad);
+    border-top: 0;
+    border-radius: 999px;
+    background: rgba(18, 20, 24, 0.8);
+    transform: translate(10px, -50%) scale(0.96);
+}
+
+html.fullpage-mode:not([data-theme="dark"]) .fp-card .fp-card-actions.fp-card-hover-menu,
+html.fullpage-mode [data-theme="light"] .fp-card .fp-card-actions.fp-card-hover-menu {
+    background: rgba(255, 255, 255, 0.88);
+    border-color: rgba(9, 16, 31, 0.12);
+    box-shadow:
+        0 12px 28px rgba(9, 16, 31, 0.13),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+html.fullpage-mode[data-theme="dark"] .fp-card .fp-card-actions.fp-card-hover-menu,
+html.fullpage-mode [data-theme="dark"] .fp-card .fp-card-actions.fp-card-hover-menu {
+    background: rgba(18, 20, 24, 0.8);
+    border-color: rgba(255, 255, 255, 0.16);
+    box-shadow:
+        0 12px 26px rgba(0, 0, 0, 0.24),
+        inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+html.fullpage-mode .fp-card:hover::after,
+html.fullpage-mode .fp-card.fp-card-interaction-active::after {
+    display: block;
+    opacity: 1;
+    background-color: rgba(0, 0, 0, 0.52);
+    background-image: none;
+    z-index: 1;
+}
+
+html.fullpage-mode .fp-content-search-mode .fp-card:hover::after,
+html.fullpage-mode .fp-content-search-mode .fp-card.fp-card-interaction-active::after {
+    display: none;
+    opacity: 0;
+    background-color: transparent;
+}
+
+html.fullpage-mode .fp-card:hover .fp-card-actions.fp-card-hover-menu,
+html.fullpage-mode .fp-card.fp-card-interaction-active .fp-card-actions.fp-card-hover-menu {
+    transform: translate(0, -50%) scale(1);
+}
+
+html.fullpage-mode .fp-content-list-mode .fp-card .fp-card-actions.fp-card-hover-menu {
+    flex-direction: row;
+    align-items: center;
+    top: 50%;
+    right: 10px;
+    transform: translate(10px, -50%) scale(0.96);
+}
+
+html.fullpage-mode .fp-content-list-mode .fp-card:hover .fp-card-actions.fp-card-hover-menu,
+html.fullpage-mode .fp-content-list-mode .fp-card.fp-card-interaction-active .fp-card-actions.fp-card-hover-menu {
+    transform: translate(0, -50%) scale(1);
+}
+
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .fp-card-menu-item,
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .action-icon {
+    box-sizing: border-box;
+    flex: 0 0 var(--rail-item-size);
+    width: var(--rail-item-size);
+    min-width: var(--rail-item-size);
+    max-width: var(--rail-item-size);
+    height: var(--rail-item-size);
+    min-height: var(--rail-item-size);
+    max-height: var(--rail-item-size);
+    padding: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: #fff;
+    position: relative;
+    z-index: 1;
+    transition: none;
+    cursor: pointer;
+}
+
+html.fullpage-mode:not([data-theme="dark"]) .fp-card .fp-card-actions.fp-card-hover-menu .fp-card-menu-item,
+html.fullpage-mode:not([data-theme="dark"]) .fp-card .fp-card-actions.fp-card-hover-menu .action-icon,
+html.fullpage-mode [data-theme="light"] .fp-card .fp-card-actions.fp-card-hover-menu .fp-card-menu-item,
+html.fullpage-mode [data-theme="light"] .fp-card .fp-card-actions.fp-card-hover-menu .action-icon {
+    color: #334155;
+}
+
+html.fullpage-mode[data-theme="dark"] .fp-card .fp-card-actions.fp-card-hover-menu .fp-card-menu-item,
+html.fullpage-mode[data-theme="dark"] .fp-card .fp-card-actions.fp-card-hover-menu .action-icon,
+html.fullpage-mode [data-theme="dark"] .fp-card .fp-card-actions.fp-card-hover-menu .fp-card-menu-item,
+html.fullpage-mode [data-theme="dark"] .fp-card .fp-card-actions.fp-card-hover-menu .action-icon {
+    color: #fff;
+}
+
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .fp-card-menu-item > svg,
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .fp-card-menu-item .action-icon > svg,
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .fp-card-color-picker .modern-color-picker-wrapper,
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .modern-color-picker,
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .current-color-preview {
+    transition: none;
+    cursor: pointer;
+}
+
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu button,
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu [role="button"],
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .modern-color-picker-wrapper,
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .modern-color-picker,
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .current-color-preview,
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu svg {
+    cursor: pointer;
+}
+
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .fp-card-menu-item:hover,
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .fp-card-menu-item:focus-within,
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .fp-card-color-picker:hover,
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .fp-card-color-picker:focus-within,
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .action-icon:hover,
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .action-icon:focus-visible,
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .menu-icon:hover,
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .menu-icon:focus-visible {
+    flex: 0 0 var(--rail-item-size);
+    width: var(--rail-item-size);
+    min-width: var(--rail-item-size);
+    max-width: var(--rail-item-size);
+    background: transparent;
+    box-shadow: none;
+    transform: none !important;
+    transition: none !important;
+}
+
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .fp-card-rail-open:hover,
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .fp-card-rail-open:focus-visible {
+    color: var(--color-primary);
+}
+
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .fp-card-rail-update:hover,
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .fp-card-rail-update:focus-visible {
+    color: var(--color-secondary);
+}
+
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .fp-card-rail-save:hover,
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .fp-card-rail-save:focus-visible {
+    color: var(--color-success);
+}
+
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .fp-card-menu-option:hover,
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .fp-card-menu-option:focus-within,
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .fp-card-menu-option:hover .action-icon,
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .fp-card-menu-option:focus-within .action-icon {
+    color: var(--color-warning);
+}
+
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .fp-card-color-picker:hover,
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .fp-card-color-picker:focus-within {
+    color: var(--color-tertiary);
+}
+
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .modern-color-picker:hover,
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .modern-color-picker.active {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+}
+
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .fp-card-color-picker:hover .current-color-preview,
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .fp-card-color-picker:focus-within .current-color-preview {
+    border-color: var(--color-tertiary);
+    box-shadow: 0 0 0 1px var(--color-tertiary);
+}
+
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .fp-card-rail-delete:hover,
+html.fullpage-mode .fp-card .fp-card-actions.fp-card-hover-menu .fp-card-rail-delete:focus-visible {
+    color: var(--color-error);
+}
+
+html.fullpage-mode .fp-card-favicon,
+html.fullpage-mode .fp-card-favicon-more,
+html.fullpage-mode .fp-card-matching-tab-favicon,
+html.fullpage-mode .fp-single-tab-session-favicon,
+html.fullpage-mode .tab-favicon {
+    background: var(--color-surface-muted);
+    border-radius: var(--fp-radius-xs);
+}
+
+html.fullpage-mode .fp-card-search-match,
+html.fullpage-mode .fp-single-tab-session-search-match,
+html.fullpage-mode .legacy-import-preview-search-match-title,
+html.fullpage-mode .legacy-import-preview-search-match-url {
+    background: color-mix(in srgb, var(--color-warning) 28%, transparent);
+    color: var(--color-text);
+    border-radius: var(--fp-radius-xs);
+}
+
+html.fullpage-mode .fp-session-card.fp-card,
+html.fullpage-mode .fp-single-tab-session-row {
+    --card-color: var(--color-tertiary);
+}
+
+html.fullpage-mode .fp-session-action-btn-save,
+html.fullpage-mode .fp-current-window-card .fp-card-action-btn.save {
+    background: transparent;
+    border: 1px solid var(--color-primary);
+    color: var(--color-primary);
+    box-shadow: none;
+}
+
+html.fullpage-mode .fp-session-action-btn-save:hover,
+html.fullpage-mode .fp-current-window-card .fp-card-action-btn.save:hover {
+    background: var(--color-selected-bg);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    transform: none;
+}
+
+html.fullpage-mode .fp-detail-panel {
+    background: var(--color-surface);
+    border-left: 1px solid var(--color-border);
+}
+
+html.fullpage-mode .fp-detail-panel .collection-detail-panel {
+    background: var(--color-surface);
+}
+
+html.fullpage-mode .fp-detail-panel .panel-header,
+html.fullpage-mode .fp-detail-panel .panel-content,
+html.fullpage-mode .fp-detail-panel .panel-collection-info,
+html.fullpage-mode .current-window-group-header,
+html.fullpage-mode .group-header {
+    background: var(--color-surface);
+    border-color: var(--color-border);
+}
+
+html.fullpage-mode .fp-detail-panel .single-tab-row,
+html.fullpage-mode .fp-card-matching-tab,
+html.fullpage-mode .fp-tab-ctx-item,
+html.fullpage-mode .fp-card-ctx-item,
+html.fullpage-mode .fp-sidebar-ctx-item {
+    border-radius: var(--fp-radius-sm);
+}
+
+html.fullpage-mode .fp-detail-panel .single-tab-row:hover,
+html.fullpage-mode .fp-card-matching-tab:hover,
+html.fullpage-mode .fp-tab-ctx-item:hover:not(:disabled),
+html.fullpage-mode .fp-card-ctx-item:hover,
+html.fullpage-mode .fp-sidebar-ctx-item:hover,
+html.fullpage-mode .current-window-group-toggle:hover {
+    background: var(--color-hover-bg);
+}
+
+/* Context menu items (including danger items) get a clearly visible neutral
+   hover on their elevated surface. Danger items keep their red text. */
+html.fullpage-mode .fp-tab-ctx-item:hover:not(:disabled),
+html.fullpage-mode .fp-card-ctx-item:hover,
+html.fullpage-mode .fp-sidebar-ctx-item:hover {
+    background: color-mix(in srgb, var(--color-text) 8%, transparent);
+}
+
+html.fullpage-mode .fp-detail-panel .current-window-tab-row .current-window-tab-hover-action {
+    border: 1px solid var(--color-border) !important;
+    border-radius: var(--fp-radius-sm) !important;
+    background: var(--color-surface) !important;
+    color: var(--color-text-muted) !important;
+}
+
+html.fullpage-mode .fp-detail-panel .current-window-tab-row .current-window-tab-focus-btn,
+html.fullpage-mode .fp-detail-panel .current-window-tab-row .current-window-tab-open-btn {
+    background: var(--color-selected-bg) !important;
+    color: var(--color-primary) !important;
+    border-color: var(--color-primary) !important;
+}
+
+html.fullpage-mode .fp-detail-panel .current-window-tab-row .current-window-tab-close-btn {
+    background: var(--color-lost-bg) !important;
+    color: var(--color-lost-text) !important;
+    border-color: var(--color-lost-border) !important;
+}
+
+html.fullpage-mode .tab-url-preview,
+html.fullpage-mode .tab-url-preview-button,
+html.fullpage-mode .fp-card-matching-tab-url,
+html.fullpage-mode .fp-single-tab-session-url,
+html.fullpage-mode .legacy-import-preview-search-match-url {
+    color: var(--color-secondary);
+}
+
+html.fullpage-mode .tab-url-preview-button:hover,
+html.fullpage-mode .tab-url-preview-button:focus-visible {
+    color: var(--color-primary);
+    outline: none;
+    box-shadow: 0 0 0 3px var(--color-focus-ring);
+}
+
+html.fullpage-mode .save-collection-modal-overlay,
+html.fullpage-mode .current-window-close-modal-overlay,
+html.fullpage-mode .modal-overlay,
+html.fullpage-mode .create-folder-modal-overlay {
+    background: rgb(9 9 11 / 48%);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
+html.fullpage-mode .save-collection-modal-content,
+html.fullpage-mode .bulk-collection-modal-content,
+html.fullpage-mode .delete-confirm-modal-content,
+html.fullpage-mode .create-folder-modal-content,
+html.fullpage-mode .modal-card,
+html.fullpage-mode .modal-content,
+html.fullpage-mode .current-window-close-modal,
+html.fullpage-mode .fp-card-ctx-menu,
+html.fullpage-mode .fp-sidebar-ctx-menu,
+html.fullpage-mode .fp-tab-ctx-menu,
+html.fullpage-mode .fp-toast {
+    background: var(--color-surface-raised);
+    border: 1px solid var(--color-border);
+    border-radius: var(--fp-radius-xl);
+    box-shadow: var(--fp-shadow-xl);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
+html.fullpage-mode .modal-card::before {
+    display: none;
+}
+
+html.fullpage-mode .save-collection-modal-header,
+html.fullpage-mode .save-collection-modal-footer,
+html.fullpage-mode .bulk-collection-modal-header,
+html.fullpage-mode .bulk-collection-modal-footer,
+html.fullpage-mode .delete-confirm-modal-header,
+html.fullpage-mode .delete-confirm-modal-footer,
+html.fullpage-mode .create-folder-modal-header,
+html.fullpage-mode .create-folder-modal-footer,
+html.fullpage-mode .button-row,
+html.fullpage-mode .current-window-close-modal-header,
+html.fullpage-mode .current-window-close-modal-footer {
+    background: var(--color-surface);
+    border-color: var(--color-border);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
+html.fullpage-mode .save-collection-label,
+html.fullpage-mode .bulk-collection-label,
+html.fullpage-mode .create-folder-label,
+html.fullpage-mode .current-window-close-form-group label {
+    color: var(--color-text);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+html.fullpage-mode .save-collection-input,
+html.fullpage-mode .bulk-collection-select,
+html.fullpage-mode .create-folder-input,
+html.fullpage-mode .current-window-close-form-group input,
+html.fullpage-mode .current-window-close-form-group select,
+html.fullpage-mode .save-collection-folder-select {
+    width: 100%;
+    min-height: 38px;
+    padding: 8px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--fp-radius-sm);
+    background: var(--color-surface);
+    color: var(--color-text);
+    box-shadow: none;
+    font-family: var(--fp-font-body);
+    font-size: 14px;
+}
+
+html.fullpage-mode .save-collection-input:hover,
+html.fullpage-mode .bulk-collection-select:hover,
+html.fullpage-mode .create-folder-input:hover,
+html.fullpage-mode .current-window-close-form-group input:hover,
+html.fullpage-mode .current-window-close-form-group select:hover,
+html.fullpage-mode .save-collection-folder-select:hover {
+    border-color: var(--color-border-strong);
+    box-shadow: none;
+}
+
+html.fullpage-mode .save-collection-input:focus,
+html.fullpage-mode .bulk-collection-select:focus,
+html.fullpage-mode .create-folder-input:focus,
+html.fullpage-mode .current-window-close-form-group input:focus,
+html.fullpage-mode .current-window-close-form-group select:focus,
+html.fullpage-mode .save-collection-folder-select:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-focus-ring);
+    outline: none;
+}
+
+html.fullpage-mode .save-collection-input::placeholder {
+    color: var(--color-text-subtle);
+}
+
+html.fullpage-mode .save-collection-mode-toggle {
+    background: var(--color-surface-muted);
+    border-radius: var(--fp-radius-sm);
+}
+
+html.fullpage-mode .save-collection-color-option {
+    border-radius: var(--fp-radius-sm);
+    border-color: var(--color-border);
+    box-shadow: none;
+}
+
+html.fullpage-mode .save-collection-color-option.selected,
+html.fullpage-mode .create-folder-color-option.selected {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-focus-ring);
+}
+
+html.fullpage-mode .save-collection-hint,
+html.fullpage-mode .delete-confirm-warning-box,
+html.fullpage-mode .delete-confirm-checkbox-container,
+html.fullpage-mode .bulk-collection-modal-empty-state {
+    background: var(--color-surface-muted);
+    border: 1px solid var(--color-border);
+    border-radius: var(--fp-radius-md);
+    color: var(--color-text-muted);
+}
+
+html.fullpage-mode .modal-button,
+html.fullpage-mode .create-folder-btn {
+    min-height: 38px;
+    padding: 8px 18px;
+    border-radius: var(--fp-radius-sm);
+    border: 1px solid var(--color-border);
+    background: transparent;
+    color: var(--color-text-muted);
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    font-family: var(--fp-font-body);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+html.fullpage-mode .modal-button:hover,
+html.fullpage-mode .create-folder-btn-cancel:hover:not(:disabled) {
+    background: var(--color-hover-bg);
+    border-color: var(--color-border-strong);
+    color: var(--color-text);
+    box-shadow: none;
+    transform: none;
+}
+
+html.fullpage-mode .modal-button.primary,
+html.fullpage-mode .modal-button.confirm,
+html.fullpage-mode .create-folder-btn-save {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: var(--color-text-inverse);
+}
+
+html.fullpage-mode .modal-button.primary:hover,
+html.fullpage-mode .modal-button.confirm:hover,
+html.fullpage-mode .create-folder-btn-save:hover:not(:disabled) {
+    background: var(--color-primary-hover);
+    border-color: var(--color-primary-hover);
+    color: var(--color-text-inverse);
+    box-shadow: none;
+    transform: none;
+}
+
+html.fullpage-mode .save-collection-modal-close,
+html.fullpage-mode .bulk-collection-modal-close,
+html.fullpage-mode .delete-confirm-modal-close,
+html.fullpage-mode .current-window-close-modal-close,
+html.fullpage-mode .create-folder-modal-close {
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--color-text-muted);
+    box-shadow: none;
+}
+
+html.fullpage-mode .save-collection-modal-close:hover,
+html.fullpage-mode .bulk-collection-modal-close:hover,
+html.fullpage-mode .delete-confirm-modal-close:hover,
+html.fullpage-mode .current-window-close-modal-close:hover,
+html.fullpage-mode .create-folder-modal-close:hover {
+    border-color: var(--color-border);
+    background: var(--color-hover-bg);
+    color: var(--color-text);
+    transform: none;
+}
+
+html.fullpage-mode .modern-color-picker,
+html.fullpage-mode .fp-toolbar-color-picker {
+    border: 1px solid var(--color-border);
+    border-radius: var(--fp-radius-sm);
+    background: var(--color-surface);
+    box-shadow: none;
+}
+
+html.fullpage-mode .modern-color-picker:hover,
+html.fullpage-mode .modern-color-picker.active,
+html.fullpage-mode .fp-toolbar-color-picker:hover {
+    border-color: var(--color-primary);
+    background: var(--color-selected-bg);
+    box-shadow: 0 0 0 3px var(--color-focus-ring);
+}
+
+html.fullpage-mode .modern-color-popover {
+    background: var(--color-surface-raised);
+    border: 1px solid var(--color-border);
+    border-radius: var(--fp-radius-md);
+    box-shadow: var(--fp-shadow-xl);
+}
+
+html.fullpage-mode .modern-color-option {
+    border-radius: var(--fp-radius-xs);
+}
+
+html.fullpage-mode .modern-color-option:hover,
+html.fullpage-mode .modern-color-option.selected {
+    box-shadow: 0 0 0 3px var(--color-focus-ring);
+}
+
+html.fullpage-mode .delete-confirm-checkbox {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--color-primary);
+}
+
+html.fullpage-mode .delete-confirm-checkbox-text,
+html.fullpage-mode .delete-confirm-checkbox-text.delete-mode {
+    color: var(--color-text);
+}
+
+html.fullpage-mode .delete-confirm-checkbox-hint,
+html.fullpage-mode .create-folder-keyboard-hint {
+    color: var(--color-text-muted);
+}
+
+html.fullpage-mode .multi-select-checkbox {
+    width: 28px;
+    height: 28px;
+}
+
+html.fullpage-mode .multi-select-checkbox-frame {
+    width: 16px;
+    height: 16px;
+    border: 1.5px solid var(--color-border-strong);
+    border-radius: var(--fp-radius-xs);
+    background: var(--color-surface);
+    box-shadow: none;
+}
+
+html.fullpage-mode .multi-select-checkbox:hover .multi-select-checkbox-frame,
+html.fullpage-mode .multi-select-checkbox:focus-visible .multi-select-checkbox-frame {
+    border-color: var(--color-primary);
+    background: var(--color-surface);
+    box-shadow: 0 0 0 3px var(--color-focus-ring);
+    transform: none;
+}
+
+html.fullpage-mode .multi-select-checkbox.is-checked .multi-select-checkbox-frame {
+    border-color: var(--color-primary);
+    background: var(--color-primary);
+    box-shadow: none;
+}
+
+html.fullpage-mode .multi-select-checkbox-checkmark {
+    width: 9px;
+    height: 5px;
+    border-left: 2px solid var(--color-text-inverse);
+    border-bottom: 2px solid var(--color-text-inverse);
+    filter: none;
+}
+
+html.fullpage-mode .fp-toast {
+    min-width: 360px;
+    max-width: 480px;
+}
+
+html.fullpage-mode .fp-toast-title {
+    color: var(--color-text);
+    font-weight: 600;
+}
+
+html.fullpage-mode .fp-toast-message {
+    color: var(--color-text-muted);
+    opacity: 1;
+}
+
+html.fullpage-mode .fp-toast--success .fp-toast-icon,
+html.fullpage-mode .fp-toast--undo .fp-toast-icon {
+    background: var(--color-success-bg);
+    color: var(--color-success-text);
+}
+
+html.fullpage-mode .fp-toast--error .fp-toast-icon,
+html.fullpage-mode .fp-toast--error .fp-toast-accent {
+    background: var(--color-lost-bg);
+    color: var(--color-lost-text);
+}
+
+html.fullpage-mode .fp-toast--error .fp-toast-accent {
+    background: var(--color-error);
+}
+
+html.fullpage-mode .fp-toast--info .fp-toast-icon {
+    background: var(--color-selected-bg);
+    color: var(--color-primary);
+}
+
+html.fullpage-mode .fp-toast-undo-btn {
+    border: 1px solid var(--color-primary);
+    color: var(--color-primary);
+    background: transparent;
+}
+
+html.fullpage-mode .fp-toast-undo-btn:hover {
+    background: var(--color-selected-bg);
+}
+
+html.fullpage-mode .fp-empty-state {
+    min-height: 300px;
+    padding: 48px 32px;
+}
+
+html.fullpage-mode .fp-empty-state-has-image {
+    border: none;
+    box-shadow: none;
+    background: transparent;
+}
+
+html.fullpage-mode .fp-empty-image {
+    opacity: 0.72;
+    filter: none;
+}
+
+html.fullpage-mode .fp-tab-ctx-divider,
+html.fullpage-mode .fp-card-ctx-divider,
+html.fullpage-mode .fp-sidebar-ctx-divider,
+html.fullpage-mode .fp-toolbar-divider {
+    background: var(--color-border);
+}
+
+html.fullpage-mode .fp-layout ::-webkit-scrollbar-thumb {
+    background: var(--color-border-strong);
+    border-radius: 999px;
 }

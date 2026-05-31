@@ -27,8 +27,8 @@
     position: fixed;
     top: 0;
     right: 0;
-    width: 340px;
-    max-width: 85vw;
+    width: 420px;
+    max-width: 92vw;
     height: 100%;
     background: var(--bg-color);
     box-shadow: -4px 0 24px rgba(0, 0, 0, 0.2);
@@ -116,24 +116,75 @@
     flex-wrap: wrap;
 }
 
-.panel-title {
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: var(--text-color);
-    margin: 0;
-    word-break: break-word;
+.panel-title-slot {
     flex: 1;
     min-width: 0;
 }
 
-.panel-title-edit {
-    flex: 1;
-    min-width: 200px;
-}
-
-.panel-title-edit .auto-save-textbox {
+.panel-title {
     font-size: 1.25rem;
     font-weight: 600;
+    line-height: 1.2;
+    font-family: inherit;
+    letter-spacing: inherit;
+    color: var(--text-color);
+    margin: 0;
+    word-break: break-word;
+}
+
+.panel-title-edit {
+    width: 100%;
+    min-width: 0;
+}
+
+.panel-title-edit-active {
+    padding: 2px 0;
+}
+
+.panel-title-autosave {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    height: auto;
+    background: transparent;
+    border-radius: 8px;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.panel-title-autosave:hover {
+    background: rgba(var(--primary-color-rgb, 52, 152, 219), 0.06);
+    box-shadow: 0 0 0 1px rgba(var(--primary-color-rgb, 52, 152, 219), 0.16);
+}
+
+.panel-title-autosave:focus-within {
+    background: rgba(var(--primary-color-rgb, 52, 152, 219), 0.08);
+    box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb, 52, 152, 219), 0.55);
+    transform: none;
+}
+
+.panel-title-input {
+    display: block;
+    width: 100%;
+    height: auto;
+    min-height: 32px;
+    padding: 0 28px 0 10px;
+    font: inherit;
+    font-size: 1.25rem !important;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: inherit;
+    color: var(--text-color);
+    background: transparent;
+    border: none;
+    outline: none;
+    box-sizing: border-box;
+    border-radius: inherit;
+    box-shadow: none;
+    appearance: none;
+    -webkit-appearance: none;
 }
 
 .panel-edit-btn {
@@ -151,6 +202,7 @@
     opacity: 0.6;
 }
 
+.panel-edit-btn.active,
 .panel-edit-btn:hover {
     background: rgba(255, 255, 255, 0.1);
     color: var(--text-color);

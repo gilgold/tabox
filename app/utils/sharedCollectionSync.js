@@ -1,6 +1,29 @@
 import { updateCollectionsOrder, updateFolderCollectionCount } from './storageUtils';
 import { normalizeCollectionParentId } from './collectionSectionDragEngine';
 
+const sortCollectionsForPersistence = (collections = []) => {
+    return [...collections].sort((a, b) => {
+        const aOrder = a?.order;
+        const bOrder = b?.order;
+        const aHasOrder = aOrder !== undefined && aOrder !== null;
+        const bHasOrder = bOrder !== undefined && bOrder !== null;
+
+        if (aHasOrder && bHasOrder) {
+            return aOrder - bOrder;
+        }
+
+        if (aHasOrder) {
+            return -1;
+        }
+
+        if (bHasOrder) {
+            return 1;
+        }
+
+        return 0;
+    });
+};
+
 export const persistCollectionLayoutChanges = async ({
     nextCollections = [],
     affectedParentIds = [],
@@ -13,8 +36,9 @@ export const persistCollectionLayoutChanges = async ({
     )];
 
     for (const parentId of normalizedParents) {
-        const siblingCollections = nextCollections
-            .filter((collection) => normalizeCollectionParentId(collection, folderUidSet) === parentId);
+        const siblingCollections = sortCollectionsForPersistence(
+            nextCollections.filter((collection) => normalizeCollectionParentId(collection, folderUidSet) === parentId),
+        );
 
         await updateCollectionsOrder(siblingCollections);
     }

@@ -6,6 +6,7 @@ import { highlightText } from '../utils/searchUtils';
 import { browser } from '../../static/globals';
 import { showErrorToast } from '../toastHelpers';
 import ClickableTabUrl from './ClickableTabUrl';
+import FPBadge from './FPBadge';
 import '../CollectionDetailPanel.css';
 import './FPCurrentWindowPanel.css';
 
@@ -432,10 +433,13 @@ function FPCurrentWindowPanel({
                     <div className="panel-title-section">
                         <div className="panel-title-row">
                             <h2 className="panel-title">{windowSnapshot.name}</h2>
-                            <span className="current-window-live-badge">
-                                <MdOpenInBrowser size={14} />
+                            <FPBadge
+                                accent="current-window"
+                                className="current-window-live-badge"
+                                leading={<MdOpenInBrowser size={14} />}
+                            >
                                 <span>Live Window</span>
-                            </span>
+                            </FPBadge>
                         </div>
 
                         <div className="panel-meta">

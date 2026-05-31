@@ -29,6 +29,27 @@
     justify-self: center;
 }
 
+.collection-tile::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: rgba(0, 0, 0, 0.56);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+    z-index: 20;
+}
+
+.tile-header,
+.tile-favicons,
+.tile-folder-label,
+.tile-footer,
+.tile-matching-badge {
+    position: relative;
+    z-index: 1;
+}
+
 /* Controlled entrance animation - only applied when needed */
 .collection-tile-entering {
     animation: tileSlideIn 0.4s ease-out both;
@@ -50,6 +71,11 @@
     border: 3px solid rgba(255, 255, 255, 0.25);
 }
 
+.collection-tile:hover::after,
+.collection-tile:focus-within::after {
+    opacity: 1;
+}
+
 /* Dark Mode Tile Hover */
 [data-theme="dark"] .collection-tile:hover {
     border: 3px solid rgba(255, 255, 255, 0.18);
@@ -59,8 +85,7 @@
 /* Enhanced Tile Content Opacity on Hover */
 .collection-tile:hover .tile-header,
 .collection-tile:hover .tile-favicons,
-.collection-tile:hover .tile-footer,
-.collection-tile:hover .tile-color-picker {
+.collection-tile:hover .tile-footer {
     opacity: 0.7;
     transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -214,85 +239,234 @@
 
 /* Action buttons */
 .tile-actions {
+    --rail-item-gap: 2px;
+    --rail-pad: 5px;
     position: absolute;
-    top: var(--tile-padding);
+    top: 50%;
     right: var(--tile-padding);
     display: flex;
     flex-direction: column;
-    gap: calc(var(--tile-padding) * 0.5);
+    align-items: flex-end;
+    gap: var(--rail-item-gap);
+    padding: var(--rail-pad);
+    border-radius: 999px;
+    background: rgba(18, 20, 24, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    box-shadow:
+        0 10px 22px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     opacity: 0;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    z-index: 100;
+    transform: translate(10px, -50%) scale(0.96);
+    pointer-events: none;
+    transition:
+        opacity 0.22s ease,
+        transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+    z-index: 40;
 }
 
-.collection-tile:hover .tile-actions {
+.collection-tile:hover .tile-actions,
+.collection-tile:focus-within .tile-actions {
     opacity: 1;
-    transform: translateY(-1px);
+    transform: translate(0, -50%) scale(1);
+    pointer-events: auto;
+}
+
+:root:not([data-theme="dark"]) .tile-actions,
+[data-theme="light"] .tile-actions {
+    background: rgba(255, 255, 255, 0.88);
+    border-color: rgba(9, 16, 31, 0.12);
+    box-shadow:
+        0 10px 24px rgba(9, 16, 31, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+[data-theme="dark"] .tile-actions {
+    background: rgba(18, 20, 24, 0.78);
+    border-color: rgba(255, 255, 255, 0.16);
+    box-shadow:
+        0 10px 22px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 /* Modern Liquid Glass Action Buttons */
 .tile-action-button,
+.tile-menu-item,
 .tile-actions .action-icon {
     width: var(--tile-button-size);
     height: var(--tile-button-size);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: calc(var(--tile-button-size) * 0.25);
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid transparent;
+    border-radius: 999px;
+    background: transparent;
     color: white;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: calc(var(--tile-button-size) * 0.5);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: none;
     flex-shrink: 0;
-    box-shadow: 
-        0 2px 8px rgba(0, 0, 0, 0.2),
-        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    position: relative;
+    overflow: hidden;
+    z-index: 1;
+    box-shadow: none;
 }
 
-/* Enhanced hover effects for action buttons */
-.tile-action-button:hover,
-.tile-actions .action-icon:hover {
-    background: rgba(12, 144, 100, 0.9);
-    transform: translateY(-1px) scale(1.05);
-    box-shadow: 
-        0 4px 16px rgba(12, 144, 100, 0.3),
-        0 2px 8px rgba(0, 0, 0, 0.2),
-        inset 0 1px 0 rgba(255, 255, 255, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+:root:not([data-theme="dark"]) .tile-action-button,
+:root:not([data-theme="dark"]) .tile-menu-item,
+:root:not([data-theme="dark"]) .tile-actions .action-icon,
+[data-theme="light"] .tile-action-button,
+[data-theme="light"] .tile-menu-item,
+[data-theme="light"] .tile-actions .action-icon {
+    color: #334155;
 }
 
-/* Specific modern hover effects for certain buttons */
-.play-button:hover {
-    background: rgba(52, 152, 219, 0.9);
-    box-shadow: 
-        0 4px 16px rgba(52, 152, 219, 0.3),
-        0 2px 8px rgba(0, 0, 0, 0.2),
-        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+[data-theme="dark"] .tile-action-button,
+[data-theme="dark"] .tile-menu-item,
+[data-theme="dark"] .tile-actions .action-icon {
+    color: #fff;
 }
 
-.delete-button:hover {
-    background: rgba(231, 76, 60, 0.9);
-    box-shadow: 
-        0 4px 16px rgba(231, 76, 60, 0.3),
-        0 2px 8px rgba(0, 0, 0, 0.2),
-        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+.tile-action-button {
+    padding: 0;
 }
 
-/* Color picker */
-.tile-color-picker {
+.tile-menu-item {
+    transform-origin: right center;
+}
+
+.tile-menu-item .tile-menu-label {
     position: absolute;
-    bottom: calc(var(--tile-padding) * 0.5);
-    right: var(--tile-padding);
+    width: 0;
+    height: 0;
     opacity: 0;
-    transition: opacity 0.2s ease;
+    pointer-events: none;
 }
 
-.collection-tile:hover .tile-color-picker {
-    opacity: 1;
+.tile-menu-item > svg,
+.tile-menu-item .action-icon > svg,
+.tile-menu-color .modern-color-picker-wrapper {
+    flex: 0 0 auto;
+    transition: none;
+}
+
+.tile-actions svg {
+    width: 15px;
+    height: 15px;
+}
+
+.tile-menu-option {
+    padding: 0;
+}
+
+.tile-menu-option .action-icon {
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    transition: none;
+    cursor: pointer;
+}
+
+.tile-menu-color .modern-color-picker-wrapper {
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+}
+
+.tile-menu-color .modern-color-picker {
+    width: 100%;
+    height: 100%;
+    border-radius: 999px;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    cursor: pointer;
+}
+
+.tile-menu-color .modern-color-picker:hover,
+.tile-menu-color .modern-color-picker.active {
+    transform: none;
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+}
+
+.tile-menu-color .current-color-preview {
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    transition: none;
+    cursor: pointer;
+}
+
+.tile-actions button,
+.tile-actions [role="button"],
+.tile-actions .modern-color-picker-wrapper,
+.tile-actions .modern-color-picker,
+.tile-actions .current-color-preview,
+.tile-actions svg {
+    cursor: pointer;
+}
+
+/* Stable icon-only hover state */
+.tile-action-button:hover,
+.tile-action-button:focus-visible,
+.tile-menu-item:hover,
+.tile-menu-item:focus-within {
+    background: transparent;
+    transform: none;
+    border-color: transparent;
+}
+
+.tile-actions .tile-menu-item:hover,
+.tile-actions .tile-menu-item:focus-within,
+.tile-actions .action-icon:hover,
+.tile-actions .action-icon:focus-visible,
+.tile-actions .menu-icon:hover,
+.tile-actions .menu-icon:focus-visible {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    transform: none !important;
+    transition: none !important;
+}
+
+.tile-menu-color .tile-menu-label {
+    display: none;
+}
+
+.tile-menu-color .modern-color-picker-wrapper {
+    transform: none !important;
+}
+
+/* Action-specific hover colors from DESIGN.md PipelinePro tokens. */
+.tile-actions .play-button:hover,
+.tile-actions .play-button:focus-visible {
+    color: var(--color-primary, #4F46E5);
+}
+
+.tile-actions .tile-menu-option:hover,
+.tile-actions .tile-menu-option:focus-within,
+.tile-actions .tile-menu-option:hover .action-icon,
+.tile-actions .tile-menu-option:focus-within .action-icon {
+    color: var(--color-warning, #F59E0B);
+}
+
+.tile-actions .tile-menu-color:hover,
+.tile-actions .tile-menu-color:focus-within {
+    color: var(--color-tertiary, #F97316);
+}
+
+.tile-actions .tile-menu-color:hover .current-color-preview,
+.tile-actions .tile-menu-color:focus-within .current-color-preview {
+    border-color: var(--color-tertiary, #F97316);
+    box-shadow: 0 0 0 1px var(--color-tertiary, #F97316);
+}
+
+.tile-actions .delete-button:hover,
+.tile-actions .delete-button:focus-visible {
+    color: var(--color-error, #EF4444);
 }
 
 /* Matching tabs badge for search results */
