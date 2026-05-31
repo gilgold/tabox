@@ -1782,6 +1782,31 @@ html.fullpage-mode .fp-content .folder-stats-text {
     font-size: 10px;
 }
 
+/* Vertical hover action rail — shrink to fit the compact tile.
+   Max 5 items (open / update / more / color / delete): 5*22 + 4*2 + 2*4 = 126px. */
+.fp-content-grid:not(.fp-content-list-mode):not(.fp-content-search-mode):not(.fp-content-grouped-mode) .fp-card-actions.fp-card-hover-menu,
+.fp-grouped-section-items:not(.fp-content-list-mode) .fp-card-actions.fp-card-hover-menu,
+.fp-session-group-cards:not(.fp-content-list-mode):not(.fp-content-search-mode) .fp-card-actions.fp-card-hover-menu {
+    --rail-item-size: 22px;
+    --rail-item-gap: 2px;
+    --rail-pad: 4px;
+    right: 6px;
+}
+
+.fp-content-grid:not(.fp-content-list-mode):not(.fp-content-search-mode):not(.fp-content-grouped-mode) .fp-card-actions.fp-card-hover-menu svg,
+.fp-grouped-section-items:not(.fp-content-list-mode) .fp-card-actions.fp-card-hover-menu svg,
+.fp-session-group-cards:not(.fp-content-list-mode):not(.fp-content-search-mode) .fp-card-actions.fp-card-hover-menu svg {
+    width: 13px;
+    height: 13px;
+}
+
+.fp-content-grid:not(.fp-content-list-mode):not(.fp-content-search-mode):not(.fp-content-grouped-mode) .fp-card-actions.fp-card-hover-menu .current-color-preview,
+.fp-grouped-section-items:not(.fp-content-list-mode) .fp-card-actions.fp-card-hover-menu .current-color-preview,
+.fp-session-group-cards:not(.fp-content-list-mode):not(.fp-content-search-mode) .fp-card-actions.fp-card-hover-menu .current-color-preview {
+    width: 13px;
+    height: 13px;
+}
+
 @media (max-width: 900px) {
     .fp-current-window-group-cards {
         margin-top: 10px;
