@@ -25,9 +25,12 @@ module.exports = (env, argv) => {
     
     output: {
       path: path.resolve(__dirname, "./build"),
-      filename: "[name].js",
-      // Use stable chunk IDs for deterministic builds
-      chunkFilename: "[name].js",
+      // Content-hash entry/chunk filenames in production so Chrome can't serve
+      // a stale cached bundle across extension reloads (the JS carries the
+      // injected CSS, so unhashed names caused reloads to keep old styles).
+      // Dev keeps stable names (watch rewrites them; HTML uses ?hash busting).
+      filename: isProduction ? "[name].[contenthash].js" : "[name].js",
+      chunkFilename: isProduction ? "[name].[contenthash].js" : "[name].js",
       clean: true, // Clean build folder before each build
     },
     
