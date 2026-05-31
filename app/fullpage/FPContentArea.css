@@ -1784,11 +1784,11 @@ html.fullpage-mode .fp-content .folder-stats-text {
 
 /* Vertical hover action rail — shrink to fit the compact tile and stay
    clearly inset. Max 5 items (open / update / more / color / delete):
-   5*18 + 4*2 + 2*3 + 2(border) = 106px inside the 150px tile. */
+   5*22 + 4*2 + 2*3 + 2(border) = 126px inside the 150px tile. */
 .fp-content-grid:not(.fp-content-list-mode):not(.fp-content-search-mode):not(.fp-content-grouped-mode) .fp-card-actions.fp-card-hover-menu,
 .fp-grouped-section-items:not(.fp-content-list-mode) .fp-card-actions.fp-card-hover-menu,
 .fp-session-group-cards:not(.fp-content-list-mode):not(.fp-content-search-mode) .fp-card-actions.fp-card-hover-menu {
-    --rail-item-size: 18px !important;
+    --rail-item-size: 22px !important;
     --rail-item-gap: 2px !important;
     --rail-pad: 3px !important;
     right: 6px;
@@ -1797,15 +1797,15 @@ html.fullpage-mode .fp-content .folder-stats-text {
 .fp-content-grid:not(.fp-content-list-mode):not(.fp-content-search-mode):not(.fp-content-grouped-mode) .fp-card-actions.fp-card-hover-menu svg,
 .fp-grouped-section-items:not(.fp-content-list-mode) .fp-card-actions.fp-card-hover-menu svg,
 .fp-session-group-cards:not(.fp-content-list-mode):not(.fp-content-search-mode) .fp-card-actions.fp-card-hover-menu svg {
-    width: 12px;
-    height: 12px;
+    width: 15px !important;
+    height: 15px !important;
 }
 
 .fp-content-grid:not(.fp-content-list-mode):not(.fp-content-search-mode):not(.fp-content-grouped-mode) .fp-card-actions.fp-card-hover-menu .current-color-preview,
 .fp-grouped-section-items:not(.fp-content-list-mode) .fp-card-actions.fp-card-hover-menu .current-color-preview,
 .fp-session-group-cards:not(.fp-content-list-mode):not(.fp-content-search-mode) .fp-card-actions.fp-card-hover-menu .current-color-preview {
-    width: 12px;
-    height: 12px;
+    width: 14px !important;
+    height: 14px !important;
 }
 
 @media (max-width: 900px) {
