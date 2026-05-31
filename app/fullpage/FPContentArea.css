@@ -1784,11 +1784,11 @@ html.fullpage-mode .fp-content .folder-stats-text {
 
 /* Vertical hover action rail — shrink to fit the compact tile and stay
    clearly inset. Max 5 items (open / update / more / color / delete):
-   5*20 + 4*2 + 2*3 + 2(border) = 116px inside the 150px tile. */
+   5*18 + 4*2 + 2*3 + 2(border) = 106px inside the 150px tile. */
 .fp-content-grid:not(.fp-content-list-mode):not(.fp-content-search-mode):not(.fp-content-grouped-mode) .fp-card-actions.fp-card-hover-menu,
 .fp-grouped-section-items:not(.fp-content-list-mode) .fp-card-actions.fp-card-hover-menu,
 .fp-session-group-cards:not(.fp-content-list-mode):not(.fp-content-search-mode) .fp-card-actions.fp-card-hover-menu {
-    --rail-item-size: 20px;
+    --rail-item-size: 18px;
     --rail-item-gap: 2px;
     --rail-pad: 3px;
     right: 6px;
