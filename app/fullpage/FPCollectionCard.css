@@ -326,9 +326,9 @@
 .fp-card-favicons {
     display: flex;
     flex-wrap: wrap;
-    gap: 5px;
+    gap: 4px;
     align-items: center;
-    min-height: 22px;
+    min-height: 18px;
     flex: 1;
     min-width: 0;
 }
@@ -336,16 +336,16 @@
 .fp-card-favicon-strip {
     display: flex;
     flex-wrap: wrap;
-    gap: 5px;
+    gap: 4px;
     align-items: center;
     min-width: 0;
     flex: 1;
 }
 
 .fp-card-favicon {
-    width: 22px;
-    height: 22px;
-    border-radius: 5px;
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
     object-fit: contain;
     background: var(--fp-border, var(--input-bg-color));
     transition:

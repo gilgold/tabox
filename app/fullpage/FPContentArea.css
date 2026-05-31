@@ -666,7 +666,7 @@ html.fullpage-mode .fp-content .folder-stats-text {
 
 /* Keep full-page grid cards visually uniform (not list/search modes) */
 .fp-content-grid:not(.fp-content-list-mode):not(.fp-content-search-mode):not(.fp-content-grouped-mode) {
-    --fp-grid-card-height: 200px;
+    --fp-grid-card-height: 150px;
     grid-auto-rows: var(--fp-grid-card-height);
 }
 
@@ -688,7 +688,7 @@ html.fullpage-mode .fp-content .folder-stats-text {
 .fp-content-grid:not(.fp-content-list-mode):not(.fp-content-search-mode):not(.fp-content-grouped-mode) .fp-card-favicons {
     flex-wrap: wrap;
     min-height: 0;
-    max-height: 86px;
+    max-height: 48px;
     align-content: center;
     align-items: center;
     overflow: hidden;
@@ -1170,7 +1170,8 @@ html.fullpage-mode .fp-content .folder-stats-text {
 }
 
 .fp-grouped-section-items:not(.fp-content-list-mode) {
-    grid-auto-rows: var(--fp-grid-card-height, 200px);
+    --fp-grid-card-height: 150px;
+    grid-auto-rows: var(--fp-grid-card-height, 150px);
 }
 
 .fp-grouped-section-items:not(.fp-content-list-mode) > div,
@@ -1186,7 +1187,7 @@ html.fullpage-mode .fp-content .folder-stats-text {
 .fp-grouped-section-items:not(.fp-content-list-mode) .fp-card-favicons {
     flex-wrap: wrap;
     min-height: 0;
-    max-height: 86px;
+    max-height: 48px;
     align-content: center;
     align-items: center;
     overflow: hidden;
@@ -1226,7 +1227,7 @@ html.fullpage-mode .fp-content .folder-stats-text {
 
 .fp-collection-insert-gap,
 .fp-grouped-insert-gap {
-    min-height: var(--fp-grid-card-height, 200px);
+    min-height: var(--fp-grid-card-height, 150px);
     border: 2px dashed rgba(22, 152, 226, 0.55);
     border-radius: var(--fp-card-radius, 16px);
     background:
@@ -1259,7 +1260,7 @@ html.fullpage-mode .fp-content .folder-stats-text {
 }
 
 .fp-grouped-empty-dropzone-wrapper {
-    min-height: var(--fp-grid-card-height, 200px);
+    min-height: var(--fp-grid-card-height, 150px);
     border-radius: 12px;
     display: flex;
     align-items: stretch;
@@ -1667,7 +1668,7 @@ html.fullpage-mode .fp-content .folder-stats-text {
 }
 
 .fp-session-group-cards:not(.fp-content-list-mode):not(.fp-content-search-mode) {
-    --fp-grid-card-height: 200px;
+    --fp-grid-card-height: 150px;
     grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--fp-card-min-width, 320px)), var(--fp-card-min-width, 320px)));
     justify-content: start;
 }
@@ -1680,8 +1681,8 @@ html.fullpage-mode .fp-content .folder-stats-text {
 
 .fp-session-group-cards:not(.fp-content-list-mode):not(.fp-content-search-mode) .fp-card-favicons {
     flex-wrap: wrap;
-    min-height: 60px;
-    max-height: 86px;
+    min-height: 36px;
+    max-height: 48px;
     align-content: center;
     align-items: center;
     overflow: hidden;
@@ -1711,6 +1712,74 @@ html.fullpage-mode .fp-content .folder-stats-text {
 .fp-session-group-cards.fp-content-search-mode {
     grid-template-columns: 1fr;
     gap: 14px;
+}
+
+/* ========================================
+   Compact grid tiles — scale internal elements
+   Applies to grid view only (collections, grouped
+   collections, current windows / sessions).
+   ======================================== */
+.fp-content-grid:not(.fp-content-list-mode):not(.fp-content-search-mode):not(.fp-content-grouped-mode) .fp-card-body,
+.fp-grouped-section-items:not(.fp-content-list-mode) .fp-card-body,
+.fp-session-group-cards:not(.fp-content-list-mode):not(.fp-content-search-mode) .fp-card-body {
+    padding: 8px 12px;
+    gap: 6px;
+}
+
+.fp-content-grid:not(.fp-content-list-mode):not(.fp-content-search-mode):not(.fp-content-grouped-mode) .fp-card.fp-card-has-top-badge .fp-card-body,
+.fp-grouped-section-items:not(.fp-content-list-mode) .fp-card.fp-card-has-top-badge .fp-card-body,
+.fp-session-group-cards:not(.fp-content-list-mode):not(.fp-content-search-mode) .fp-card.fp-card-has-top-badge .fp-card-body {
+    padding-top: 28px;
+}
+
+.fp-content-grid:not(.fp-content-list-mode):not(.fp-content-search-mode):not(.fp-content-grouped-mode) .fp-card-footer,
+.fp-grouped-section-items:not(.fp-content-list-mode) .fp-card-footer,
+.fp-session-group-cards:not(.fp-content-list-mode):not(.fp-content-search-mode) .fp-card-footer {
+    padding-top: 6px;
+    gap: 6px;
+}
+
+.fp-content-grid:not(.fp-content-list-mode):not(.fp-content-search-mode):not(.fp-content-grouped-mode) .fp-card-title,
+.fp-grouped-section-items:not(.fp-content-list-mode) .fp-card-title,
+.fp-session-group-cards:not(.fp-content-list-mode):not(.fp-content-search-mode) .fp-card-title {
+    font-size: 12.5px;
+    line-height: 1.3;
+}
+
+/* Count / meta / status chips */
+.fp-content-grid:not(.fp-content-list-mode):not(.fp-content-search-mode):not(.fp-content-grouped-mode) .fp-card-meta-chip,
+.fp-grouped-section-items:not(.fp-content-list-mode) .fp-card-meta-chip,
+.fp-session-group-cards:not(.fp-content-list-mode):not(.fp-content-search-mode) .fp-card-meta-chip,
+.fp-content-grid:not(.fp-content-list-mode):not(.fp-content-search-mode):not(.fp-content-grouped-mode) .fp-card-count-chip,
+.fp-grouped-section-items:not(.fp-content-list-mode) .fp-card-count-chip,
+.fp-session-group-cards:not(.fp-content-list-mode):not(.fp-content-search-mode) .fp-card-count-chip {
+    min-height: 18px;
+    padding: 2px 7px;
+    font-size: 10px;
+    gap: 4px;
+}
+
+/* Top label badge (e.g. current-window "ACTIVE") */
+.fp-content-grid:not(.fp-content-list-mode):not(.fp-content-search-mode):not(.fp-content-grouped-mode) .fp-card-badge.fp-card-badge-label,
+.fp-grouped-section-items:not(.fp-content-list-mode) .fp-card-badge.fp-card-badge-label,
+.fp-session-group-cards:not(.fp-content-list-mode):not(.fp-content-search-mode) .fp-card-badge.fp-card-badge-label {
+    padding: 2px 6px;
+    font-size: 9px;
+}
+
+/* "+N more" favicon counter */
+.fp-content-grid:not(.fp-content-list-mode):not(.fp-content-search-mode):not(.fp-content-grouped-mode) .fp-card-favicon-more,
+.fp-grouped-section-items:not(.fp-content-list-mode) .fp-card-favicon-more,
+.fp-session-group-cards:not(.fp-content-list-mode):not(.fp-content-search-mode) .fp-card-favicon-more {
+    font-size: 9px;
+    padding: 1px 5px;
+}
+
+/* Timestamp */
+.fp-content-grid:not(.fp-content-list-mode):not(.fp-content-search-mode):not(.fp-content-grouped-mode) .fp-card-time,
+.fp-grouped-section-items:not(.fp-content-list-mode) .fp-card-time,
+.fp-session-group-cards:not(.fp-content-list-mode):not(.fp-content-search-mode) .fp-card-time {
+    font-size: 10px;
 }
 
 @media (max-width: 900px) {

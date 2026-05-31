@@ -480,8 +480,8 @@ describe('FPCollectionCard keyboard navigation', () => {
             </Provider>,
         );
 
-        expect(container.querySelectorAll('.fp-card-favicon')).toHaveLength(2);
-        expect(screen.getByText('+8')).toBeInTheDocument();
+        expect(container.querySelectorAll('.fp-card-favicon')).toHaveLength(3);
+        expect(screen.getByText('+5')).toBeInTheDocument();
 
         clientWidthSpy.mockRestore();
     });

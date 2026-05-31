@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
-const FAVICON_SIZE = 22;
-const FAVICON_GAP = 5;
+const FAVICON_SIZE = 18;
+const FAVICON_GAP = 4;
 
 function FPCardFaviconPreview({
     tabs = [],
-    alwaysShowAllThreshold = 8,
-    maxPreviewCount = 10,
+    alwaysShowAllThreshold = 6,
+    maxPreviewCount = 8,
 }) {
     const faviconContainerRef = useRef(null);
     const [visibleFaviconCount, setVisibleFaviconCount] = useState(null);
