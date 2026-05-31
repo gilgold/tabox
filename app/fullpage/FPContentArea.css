@@ -1788,9 +1788,9 @@ html.fullpage-mode .fp-content .folder-stats-text {
 .fp-content-grid:not(.fp-content-list-mode):not(.fp-content-search-mode):not(.fp-content-grouped-mode) .fp-card-actions.fp-card-hover-menu,
 .fp-grouped-section-items:not(.fp-content-list-mode) .fp-card-actions.fp-card-hover-menu,
 .fp-session-group-cards:not(.fp-content-list-mode):not(.fp-content-search-mode) .fp-card-actions.fp-card-hover-menu {
-    --rail-item-size: 18px;
-    --rail-item-gap: 2px;
-    --rail-pad: 3px;
+    --rail-item-size: 18px !important;
+    --rail-item-gap: 2px !important;
+    --rail-pad: 3px !important;
     right: 6px;
 }
 
