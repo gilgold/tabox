@@ -889,17 +889,6 @@
 	opacity: 0.7;
 }
 
-.color-picker-header.with-clear {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 8px;
-	opacity: 1;
-}
-
-.color-picker-header.with-clear > span {
-	opacity: 0.7;
-}
 
 .color-grid {
 	display: grid;
@@ -941,16 +930,18 @@
 }
 
 .color-picker-clear-row {
-	flex: 0 0 auto;
-	padding: 2px 8px;
+	display: block;
+	width: 100%;
+	margin-bottom: 8px;
+	padding: 8px 12px;
 	border: 1px solid var(--setting-row-border-color);
 	background: none;
 	color: var(--text-color, inherit);
-	font-size: 11px;
+	font-size: 13px;
 	font-weight: 600;
-	line-height: 1.4;
+	text-align: center;
 	cursor: pointer;
-	border-radius: 6px;
+	border-radius: 8px;
 }
 
 .color-picker-clear-row:hover:not(:disabled) {
