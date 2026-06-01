@@ -235,10 +235,10 @@ export const normalizeColorKey = (colorName) => {
  * Empty/undefined selection returns all collections unchanged.
  * @param {Array<{color?: string}>} collections
  * @param {Array<string>} colors selected color names
- * @returns {Array} filtered collections
+ * @returns {Array<{color?: string}>} filtered collections
  */
 export const filterByColors = (collections, colors) => {
     if (!colors || colors.length === 0) return collections;
     const selected = new Set(colors.map(normalizeColorKey));
-    return collections.filter((collection) => selected.has(normalizeColorKey(collection.color)));
+    return collections.filter((collection) => collection && selected.has(normalizeColorKey(collection.color)));
 };

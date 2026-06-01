@@ -27,4 +27,10 @@ describe('filterByColors', () => {
     const legacy = [{ uid: 'x', color: '#DC2626' }];
     expect(filterByColors(legacy, ['red']).map((c) => c.uid)).toEqual(['x']);
   });
+
+  test('skips null/undefined collections without throwing', () => {
+    const sparse = [{ uid: '1', color: 'red' }, null, undefined];
+    expect(() => filterByColors(sparse, ['red'])).not.toThrow();
+    expect(filterByColors(sparse, ['red']).map((c) => c.uid)).toEqual(['1']);
+  });
 });
