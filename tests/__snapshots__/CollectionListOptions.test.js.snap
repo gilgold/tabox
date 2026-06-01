@@ -83,6 +83,7 @@ exports[`Collection List Options tests CollectionListOptions renders correctly 1
               >
                 <div
                   class="current-color-preview"
+                  style="--current-color-bg: var(--collection-default-color);"
                 />
               </div>
             </div>
