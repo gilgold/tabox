@@ -320,7 +320,7 @@ const baseProps = {
     updateRemoteData: jest.fn(),
     onDataUpdate: jest.fn(),
     hasActiveFilters: false,
-    filters: { recentlyOpenedActual: false, color: null },
+    filters: { recentlyOpenedActual: false, colors: [] },
     trackedCollectionUids: new Set(),
     onViewModeChange: jest.fn(),
     onFiltersChange: jest.fn(),

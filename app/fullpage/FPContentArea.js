@@ -946,7 +946,7 @@ function FPContentArea({
     const [viewMode, setViewMode] = useState(initialViewMode || 'grid');
     const [openInNewWindow, setOpenInNewWindow] = useState(false);
     const [recentlyOpenedFilter, setRecentlyOpenedFilter] = useState(false);
-    const [colorFilter, setColorFilter] = useState(null);
+    const [colorsFilter, setColorsFilter] = useState([]);
     const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
     const [isSaveAllWindowsModalOpen, setIsSaveAllWindowsModalOpen] = useState(false);
     const [folderModalOpen, setFolderModalOpen] = useState(false);
@@ -985,8 +985,8 @@ function FPContentArea({
 
     useEffect(() => {
         setRecentlyOpenedFilter(!!filters?.recentlyOpenedActual);
-        setColorFilter(filters?.color || null);
-    }, [filters?.recentlyOpenedActual, filters?.color]);
+        setColorsFilter(filters?.colors ?? []);
+    }, [filters?.recentlyOpenedActual, filters?.colors]);
 
     const queueRevealBatch = useCallback((collectionsToReveal) => {
         const payload = buildRevealBatchPayload(collectionsToReveal);
@@ -2459,7 +2459,7 @@ function FPContentArea({
 
         onFiltersChange({
             recentlyOpenedActual: nextFilters.recentlyOpenedActual,
-            color: nextFilters.color,
+            colors: nextFilters.colors,
         });
     }, [onFiltersChange]);
 
@@ -2468,26 +2468,36 @@ function FPContentArea({
         setRecentlyOpenedFilter(newVal);
         emitFiltersChange({
             recentlyOpenedActual: newVal,
-            color: colorFilter,
+            colors: colorsFilter,
         });
     };
 
     const handleColorFilterChange = (color) => {
-        const newColor = colorFilter === color ? null : color;
-        setColorFilter(newColor);
+        const newColors = colorsFilter.includes(color)
+            ? colorsFilter.filter((c) => c !== color)
+            : [...colorsFilter, color];
+        setColorsFilter(newColors);
         emitFiltersChange({
             recentlyOpenedActual: recentlyOpenedFilter,
-            color: newColor,
+            colors: newColors,
+        });
+    };
+
+    const handleColorFilterClear = () => {
+        setColorsFilter([]);
+        emitFiltersChange({
+            recentlyOpenedActual: recentlyOpenedFilter,
+            colors: [],
         });
     };
 
     const clearAllFilters = () => {
         setRecentlyOpenedFilter(false);
-        setColorFilter(null);
-        emitFiltersChange({ recentlyOpenedActual: false, color: null });
+        setColorsFilter([]);
+        emitFiltersChange({ recentlyOpenedActual: false, colors: [] });
     };
 
-    const hasLocalActiveFilters = recentlyOpenedFilter || colorFilter;
+    const hasLocalActiveFilters = recentlyOpenedFilter || colorsFilter.length > 0;
 
     // Import
     const handleFileSelection = async (event) => {
@@ -3057,8 +3067,10 @@ function FPContentArea({
                 >
                     <MdPalette size={18} className="fp-toolbar-color-icon" />
                     <ColorPicker
-                        currentColor={colorFilter}
+                        multiSelect
+                        selectedColors={colorsFilter}
                         action={handleColorFilterChange}
+                        onClear={handleColorFilterClear}
                         tooltip="Filter by color"
                         size="small"
                     />
