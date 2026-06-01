@@ -2,6 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { CollectionFilter } from '../app/CollectionFilter';
+import ColorPicker from '../app/ColorPicker';
 import { COLOR_PALETTE } from '../app/utils/colorMigration';
 
 jest.mock('react-tiny-popover', () => ({
@@ -50,5 +51,51 @@ describe('CollectionFilter', () => {
       });
       expect(container.querySelector('.color-grid')).not.toBeInTheDocument();
     });
+  });
+});
+
+describe('ColorPicker multi-select mode', () => {
+  test('checkmarks every selected color and stays open after a pick', () => {
+    const action = jest.fn();
+    const { container } = render(
+      <ColorPicker
+        multiSelect
+        selectedColors={['red', 'blue']}
+        action={action}
+        onClear={jest.fn()}
+        size="small"
+      />
+    );
+
+    fireEvent.click(container.querySelector('.modern-color-picker'));
+
+    const selected = container.querySelectorAll('.modern-color-option.selected');
+    expect(selected.length).toBe(2);
+
+    fireEvent.click(container.querySelector('.modern-color-option'));
+    expect(action).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('.color-grid')).toBeInTheDocument();
+  });
+
+  test('Clear row calls onClear and is disabled when nothing selected', () => {
+    const onClear = jest.fn();
+    const { container } = render(
+      <ColorPicker multiSelect selectedColors={[]} action={jest.fn()} onClear={onClear} size="small" />
+    );
+    fireEvent.click(container.querySelector('.modern-color-picker'));
+
+    const clearBtn = container.querySelector('.color-picker-clear-row');
+    expect(clearBtn).toBeInTheDocument();
+    expect(clearBtn).toBeDisabled();
+    fireEvent.click(clearBtn);
+    expect(onClear).not.toHaveBeenCalled();
+  });
+
+  test('trigger preview is a gradient when 2+ colors selected', () => {
+    const { container } = render(
+      <ColorPicker multiSelect selectedColors={['red', 'blue']} action={jest.fn()} onClear={jest.fn()} size="small" />
+    );
+    const preview = container.querySelector('.current-color-preview');
+    expect(preview.getAttribute('style')).toMatch(/linear-gradient/);
   });
 });

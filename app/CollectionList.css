@@ -923,9 +923,33 @@
 .modern-color-option.selected {
 	transform: scale(1.05);
 	border-color: var(--text-color);
-	box-shadow: 
+	box-shadow:
 		0 2px 8px rgba(0, 0, 0, 0.2),
 		0 0 0 1px var(--text-color);
+}
+
+.color-picker-clear-row {
+	display: block;
+	width: 100%;
+	margin-top: 8px;
+	padding: 6px 8px;
+	border: none;
+	border-top: 1px solid var(--setting-row-border-color);
+	background: none;
+	color: var(--text-color, inherit);
+	font-size: 12px;
+	text-align: center;
+	cursor: pointer;
+	border-radius: 6px;
+}
+
+.color-picker-clear-row:hover:not(:disabled) {
+	background: var(--button-hover-bg, rgba(0, 0, 0, 0.06));
+}
+
+.color-picker-clear-row:disabled {
+	opacity: 0.4;
+	cursor: default;
 }
 
 .selection-indicator {
