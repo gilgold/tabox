@@ -45,11 +45,13 @@ describe('CollectionFilter', () => {
     fireEvent.click(firstColorOption);
 
     await waitFor(() => {
-      expect(onFiltersChange).toHaveBeenCalledWith({
+      const last = onFiltersChange.mock.calls.at(-1)[0];
+      expect(last).toEqual({
         recentlyOpenedActual: false,
-        color: firstColorName,
+        colors: [firstColorName],
       });
-      expect(container.querySelector('.color-grid')).not.toBeInTheDocument();
+      // multi-select keeps the popover open after a pick
+      expect(container.querySelector('.color-grid')).toBeInTheDocument();
     });
   });
 });
@@ -97,5 +99,31 @@ describe('ColorPicker multi-select mode', () => {
     );
     const preview = container.querySelector('.current-color-preview');
     expect(preview.getAttribute('style')).toMatch(/linear-gradient/);
+  });
+});
+
+describe('CollectionFilter multi-color', () => {
+  test('selecting two colors emits both; clear empties the selection', async () => {
+    const onFiltersChange = jest.fn();
+    const { container } = render(<CollectionFilter onFiltersChange={onFiltersChange} />);
+
+    fireEvent.click(container.querySelector('.modern-color-picker'));
+    const options = container.querySelectorAll('.modern-color-option');
+
+    // pick first two non-default colors
+    fireEvent.click(options[1]);
+    fireEvent.click(options[2]);
+
+    await waitFor(() => {
+      const last = onFiltersChange.mock.calls.at(-1)[0];
+      expect(last.colors).toHaveLength(2);
+    });
+
+    // clear via the popover Clear row
+    fireEvent.click(container.querySelector('.color-picker-clear-row'));
+    await waitFor(() => {
+      const last = onFiltersChange.mock.calls.at(-1)[0];
+      expect(last.colors).toEqual([]);
+    });
   });
 });

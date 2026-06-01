@@ -101,22 +101,11 @@ function RecentlyOpenedFilter({ isActive, onToggle }) {
     );
 }
 
-function ColorFilter({ selectedColor, onColorChange, onClear }) {
+function ColorFilter({ selectedColors, onToggleColor, onClear }) {
     const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
 
-    const handleColorSelect = (colorName) => {
-        if (selectedColor === colorName) {
-            onClear(); // Toggle off if same color clicked
-        } else {
-            onColorChange(colorName);
-        }
-    };
-
     return (
-        <div
-            className="fp-toolbar-color-picker"
-            id="filter-color-picker"
-        >
+        <div className="fp-toolbar-color-picker" id="filter-color-picker">
             <MdPalette size={18} className="fp-toolbar-color-icon" />
             <FilterTooltip
                 content="Filter collections by color"
@@ -124,8 +113,10 @@ function ColorFilter({ selectedColor, onColorChange, onClear }) {
                 disabled={isColorPickerOpen}
             >
                 <ColorPicker
-                    currentColor={selectedColor}
-                    action={handleColorSelect}
+                    multiSelect
+                    selectedColors={selectedColors}
+                    action={onToggleColor}
+                    onClear={onClear}
                     size="small"
                     showTriggerTooltip={false}
                     showOptionTooltips={false}
@@ -155,7 +146,7 @@ function ClearFiltersButton({ hasActiveFilters, onClear }) {
 
 export function CollectionFilter({ onFiltersChange }) {
     const [recentlyOpenedActive, setRecentlyOpenedActive] = useState(false);
-    const [selectedColor, setSelectedColor] = useState(null);
+    const [selectedColors, setSelectedColors] = useState([]);
     const isMountedRef = useRef(true);
     const isInitialRenderRef = useRef(true);
 
@@ -175,10 +166,10 @@ export function CollectionFilter({ onFiltersChange }) {
         if (isMountedRef.current && onFiltersChange) {
             onFiltersChange({
                 recentlyOpenedActual: recentlyOpenedActive,
-                color: selectedColor,
+                colors: selectedColors,
             });
         }
-    }, [recentlyOpenedActive, selectedColor]);
+    }, [recentlyOpenedActive, selectedColors]);
 
     const handleRecentlyOpenedToggle = () => {
         if (isMountedRef.current) {
@@ -186,26 +177,25 @@ export function CollectionFilter({ onFiltersChange }) {
         }
     };
 
-    const handleColorChange = (colorName) => {
-        if (isMountedRef.current) {
-            setSelectedColor(colorName);
-        }
+    const handleToggleColor = (colorName) => {
+        if (!isMountedRef.current) return;
+        setSelectedColors((prev) =>
+            prev.includes(colorName) ? prev.filter((c) => c !== colorName) : [...prev, colorName]
+        );
     };
 
     const handleColorClear = () => {
-        if (isMountedRef.current) {
-            setSelectedColor(null);
-        }
+        if (isMountedRef.current) setSelectedColors([]);
     };
 
     const handleClearAll = () => {
         if (isMountedRef.current) {
             setRecentlyOpenedActive(false);
-            setSelectedColor(null);
+            setSelectedColors([]);
         }
     };
 
-    const hasActiveFilters = recentlyOpenedActive || selectedColor;
+    const hasActiveFilters = recentlyOpenedActive || selectedColors.length > 0;
 
     return (
         <>
@@ -224,8 +214,8 @@ export function CollectionFilter({ onFiltersChange }) {
                 />
                 
                 <ColorFilter
-                    selectedColor={selectedColor}
-                    onColorChange={handleColorChange}
+                    selectedColors={selectedColors}
+                    onToggleColor={handleToggleColor}
                     onClear={handleColorClear}
                 />
             </div>
