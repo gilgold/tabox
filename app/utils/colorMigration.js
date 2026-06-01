@@ -229,3 +229,16 @@ export const normalizeColorKey = (colorName) => {
 
     return migrateColor(colorName);
 };
+
+/**
+ * Filter collections by a set of selected color names (OR semantics).
+ * Empty/undefined selection returns all collections unchanged.
+ * @param {Array<{color?: string}>} collections
+ * @param {Array<string>} colors selected color names
+ * @returns {Array} filtered collections
+ */
+export const filterByColors = (collections, colors) => {
+    if (!colors || colors.length === 0) return collections;
+    const selected = new Set(colors.map(normalizeColorKey));
+    return collections.filter((collection) => selected.has(normalizeColorKey(collection.color)));
+};

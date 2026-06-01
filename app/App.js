@@ -28,7 +28,7 @@ import {
 } from './atoms/globalAppSettingsState';
 
 import { browser } from '../static/globals';
-import { normalizeColorKey } from './utils/colorMigration';
+import { normalizeColorKey, filterByColors } from './utils/colorMigration';
 import TimeAgo from 'javascript-time-ago';
 import en from 'javascript-time-ago/locale/en';
 import { showSuccessToast, showErrorToast, setToastViewContext } from './toastHelpers';
@@ -63,7 +63,7 @@ import { createFolder } from './utils/folderOperations';
 // Migration system imports - wrapped in try/catch for compatibility
 const PERF_NAMESPACE = 'tabox:popup';
 const PERF_MEASURE_PREFIX = `${PERF_NAMESPACE}:measure:`;
-const DEFAULT_COLLECTION_FILTERS = { recentlyOpenedActual: false, color: null };
+const DEFAULT_COLLECTION_FILTERS = { recentlyOpenedActual: false, colors: [] };
 
 const makeMarkName = (label) => `${PERF_NAMESPACE}:${label}`;
 
@@ -1749,8 +1749,8 @@ function App({ mode = 'popup' }) {
   const hasActiveFilters = useMemo(() => {
     const hasSearch = search && search.trim() !== '';
     const hasRecentlyOpenedFilter = filters.recentlyOpenedActual;
-    const hasColorFilter = filters.color;
-    
+    const hasColorFilter = filters.colors && filters.colors.length > 0;
+
     return hasSearch || hasRecentlyOpenedFilter || hasColorFilter;
   }, [search, filters]);
 
@@ -1772,12 +1772,8 @@ function App({ mode = 'popup' }) {
         });
     }
     
-    // Apply color filter
-    if (filters.color) {
-      filteredCollections = filteredCollections.filter(collection => {
-        return normalizeColorKey(collection.color) === normalizeColorKey(filters.color);
-      });
-    }
+    // Apply color filter (multi-select, OR semantics)
+    filteredCollections = filterByColors(filteredCollections, filters.colors);
 
     return filteredCollections;
   }, [
