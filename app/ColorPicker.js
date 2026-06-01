@@ -156,6 +156,9 @@ function ColorPicker(props) {
             <div className={`modern-color-picker ${showPicker ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); handleClick(e); }}>
                 <div
                     className="current-color-preview"
+                    // `background` paints the preview (solid or gradient). The duplicate
+                    // `--current-color-bg` custom property is only so jsdom-based tests can read
+                    // the gradient value, which jsdom drops from the `background` shorthand.
                     style={multiSelect
                         ? { '--current-color-bg': triggerBackground, background: triggerBackground }
                         : { backgroundColor: color }}
