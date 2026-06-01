@@ -103,8 +103,18 @@ function ColorPicker(props) {
         contentStyle={{ zIndex: 2000 }}
         content={
             <div className={`modern-color-popover ${size}`} style={{ zIndex: 2000 }}>
-                <div className="color-picker-header">
+                <div className={`color-picker-header ${multiSelect ? 'with-clear' : ''}`}>
                     <span>Choose Color</span>
+                    {multiSelect && (
+                        <button
+                            type="button"
+                            className="color-picker-clear-row"
+                            disabled={selectedColors.length === 0}
+                            onClick={(e) => { e.stopPropagation(); props.onClear?.(); }}
+                        >
+                            Clear
+                        </button>
+                    )}
                 </div>
                 <div className="color-grid">
                     {Object.entries(colorList).map(([colorName, colorValue], index) => (
@@ -133,16 +143,6 @@ function ColorPicker(props) {
                         </div>
                     ))}
                 </div>
-                {multiSelect && (
-                    <button
-                        type="button"
-                        className="color-picker-clear-row"
-                        disabled={selectedColors.length === 0}
-                        onClick={(e) => { e.stopPropagation(); props.onClear?.(); }}
-                    >
-                        Clear
-                    </button>
-                )}
             </div>}
     >
         <div
