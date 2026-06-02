@@ -185,10 +185,10 @@ describe('full-page PipelinePro styling contract', () => {
     test('applies one glass treatment to the header and toolbar', () => {
         const glassRule = css.match(/html\.fullpage-mode \.fp-content-heading,[\s\S]+?html\.fullpage-mode \.fp-toolbar\s*{[^}]+}/)?.[0] || '';
 
-        expect(glassRule).toContain('background: color-mix(in srgb, var(--color-surface) 72%, transparent)');
+        expect(glassRule).toContain('background: color-mix(in srgb, var(--color-surface) 52%, transparent)');
         expect(glassRule).toContain('backdrop-filter: saturate(1.35) blur(18px)');
         expect(glassRule).toContain('-webkit-backdrop-filter: saturate(1.35) blur(18px)');
-        expect(glassRule).toContain('border-color: color-mix(in srgb, var(--color-border) 78%, transparent)');
+        expect(glassRule).toContain('border-color: color-mix(in srgb, var(--color-border) 58%, transparent)');
     });
 
     test('uses the heading accent as a real left border that reaches the rounded corners', () => {
