@@ -560,7 +560,8 @@ describe('FPContentArea grouped all collections view', () => {
     test('reserves enough compact vertical space for the heading above the floating toolbar', () => {
         const cssPath = path.join(__dirname, '../app/fullpage/FPContentArea.css');
         const css = fs.readFileSync(cssPath, 'utf8');
-        expect(css).toContain('--fp-floating-title-height: 112px');
+        expect(css).toContain('--fp-floating-toolbar-top: var(--fp-floating-title-top)');
+        expect(css).toContain('--fp-floating-stack-offset: calc(var(--fp-floating-title-toolbar-gap) + var(--fp-toolbar-float-offset))');
         expect(css).toMatch(/@media \(max-width: 900px\)\s*{[\s\S]+?\.fp-toolbar\s*{[^}]*max-width:\s*calc\(100% - 16px\)[^}]*flex-wrap:\s*wrap/);
         expect(css).toMatch(/@media \(max-width: 900px\)\s*{[\s\S]+?\.fp-toolbar-leading:not\(\.is-visible\)\s*{[^}]*display:\s*none/);
     });
@@ -764,7 +765,7 @@ describe('FPContentArea grouped all collections view', () => {
         expect(onViewModeChange).not.toHaveBeenCalled();
     });
 
-    test('renders the folder heading above the detached floating toolbar with the folder color indicator', async () => {
+    test('renders the folder heading above the detached floating toolbar with the folder accent', async () => {
         const { container } = renderWithStore(
             <FPContentArea
                 {...baseProps}
@@ -784,12 +785,13 @@ describe('FPContentArea grouped all collections view', () => {
 
         const toolbar = container.querySelector('.fp-toolbar-wrapper');
         const titleRow = container.querySelector('.fp-content-title-row');
-        const colorIndicator = container.querySelector('.fp-content-heading-color-indicator');
+        const badge = container.querySelector('.fp-content-heading-badge');
 
         expect(toolbar).toBeInTheDocument();
         expect(toolbar).toHaveClass('fp-toolbar-wrapper-floating');
         expect(titleRow).toBeInTheDocument();
-        expect(colorIndicator).toBeInTheDocument();
+        expect(badge).toBeInTheDocument();
+        // The folder accent now flows through the heading gradient/badge via the custom property.
         expect(titleRow).toHaveStyle('--fp-heading-accent: #2563EB');
         expect(titleRow.compareDocumentPosition(toolbar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
@@ -818,7 +820,7 @@ describe('FPContentArea grouped all collections view', () => {
         expect(container.querySelector('.fp-content-title-row')).toHaveStyle(`--fp-heading-accent: ${CURRENT_WINDOWS_ACCENT_COLOR}`);
     });
 
-    test('applies the floating glass shell only to the top full-page heading above the toolbar', async () => {
+    test('renders the top full-page heading as a single accent-washed title row above the toolbar', async () => {
         const { container } = renderWithStore(
             <FPContentArea
                 {...baseProps}
@@ -836,13 +838,21 @@ describe('FPContentArea grouped all collections view', () => {
             expect(screen.getByRole('heading', { name: 'All Collections' })).toBeInTheDocument();
         });
 
-        expect(container.querySelector('.fp-content-title-row')).toHaveClass('fp-floating-header-row');
-        expect(container.querySelector('.fp-content-heading')).toHaveClass('fp-floating-header-shell');
-        expect(container.querySelector('[data-section-id="folder-1"]')).not.toHaveClass('fp-floating-header-shell');
-        expect(container.querySelector('[data-section-id="__root__"]')).not.toHaveClass('fp-floating-header-shell');
+        const titleRow = container.querySelector('.fp-content-title-row');
+
+        expect(titleRow).toBeInTheDocument();
+        // The accent wash gradient is driven by the --fp-heading-accent custom property.
+        expect(titleRow).toHaveStyle('--fp-heading-accent: var(--primary-color)');
+        // Single-row header: badge, title, and count all live inside the one title row.
+        expect(within(titleRow).getByText('Library area')).toBeInTheDocument();
+        expect(titleRow.querySelector('.fp-content-title')).toHaveTextContent('All Collections');
+        expect(titleRow.querySelector('.fp-content-heading-count')).toBeInTheDocument();
+        // The per-section headings do not get the top title row treatment.
+        expect(container.querySelector('[data-section-id="folder-1"]')).not.toHaveClass('fp-content-title-row');
+        expect(container.querySelector('[data-section-id="__root__"]')).not.toHaveClass('fp-content-title-row');
     });
 
-    test('renders the top full-page heading in a compact inline layout', async () => {
+    test('renders the subtitle separator only when a subtitle is present', async () => {
         const { container } = renderWithStore(
             <FPContentArea
                 {...baseProps}
@@ -856,9 +866,12 @@ describe('FPContentArea grouped all collections view', () => {
             expect(screen.getByRole('heading', { name: 'All Collections' })).toBeInTheDocument();
         });
 
-        expect(container.querySelector('.fp-content-heading')).toHaveClass('fp-content-heading-compact');
-        expect(container.querySelector('.fp-content-heading-main')).toHaveClass('fp-content-heading-main-inline');
-        expect(container.querySelector('.fp-content-heading-supporting')).toHaveClass('fp-content-heading-supporting-inline');
+        const titleRow = container.querySelector('.fp-content-title-row');
+        // The default "All Collections" view has a subtitle, so the separator and subtitle render.
+        expect(titleRow.querySelector('.fp-content-heading-sep')).toBeInTheDocument();
+        expect(titleRow.querySelector('.fp-content-heading-subtitle')).toHaveTextContent(
+            'Everything you have saved in Tabox',
+        );
     });
 
     test('toggles folder collapse using the view-scoped folder state callback', async () => {

@@ -1259,7 +1259,6 @@ function FPContentArea({
                 subtitle: searchSubtitle || 'Collections saved in this folder',
                 countLabel: collectionCountLabel,
                 accentColor: folderColorMap[activeFolder.uid],
-                showColorIndicator: true,
             };
         }
 
@@ -1271,7 +1270,6 @@ function FPContentArea({
                     subtitle: searchSubtitle,
                     countLabel: currentWindowCountLabel,
                     accentColor: CURRENT_WINDOWS_ACCENT_COLOR,
-                    showColorIndicator: false,
                 };
             }
             if (isSessionsView) {
@@ -1281,7 +1279,6 @@ function FPContentArea({
                     subtitle: searchSubtitle,
                     countLabel: sessionCountLabel,
                     accentColor: '#F59E0B',
-                    showColorIndicator: false,
                 };
             }
 
@@ -1296,7 +1293,6 @@ function FPContentArea({
                 subtitle: searchSubtitle,
                 countLabel: collectionCountLabel,
                 accentColor: 'var(--primary-color)',
-                showColorIndicator: false,
             };
         }
 
@@ -1308,7 +1304,6 @@ function FPContentArea({
                     subtitle: 'Everything you have saved in Tabox',
                     countLabel: collectionCountLabel,
                     accentColor: 'var(--primary-color)',
-                    showColorIndicator: false,
                 };
             case 'unorganized':
                 return {
@@ -1317,7 +1312,6 @@ function FPContentArea({
                     subtitle: 'Collections still sitting at the root level',
                     countLabel: collectionCountLabel,
                     accentColor: 'var(--primary-color)',
-                    showColorIndicator: false,
                 };
             case 'current-windows':
                 return {
@@ -1326,7 +1320,6 @@ function FPContentArea({
                     subtitle: 'Open browser windows available right now',
                     countLabel: currentWindowCountLabel,
                     accentColor: CURRENT_WINDOWS_ACCENT_COLOR,
-                    showColorIndicator: false,
                 };
             case 'sessions':
                 return {
@@ -1335,7 +1328,6 @@ function FPContentArea({
                     subtitle: 'Recently closed tabs and windows from this browser',
                     countLabel: sessionCountLabel,
                     accentColor: '#F59E0B',
-                    showColorIndicator: false,
                 };
             default:
                 return {
@@ -1344,7 +1336,6 @@ function FPContentArea({
                     subtitle: 'Saved collections in this section',
                     countLabel: collectionCountLabel,
                     accentColor: 'var(--primary-color)',
-                    showColorIndicator: false,
                 };
         }
     }, [
@@ -3712,29 +3703,18 @@ function FPContentArea({
     return (
         <div className="fp-content">
             <div
-                className="fp-content-title-row fp-floating-header-row"
+                className="fp-content-title-row"
                 style={{ '--fp-heading-accent': contentHeading.accentColor }}
             >
-                <div className="fp-content-heading fp-content-heading-compact fp-floating-header-shell">
-                    <div className="fp-content-heading-meta">
-                        <FPBadge accent={contentHeading.accentColor} className="fp-content-heading-badge">{contentHeading.badge}</FPBadge>
-                        {contentHeading.showColorIndicator && (
-                            <span
-                                className="fp-content-heading-color-indicator"
-                                aria-hidden="true"
-                            />
-                        )}
-                    </div>
-                    <div className="fp-content-heading-main fp-content-heading-main-inline">
-                        <h2 className="fp-content-title">{contentHeading.title}</h2>
-                        <div className="fp-content-heading-supporting fp-content-heading-supporting-inline">
-                            <span className="fp-content-heading-count">{contentHeading.countLabel}</span>
-                            {contentHeading.subtitle && (
-                                <p className="fp-content-heading-subtitle">{contentHeading.subtitle}</p>
-                            )}
-                        </div>
-                    </div>
-                </div>
+                <FPBadge accent={contentHeading.accentColor} className="fp-content-heading-badge">{contentHeading.badge}</FPBadge>
+                <h2 className="fp-content-title">{contentHeading.title}</h2>
+                <span className="fp-content-heading-count">{contentHeading.countLabel}</span>
+                {contentHeading.subtitle && (
+                    <>
+                        <span className="fp-content-heading-sep" aria-hidden="true">·</span>
+                        <p className="fp-content-heading-subtitle">{contentHeading.subtitle}</p>
+                    </>
+                )}
             </div>
 
             {/* Centered floating toolbar — hidden for lightweight live views */}
