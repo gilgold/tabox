@@ -800,6 +800,7 @@ async function openTabs(collection, window, newWindow = null, trackOpenedWindow 
   
   // Early return for empty collections
   if (totalTabs === 0) {
+    await markCollectionOpenedBG(collection?.uid);
     return true;
   }
   
@@ -983,6 +984,13 @@ async function openTabs(collection, window, newWindow = null, trackOpenedWindow 
     console.error('Error applying chrome groups or tracking:', groupError);
   }
   
+  // Authoritatively record the "recently opened" timestamp here in the background —
+  // openTabs() is the single funnel for every open path (popup, fullpage, context menu,
+  // keyboard command). Persisting it here (instead of in the UI) means it survives the
+  // popup being torn down when a new window steals focus, and lands before the tab-load
+  // auto-update can rebuild the collection, so the green "recently opened" dot is reliable.
+  await markCollectionOpenedBG(collection?.uid);
+
   // Return detailed result object for UI feedback
   return {
     success: successCount > 0,

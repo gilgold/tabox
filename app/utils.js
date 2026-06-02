@@ -71,7 +71,8 @@ export async function getCurrentTabsAndGroups(title, forceOnlyHighlighted = fals
   const { chkIgnorePinned } = await browser.storage.local.get('chkIgnorePinned');
   if (onlyHighlighted) tabQueryProperties.highlighted = true;
   if (chkIgnorePinned) tabQueryProperties.pinned = false;
-  let tabs = await browser.tabs.query(tabQueryProperties);
+  const fullPageUrl = browser.runtime.getURL('fullpage.html');
+  let tabs = (await browser.tabs.query(tabQueryProperties)).filter(t => t.url !== fullPageUrl);
   let window;
   let isFromIncognito = false;
   try {
@@ -152,8 +153,8 @@ export async function getAllWindowsTabsAndGroups(folderName, folderColor = '#4fa
       // Get tabs for this window
       let tabQueryProperties = { windowId: window.id };
       if (chkIgnorePinned) tabQueryProperties.pinned = false;
-      
-      let tabs = await browser.tabs.query(tabQueryProperties);
+      const fullPageUrl = browser.runtime.getURL('fullpage.html');
+      let tabs = (await browser.tabs.query(tabQueryProperties)).filter(t => t.url !== fullPageUrl);
       
       // Skip windows with no tabs (shouldn't happen but be safe)
       if (!tabs || tabs.length === 0) continue;

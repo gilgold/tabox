@@ -182,6 +182,29 @@ const saveSingleCollectionBG = async (collection, forceUpdateTimestamp = false) 
     }
 };
 
+// Mark a collection as recently opened. This is the authoritative place to record
+// `lastOpened`: doing it in the background (instead of the popup/fullpage UI) means
+// the write survives the popup being torn down when a new window steals focus, and
+// it lands before the tab-load auto-update can rebuild the collection. Opening is not
+// a content edit, so `lastUpdated` is intentionally preserved (no forced timestamp).
+const markCollectionOpenedBG = async (uid, timestamp = Date.now()) => {
+    if (!uid) {
+        return false;
+    }
+
+    try {
+        const existing = await loadSingleCollectionBG(uid);
+        if (!existing) {
+            return false;
+        }
+
+        return await saveSingleCollectionBG({ ...existing, lastOpened: timestamp }, false);
+    } catch (error) {
+        console.error(`Background: Failed to mark collection ${uid} as opened:`, error);
+        return false;
+    }
+};
+
 // Load all collections with backward compatibility for background script
 const loadAllCollectionsBG = async (useNewStorageFirst = true) => {
     try {
@@ -1750,8 +1773,9 @@ async function updateCollection(collection, windowId) {
         const { chkIgnorePinned } = await browser.storage.local.get('chkIgnorePinned');
         if (chkIgnorePinned) tabQueryProperties.pinned = false;
         
-        let tabs = await browser.tabs.query(tabQueryProperties);
-        
+        const fullPageUrl = browser.runtime.getURL('fullpage.html');
+        let tabs = (await browser.tabs.query(tabQueryProperties)).filter(t => t.url !== fullPageUrl);
+
         // Verify window still exists before trying to get it
         let window;
         try {
@@ -2361,6 +2385,7 @@ const backgroundUtilsApi = {
     loadCollectionsIndexBG,
     loadSingleCollectionBG,
     saveSingleCollectionBG,
+    markCollectionOpenedBG,
     loadAllCollectionsBG,
     updateAllCollectionsBG,
     deleteSingleCollectionBG,
