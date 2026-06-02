@@ -1,10 +1,8 @@
-version: 2
-jobs:
-  build:
-    docker:
-      - image: cimg/node:16.3.0
-    environment:
-      - APP_ID: bdbliblipiempfdkkkjohnecmeknnpoa
+version: 2.1
+
+# Reusable steps shared by the test and build jobs.
+commands:
+  install_deps:
     steps:
       - checkout
       - restore_cache:
@@ -13,48 +11,117 @@ jobs:
             - yarn-packages-{{ checksum "yarn.lock" }}
       - run:
           name: Install Dependencies
-          command: |
-            yarn install --immutable
-            sudo apt-get update
-            sudo apt-get -y install curl jq
+          # The repo pins Yarn 4.x via .yarnrc.yml (yarnPath), which requires
+          # Node >= 18. The cimg/node:20.x image satisfies that.
+          command: yarn install --immutable
       - save_cache:
           name: Save Yarn Package Cache
           key: yarn-packages-{{ checksum "yarn.lock" }}
           paths:
             - .yarn/cache
             - .yarn/unplugged
+
+jobs:
+  test:
+    docker:
+      - image: cimg/node:20.19
+    resource_class: large
+    steps:
+      - install_deps
       - run:
-          name: Build Project
-          command: |
-            yarn prod
+          name: Lint
+          command: yarn lint
       - run:
-          name: Update secrets
-          command: |
-            cat << EOF > build/api-keys.json
-            {"googleDrive": $json_api_key, "clientSecret": $json_client_secret}
-            EOF
-      - run:
-          name: "Run Tests"
+          name: Run Tests
           command: yarn test
       - store_test_results:
           path: test-results/jest/
+
+  build-and-publish:
+    docker:
+      - image: cimg/node:20.19
+    resource_class: large
+    environment:
+      # Public Chrome Web Store item id for Tabox.
+      EXTENSION_ID: bdbliblipiempfdkkkjohnecmeknnpoa
+    steps:
+      - install_deps
       - run:
-          name: "Package Extension"
+          name: Install packaging tools
+          command: sudo apt-get update && sudo apt-get install -y jq curl zip
+      - run:
+          name: Inject API keys
+          # webpack's CopyPlugin copies chrome/api-keys.json into the bundle
+          # (see webpack.js), so this file must exist BEFORE the build runs.
+          # It is gitignored, so CI recreates it from CircleCI secrets.
+          command: |
+            cat > chrome/api-keys.json \<<EOF
+            {"googleDrive": "${json_api_key}", "clientSecret": "${json_client_secret}"}
+            EOF
+      - run:
+          name: Build release bundle
+          command: yarn build:release
+      - run:
+          name: Package extension
           command: |
             cd build
-            zip -r ../tabox.zip *
+            zip -r ../tabox.zip .
             cd ..
       - store_artifacts:
           path: tabox.zip
           destination: tabox-chrome.zip
-     
       - run:
-          name: "Upload & Publish Extension to the Google Chrome Store"
+          name: Upload & publish to the Chrome Web Store
+          # https://developer.chrome.com/docs/webstore/using-api
           command: |
-            if [ "${CIRCLE_BRANCH}" == "main" ]; then
-              ACCESS_TOKEN=$(curl "https://accounts.google.com/o/oauth2/token" -d "client_id=${CLIENT_ID}&client_secret=${CLIENT_SECRET}&refresh_token=${REFRESH_TOKEN}&grant_type=refresh_token&redirect_uri=urn:ietf:wg:oauth:2.0:oob" | jq -r .access_token)
-              curl -H "Authorization: Bearer ${ACCESS_TOKEN}" -H "x-goog-api-version: 2" -X PUT -T tabox.zip -v "https://www.googleapis.com/upload/chromewebstore/v1.1/items/${APP_ID}"
-              curl -H "Authorization: Bearer ${ACCESS_TOKEN}" -H "x-goog-api-version: 2" -H "Content-Length: 0" -X POST -v "https://www.googleapis.com/chromewebstore/v1.1/items/${APP_ID}/publish"
+            set -euo pipefail
+
+            echo "Requesting OAuth access token..."
+            ACCESS_TOKEN=$(curl -sS --fail "https://oauth2.googleapis.com/token" \
+              -d "client_id=${CLIENT_ID}" \
+              -d "client_secret=${CLIENT_SECRET}" \
+              -d "refresh_token=${REFRESH_TOKEN}" \
+              -d "grant_type=refresh_token" | jq -r .access_token)
+            if [ -z "${ACCESS_TOKEN}" ] || [ "${ACCESS_TOKEN}" = "null" ]; then
+              echo "Failed to obtain access token"; exit 1
             fi
-    # The resource_class feature allows configuring CPU and RAM resources for each job. Different resource classes are available for different executors. https://circleci.com/docs/2.0/configuration-reference/#resourceclass
-    resource_class: large
+
+            echo "Uploading new package version..."
+            UPLOAD_RESPONSE=$(curl -sS \
+              -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+              -H "x-goog-api-version: 2" \
+              -X PUT -T tabox.zip \
+              "https://www.googleapis.com/upload/chromewebstore/v1.1/items/${EXTENSION_ID}")
+            echo "Upload response: ${UPLOAD_RESPONSE}"
+            UPLOAD_STATE=$(echo "${UPLOAD_RESPONSE}" | jq -r '.uploadState // "FAILURE"')
+            if [ "${UPLOAD_STATE}" != "SUCCESS" ]; then
+              echo "Upload failed (uploadState=${UPLOAD_STATE})"; exit 1
+            fi
+
+            echo "Publishing to the public channel..."
+            PUBLISH_RESPONSE=$(curl -sS \
+              -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+              -H "x-goog-api-version: 2" \
+              -H "Content-Length: 0" \
+              -X POST \
+              "https://www.googleapis.com/chromewebstore/v1.1/items/${EXTENSION_ID}/publish")
+            echo "Publish response: ${PUBLISH_RESPONSE}"
+            PUBLISH_STATUS=$(echo "${PUBLISH_RESPONSE}" | jq -r '.status[0] // "FAILURE"')
+            case "${PUBLISH_STATUS}" in
+              OK|PUBLISHED)
+                echo "Publish succeeded (status=${PUBLISH_STATUS})" ;;
+              *)
+                echo "Publish failed (status=${PUBLISH_STATUS})"; exit 1 ;;
+            esac
+
+workflows:
+  build-test-publish:
+    jobs:
+      - test
+      # Only build + publish on main, and only after tests pass.
+      - build-and-publish:
+          requires:
+            - test
+          filters:
+            branches:
+              only: main
