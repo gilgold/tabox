@@ -1325,6 +1325,27 @@
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1) !important;
 }
 
+/* Tab-count badge on the group icon — compact in the popup, larger in full-page. */
+.group-tab-count-badge {
+    top: -7px;
+    right: -8px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    font-size: 9px;
+    font-weight: 800;
+    border: 2px solid var(--section-bg-color);
+}
+
+html.fullpage-mode .group-tab-count-badge {
+    top: -9px;
+    right: -11px;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    font-size: 13px;
+}
+
 .group-open-button:hover:not(:disabled) {
     transform: translateY(-1px);
     filter: saturate(1.15);

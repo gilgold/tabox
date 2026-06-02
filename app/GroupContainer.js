@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MdExpandMore, MdExpandLess, MdDragIndicator } from 'react-icons/md';
+import { MdExpandMore, MdExpandLess, MdDragIndicator, MdOpenInNew } from 'react-icons/md';
 import { PiTabs } from 'react-icons/pi';
 import { AutoSaveTextbox } from './AutoSaveTextbox';
 import ColorPicker from './ColorPicker';
@@ -8,7 +8,33 @@ import DroppableGroupHeader from './DroppableGroupHeader';
 import { getColorCode, tabGrooupColorChart } from './utils';
 import { getColorValue } from './utils/colorMigration';
 
-function GroupContainer({ 
+// Compact label for the tab-count badge so large numbers fit a small circle:
+// 0–999 shown as-is, 1,000–99,999 collapse to "1k"…"99k", anything bigger caps at "99k+".
+function formatCompactCount(count) {
+    const n = Number(count) || 0;
+    if (n < 1000) return String(n);
+    if (n < 100000) return `${Math.floor(n / 1000)}k`;
+    return '99k+';
+}
+
+// Pick black or white text so the count stays legible on any group color,
+// including bright/light ones where white would wash out. Uses perceived
+// (sRGB-weighted) luminance.
+function getReadableTextColor(hex) {
+    if (typeof hex !== 'string' || !hex.startsWith('#') || hex.length !== 7) {
+        return '#fff';
+    }
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    if ([r, g, b].some(Number.isNaN)) {
+        return '#fff';
+    }
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return luminance > 0.6 ? '#1a1a1a' : '#fff';
+}
+
+function GroupContainer({
     group, 
     tabs, 
     children, 
@@ -159,6 +185,30 @@ function GroupContainer({
         flexShrink: 0,
     };
 
+    const iconWrapStyle = {
+        position: 'relative',
+        display: 'inline-flex',
+        alignItems: 'center',
+        flexShrink: 0,
+    };
+
+    // Size, position and border live in CSS (.group-tab-count-badge) so the badge can
+    // be smaller in the popup and larger in full-page mode. Only the color-derived
+    // bits stay inline because they depend on the group's color.
+    const countBadgeStyle = {
+        position: 'absolute',
+        boxSizing: 'border-box',
+        borderRadius: '999px',
+        background: groupColor,
+        color: getReadableTextColor(groupColor),
+        lineHeight: 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        boxShadow: `0 1px 3px ${hexToRgba(groupColor, 0.4)}`,
+        cursor: 'default',
+    };
+
     const groupInfoStyle = {
         display: 'flex',
         flexDirection: 'column',
@@ -175,13 +225,6 @@ function GroupContainer({
         display: 'flex',
         alignItems: 'center',
         gap: '8px',
-    };
-
-    const groupStatsStyle = {
-        fontSize: '11px',
-        color: 'var(--secondary-text-color)',
-        fontWeight: '500',
-        opacity: 0.8,
     };
 
     const actionsStyle = {
@@ -276,7 +319,19 @@ function GroupContainer({
                         >
                             <MdDragIndicator size="16px" color="var(--text-color)" />
                         </div>
-                        <PiTabs style={iconStyle} />
+                        <div style={iconWrapStyle}>
+                            <PiTabs style={iconStyle} />
+                            {tabCount > 0 && (
+                                <span
+                                    style={countBadgeStyle}
+                                    className="group-tab-count-badge"
+                                    data-tooltip-id="main-tooltip"
+                                    data-tooltip-content={`${tabCount} tab${tabCount !== 1 ? 's' : ''} in this group`}
+                                >
+                                    {formatCompactCount(tabCount)}
+                                </span>
+                            )}
+                        </div>
                         <div style={groupInfoStyle}>
                             <div style={groupTitleStyle}>
                                 <AutoSaveTextbox
@@ -287,14 +342,23 @@ function GroupContainer({
                                     wrapperClassName="group-title-autosave-wrapper"
                                     hideEditIcon
                                 />
-                                <span style={groupStatsStyle}>
-                                    {tabCount} tab{tabCount !== 1 ? 's' : ''}
-                                </span>
                             </div>
                         </div>
                     </div>
                     
                     <div style={actionsStyle} className="group-actions" onClick={(e) => e.stopPropagation()}>
+                        {onOpenGroupTabs && (
+                            <button
+                                style={openButtonStyle}
+                                onClick={() => tabCount > 0 && onOpenGroupTabs(group)}
+                                disabled={tabCount === 0}
+                                aria-label={`Open all tabs in ${group.title}`}
+                                data-tooltip-id="main-tooltip"
+                                data-tooltip-content={`Open all tabs in ${group.title}`}
+                            >
+                                <MdOpenInNew size={14} />
+                            </button>
+                        )}
                         <ColorPicker
                             colorList={tabGrooupColorChart}
                             tooltip="Choose a color for this group"
