@@ -3,7 +3,7 @@
 exports[`Header -- Sync disabled Header renders correctly - sync disabled 1`] = `
 <div>
   <header
-    class="header"
+    class="header header-popup"
   >
     <div
       class="header-left"
@@ -32,6 +32,29 @@ exports[`Header -- Sync disabled Header renders correctly - sync disabled 1`] = 
     <div
       class="header-right"
     >
+      <button
+        class="header-action-btn"
+        data-tooltip-content="Open in full page"
+        data-tooltip-id="main-tooltip"
+      >
+        <svg
+          fill="currentColor"
+          height="18"
+          stroke="currentColor"
+          stroke-width="0"
+          viewBox="0 0 24 24"
+          width="18"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M0 0h24v24H0z"
+            fill="none"
+          />
+          <path
+            d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"
+          />
+        </svg>
+      </button>
       <div
         class="settings-wrapper"
       >
@@ -41,11 +64,11 @@ exports[`Header -- Sync disabled Header renders correctly - sync disabled 1`] = 
           <svg
             color="var(--text-color)"
             fill="currentColor"
-            height="24"
+            height="28"
             stroke="currentColor"
             stroke-width="0"
             viewBox="0 0 24 24"
-            width="24"
+            width="28"
             xmlns="http://www.w3.org/2000/svg"
           >
             <path
@@ -299,6 +322,47 @@ exports[`Header -- Sync disabled Header renders correctly - sync disabled 1`] = 
                             ✨ Performance Mode: 
                             <strong>
                               Disabled
+                            </strong>
+                          </span>
+                        </span>
+                      </label>
+                    </span>
+                  </div>
+                  <div
+                    class="setting-item"
+                  >
+                    <span
+                      data-tooltip-class-name="small-tooltip"
+                      data-tooltip-content="Choose what happens when you click the Tabox icon in the browser toolbar"
+                      data-tooltip-id="main-tooltip"
+                    >
+                      <input
+                        class="switch-input"
+                        id="chkToolbarIconOpensFullPage"
+                        name="chkToolbarIconOpensFullPage"
+                        type="checkbox"
+                      />
+                      <label
+                        class="switch-label"
+                        for="chkToolbarIconOpensFullPage"
+                      >
+                        <span
+                          class="toggle--on"
+                        >
+                          <span>
+                            When opening Tabox launch in: 
+                            <strong>
+                              new tab
+                            </strong>
+                          </span>
+                        </span>
+                        <span
+                          class="toggle--off"
+                        >
+                          <span>
+                            When opening Tabox launch in: 
+                            <strong>
+                              popup
                             </strong>
                           </span>
                         </span>

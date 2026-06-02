@@ -119,7 +119,7 @@ const createMockCollection = (overrides = {}) => ({
     name: 'Test Collection',
     tabs: [createMockTab()],
     chromeGroups: [],
-    color: 'var(--setting-row-border-color)',
+    color: 'var(--collection-default-color)',
     createdOn: Date.now(),
     lastUpdated: Date.now(),
     lastOpened: null,
@@ -175,9 +175,9 @@ describe('Collection Creation', () => {
 
         test('should create collection with default color', () => {
             const collection = createMockCollection({ color: undefined });
-            collection.color = collection.color || 'var(--setting-row-border-color)';
+            collection.color = collection.color || 'var(--collection-default-color)';
 
-            expect(collection.color).toBe('var(--setting-row-border-color)');
+            expect(collection.color).toBe('var(--collection-default-color)');
         });
 
         test('should create collection with custom color', () => {
@@ -1140,13 +1140,13 @@ describe('Import/Export', () => {
 
             // Apply defaults
             imported.uid = imported.uid || mockCrypto.randomUUID();
-            imported.color = imported.color || 'var(--setting-row-border-color)';
+            imported.color = imported.color || 'var(--collection-default-color)';
             imported.createdOn = imported.createdOn || Date.now();
             imported.lastUpdated = imported.lastUpdated || Date.now();
             imported.chromeGroups = imported.chromeGroups || [];
 
             expect(imported.uid).toBeDefined();
-            expect(imported.color).toBe('var(--setting-row-border-color)');
+            expect(imported.color).toBe('var(--collection-default-color)');
             expect(imported.chromeGroups).toEqual([]);
         });
     });

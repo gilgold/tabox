@@ -4,6 +4,7 @@
   --text-color: #464646;
   --bg-color: #fff;
   --settings-bg-color: #fff;
+  --collection-default-color: #f4f5f7;
   --setting-row-border-color: #bebebe;
   --setting-row-hover-bg-color: #efefef;
   --settings-row-text-color: #464646;
@@ -40,6 +41,7 @@
   --text-color: #f2f2f2;
   --bg-color: #212121;
   --settings-bg-color: #2B303C;
+  --collection-default-color: #2B303C;
   --setting-row-border-color: #2B303C;
   --setting-row-hover-bg-color: #2f343b;
   --settings-row-text-color: #c3c3c3;
@@ -163,31 +165,18 @@ body > div[style*="z-index"]:has(.popover) {
 	z-index: 2000 !important;
 }
 
-/* Global z-index fix for react-simple-snackbar */
+/* Keep toast portals above popovers and extension UI chrome */
 body > div[style*="position"][style*="bottom"],
 div[style*="position: fixed"][style*="bottom"],
-div[class*="snackbar"],
-[data-snackbar-container],
-.snackbar-wrapper {
+[data-sonner-toaster],
+[data-hot-toast] {
 	z-index: 100000 !important;
 }
 
-/* Target react-simple-snackbar's auto-generated containers */
-div[style*="bottom"][style*="position"]:has(.snackbar-wrapper),
+/* Ensure bottom-fixed toast portals stay layered correctly */
+div[style*="bottom"][style*="position"],
 div[style*="position: fixed"][style*="bottom"]:not(:has(.popover)) {
 	z-index: 100000 !important;
-}
-
-/* Simple, non-intrusive styling for react-simple-snackbar containers */
-body > div[style*="position: fixed"][style*="bottom"] > div[style*="background"]:not(:has(.snackbar-wrapper)) {
-	/* Only add visual effects without changing layout */
-	background: 'transparent' !important;
-  backdrop-filter: 'none' !important;
-  border: 'none';
-  border-radius: 0;
-  padding: 0;
-  box-shadow: 'none';
-  text-shadow: 'none';
 }
 
 /* Fix tooltip z-index to appear above all floating elements including settings menu */
@@ -228,6 +217,12 @@ div[style*="position: fixed"][style*="z-index"] {
 /* Target any fixed positioned elements that might be the drawer */
 body > div[style*="position: fixed"] {
 	z-index: 999999 !important;
+}
+
+/* Keep shared toast viewports above modal and drawer overlays that also use fixed positioning. */
+.tabox-toast-viewport,
+.tabox-toast-viewport[data-hot-toast] {
+	z-index: 2147483647 !important;
 }
 
 /* ========================================

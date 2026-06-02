@@ -5,7 +5,7 @@
 
 // New color system with names and hex values
 export const COLOR_PALETTE = {
-    'default': 'var(--setting-row-border-color)',
+    'default': 'var(--collection-default-color)',
     'red': '#DC2626',
     'orange-red': '#EA580C', 
     'yellow': '#F59E0B',
@@ -54,8 +54,16 @@ const LEGACY_COLOR_MAPPING = {
     '#B499F7': 'light-purple',  // Alternative old light purple
     
     // Additional legacy colors that might exist
-    'var(--setting-row-border-color)': 'default'
+    'var(--setting-row-border-color)': 'default',
+    'var(--collection-default-color)': 'default'
 };
+
+// Chrome's native tab-group color enum values (stored on chromeGroups[].color).
+// These are valid as-is and must NOT be remapped to the collection palette,
+// otherwise tab-group recreation via browser.tabGroups.update() breaks.
+const CHROME_TAB_GROUP_COLORS = new Set([
+    'grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'orange', 'cyan'
+]);
 
 /**
  * Migrate a single color from old hex code to new color name
@@ -64,9 +72,15 @@ const LEGACY_COLOR_MAPPING = {
  */
 export const migrateColor = (oldColor) => {
     if (!oldColor) return 'default';
-    
+
     // If it's already a color name from the new system, return as is
     if (COLOR_PALETTE[oldColor]) {
+        return oldColor;
+    }
+
+    // Chrome tab-group colors (e.g. grey/pink/orange) are a separate color
+    // space from the collection palette - leave them untouched.
+    if (CHROME_TAB_GROUP_COLORS.has(oldColor)) {
         return oldColor;
     }
     
@@ -213,4 +227,31 @@ export const getColorValue = (colorName) => {
     
     // If it's an unknown format, return default
     return COLOR_PALETTE['default'];
+};
+
+/**
+ * Normalize a stored or selected color into a comparable palette key.
+ * Default-colored collections may be stored as null, "default", or the CSS variable.
+ * @param {string} colorName
+ * @returns {string}
+ */
+export const normalizeColorKey = (colorName) => {
+    if (!colorName || colorName === COLOR_PALETTE['default'] || colorName === 'var(--setting-row-border-color)') {
+        return 'default';
+    }
+
+    return migrateColor(colorName);
+};
+
+/**
+ * Filter collections by a set of selected color names (OR semantics).
+ * Empty/undefined selection returns all collections unchanged.
+ * @param {Array<{color?: string}>} collections
+ * @param {Array<string>} colors selected color names
+ * @returns {Array<{color?: string}>} filtered collections
+ */
+export const filterByColors = (collections, colors) => {
+    if (!colors || colors.length === 0) return collections;
+    const selected = new Set(colors.map(normalizeColorKey));
+    return collections.filter((collection) => collection && selected.has(normalizeColorKey(collection.color)));
 };

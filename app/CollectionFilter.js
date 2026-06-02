@@ -1,58 +1,129 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MdFilterList, MdClear, MdPalette, MdOpenInBrowser } from 'react-icons/md';
+import ReactDOM from 'react-dom';
+import { MdClear, MdPalette, MdOpenInBrowser } from 'react-icons/md';
 import ColorPicker from './ColorPicker';
 import './CollectionFilter.css';
-import { Tooltip } from 'react-tooltip';
 
+function FilterTooltip({ content, place = 'top', children, disabled = false }) {
+    const anchorRef = useRef(null);
+    const [isVisible, setIsVisible] = useState(false);
+    const [position, setPosition] = useState(null);
+    const tooltipRef = useRef(null);
 
+    const updatePosition = () => {
+        if (!anchorRef.current) return;
+        const rect = anchorRef.current.getBoundingClientRect();
+        const viewportPadding = 8;
+        const estimatedWidth = tooltipRef.current?.offsetWidth ?? 220;
+        const halfWidth = estimatedWidth / 2;
+        const minLeft = viewportPadding + halfWidth;
+        const maxLeft = window.innerWidth - viewportPadding - halfWidth;
+        const centeredLeft = rect.left + rect.width / 2;
+        const clampedLeft = Math.min(Math.max(centeredLeft, minLeft), maxLeft);
+        const arrowOffset = centeredLeft - clampedLeft;
 
-function RecentlyOpenedFilter({ isActive, onToggle }) {
+        setPosition({
+            left: clampedLeft,
+            top: place === 'top' ? rect.top - 8 : rect.bottom + 8,
+            arrowOffset,
+        });
+    };
+
+    const showTooltip = () => {
+        updatePosition();
+        setIsVisible(true);
+    };
+
+    const hideTooltip = () => {
+        setIsVisible(false);
+    };
+
+    useEffect(() => {
+        if (disabled) {
+            setIsVisible(false);
+        }
+    }, [disabled]);
+
+    useEffect(() => {
+        if (!isVisible) return undefined;
+        updatePosition();
+        const handleWindowChange = () => updatePosition();
+        window.addEventListener('scroll', handleWindowChange, true);
+        window.addEventListener('resize', handleWindowChange);
+        return () => {
+            window.removeEventListener('scroll', handleWindowChange, true);
+            window.removeEventListener('resize', handleWindowChange);
+        };
+    }, [isVisible, place]);
+
     return (
-        <>
-        <button
-            id="filter-recently-opened"
-            className={`filter-button opened-filter ${isActive ? 'active' : ''}`}
-            onClick={onToggle}
+        <span
+            ref={anchorRef}
+            className={`filter-tooltip-anchor filter-tooltip-${place}`}
+            onMouseEnter={disabled ? undefined : showTooltip}
+            onMouseLeave={hideTooltip}
+            onFocus={disabled ? undefined : showTooltip}
+            onBlur={hideTooltip}
         >
-            <MdOpenInBrowser size={14} /><span className="filter-label">Opened</span>
-        </button>
-        <Tooltip
-            anchorSelect="#filter-recently-opened"
-            content="Show collections opened in the last 3 hours"
-            className="small-tooltip"
-            place="bottom"
-        />
-        </>
+            {children}
+            {!disabled && isVisible && position && typeof document !== 'undefined' && ReactDOM.createPortal(
+                <span
+                    ref={tooltipRef}
+                    className={`filter-inline-tooltip filter-inline-tooltip-${place}`}
+                    role="tooltip"
+                    style={{
+                        left: `${position.left}px`,
+                        top: `${position.top}px`,
+                        '--filter-tooltip-arrow-offset': `${position.arrowOffset}px`,
+                    }}
+                >
+                    {content}
+                </span>,
+                document.body
+            )}
+        </span>
     );
 }
 
-function ColorFilter({ selectedColor, onColorChange, onClear }) {
-    const handleColorSelect = (colorName) => {
-        if (selectedColor === colorName) {
-            onClear(); // Toggle off if same color clicked
-        } else {
-            onColorChange(colorName);
-        }
-    };
+function RecentlyOpenedFilter({ isActive, onToggle }) {
+    return (
+        <FilterTooltip content="Show collections opened in the last 3 hours" place="top">
+            <button
+                id="filter-recently-opened"
+                type="button"
+                className={`fp-toolbar-pill ${isActive ? 'active' : ''}`}
+                onClick={onToggle}
+            >
+                <MdOpenInBrowser size={18} />
+                <span className="collection-filter-opened-label">Opened</span>
+            </button>
+        </FilterTooltip>
+    );
+}
+
+function ColorFilter({ selectedColors, onToggleColor, onClear }) {
+    const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
 
     return (
-        <>
-        <div className="color-filter-wrapper" id="filter-color-picker">
-            <MdPalette size={16} className="color-filter-icon" />
-            <ColorPicker
-                currentColor={selectedColor}
-                action={handleColorSelect}
-                tooltip="Filter by collection color"
-                size="small"
-            />
+        <div className="fp-toolbar-color-picker" id="filter-color-picker">
+            <MdPalette size={18} className="fp-toolbar-color-icon" />
+            <FilterTooltip
+                content="Filter collections by color"
+                place="bottom"
+                disabled={isColorPickerOpen}
+            >
+                <ColorPicker
+                    multiSelect
+                    selectedColors={selectedColors}
+                    action={onToggleColor}
+                    onClear={onClear}
+                    size="small"
+                    showTriggerTooltip={false}
+                    showOptionTooltips={false}
+                    onOpenChange={setIsColorPickerOpen}
+                />
+            </FilterTooltip>
         </div>
-        <Tooltip
-            anchorSelect="#filter-color-picker"
-            content="Filter collections by color"
-            className="small-tooltip"
-            place="bottom"
-        />
-        </>
     );
 }
 
@@ -60,27 +131,22 @@ function ClearFiltersButton({ hasActiveFilters, onClear }) {
     if (!hasActiveFilters) return null;
 
     return (
-        <>
-        <button
-            id="filter-clear"
-            className="clear-filters-button"
-            onClick={onClear}
-        >
-            <MdClear size={14} />
-        </button>
-        <Tooltip
-            anchorSelect="#filter-clear"
-            content="Clear all filters"
-            className="small-tooltip"
-            place="bottom"
-        />
-        </>
+        <FilterTooltip content="Clear all filters" place="bottom">
+            <button
+                id="filter-clear"
+                type="button"
+                className="fp-toolbar-clear"
+                onClick={onClear}
+            >
+                <MdClear size={16} />
+            </button>
+        </FilterTooltip>
     );
 }
 
 export function CollectionFilter({ onFiltersChange }) {
     const [recentlyOpenedActive, setRecentlyOpenedActive] = useState(false);
-    const [selectedColor, setSelectedColor] = useState(null);
+    const [selectedColors, setSelectedColors] = useState([]);
     const isMountedRef = useRef(true);
     const isInitialRenderRef = useRef(true);
 
@@ -100,10 +166,10 @@ export function CollectionFilter({ onFiltersChange }) {
         if (isMountedRef.current && onFiltersChange) {
             onFiltersChange({
                 recentlyOpenedActual: recentlyOpenedActive,
-                color: selectedColor
+                colors: selectedColors,
             });
         }
-    }, [recentlyOpenedActive, selectedColor]);
+    }, [recentlyOpenedActive, selectedColors]);
 
     const handleRecentlyOpenedToggle = () => {
         if (isMountedRef.current) {
@@ -111,50 +177,48 @@ export function CollectionFilter({ onFiltersChange }) {
         }
     };
 
-    const handleColorChange = (colorName) => {
-        if (isMountedRef.current) {
-            setSelectedColor(colorName);
-        }
+    const handleToggleColor = (colorName) => {
+        if (!isMountedRef.current) return;
+        setSelectedColors((prev) =>
+            prev.includes(colorName) ? prev.filter((c) => c !== colorName) : [...prev, colorName]
+        );
     };
 
     const handleColorClear = () => {
-        if (isMountedRef.current) {
-            setSelectedColor(null);
-        }
+        if (isMountedRef.current) setSelectedColors([]);
     };
 
     const handleClearAll = () => {
         if (isMountedRef.current) {
             setRecentlyOpenedActive(false);
-            setSelectedColor(null);
+            setSelectedColors([]);
         }
     };
 
-    const hasActiveFilters = recentlyOpenedActive || selectedColor;
+    const hasActiveFilters = recentlyOpenedActive || selectedColors.length > 0;
 
     return (
-        <div className="collection-filter">
-            <div className="filter-icon">
-                <MdFilterList size={16} />
+        <>
+            <div className={`fp-toolbar-leading collection-filter-leading ${hasActiveFilters ? 'is-visible' : ''}`}>
+                <ClearFiltersButton
+                    hasActiveFilters={hasActiveFilters}
+                    onClear={handleClearAll}
+                />
+                <div className="fp-toolbar-divider fp-toolbar-leading-divider" />
             </div>
-            
-            <div className="filter-controls">
+
+            <div className="fp-toolbar-group collection-filter-group">
                 <RecentlyOpenedFilter
                     isActive={recentlyOpenedActive}
                     onToggle={handleRecentlyOpenedToggle}
                 />
                 
                 <ColorFilter
-                    selectedColor={selectedColor}
-                    onColorChange={handleColorChange}
+                    selectedColors={selectedColors}
+                    onToggleColor={handleToggleColor}
                     onClear={handleColorClear}
                 />
             </div>
-
-            <ClearFiltersButton
-                hasActiveFilters={hasActiveFilters}
-                onClear={handleClearAll}
-            />
-        </div>
+        </>
     );
 } 

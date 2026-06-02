@@ -1,68 +1,139 @@
-.del {
-	cursor: pointer;
-	overflow: hidden;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	height: 24px;
-	width: 24px;
-	border-radius: 4px;
-	transition: all 0.2s ease;
-}
+/* Delete-with-confirmation inline button */
 
-.del:hover {
-	background-color: rgba(182, 74, 74, 0.1);
-}
-
-.slider-wrapper {
+.del-confirm-wrapper {
     position: relative;
     display: flex;
     align-items: center;
+    gap: 0;
+    height: 32px;
+    border-radius: 10px;
+    transition: background 0.25s ease, box-shadow 0.25s ease;
 }
 
-.slider-message {
-    font-size: 0.7em;
-    font-weight: 500;
-    color: #fff;
-    text-overflow: clip;
-    white-space: nowrap;
+.del-confirm-wrapper.is-confirming {
+    background: rgba(224, 108, 117, 0.10);
+    box-shadow: 0 0 0 1px rgba(224, 108, 117, 0.18);
+    border-radius: 10px;
 }
 
-
-
-.slider {
-    background-color: #d22c28;
-    border-radius: 5px;
-    display: flex;
+/* Trigger icon button */
+.del-confirm-trigger {
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 0px;
-    height: 24px;
-    overflow: hidden;
-    text-overflow: clip;
-    transition: all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    transform-origin: left center;
-    margin-left: 4px;
-}
-.slider-open {
-    width: 70px;
-}
-.slider-button {
-    background-color: transparent;
-    border-radius: 4px;
+    width: 32px;
+    height: 32px;
     border: none;
-    color: #fff;
-    font-size: 11px;
-    font-weight: 500;
-    padding: 4px 12px;
+    border-radius: 10px;
+    background: transparent;
+    color: #e06c75;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
+    position: relative;
+    z-index: 2;
+}
+
+.del-confirm-trigger svg {
+    width: 18px !important;
+    height: 18px !important;
+    stroke-width: 1.8;
+    transition: transform 0.2s ease;
+}
+
+.del-confirm-trigger:hover {
+    background: rgba(224, 108, 117, 0.15);
+    transform: scale(1.08);
+}
+
+.del-confirm-trigger:active {
+    transform: scale(0.92);
+}
+
+.del-confirm-trigger.active {
+    color: #d94f5a;
+    background: rgba(224, 108, 117, 0.18);
+}
+
+.del-confirm-trigger.active svg {
+    transform: rotate(-8deg);
+}
+
+/* Sliding confirmation */
+.del-confirm-slide {
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    width: 0;
+    opacity: 0;
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.2s ease 0.05s;
+    transform-origin: left center;
+}
+
+.del-confirm-slide.open {
+    width: 68px;
+    opacity: 1;
+}
+
+/* Confirm button */
+.del-confirm-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 26px;
+    padding: 0 12px;
+    margin-left: 2px;
+    border: none;
+    border-radius: 7px;
+    background: #d94f5a;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    cursor: pointer;
     white-space: nowrap;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 4px rgba(217, 79, 90, 0.25);
 }
-.slider-button:hover {
-    background-color: rgba(255, 255, 255, 0.2);
+
+.del-confirm-btn:hover:not(:disabled) {
+    background: #c93a45;
+    box-shadow: 0 2px 8px rgba(217, 79, 90, 0.35);
+    transform: translateY(-1px);
 }
-.slider-button:disabled {
-    opacity: 0.7;
+
+.del-confirm-btn:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(217, 79, 90, 0.2);
+}
+
+.del-confirm-btn:disabled {
+    opacity: 0.5;
     cursor: not-allowed;
+}
+
+/* Fullpage overrides */
+.fp-detail-panel .del-confirm-trigger {
+    width: 36px;
+    height: 36px;
+}
+
+.fp-detail-panel .del-confirm-trigger svg {
+    width: 20px !important;
+    height: 20px !important;
+}
+
+.fp-detail-panel .del-confirm-wrapper {
+    height: 36px;
+}
+
+.fp-detail-panel .del-confirm-btn {
+    height: 28px;
+    font-size: 13px;
+    padding: 0 14px;
+}
+
+.fp-detail-panel .del-confirm-slide.open {
+    width: 74px;
 }

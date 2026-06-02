@@ -2,11 +2,22 @@ import React, { memo, useCallback, useMemo, useState } from 'react';
 import { browser } from '../static/globals';
 import { AiFillPushpin } from 'react-icons/ai';
 import { FaVolumeMute } from 'react-icons/fa';
-import { MdDeleteForever, MdOutlineOpenInNew, MdDragIndicator, MdDriveFileMove } from 'react-icons/md';
+import { MdDragIndicator } from 'react-icons/md';
+import { HiOutlineExternalLink } from 'react-icons/hi';
+import { HiOutlineTrash, HiOutlineArrowRightOnRectangle } from 'react-icons/hi2';
 import { getColorCode } from './utils';
 import MoveToCollectionModal from './MoveToCollectionModal';
+import ClickableTabUrl from './fullpage/ClickableTabUrl';
 
-const TabRow = memo(({ tab, updateCollection, collection, group = null, isDragging = false, search = null }) => {
+const TabRow = memo(({
+    tab,
+    updateCollection,
+    collection,
+    group = null,
+    isDragging = false,
+    search = null,
+    dragHandleProps = {},
+}) => {
     const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
     const fallbackFavicon = './images/favicon-fallback.png';
 
@@ -181,7 +192,11 @@ const TabRow = memo(({ tab, updateCollection, collection, group = null, isDraggi
                     <div className="group-placeholder" />}
                 
                 {/* Drag Handle */}
-                <div className="drag-handle" title={tab.pinned ? "Cannot drag pinned tab" : "Drag to reorder tab"}>
+                <div
+                    className="drag-handle"
+                    title={tab.pinned ? "Cannot drag pinned tab" : "Drag to reorder tab"}
+                    {...dragHandleProps}
+                >
                     <MdDragIndicator size="14px" color="var(--text-color)" />
                 </div>
                 
@@ -222,42 +237,42 @@ const TabRow = memo(({ tab, updateCollection, collection, group = null, isDraggi
                             {highlightMatchInTitle !== null ? highlightMatchInTitle : tab.title}
                         </span>
                         {formattedUrl && (
-                            <span className="tab-url-preview" title={tab.url}>
+                            <ClickableTabUrl url={tab.url} className="tab-url-preview">
                                 {formattedUrl}
-                            </span>
+                            </ClickableTabUrl>
                         )}
                     </div>
                 </div>
                 <div className="column actions-col">
                     <button 
-                        className="action-button" 
+                        className="tab-action-btn tab-action-open" 
                         data-tooltip-id="main-tooltip" data-tooltip-content="Open this tab" 
                         onClick={(e) => { 
                             e.stopPropagation(); 
                             handleOpenTab(tab); 
                         }}
                     >
-                        <MdOutlineOpenInNew size="14px" color="var(--primary-color)" />
+                        <HiOutlineExternalLink />
                     </button>
                     <button 
-                        className="action-button move-tab" 
+                        className="tab-action-btn tab-action-move" 
                         data-tooltip-id="main-tooltip" data-tooltip-content="Move to another collection" 
                         onClick={(e) => { 
                             e.stopPropagation(); 
                             setIsMoveModalOpen(true); 
                         }}
                     >
-                        <MdDriveFileMove size="14px" color="#E67E22" />
+                        <HiOutlineArrowRightOnRectangle />
                     </button>
                     <button 
-                        className="action-button del-tab" 
+                        className="tab-action-btn tab-action-delete" 
                         data-tooltip-id="main-tooltip" data-tooltip-content="Delete this tab" 
                         onClick={(e) => { 
                             e.stopPropagation(); 
                             handleTabDelete(); 
                         }}
                     >
-                        <MdDeleteForever color="#B64A4A" size="14px" />
+                        <HiOutlineTrash />
                     </button>
                 </div>
             </div>

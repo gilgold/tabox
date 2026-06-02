@@ -7,6 +7,136 @@ import { browser } from '../static/globals';
 import TaboxCollection from './model/TaboxCollection';
 import { loadAllCollections, deleteSingleCollection, updateFolderCollectionCount } from './utils/storageUtils';
 
+export const openCollectionTabs = async ({
+    collectionToOpen,
+    updateCollection,
+    openedCollectionToTrack = collectionToOpen,
+    trackOpenedWindow = true
+}) => {
+    const { chkOpenNewWindow } = await browser.storage.local.get('chkOpenNewWindow');
+
+    // Check if collection was saved from incognito
+    const wasFromIncognito = collectionToOpen.savedFromIncognito === true;
+    let incognitoAllowed = false;
+
+    // If collection was from incognito, check if we can open in incognito
+    if (wasFromIncognito && chkOpenNewWindow) {
+        try {
+            const incognitoCheck = await browser.runtime.sendMessage({ type: 'checkIncognitoAccess' });
+            incognitoAllowed = incognitoCheck?.allowed === true;
+        } catch (error) {
+            console.warn('Could not check incognito access:', error);
+        }
+    }
+
+    let window;
+    if (chkOpenNewWindow) {
+        let windowCreationObject = { focused: true };
+
+        // Try to open in incognito if the collection was from incognito and we have permission
+        if (wasFromIncognito && incognitoAllowed) {
+            windowCreationObject.incognito = true;
+        }
+
+        if (collectionToOpen.window && !windowCreationObject.incognito) {
+            // Window position only applies to normal windows
+            try {
+                const displays = await browser.system.display.getInfo();
+
+                let targetBounds = {
+                    top: Math.round(collectionToOpen.window.top),
+                    left: Math.round(collectionToOpen.window.left),
+                    width: Math.round(collectionToOpen.window.width),
+                    height: Math.round(collectionToOpen.window.height)
+                };
+
+                const isPositionValid = displays.some(display => {
+                    const d = display.bounds;
+                    const intersection = {
+                        top: Math.max(d.top, targetBounds.top),
+                        left: Math.max(d.left, targetBounds.left),
+                        bottom: Math.min(d.top + d.height, targetBounds.top + targetBounds.height),
+                        right: Math.min(d.left + d.width, targetBounds.left + targetBounds.width)
+                    };
+
+                    const intersectWidth = intersection.right - intersection.left;
+                    const intersectHeight = intersection.bottom - intersection.top;
+
+                    if (intersectWidth <= 0 || intersectHeight <= 0) return false;
+
+                    const intersectArea = intersectWidth * intersectHeight;
+                    const windowArea = targetBounds.width * targetBounds.height;
+                    const visiblePercentage = windowArea > 0 ? (intersectArea / windowArea) : 0;
+
+                    return visiblePercentage >= 0.5;
+                });
+
+                if (isPositionValid) {
+                    windowCreationObject = { ...windowCreationObject, ...targetBounds };
+                } else {
+                    windowCreationObject.width = targetBounds.width;
+                    windowCreationObject.height = targetBounds.height;
+                }
+            } catch (error) {
+                console.error('Error validating window position:', error);
+                windowCreationObject.width = collectionToOpen.window.width;
+                windowCreationObject.height = collectionToOpen.window.height;
+            }
+        }
+
+        try {
+            window = await browser.windows.create(windowCreationObject);
+        } catch (windowError) {
+            // If incognito window creation fails, fall back to normal window
+            if (windowCreationObject.incognito) {
+                console.warn('Failed to create incognito window, falling back to normal:', windowError);
+                delete windowCreationObject.incognito;
+                window = await browser.windows.create(windowCreationObject);
+            } else {
+                throw windowError;
+            }
+        }
+        window.tabs = await browser.tabs.query({ windowId: window.id });
+    } else {
+        window = await browser.windows.getCurrent({ populate: true, windowTypes: ['normal'] });
+    }
+
+    const msg = {
+        type: 'openTabs',
+        collection: collectionToOpen,
+        window,
+        newWindow: chkOpenNewWindow,
+        trackOpenedWindow
+    };
+    const result = await browser.runtime.sendMessage(msg);
+
+    // Show feedback for incognito-related scenarios
+    if (result && typeof result === 'object') {
+        if (result.wasFromIncognito && !result.restoredToIncognito && !result.isIncognitoWindow) {
+            // Collection was from incognito but opened in normal window
+            showInfoToast(
+                `Opened in normal window (saved from incognito${!incognitoAllowed ? ' - enable "Allow in incognito" to restore to incognito' : ''})`,
+                4000
+            );
+        }
+        if (result.skippedForIncognito > 0) {
+            showInfoToast(
+                `${result.skippedForIncognito} tab(s) skipped - not allowed in incognito`,
+                4000
+            );
+        }
+    }
+
+    if (openedCollectionToTrack && updateCollection) {
+        await updateCollection({
+            ...openedCollectionToTrack,
+            lastOpened: Date.now()
+        });
+    }
+
+    return result;
+};
+
 export function useCollectionOperations({
     collection,
     removeCollection,
@@ -20,7 +150,6 @@ export function useCollectionOperations({
     addCollection,
     onDataUpdate
 }) {
-
     const _handleDelete = async () => {
         // 🚀 NEW: Load current collections from NEW STORAGE for undo
         const previousCollections = await loadAllCollections();
@@ -108,7 +237,7 @@ export function useCollectionOperations({
                 null, // createdOn - will be set to now
                 collection.window,
                 null, // lastUpdated - will be set to now
-                null  // lastOpened - null for new duplicate
+                null // lastOpened - null for new duplicate
             );
             
             // Apply unique IDs to tabs and groups
@@ -197,127 +326,12 @@ export function useCollectionOperations({
             await _handleFocusWindow();
             return;
         }
-        
-        const { chkOpenNewWindow } = await browser.storage.local.get('chkOpenNewWindow');
-        
-        // Check if collection was saved from incognito
-        const wasFromIncognito = collection.savedFromIncognito === true;
-        let incognitoAllowed = false;
-        
-        // If collection was from incognito, check if we can open in incognito
-        if (wasFromIncognito && chkOpenNewWindow) {
-            try {
-                const incognitoCheck = await browser.runtime.sendMessage({ type: 'checkIncognitoAccess' });
-                incognitoAllowed = incognitoCheck?.allowed === true;
-            } catch (error) {
-                console.warn('Could not check incognito access:', error);
-            }
-        }
-        
-        let window;
-        if (chkOpenNewWindow) {
-            let windowCreationObject = { focused: true };
-            
-            // Try to open in incognito if the collection was from incognito and we have permission
-            if (wasFromIncognito && incognitoAllowed) {
-                windowCreationObject.incognito = true;
-            }
 
-            if (collection.window && !windowCreationObject.incognito) {
-                // Window position only applies to normal windows
-                try {
-                    const displays = await browser.system.display.getInfo();
-                    const primaryDisplay = displays.find(d => d.isPrimary) || displays[0];
-                    
-                    let targetBounds = {
-                        top: Math.round(collection.window.top),
-                        left: Math.round(collection.window.left),
-                        width: Math.round(collection.window.width),
-                        height: Math.round(collection.window.height)
-                    };
-
-                    const isPositionValid = displays.some(display => {
-                        const d = display.bounds;
-                        const intersection = {
-                            top: Math.max(d.top, targetBounds.top),
-                            left: Math.max(d.left, targetBounds.left),
-                            bottom: Math.min(d.top + d.height, targetBounds.top + targetBounds.height),
-                            right: Math.min(d.left + d.width, targetBounds.left + targetBounds.width)
-                        };
-
-                        const intersectWidth = intersection.right - intersection.left;
-                        const intersectHeight = intersection.bottom - intersection.top;
-
-                        if (intersectWidth <= 0 || intersectHeight <= 0) return false;
-
-                        const intersectArea = intersectWidth * intersectHeight;
-                        const windowArea = targetBounds.width * targetBounds.height;
-                        const visiblePercentage = windowArea > 0 ? (intersectArea / windowArea) : 0;
-                        
-                        return visiblePercentage >= 0.5;
-                    });
-
-                    if (isPositionValid) {
-                        windowCreationObject = { ...windowCreationObject, ...targetBounds };
-                    } else {
-                        windowCreationObject.width = targetBounds.width;
-                        windowCreationObject.height = targetBounds.height;
-                    }
-                } catch (error) {
-                    console.error('Error validating window position:', error);
-                    windowCreationObject.width = collection.window.width;
-                    windowCreationObject.height = collection.window.height;
-                }
-            }
-            
-            try {
-                window = await browser.windows.create(windowCreationObject);
-            } catch (windowError) {
-                // If incognito window creation fails, fall back to normal window
-                if (windowCreationObject.incognito) {
-                    console.warn('Failed to create incognito window, falling back to normal:', windowError);
-                    delete windowCreationObject.incognito;
-                    window = await browser.windows.create(windowCreationObject);
-                } else {
-                    throw windowError;
-                }
-            }
-            window.tabs = await browser.tabs.query({ windowId: window.id });
-        } else {
-            window = await browser.windows.getCurrent({ populate: true, windowTypes: ['normal'] });
-        }
-        
-        const msg = {
-            type: 'openTabs',
-            collection: collection,
-            window: window,
-            newWindow: chkOpenNewWindow
-        };
-        const result = await browser.runtime.sendMessage(msg);
-        
-        // Show feedback for incognito-related scenarios
-        if (result && typeof result === 'object') {
-            if (result.wasFromIncognito && !result.restoredToIncognito && !result.isIncognitoWindow) {
-                // Collection was from incognito but opened in normal window
-                showInfoToast(
-                    `Opened in normal window (saved from incognito${!incognitoAllowed ? ' - enable "Allow in incognito" to restore to incognito' : ''})`,
-                    4000
-                );
-            }
-            if (result.skippedForIncognito > 0) {
-                showInfoToast(
-                    `${result.skippedForIncognito} tab(s) skipped - not allowed in incognito`,
-                    4000
-                );
-            }
-        }
-        
-        // Track that this collection was opened
-        const updatedCollection = {
-            ...collection,
-            lastOpened: Date.now()
-        };
-        await updateCollection(updatedCollection); // No lightning effect for open tracking
+        await openCollectionTabs({
+            collectionToOpen: collection,
+            updateCollection,
+            openedCollectionToTrack: collection
+        });
     };
 
     const _handleExpand = () => {

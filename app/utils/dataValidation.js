@@ -32,7 +32,7 @@ export const validateCollection = (collection) => {
   if (collection.chromeGroups && !Array.isArray(collection.chromeGroups)) {
     errors.push('chromeGroups must be an array if present');
   }
-  
+
   if (collection.type && collection.type !== 'collection') {
     errors.push('Collection type must be "collection"');
   }

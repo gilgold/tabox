@@ -2,7 +2,8 @@ import {
     COLOR_PALETTE, 
     migrateColor, 
     migrateAllCollectionColors, 
-    getColorValue 
+    getColorValue,
+    normalizeColorKey,
 } from '../app/utils/colorMigration';
 
 describe('COLOR_PALETTE', () => {
@@ -27,7 +28,7 @@ describe('COLOR_PALETTE', () => {
     });
 
     test('default color is CSS variable', () => {
-        expect(COLOR_PALETTE['default']).toBe('var(--setting-row-border-color)');
+        expect(COLOR_PALETTE['default']).toBe('var(--collection-default-color)');
     });
 
     test('colors are valid hex codes or CSS variables', () => {
@@ -52,6 +53,16 @@ describe('migrateColor', () => {
         expect(migrateColor('green')).toBe('green');
         expect(migrateColor('purple')).toBe('purple');
         expect(migrateColor('default')).toBe('default');
+    });
+
+    test('preserves Chrome native tab-group colors unchanged', () => {
+        // These are stored on chromeGroups[].color and must not be remapped,
+        // otherwise tab-group recreation via tabGroups.update() breaks.
+        expect(migrateColor('grey')).toBe('grey');
+        expect(migrateColor('pink')).toBe('pink');
+        expect(migrateColor('orange')).toBe('orange');
+        expect(migrateColor('cyan')).toBe('cyan');
+        expect(migrateColor('yellow')).toBe('yellow');
     });
 
     test('migrates legacy hex colors to new names', () => {
@@ -87,6 +98,7 @@ describe('migrateColor', () => {
 
     test('migrates CSS variable for default', () => {
         expect(migrateColor('var(--setting-row-border-color)')).toBe('default');
+        expect(migrateColor('var(--collection-default-color)')).toBe('default');
     });
 
     test('finds closest color for unknown hex codes', () => {
@@ -215,3 +227,18 @@ describe('getColorValue', () => {
     });
 });
 
+describe('normalizeColorKey', () => {
+    test('normalizes empty and css-variable default values to the default key', () => {
+        expect(normalizeColorKey(null)).toBe('default');
+        expect(normalizeColorKey(undefined)).toBe('default');
+        expect(normalizeColorKey('')).toBe('default');
+        expect(normalizeColorKey('default')).toBe('default');
+        expect(normalizeColorKey('var(--setting-row-border-color)')).toBe('default');
+        expect(normalizeColorKey('var(--collection-default-color)')).toBe('default');
+    });
+
+    test('normalizes legacy and palette colors to comparable keys', () => {
+        expect(normalizeColorKey('#1D76DB')).toBe('blue');
+        expect(normalizeColorKey('blue')).toBe('blue');
+    });
+});

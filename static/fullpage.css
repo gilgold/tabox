@@ -1,0 +1,24 @@
+/* ========================================
+   FULL PAGE MODE — Viewport overrides only.
+   Component styles live in their own CSS files.
+   ======================================== */
+
+html.fullpage-mode body {
+  width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+}
+
+html.fullpage-mode body {
+  background: var(--color-background, #FAFAFA);
+}
+
+/* ---------- Reduced-Motion Safety ---------- */
+@media (prefers-reduced-motion: reduce) {
+  html.fullpage-mode .fp-detail-panel,
+  html.fullpage-mode .fp-detail-panel .collection-detail-panel.open .panel-collection-info,
+  html.fullpage-mode .fp-detail-panel .collection-detail-panel.open .panel-content {
+    animation: none !important;
+  }
+}

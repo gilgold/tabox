@@ -1,16 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import './DeleteWithConfirmationButton.css';
-import { MdDeleteForever } from 'react-icons/md';
+import { HiOutlineTrash } from 'react-icons/hi2';
 
 const DeleteWithConfirmationButton = (props) => {
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [confirmDisabled, setConfirmDisabled] = useState(true);
+    const wrapperRef = useRef(null);
+
+    const closeConfirm = useCallback(() => {
+        setConfirmOpen(false);
+    }, []);
+
+    useEffect(() => {
+        if (!confirmOpen) return;
+        const handleClickOutside = (e) => {
+            if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+                closeConfirm();
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [confirmOpen, closeConfirm]);
 
     const toggleSlideConfirm = (e) => {
         e.stopPropagation();
         setConfirmDisabled(true);
         setConfirmOpen(!confirmOpen);
-        setTimeout(() => setConfirmDisabled(false), 400);
+        setTimeout(() => setConfirmDisabled(false), 350);
     }
 
     const handleDelete = (e) => {
@@ -18,14 +34,30 @@ const DeleteWithConfirmationButton = (props) => {
         props.action(props.group.uid);
     }
 
-    return <div className="slider-wrapper" onClick={(e) => e.stopPropagation()}>
-        <div data-tooltip-id="main-tooltip" data-tooltip-content={confirmOpen ? 'Cancel' : `Delete group '${props.group.title}'`} className="del" onClick={(e) => { e.stopPropagation(); toggleSlideConfirm(e); }}>
-            <MdDeleteForever color="#B64A4A" size="18px" />
+    return (
+        <div className={`del-confirm-wrapper ${confirmOpen ? 'is-confirming' : ''}`} ref={wrapperRef} onClick={(e) => e.stopPropagation()}>
+            <button
+                className={`del-confirm-trigger ${confirmOpen ? 'active' : ''}`}
+                data-tooltip-id="main-tooltip"
+                data-tooltip-content={confirmOpen ? 'Cancel' : `Delete group '${props.group.title}'`}
+                onClick={toggleSlideConfirm}
+            >
+                <HiOutlineTrash />
+            </button>
+            <div className={`del-confirm-slide ${confirmOpen ? 'open' : ''}`}>
+                <button
+                    className="del-confirm-btn"
+                    disabled={confirmDisabled}
+                    data-tooltip-id="main-tooltip"
+                    data-tooltip-content="Delete this group and all its tabs"
+                    data-tooltip-class-name="small-tooltip"
+                    onClick={handleDelete}
+                >
+                    Delete
+                </button>
+            </div>
         </div>
-        <div className={`slider ${confirmOpen ? 'slider-open' : null}`}>
-            <button className="slider-button" disabled={confirmDisabled} data-tooltip-id="main-tooltip" data-tooltip-content="Delete this group and all its tabs?" data-tooltip-class-name="small-tooltip" onClick={(e) => { e.stopPropagation(); handleDelete(e); }}>Delete</button>
-        </div>
-    </div>
+    );
 }
 
 export default DeleteWithConfirmationButton;

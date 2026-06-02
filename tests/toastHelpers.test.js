@@ -1,24 +1,39 @@
-import { showUndoToast, showSuccessToast, showErrorToast } from '../app/toastHelpers';
+import {
+    showUndoToast,
+    showSuccessToast,
+    showErrorToast,
+    showInfoToast,
+    setToastViewContext,
+} from '../app/toastHelpers';
 import toast from 'react-hot-toast';
 
 // Mock react-hot-toast (already mocked in jest.setup.js, but let's verify behavior)
 jest.mock('react-hot-toast', () => ({
+    __esModule: true,
+    default: {
+        custom: jest.fn(),
+        success: jest.fn(),
+        error: jest.fn(),
+        dismiss: jest.fn(),
+    },
     custom: jest.fn(),
     success: jest.fn(),
     error: jest.fn(),
+    dismiss: jest.fn(),
 }));
 
 describe('toastHelpers', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        setToastViewContext('popup');
     });
 
     describe('showSuccessToast', () => {
-        test('calls toast.success with message', () => {
+        test('uses the shared custom toast in popup view', () => {
             showSuccessToast('Success message');
-            
-            expect(toast.success).toHaveBeenCalledWith(
-                'Success message',
+
+            expect(toast.custom).toHaveBeenCalledWith(
+                expect.any(Function),
                 expect.objectContaining({
                     duration: 3000,
                     position: 'bottom-center',
@@ -26,27 +41,27 @@ describe('toastHelpers', () => {
             );
         });
 
-        test('applies green styling', () => {
+        test('uses the shared custom toast in fullpage view', () => {
+            setToastViewContext('fullpage');
+
             showSuccessToast('Test');
-            
-            expect(toast.success).toHaveBeenCalledWith(
-                'Test',
+
+            expect(toast.custom).toHaveBeenCalledWith(
+                expect.any(Function),
                 expect.objectContaining({
-                    style: expect.objectContaining({
-                        background: '#4caf50',
-                        color: '#fff',
-                    }),
+                    duration: 3000,
+                    position: 'bottom-right',
                 })
             );
         });
     });
 
     describe('showErrorToast', () => {
-        test('calls toast.error with message', () => {
+        test('uses the shared custom toast in popup view', () => {
             showErrorToast('Error message');
-            
-            expect(toast.error).toHaveBeenCalledWith(
-                'Error message',
+
+            expect(toast.custom).toHaveBeenCalledWith(
+                expect.any(Function),
                 expect.objectContaining({
                     duration: 4000,
                     position: 'bottom-center',
@@ -54,23 +69,37 @@ describe('toastHelpers', () => {
             );
         });
 
-        test('applies red styling', () => {
+        test('uses the shared custom toast in fullpage view', () => {
+            setToastViewContext('fullpage');
+
             showErrorToast('Test');
-            
-            expect(toast.error).toHaveBeenCalledWith(
-                'Test',
+
+            expect(toast.custom).toHaveBeenCalledWith(
+                expect.any(Function),
                 expect.objectContaining({
-                    style: expect.objectContaining({
-                        background: '#f44336',
-                        color: '#fff',
-                    }),
+                    duration: 4000,
+                    position: 'bottom-right',
+                })
+            );
+        });
+    });
+
+    describe('showInfoToast', () => {
+        test('uses the shared custom toast in popup view', () => {
+            showInfoToast('Heads up');
+
+            expect(toast.custom).toHaveBeenCalledWith(
+                expect.any(Function),
+                expect.objectContaining({
+                    duration: 4000,
+                    position: 'bottom-center',
                 })
             );
         });
     });
 
     describe('showUndoToast', () => {
-        test('calls toast.custom with correct options', () => {
+        test('calls toast.custom with correct options in popup view', () => {
             const mockIcon = 'icon';
             const mockMessage = 'Item deleted';
             const mockCollectionName = 'My Collection';
@@ -89,7 +118,7 @@ describe('toastHelpers', () => {
 
         test('uses default duration from UNDO_TIME constant', () => {
             showUndoToast('icon', 'message', 'name', jest.fn());
-            
+
             expect(toast.custom).toHaveBeenCalledWith(
                 expect.any(Function),
                 expect.objectContaining({
@@ -97,6 +126,18 @@ describe('toastHelpers', () => {
                 })
             );
         });
+
+        test('uses fullpage positioning when fullpage context is active', () => {
+            setToastViewContext('fullpage');
+
+            showUndoToast('icon', 'message', 'name', jest.fn());
+
+            expect(toast.custom).toHaveBeenCalledWith(
+                expect.any(Function),
+                expect.objectContaining({
+                    position: 'bottom-right',
+                })
+            );
+        });
     });
 });
-

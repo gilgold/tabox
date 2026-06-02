@@ -1,7 +1,11 @@
 import React from 'react';
-import { useSortable, defaultAnimateLayoutChanges } from '@dnd-kit/sortable';
+import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import GroupContainer from './GroupContainer';
+import {
+    collectionDropTargetTypes,
+    createCollectionDropTargetId,
+} from './utils/collectionDragUtils';
 
 function SortableGroupContainer(props) {
     const {
@@ -9,58 +13,67 @@ function SortableGroupContainer(props) {
         listeners,
         setNodeRef,
         transform,
-        transition,
         isDragging,
-    } = useSortable({
+    } = useDraggable({
         id: props.group.uid,
         disabled: props.disableDrag,
         data: {
-            type: 'group',
-            group: props.group,
-            tabs: props.tabs,
-            sourceCollection: props.collection
+            itemType: 'group',
+            groupUid: props.group.uid,
         },
-        // Only animate layout changes when this specific item is being dragged
-        // This prevents other groups from being displaced during drag
-        animateLayoutChanges: (args) => {
-            const { isSorting, wasDragging, isDragging } = args;
-            
-            // If currently dragging this item, don't animate (it's hidden)
-            if (isDragging) {
-                return false;
-            }
-            
-            // If this item was being dragged and is now being dropped, animate to new position
-            if (wasDragging) {
-                return true;
-            }
-            
-            // For all other items (not currently dragging, not previously dragged),
-            // don't animate to prevent displacement
-            return false;
-        }
     });
 
-    const style = {
-        transform: CSS.Transform.toString(transform),
-        transition,
-        // Hide the original item when dragging (DragOverlay shows it instead)
-        // This prevents visual displacement of other groups
-        opacity: isDragging ? 0 : 1,
-        visibility: isDragging ? 'hidden' : 'visible',
-        zIndex: isDragging ? 1000 : 'auto',
+    const headerTarget = {
+        type: collectionDropTargetTypes.GROUP_APPEND,
+        groupUid: props.group.uid,
+        surface: 'header',
+    };
+    const bodyTarget = {
+        type: collectionDropTargetTypes.GROUP_APPEND,
+        groupUid: props.group.uid,
+        surface: 'body',
     };
 
+    const headerDrop = useDroppable({
+        id: createCollectionDropTargetId(headerTarget),
+        disabled: props.dragSession?.kind !== 'tab',
+        data: {
+            dropTarget: headerTarget,
+        },
+    });
+    const bodyDrop = useDroppable({
+        id: createCollectionDropTargetId(bodyTarget),
+        disabled: props.dragSession?.kind !== 'tab',
+        data: {
+            dropTarget: bodyTarget,
+        },
+    });
+
+    const style = isDragging
+        ? {
+            // Collapse to zero height so no empty space is left behind.
+            height: 0,
+            overflow: 'hidden',
+            margin: 0,
+            padding: 0,
+            opacity: 0,
+            pointerEvents: 'none',
+            position: 'relative',
+        }
+        : {
+            transform: CSS.Transform.toString(transform),
+            position: 'relative',
+        };
+
     return (
-        <div 
-            ref={setNodeRef} 
-            style={style}
-        >
+        <div ref={setNodeRef} style={style} className="collection-draggable-group">
             <GroupContainer
                 {...props}
                 isDragging={isDragging}
-                dragAttributes={attributes}
-                dragListeners={listeners}
+                headerDropProps={headerDrop}
+                bodyDropProps={bodyDrop}
+                dragAttributes={props.disableDrag ? {} : attributes}
+                dragListeners={props.disableDrag ? {} : listeners}
             />
         </div>
     );

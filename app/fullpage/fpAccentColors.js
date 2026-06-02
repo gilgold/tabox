@@ -1,0 +1,1 @@
+export const CURRENT_WINDOWS_ACCENT_COLOR = '#65A30D';

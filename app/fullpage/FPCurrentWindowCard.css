@@ -1,0 +1,101 @@
+.fp-current-window-card.fp-card {
+    --card-color: var(--fp-current-windows-accent, #84CC16);
+}
+
+.fp-current-window-card .fp-card-badge.fp-card-badge-label {
+    --fp-badge-accent: var(--fp-current-windows-accent, #84CC16);
+}
+
+.fp-current-window-card.fp-card.fp-card-selected {
+    border-color: color-mix(in srgb, var(--fp-current-windows-accent, #84CC16) 68%, transparent);
+    box-shadow:
+        0 0 0 2px color-mix(in srgb, var(--fp-current-windows-accent, #84CC16) 20%, transparent),
+        var(--fp-shadow-md);
+}
+
+[data-theme="dark"] .fp-current-window-card .fp-card-badge.fp-card-badge-label {
+    --fp-badge-accent: var(--fp-current-windows-accent, #84CC16);
+}
+
+[data-theme="dark"] .fp-current-window-card.fp-card.fp-card-selected {
+    box-shadow:
+        0 0 0 2px color-mix(in srgb, var(--fp-current-windows-accent, #84CC16) 24%, transparent),
+        var(--fp-shadow-md);
+}
+
+.fp-current-window-card .fp-card-meta-chip.current-window-status {
+    --fp-badge-accent: #94a3b8;
+}
+
+.fp-current-window-card .fp-card-meta-chip.current-window-status.active {
+    --fp-badge-accent: #22c55e;
+}
+
+/* List view: give the tab-count, status, and timestamp fixed-width columns so
+   they line up vertically across rows regardless of their content width
+   (e.g. "46 tabs" vs "2 tabs", "Focused" vs "Background"). */
+.fp-content-list-mode .fp-current-window-card .fp-card-meta-chip.tabs {
+    min-width: 66px;
+}
+
+.fp-content-list-mode .fp-current-window-card .fp-card-meta-chip.current-window-status {
+    min-width: 98px;
+}
+
+.fp-content-list-mode .fp-current-window-card .fp-card-time {
+    min-width: 56px;
+    text-align: right;
+}
+
+.fp-current-window-card .fp-card-matching-tab-title .fp-card-search-match {
+    background: color-mix(in srgb, var(--fp-current-windows-accent, #84CC16) 24%, transparent);
+}
+
+.fp-current-window-card .fp-card-matching-tab-url .fp-card-search-match {
+    background: color-mix(in srgb, var(--fp-current-windows-accent, #84CC16) 16%, transparent);
+}
+
+[data-theme="dark"] .fp-current-window-card .fp-card-matching-tab-title .fp-card-search-match {
+    background: color-mix(in srgb, var(--fp-current-windows-accent, #84CC16) 30%, transparent);
+}
+
+[data-theme="dark"] .fp-current-window-card .fp-card-matching-tab-url .fp-card-search-match {
+    background: color-mix(in srgb, var(--fp-current-windows-accent, #84CC16) 24%, transparent);
+}
+
+[data-theme="dark"] .fp-current-window-card .fp-card-meta-chip.current-window-status.active {
+    --fp-badge-accent: #4ade80;
+}
+
+.fp-current-window-card .fp-card-actions.fp-card-hover-menu {
+    gap: var(--rail-item-gap, 2px);
+    align-items: flex-end;
+    opacity: 0;
+    transform: translate(10px, -50%) scale(0.96);
+    transition:
+        opacity 0.22s var(--fp-ease, ease),
+        transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.fp-current-window-card.fp-card:hover .fp-card-actions.fp-card-hover-menu,
+.fp-current-window-card.fp-card:focus-within .fp-card-actions.fp-card-hover-menu {
+    opacity: 1;
+    transform: translate(0, -50%) scale(1);
+    pointer-events: auto;
+}
+
+.fp-current-window-card .fp-card-action-btn.close {
+    color: #dc2626;
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+.fp-current-window-card .fp-card-action-btn.close:hover {
+    background: rgba(239, 68, 68, 0.16);
+    border-color: rgba(239, 68, 68, 0.42);
+}
+
+[data-theme="dark"] .fp-current-window-card .fp-card-action-btn.close {
+    background: rgba(239, 68, 68, 0.16);
+    border-color: rgba(248, 113, 113, 0.34);
+}

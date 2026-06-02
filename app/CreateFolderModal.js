@@ -3,13 +3,13 @@ import Modal from 'react-modal';
 import { MdFolder, MdClose } from 'react-icons/md';
 import './Modal.css';
 
-function CreateFolderModal({ isOpen, onClose, onSave }) {
+function CreateFolderModal({ isOpen, onClose, onSave, folder }) {
+    const isEditMode = !!folder;
     const [folderName, setFolderName] = useState('');
     const [selectedColor, setSelectedColor] = useState('#4facfe');
-    const [isCreating, setIsCreating] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
     const inputRef = useRef(null);
 
-    // Folder color options
     const folderColors = [
         { name: 'Blue', value: '#4facfe' },
         { name: 'Green', value: '#43e97b' },
@@ -22,35 +22,39 @@ function CreateFolderModal({ isOpen, onClose, onSave }) {
         { name: 'Gray', value: '#6b7280' }
     ];
 
-    // Reset state when modal opens
     useEffect(() => {
         if (isOpen) {
-            setFolderName('');
-            setSelectedColor('#4facfe');
-            setIsCreating(false);
-            // Focus input after modal animation
+            setFolderName(isEditMode ? (folder.name || '') : '');
+            setSelectedColor(isEditMode ? (folder.color || '#4facfe') : '#4facfe');
+            setIsSaving(false);
             setTimeout(() => {
                 if (inputRef.current) {
                     inputRef.current.focus();
+                    if (isEditMode) inputRef.current.select();
                 }
             }, 100);
         }
-    }, [isOpen]);
+    }, [isOpen, isEditMode, folder]);
 
     const handleSave = async () => {
         const trimmedName = folderName.trim();
-        if (!trimmedName) {
-            return;
-        }
+        if (!trimmedName) return;
 
-        setIsCreating(true);
+        setIsSaving(true);
         try {
-            await onSave(trimmedName, selectedColor);
-            onClose();
+            if (isEditMode) {
+                Promise.resolve(onSave(trimmedName, selectedColor, folder.uid)).catch((error) => {
+                    console.error('Error updating folder:', error);
+                });
+                onClose();
+            } else {
+                await onSave(trimmedName, selectedColor);
+                onClose();
+            }
         } catch (error) {
-            console.error('Error creating folder:', error);
+            console.error(isEditMode ? 'Error updating folder:' : 'Error creating folder:', error);
         } finally {
-            setIsCreating(false);
+            setIsSaving(false);
         }
     };
 
@@ -72,7 +76,7 @@ function CreateFolderModal({ isOpen, onClose, onSave }) {
         <Modal
             isOpen={isOpen}
             onRequestClose={onClose}
-            contentLabel="Create New Folder"
+            contentLabel={isEditMode ? "Edit Folder" : "Create New Folder"}
             className="create-folder-modal"
             overlayClassName="create-folder-modal-overlay"
             ariaHideApp={false}
@@ -91,7 +95,7 @@ function CreateFolderModal({ isOpen, onClose, onSave }) {
                                 marginRight: '8px' 
                             }} 
                         />
-                        <span>Create New Folder</span>
+                        <span>{isEditMode ? 'Edit Folder' : 'Create New Folder'}</span>
                     </div>
                     <button 
                         className="create-folder-modal-close"
@@ -119,7 +123,7 @@ function CreateFolderModal({ isOpen, onClose, onSave }) {
                             placeholder="Enter folder name..."
                             className="create-folder-input"
                             maxLength={50}
-                            disabled={isCreating}
+                            disabled={isSaving}
                         />
                     </div>
 
@@ -139,7 +143,7 @@ function CreateFolderModal({ isOpen, onClose, onSave }) {
                                     style={{ backgroundColor: color.value }}
                                     onClick={() => setSelectedColor(color.value)}
                                     title={color.name}
-                                    disabled={isCreating}
+                                    disabled={isSaving}
                                 >
                                     {selectedColor === color.value && (
                                         <span className="create-folder-color-check">✓</span>
@@ -156,7 +160,7 @@ function CreateFolderModal({ isOpen, onClose, onSave }) {
                         type="button"
                         className="create-folder-btn create-folder-btn-cancel"
                         onClick={handleCancel}
-                        disabled={isCreating}
+                        disabled={isSaving}
                     >
                         Cancel
                     </button>
@@ -164,15 +168,15 @@ function CreateFolderModal({ isOpen, onClose, onSave }) {
                         type="button"
                         className="create-folder-btn create-folder-btn-save"
                         onClick={handleSave}
-                        disabled={!folderName.trim() || isCreating}
+                        disabled={!folderName.trim() || isSaving}
                     >
-                        {isCreating ? 'Creating...' : 'Create Folder'}
+                        {isSaving ? 'Saving...' : isEditMode ? 'Save Changes' : 'Create Folder'}
                     </button>
                 </div>
 
                 {/* Keyboard Hint */}
                 <div className="create-folder-keyboard-hint">
-                    Press <kbd>Enter</kbd> to create or <kbd>Esc</kbd> to cancel
+                    Press <kbd>Enter</kbd> to {isEditMode ? 'save' : 'create'} or <kbd>Esc</kbd> to cancel
                 </div>
             </div>
             </Activity>

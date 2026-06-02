@@ -35,7 +35,7 @@ export const getColorCode = (name) => {
  * @returns {string} Actual color value
  */
 const getColorValue = (color) => {
-    if (!color) return 'var(--setting-row-border-color)';
+    if (!color) return 'var(--collection-default-color)';
     
     // If it's a color name from our palette, get its hex value
     if (COLOR_PALETTE[color]) {
@@ -86,5 +86,5 @@ export const getBorderColor = (collectionColor) => {
     });
     
     // Return fallback color if there's a conflict, otherwise return the collection color
-    return matchesBackground ? 'var(--setting-row-border-color)' : colorValue;
+    return matchesBackground ? 'var(--collection-default-color)' : colorValue;
 };

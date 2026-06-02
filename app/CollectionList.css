@@ -36,7 +36,8 @@
 		transition: none;
 	}
 
-	.setting_row:hover:not(.expanded) {
+	.setting_row:hover:not(.expanded),
+	.setting_row.collection-item-interaction-active:not(.expanded) {
 		transform: none;
 	}
 }
@@ -102,14 +103,16 @@
 }
 
 /* Enhanced Modern Liquid Glass Hover Effect for List Items - but not for expanded items */
-.setting_row:hover:not(.expanded) {
+.setting_row:hover:not(.expanded),
+.setting_row.collection-item-interaction-active:not(.expanded) {
 	background: rgba(255, 255, 255, 0.18);
 	border: 1px solid rgba(255, 255, 255, 0.28);
 	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
 }
 
 /* Enhanced Dark Mode List Item Hover */
-[data-theme="dark"] .setting_row:hover:not(.expanded) {
+[data-theme="dark"] .setting_row:hover:not(.expanded),
+[data-theme="dark"] .setting_row.collection-item-interaction-active:not(.expanded) {
 	background: rgba(255, 255, 255, 0.07);
 	border: 1px solid rgba(255, 255, 255, 0.2);
 	box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
@@ -271,7 +274,8 @@
 	margin-left: 4px;
 }
 
-.setting_row:hover .collection-chevron {
+.setting_row:hover .collection-chevron,
+.setting_row.collection-item-interaction-active .collection-chevron {
 	opacity: 0.8;
 	transform: translateX(2px);
 	color: var(--primary-color);
@@ -281,6 +285,7 @@
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
+	min-width: 0;
 }
 
 .collection-name {
@@ -349,7 +354,8 @@
 	transform-origin: left center;
 }
 
-.setting_row:hover .collection-counts {
+.setting_row:hover .collection-counts,
+.setting_row.collection-item-interaction-active .collection-counts {
 	transform: scale(1.08);
 	opacity: 0.85;
 }
@@ -729,7 +735,7 @@
 }
 
 .context-menu-item:hover {
-	background: rgba(255, 255, 255, 0.15);
+	background: color-mix(in srgb, var(--text-color) 8%, transparent);
 	color: var(--text-color);
 }
 
@@ -751,9 +757,7 @@
 	border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-[data-theme="dark"] .context-menu-item:hover {
-	background: rgba(255, 255, 255, 0.1);
-}
+
 
 #nothing_message {
 	margin: 6px auto;
@@ -885,6 +889,7 @@
 	opacity: 0.7;
 }
 
+
 .color-grid {
 	display: grid;
 	grid-template-columns: repeat(4, 1fr);
@@ -919,9 +924,33 @@
 .modern-color-option.selected {
 	transform: scale(1.05);
 	border-color: var(--text-color);
-	box-shadow: 
+	box-shadow:
 		0 2px 8px rgba(0, 0, 0, 0.2),
 		0 0 0 1px var(--text-color);
+}
+
+.color-picker-clear-row {
+	display: block;
+	width: 100%;
+	margin-bottom: 8px;
+	padding: 8px 12px;
+	border: 1px solid var(--setting-row-border-color);
+	background: none;
+	color: var(--text-color, inherit);
+	font-size: 13px;
+	font-weight: 600;
+	text-align: center;
+	cursor: pointer;
+	border-radius: 8px;
+}
+
+.color-picker-clear-row:hover:not(:disabled) {
+	background: var(--button-hover-bg, rgba(0, 0, 0, 0.06));
+}
+
+.color-picker-clear-row:disabled {
+	opacity: 0.4;
+	cursor: default;
 }
 
 .selection-indicator {
@@ -1122,6 +1151,18 @@
 	font-family: monospace;
 }
 
+.tab-url-preview-button {
+	background: none;
+	border: 0;
+	padding: 0;
+	text-align: left;
+	width: 100%;
+	cursor: pointer;
+	font: inherit;
+	color: inherit;
+	opacity: inherit;
+}
+
 .tab-url-preview .search-match-text {
 	opacity: 1;
 	font-weight: 600;
@@ -1227,6 +1268,53 @@
 	z-index: 100;
 }
 
+/* Tab drag wrapper — position: relative needed for drop indicator overlays */
+.collection-draggable-tab {
+	position: relative;
+}
+
+.collection-detail-drop-hover {
+	position: relative;
+}
+
+.collection-detail-drop-hover::before {
+	content: '';
+	position: absolute;
+	left: 2px;
+	right: 2px;
+	top: 6px;
+	bottom: 6px;
+	height: auto;
+	border-radius: 12px;
+	border: 2px dashed rgba(22, 152, 226, 0.72);
+	background: rgba(22, 152, 226, 0.08);
+	pointer-events: none;
+	z-index: 12;
+}
+
+.collection-edge-drop-zone {
+	position: relative;
+	min-height: 12px;
+	border-radius: 999px;
+	transition: all 0.2s ease;
+}
+
+.collection-edge-drop-zone.is-over {
+	background: rgba(22, 152, 226, 0.18);
+	box-shadow: inset 0 0 0 2px rgba(22, 152, 226, 0.72);
+}
+
+.collection-edge-drop-zone-label {
+	display: inline-flex;
+	align-items: center;
+	padding: 2px 10px;
+	border-radius: 999px;
+	background: rgba(22, 152, 226, 0.88);
+	color: white;
+	font-size: 11px;
+	font-weight: 600;
+}
+
 /* Group Container Styles */
 .group-container {
     position: relative;
@@ -1237,8 +1325,61 @@
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1) !important;
 }
 
+/* Tab-count badge on the group icon — compact in the popup, larger in full-page. */
+.group-tab-count-badge {
+    top: -7px;
+    right: -8px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    font-size: 9px;
+    font-weight: 800;
+    border: 2px solid var(--section-bg-color);
+}
+
+html.fullpage-mode .group-tab-count-badge {
+    top: -9px;
+    right: -11px;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    font-size: 13px;
+}
+
+.group-open-button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    filter: saturate(1.15);
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+        0 8px 18px rgba(0, 0, 0, 0.12);
+}
+
+.group-open-button:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+.group-open-button:disabled {
+    box-shadow: inset 0 0 0 1px rgba(107, 114, 128, 0.12);
+}
+
+/* Group title autosave wrapper — keep layout, strip visible box */
+.group-title-autosave-wrapper,
+.group-title-autosave-wrapper:hover {
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.group-title-autosave-wrapper:focus-within {
+    background: rgba(var(--primary-color-rgb, 52, 152, 219), 0.08) !important;
+    box-shadow: 0 0 0 1px rgba(var(--primary-color-rgb, 52, 152, 219), 0.4) !important;
+    transform: none !important;
+}
+
 .group-title-input {
     background: transparent !important;
+    -webkit-appearance: none !important;
+    appearance: none !important;
     border: none !important;
     color: var(--text-color) !important;
     font-weight: 600 !important;
@@ -1249,10 +1390,8 @@
 }
 
 .group-title-input:focus {
-    outline: 1px solid var(--primary-color) !important;
-    border-radius: 4px !important;
+    outline: none !important;
     padding: 2px 6px !important;
-    background: var(--section-bg-color) !important;
 }
 
 /* Tab styling within groups */
@@ -1579,16 +1718,73 @@
 	display: flex;
 	align-items: center;
 	opacity: 0;
-	transition: opacity 300ms ease-in-out;
+	transition: opacity 200ms ease-out;
 	justify-content: flex-end;
 	flex-direction: row;
 	flex: 0 0 auto !important;
+	gap: 4px;
 }
 
 .single-tab-row:hover .actions-col {
 	opacity: 1;
 }
 
+/* Modern tab action buttons */
+.tab-action-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	border: none;
+	border-radius: 8px;
+	cursor: pointer;
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	background: transparent;
+	color: var(--text-secondary-color);
+	flex-shrink: 0;
+}
+
+.tab-action-btn svg {
+	width: 18px !important;
+	height: 18px !important;
+}
+
+.tab-action-btn.tab-action-open {
+	color: var(--primary-color);
+}
+
+.tab-action-btn.tab-action-open:hover {
+	background: rgba(var(--primary-color-rgb, 52, 152, 219), 0.15);
+	color: var(--primary-color);
+	transform: scale(1.1);
+}
+
+.tab-action-btn.tab-action-move {
+	color: #e6a23c;
+}
+
+.tab-action-btn.tab-action-move:hover {
+	background: rgba(230, 162, 60, 0.15);
+	color: #d4940a;
+	transform: scale(1.1);
+}
+
+.tab-action-btn.tab-action-delete {
+	color: #e06c75;
+}
+
+.tab-action-btn.tab-action-delete:hover {
+	background: rgba(224, 108, 117, 0.15);
+	color: #d94f5a;
+	transform: scale(1.1);
+}
+
+.tab-action-btn:active {
+	transform: scale(0.92);
+}
+
+/* Legacy action-button for backwards compatibility */
 .action-button {
 	border: none;
 	background-color: transparent;
@@ -2052,7 +2248,7 @@
 
 /* Collection List Grid/List Layout */
 
-/* Tab row action buttons - smaller size */
+/* Legacy tab row action buttons (kept for non-tab-row uses) */
 .single-tab-row .action-button {
     height: 22px;
     width: 18px;
@@ -2069,7 +2265,6 @@
     transform: scale(1.1);
 }
 
-/* Tab row action button icons - smaller */
 .single-tab-row .action-button svg,
 .single-tab-row .del-tab svg {
     width: 14px !important;

@@ -20,13 +20,17 @@ module.exports = (env, argv) => {
     
     entry: {
       app: path.join(__dirname, "./static/index.js"),
+      fullpage: path.join(__dirname, "./static/fullpage.js"),
     },
     
     output: {
       path: path.resolve(__dirname, "./build"),
-      filename: "[name].js",
-      // Use stable chunk IDs for deterministic builds
-      chunkFilename: "[name].js",
+      // Content-hash entry/chunk filenames in production so Chrome can't serve
+      // a stale cached bundle across extension reloads (the JS carries the
+      // injected CSS, so unhashed names caused reloads to keep old styles).
+      // Dev keeps stable names (watch rewrites them; HTML uses ?hash busting).
+      filename: isProduction ? "[name].[contenthash].js" : "[name].js",
+      chunkFilename: isProduction ? "[name].[contenthash].js" : "[name].js",
       clean: true, // Clean build folder before each build
     },
     
@@ -124,10 +128,34 @@ module.exports = (env, argv) => {
           viewport: "width=device-width, initial-scale=1, shrink-to-fit=no",
           "theme-color": "#000000"
         },
-        manifest: "manifest.json",
         filename: "index.html",
         template: "./static/index.html",
+        chunks: ['app'],
         hash: !isProduction, // Only add hash in development for cache busting
+        minify: isProduction ? {
+          removeComments: true,
+          collapseWhitespace: true,
+          removeRedundantAttributes: true,
+          useShortDoctype: true,
+          removeEmptyAttributes: true,
+          removeStyleLinkTypeAttributes: true,
+          keepClosingSlash: true,
+          minifyJS: true,
+          minifyCSS: true,
+          minifyURLs: true,
+        } : false,
+      }),
+      new HtmlWebpackPlugin({
+        title: "Tabox - Full Page View",
+        meta: {
+          charset: "utf-8",
+          viewport: "width=device-width, initial-scale=1, shrink-to-fit=no",
+          "theme-color": "#000000"
+        },
+        filename: "fullpage.html",
+        template: "./static/fullpage.html",
+        chunks: ['fullpage'],
+        hash: !isProduction,
         minify: isProduction ? {
           removeComments: true,
           collapseWhitespace: true,

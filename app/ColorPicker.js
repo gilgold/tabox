@@ -1,18 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import { Popover } from 'react-tiny-popover';
-import { COLOR_PALETTE } from './utils/colorMigration';
+import { COLOR_PALETTE, getColorValue } from './utils/colorMigration';
 
 function ColorPicker(props) {
 
-    const [color, setColor] = useState(props?.currentColor ?? 'var(--setting-row-border-color)');
+    const multiSelect = props.multiSelect === true;
+    const selectedColors = props.selectedColors ?? [];
+
+    const [color, setColor] = useState(props?.currentColor ?? 'var(--collection-default-color)');
     const [showPicker, setShowPicker] = useState(false);
     const [selectedColorCircle, setSelectedColorCircle] = useState(0);
 
     const colorList = props.colorList ?? COLOR_PALETTE;
+    const showTriggerTooltip = props.showTriggerTooltip !== false;
+    const showOptionTooltips = props.showOptionTooltips !== false;
 
     // Helper function to get actual color value (supports both new names and legacy hex codes)
     const getActualColor = (color) => {
-        if (!color) return 'var(--setting-row-border-color)';
+        if (!color) return 'var(--collection-default-color)';
         
         // If it's a color name from our palette, get its hex value
         if (COLOR_PALETTE[color]) {
@@ -54,24 +59,41 @@ function ColorPicker(props) {
 
     const handleChange = async (colorName, colorValue, index, e) => {
         e.stopPropagation();
-        setColor(colorValue); // Set display color to hex value
-        setSelectedColorCircle(index);
         props.action(colorName, props.group ?? null); // Pass color name for storage
-        setShowPicker(false); // Close picker after selection
+        if (!multiSelect) {
+            setColor(colorValue); // Set display color to hex value
+            setSelectedColorCircle(index);
+            setShowPicker(false); // Close picker after selection
+            props.onOpenChange?.(false);
+        }
     };
 
     const handleClick = (e) => {
         e.stopPropagation();
         e.preventDefault();
-        setShowPicker(!showPicker);
+        const nextShowPicker = !showPicker;
+        setShowPicker(nextShowPicker);
+        props.onOpenChange?.(nextShowPicker);
     };
 
     const handleClose = (e) => {
         if (e && ['colorOption', 'modern-color-option', 'color-grid'].includes(e.target.className)) return;
         setShowPicker(false);
+        props.onOpenChange?.(false);
     };
 
     const size = props.size === 'small' ? 'small' : 'normal';
+
+    const triggerBackground = (() => {
+        if (!multiSelect) return color;
+        if (selectedColors.length === 0) return 'var(--collection-default-color)';
+        if (selectedColors.length === 1) return getColorValue(selectedColors[0]);
+        const stops = selectedColors.map((name, i) => {
+            const pct = Math.round((i / (selectedColors.length - 1)) * 100);
+            return `${getColorValue(name)} ${pct}%`;
+        });
+        return `linear-gradient(135deg, ${stops.join(', ')})`;
+    })();
 
     return <Popover
         isOpen={showPicker}
@@ -84,19 +106,34 @@ function ColorPicker(props) {
                 <div className="color-picker-header">
                     <span>Choose Color</span>
                 </div>
+                {multiSelect && (
+                    <button
+                        type="button"
+                        className="color-picker-clear-row"
+                        disabled={selectedColors.length === 0}
+                        onClick={(e) => { e.stopPropagation(); props.onClear?.(); }}
+                    >
+                        Clear Selection
+                    </button>
+                )}
                 <div className="color-grid">
                     {Object.entries(colorList).map(([colorName, colorValue], index) => (
                         <div
                             key={`color-${colorName}`}
                             onClick={async (e) => await handleChange(colorName, colorValue, index, e)}
-                            className={`modern-color-option ${index === selectedColorCircle ? 'selected' : ''}`}
+                            className={`modern-color-option ${
+                                multiSelect
+                                    ? (selectedColors.includes(colorName) ? 'selected' : '')
+                                    : (index === selectedColorCircle ? 'selected' : '')
+                            }`}
                             style={{ 
                                 backgroundColor: colorValue,
                                 '--color-value': colorValue 
                             }}
-                            data-tooltip-id="main-tooltip" data-tooltip-content={colorName.replace('-', ' ')}
-                            data-for="color-tooltip">
-                            {index === selectedColorCircle && (
+                            data-tooltip-id={showOptionTooltips ? 'main-tooltip' : undefined}
+                            data-tooltip-content={showOptionTooltips ? colorName.replace('-', ' ') : undefined}
+                            data-for={showOptionTooltips ? 'color-tooltip' : undefined}>
+                            {(multiSelect ? selectedColors.includes(colorName) : index === selectedColorCircle) && (
                                 <div className="selection-indicator">
                                     <svg width="8" height="8" viewBox="0 0 12 12" fill="none">
                                         <path d="M10 3L4.5 8.5L2 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -108,9 +145,24 @@ function ColorPicker(props) {
                 </div>
             </div>}
     >
-        <div onClick={handleClick} className={`modern-color-picker-wrapper ${size}`} data-tooltip-hidden={showPicker} data-tooltip-id="main-tooltip" data-tooltip-content={props.tooltip}>
+        <div
+            onClick={handleClick}
+            className={`modern-color-picker-wrapper ${size}`}
+            data-tooltip-hidden={showTriggerTooltip ? showPicker : undefined}
+            data-tooltip-id={showTriggerTooltip ? 'main-tooltip' : undefined}
+            data-tooltip-content={showTriggerTooltip ? props.tooltip : undefined}
+            data-tooltip-place={showTriggerTooltip ? props.tooltipPlace : undefined}
+        >
             <div className={`modern-color-picker ${showPicker ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); handleClick(e); }}>
-                <div className="current-color-preview" style={{ backgroundColor: color }} />
+                <div
+                    className="current-color-preview"
+                    // `background` paints the preview (solid or gradient). The duplicate
+                    // `--current-color-bg` custom property is only so jsdom-based tests can read
+                    // the gradient value, which jsdom drops from the `background` shorthand.
+                    style={multiSelect
+                        ? { '--current-color-bg': triggerBackground, background: triggerBackground }
+                        : { backgroundColor: color }}
+                />
             </div>
         </div>
     </Popover>;

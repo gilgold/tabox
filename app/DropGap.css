@@ -1,0 +1,68 @@
+.drop-gap {
+	position: relative;
+	height: 2px;
+	transition: height 0.15s ease;
+	z-index: 10;
+}
+
+.drop-gap.is-over {
+	height: 32px;
+}
+
+.drop-gap.variant-group {
+	height: 2px;
+	padding: 9px 0;
+	margin: -9px 0;
+	box-sizing: content-box;
+}
+
+.drop-gap.variant-group.is-over {
+	height: 48px;
+	padding: 0;
+	margin: 0;
+}
+
+.drop-gap-indicator {
+	position: absolute;
+	inset: 0;
+	box-sizing: border-box;
+	background:
+		linear-gradient(
+			135deg,
+			rgba(22, 152, 226, 0.18) 0%,
+			rgba(22, 152, 226, 0.08) 100%
+		);
+	border: 2px dashed rgba(22, 152, 226, 0.72);
+	border-radius: 6px;
+	box-shadow:
+		0 0 0 1px rgba(22, 152, 226, 0.18),
+		inset 0 0 0 1px rgba(255, 255, 255, 0.45);
+	pointer-events: none;
+	animation: drop-gap-pulse 1.1s ease-in-out infinite;
+}
+
+.drop-gap.variant-group .drop-gap-indicator {
+	border-radius: 8px;
+}
+
+[data-theme="dark"] .drop-gap-indicator {
+	background:
+		linear-gradient(
+			135deg,
+			rgba(58, 119, 216, 0.3) 0%,
+			rgba(58, 119, 216, 0.14) 100%
+		);
+	border-color: rgba(96, 165, 250, 0.85);
+	box-shadow:
+		0 0 0 1px rgba(96, 165, 250, 0.2),
+		inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+[data-theme="dark"] .drop-gap.variant-group .drop-gap-indicator {
+	border-radius: 8px;
+}
+
+@keyframes drop-gap-pulse {
+	0%, 100% { opacity: 0.88; }
+	50% { opacity: 1; }
+}

@@ -1,36 +1,91 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import './Switch.css';
 import { browser } from '../static/globals';
 
+const USER_TOGGLE_ANIMATION_MS = 500;
+
 const Switch = props => {
-  const { id: _id, textOn, textOff, disabled, ...otherProps } = props;
+  const { id: _id, textOn, textOff, disabled, className, animateOnUserToggleOnly = false, ...otherProps } = props;
   const [isChecked, setIsChecked] = useState(false);
+  const [toggleAnimation, setToggleAnimation] = useState(null);
+  const loaded = useRef(false);
+  const animationTimeoutRef = useRef(null);
+
+  const clearAnimationTimeout = useCallback(() => {
+    if (animationTimeoutRef.current) {
+      clearTimeout(animationTimeoutRef.current);
+      animationTimeoutRef.current = null;
+    }
+  }, []);
+
+  const clearToggleAnimation = useCallback(() => {
+    clearAnimationTimeout();
+
+    setToggleAnimation(null);
+  }, [clearAnimationTimeout]);
+
+  const queueToggleAnimation = useCallback((direction) => {
+    if (!animateOnUserToggleOnly) return;
+
+    clearToggleAnimation();
+    setToggleAnimation(direction);
+    animationTimeoutRef.current = setTimeout(() => {
+      animationTimeoutRef.current = null;
+      setToggleAnimation(null);
+    }, USER_TOGGLE_ANIMATION_MS);
+  }, [animateOnUserToggleOnly, clearToggleAnimation]);
+
   useEffect(() => {
-    // Load initial value from storage
+    return () => {
+      clearAnimationTimeout();
+    };
+  }, [clearAnimationTimeout]);
+
+  useEffect(() => {
+    clearToggleAnimation();
+    loaded.current = false;
+
     browser.storage.local.get(_id).then((items) => {
-        if (items[_id]) {
-            setIsChecked(items[_id]);
+        if (!loaded.current) {
+            setIsChecked(!!items[_id]);
+            loaded.current = true;
         }
     });
-  }, [_id]); // Only run when _id changes
+
+    const onStorageChanged = (changes) => {
+        if (changes[_id] && changes[_id].newValue !== undefined) {
+            loaded.current = true;
+            setIsChecked(!!changes[_id].newValue);
+        }
+    };
+    browser.storage.onChanged.addListener(onStorageChanged);
+    return () => browser.storage.onChanged.removeListener(onStorageChanged);
+  }, [_id, clearToggleAnimation]);
 
   useEffect(() => {
-    setLocalStorage(disabled ? false : isChecked);
-  } , [disabled, isChecked]);
-
-  const setLocalStorage = (value) => {
+    if (!loaded.current) return;
     const localStorageObj = {};
-    localStorageObj[_id] = value;
+    localStorageObj[_id] = disabled ? false : isChecked;
     browser.storage.local.set(localStorageObj);
-  }
+  }, [disabled, isChecked, _id]);
 
   const toggle = useCallback((event) => {
     const target = event.target;
     setIsChecked(target.checked);
-    setLocalStorage(target.checked);
-  });
+    queueToggleAnimation(target.checked ? 'on' : 'off');
+    const localStorageObj = {};
+    localStorageObj[_id] = target.checked;
+    browser.storage.local.set(localStorageObj);
+  }, [_id, queueToggleAnimation]);
 
-  return <span {...otherProps} data-tooltip-class-name="small-tooltip">
+  const wrapperClassName = [
+    className,
+    animateOnUserToggleOnly ? 'switch switch--manual-animation' : '',
+    toggleAnimation === 'on' ? 'switch--animate-on' : '',
+    toggleAnimation === 'off' ? 'switch--animate-off' : '',
+  ].filter(Boolean).join(' ');
+
+  return <span {...otherProps} className={wrapperClassName || undefined} data-tooltip-class-name="small-tooltip">
                 <input type="checkbox" disabled={disabled} checked={disabled ? false : isChecked} onChange={toggle} id={_id} name={_id} className="switch-input" />
                 <label htmlFor={_id} className="switch-label">
                         <span className="toggle--on">

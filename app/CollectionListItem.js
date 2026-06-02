@@ -6,7 +6,7 @@ import ContextMenu from './ContextMenu';
 import { createCollectionMenuItems } from './utils/contextMenuItems';
 import TimeAgo from 'javascript-time-ago';
 import { useSetAtom, useAtomValue } from 'jotai';
-import { deletingCollectionUidsState, highlightedCollectionUidState, draggingTabState, draggingGroupState } from './atoms/animationsState';
+import { deletingCollectionUidsState, highlightedCollectionUidState, dragSessionState } from './atoms/animationsState';
 import { trackingStateVersion } from './atoms/globalAppSettingsState';
 
 import ColorPicker from './ColorPicker';
@@ -19,20 +19,16 @@ function CollectionListItem(props) {
     const setDeletingCollectionUids = useSetAtom(deletingCollectionUidsState);
     const highlightedCollectionUid = useAtomValue(highlightedCollectionUidState);
     const setHighlightedCollectionUid = useSetAtom(highlightedCollectionUidState);
-    const draggingTab = useAtomValue(draggingTabState);
-    const draggingGroup = useAtomValue(draggingGroupState);
+    const dragSession = useAtomValue(dragSessionState);
     const [collectionName, setCollectionName] = useState(props.collection.name);
     const [isAutoUpdate, setIsAutoUpdate] = useState(false);
     const [showAllMatchingTabs, setShowAllMatchingTabs] = useState(false);
+    const [isInteractionActive, setIsInteractionActive] = useState(false);
     const mountedRef = useRef(true);
     
     // Prevent expansion when dragging a tab or group (unless it's from this collection)
-    const isDraggingTab = draggingTab !== null;
-    const isDraggingGroup = draggingGroup !== null;
-    const isDraggingItem = isDraggingTab || isDraggingGroup;
-    const isDraggingTabFromThisCollection = draggingTab?.sourceCollection?.uid === props.collection.uid;
-    const isDraggingGroupFromThisCollection = draggingGroup?.sourceCollection?.uid === props.collection.uid;
-    const isDraggingFromThisCollection = isDraggingTabFromThisCollection || isDraggingGroupFromThisCollection;
+    const isDraggingItem = dragSession !== null;
+    const isDraggingFromThisCollection = dragSession?.sourceCollectionUid === props.collection.uid;
 
 
 
@@ -250,7 +246,17 @@ function CollectionListItem(props) {
         <DroppableCollection collection={props.collection}>
             <div
                 onClick={_handleRowClick}
-                className={`row setting_row collection-list-item ${isAutoUpdate && 'active-auto-tracking'} ${isHighlighted ? 'collection-item-highlight' : ''} ${isDeleting ? 'collection-item-deleting' : ''} ${props.lightningEffect ? 'lightning-effect' : ''} ${matchingTabs.length > 0 ? 'has-matching-tabs' : ''}`}
+                className={[
+                    'row',
+                    'setting_row',
+                    'collection-list-item',
+                    isAutoUpdate ? 'active-auto-tracking' : '',
+                    isHighlighted ? 'collection-item-highlight' : '',
+                    isDeleting ? 'collection-item-deleting' : '',
+                    props.lightningEffect ? 'lightning-effect' : '',
+                    matchingTabs.length > 0 ? 'has-matching-tabs' : '',
+                    isInteractionActive ? 'collection-item-interaction-active' : '',
+                ].filter(Boolean).join(' ')}
                 style={{
                     ...style,
                     border: '2px solid var(--setting-row-border-color)'
@@ -271,6 +277,7 @@ function CollectionListItem(props) {
                         currentColor={props.collection.color}
                         tooltip="Change collection color"
                         action={handleSaveCollectionColor}
+                        onOpenChange={setIsInteractionActive}
                     />
                 </div>
             
@@ -365,6 +372,7 @@ function CollectionListItem(props) {
                         onDuplicate: _handleDuplicate
                     })}
                     tooltip="Collection options"
+                    onOpenChange={setIsInteractionActive}
                 />
                 
                 {/* Chevron indicator for panel */}

@@ -5,10 +5,10 @@ import { searchState } from './atoms/globalAppSettingsState';
 import { highlightedCollectionUidState } from './atoms/animationsState';
 import { getCurrentTabsAndGroups, getAllWindowsTabsAndGroups } from './utils';
 import { browser } from '../static/globals';
+import { triggerBackgroundSync } from './utils/sharedSync';
 import { showErrorToast } from './toastHelpers';
 import { IoClose } from 'react-icons/io5';
 import { HiOutlineDesktopComputer, HiCollection } from 'react-icons/hi';
-
 
 function SaveHighlightedOnlyLabel({ saveMode, windowCount }) {
     const [totalHighlighted, setTotalHighlighted] = useState(0);
@@ -65,6 +65,7 @@ function WindowChoiceToggle({ saveMode, setSaveMode, windowCount }) {
                 className={`mode-toggle-btn ${saveMode === 'current' ? 'active' : ''} ${isDisabled ? 'disabled' : ''}`}
                 onClick={handleCurrentClick}
                 disabled={isDisabled}
+                aria-label="Save current window as collection"
                 data-tooltip-id="main-tooltip" data-tooltip-content={isDisabled ? "Only one window open" : "Save current window as collection"}
                 data-tooltip-class-name="small-tooltip"
             >
@@ -75,6 +76,7 @@ function WindowChoiceToggle({ saveMode, setSaveMode, windowCount }) {
                 className={`mode-toggle-btn ${saveMode === 'all' ? 'active' : ''} ${isDisabled ? 'disabled' : ''}`}
                 onClick={handleAllClick}
                 disabled={isDisabled}
+                aria-label="Save all windows as folder"
                 data-tooltip-id="main-tooltip" data-tooltip-content={isDisabled ? "Only one window open" : "Save all windows as folder"}
                 data-tooltip-class-name="small-tooltip"
             >
@@ -238,8 +240,7 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
                 // Trigger context menu update once after all collections are added
                 await browser.runtime.sendMessage({ type: 'addCollection' });
                 
-                // Trigger cloud sync (fire and forget - don't block UI)
-                browser.runtime.sendMessage({ type: 'updateRemote' }).catch(() => {});
+                await triggerBackgroundSync();
                 
                 // Force refresh data to update UI
                 if (onDataUpdate) {
@@ -253,7 +254,6 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
                     const { showSuccessToast } = await import('./toastHelpers');
                     showSuccessToast(`Folder created with ${addedCollections.length} collection${addedCollections.length > 1 ? 's' : ''}`);
                 }
-                
             } else {
                 // Save current window as collection (existing behavior)
                 const newItem = await getCurrentTabsAndGroups(collectionName);

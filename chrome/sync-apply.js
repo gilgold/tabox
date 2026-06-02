@@ -1,0 +1,244 @@
+(() => {
+const STORAGE_KEYS = {
+    COLLECTIONS_INDEX: 'collections_index',
+    FOLDERS_INDEX: 'folders_index',
+    LEGACY_TABS_ARRAY: 'tabsArray',
+    DELETED_COLLECTION_TOMBSTONES: 'deleted_collection_tombstones',
+    COLLECTION_PREFIX: 'collection_',
+    FOLDER_PREFIX: 'folder_',
+    STORAGE_VERSION: 'tabox_storage_version'
+};
+
+const normalizeCollection = (collection, index, now) => {
+    const createdOn = Number.isFinite(collection.createdOn) ? collection.createdOn : now;
+    const lastUpdated = Number.isFinite(collection.lastUpdated) ? collection.lastUpdated : createdOn;
+
+    return {
+        ...collection,
+        uid: collection.uid,
+        name: collection.name || 'Untitled Collection',
+        tabs: Array.isArray(collection.tabs) ? collection.tabs : [],
+        chromeGroups: Array.isArray(collection.chromeGroups) ? collection.chromeGroups : [],
+        color: collection.color || 'default',
+        createdOn,
+        lastUpdated,
+        lastOpened: collection.lastOpened !== undefined ? collection.lastOpened : null,
+        parentId: collection.parentId ?? null,
+        order: collection.order !== undefined ? collection.order : index,
+        type: 'collection'
+    };
+};
+
+const normalizeFolder = (folder, index, collections, now) => {
+    const createdOn = Number.isFinite(folder.createdOn) ? folder.createdOn : now;
+    const lastUpdated = Number.isFinite(folder.lastUpdated) ? folder.lastUpdated : createdOn;
+
+    return {
+        ...folder,
+        uid: folder.uid,
+        name: folder.name || 'Untitled Folder',
+        type: 'folder',
+        color: folder.color || 'var(--folder-default-color)',
+        collapsed: folder.collapsed !== undefined ? folder.collapsed : false,
+        createdOn,
+        lastUpdated,
+        order: folder.order !== undefined ? folder.order : index,
+        collectionCount: collections.filter((collection) => collection.parentId === folder.uid).length
+    };
+};
+
+function buildIndexedSyncPayload({ currentStorage = {}, syncData = {}, now = Date.now() }) {
+    const collections = Array.isArray(syncData.tabsArray)
+        ? syncData.tabsArray.map((collection, index) => normalizeCollection(collection, index, now))
+        : [];
+    const folders = Array.isArray(syncData.foldersArray)
+        ? syncData.foldersArray.map((folder, index) => normalizeFolder(folder, index, collections, now))
+        : [];
+
+    const collectionsIndex = collections.reduce((index, collection) => {
+        index[collection.uid] = {
+            name: collection.name,
+            type: 'collection',
+            tabCount: collection.tabs.length,
+            lastUpdated: collection.lastUpdated,
+            lastOpened: collection.lastOpened,
+            createdOn: collection.createdOn,
+            color: collection.color,
+            size: JSON.stringify(collection).length,
+            parentId: collection.parentId,
+            order: collection.order
+        };
+        return index;
+    }, {});
+
+    const foldersIndex = folders.reduce((index, folder) => {
+        index[folder.uid] = {
+            name: folder.name,
+            type: 'folder',
+            color: folder.color,
+            collapsed: folder.collapsed,
+            collectionCount: folder.collectionCount,
+            lastUpdated: folder.lastUpdated,
+            createdOn: folder.createdOn,
+            size: JSON.stringify(folder).length,
+            order: folder.order
+        };
+        return index;
+    }, {});
+
+    const staleCollectionKeys = Object.keys(currentStorage[STORAGE_KEYS.COLLECTIONS_INDEX] || {})
+        .filter((uid) => !collectionsIndex[uid])
+        .map((uid) => `${STORAGE_KEYS.COLLECTION_PREFIX}${uid}`);
+    const staleFolderKeys = Object.keys(currentStorage[STORAGE_KEYS.FOLDERS_INDEX] || {})
+        .filter((uid) => !foldersIndex[uid])
+        .map((uid) => `${STORAGE_KEYS.FOLDER_PREFIX}${uid}`);
+    const deletedCollections = Array.isArray(syncData.deletedCollections)
+        ? syncData.deletedCollections.reduce((entries, tombstone) => {
+            if (!tombstone?.uid || !Number.isFinite(tombstone.lastUpdated)) {
+                return entries;
+            }
+
+            entries[tombstone.uid] = tombstone.lastUpdated;
+            return entries;
+        }, {})
+        : {};
+
+    const setPayload = {
+        [STORAGE_KEYS.COLLECTIONS_INDEX]: collectionsIndex,
+        [STORAGE_KEYS.FOLDERS_INDEX]: foldersIndex,
+        [STORAGE_KEYS.LEGACY_TABS_ARRAY]: collections,
+        [STORAGE_KEYS.DELETED_COLLECTION_TOMBSTONES]: deletedCollections,
+        [STORAGE_KEYS.STORAGE_VERSION]: 3
+    };
+
+    collections.forEach((collection) => {
+        setPayload[`${STORAGE_KEYS.COLLECTION_PREFIX}${collection.uid}`] = collection;
+    });
+
+    folders.forEach((folder) => {
+        setPayload[`${STORAGE_KEYS.FOLDER_PREFIX}${folder.uid}`] = folder;
+    });
+
+    return {
+        setPayload,
+        removeKeys: staleCollectionKeys.concat(staleFolderKeys),
+        collections,
+        folders
+    };
+}
+
+const SYNC_MANAGED_KEYS = new Set([
+    STORAGE_KEYS.COLLECTIONS_INDEX,
+    STORAGE_KEYS.FOLDERS_INDEX,
+    STORAGE_KEYS.LEGACY_TABS_ARRAY,
+    STORAGE_KEYS.DELETED_COLLECTION_TOMBSTONES,
+    STORAGE_KEYS.STORAGE_VERSION
+]);
+
+function isSyncManagedKey(key) {
+    return SYNC_MANAGED_KEYS.has(key)
+        || key.startsWith(STORAGE_KEYS.COLLECTION_PREFIX)
+        || key.startsWith(STORAGE_KEYS.FOLDER_PREFIX);
+}
+
+function valuesMatch(left, right) {
+    return JSON.stringify(left) === JSON.stringify(right);
+}
+
+async function rollbackSyncManagedKeys(storageArea, snapshot, payload) {
+    const touchedKeys = Array.from(new Set([
+        ...Object.keys(snapshot).filter(isSyncManagedKey),
+        ...Object.keys(payload.setPayload),
+        ...payload.removeKeys
+    ].filter(isSyncManagedKey)));
+
+    /* istanbul ignore next: setPayload always contributes sync-managed keys */
+    const currentValues = touchedKeys.length > 0
+        ? await storageArea.get(touchedKeys)
+        : {};
+    const rollbackSet = {};
+    const rollbackRemove = [];
+
+    touchedKeys.forEach((key) => {
+        const hadSnapshotValue = Object.prototype.hasOwnProperty.call(snapshot, key);
+        const attemptedValue = Object.prototype.hasOwnProperty.call(payload.setPayload, key)
+            ? payload.setPayload[key]
+            : (payload.removeKeys.includes(key) ? undefined : snapshot[key]);
+        const currentValue = Object.prototype.hasOwnProperty.call(currentValues, key)
+            ? currentValues[key]
+            : undefined;
+
+        if (!valuesMatch(currentValue, attemptedValue)) {
+            return;
+        }
+
+        if (hadSnapshotValue) {
+            rollbackSet[key] = snapshot[key];
+            return;
+        }
+
+        rollbackRemove.push(key);
+    });
+
+    if (Object.keys(rollbackSet).length > 0) {
+        await storageArea.set(rollbackSet);
+    }
+
+    if (rollbackRemove.length > 0) {
+        await storageArea.remove(rollbackRemove);
+    }
+}
+
+async function applySyncSnapshotAtomically({ storageArea, syncData, now = Date.now() }) {
+    const currentStorage = await storageArea.get(null);
+    const payload = buildIndexedSyncPayload({
+        currentStorage,
+        syncData,
+        now
+    });
+
+    try {
+        await storageArea.set(payload.setPayload);
+        await storageArea.remove(payload.removeKeys);
+
+        return {
+            success: true,
+            collections: payload.collections,
+            folders: payload.folders
+        };
+    } catch (error) {
+        try {
+            await rollbackSyncManagedKeys(storageArea, currentStorage, payload);
+        } catch (rollbackError) {
+            return {
+                success: false,
+                error: error.message,
+                rollbackSucceeded: false,
+                rollbackError: rollbackError.message
+            };
+        }
+
+        return {
+            success: false,
+            error: error.message,
+            rollbackSucceeded: true
+        };
+    }
+}
+
+const syncApplyApi = {
+    STORAGE_KEYS,
+    buildIndexedSyncPayload,
+    applySyncSnapshotAtomically
+};
+
+/* istanbul ignore next */
+if (typeof globalThis !== 'undefined') {
+    globalThis.TaboxSyncApply = syncApplyApi;
+}
+
+/* istanbul ignore next */
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = syncApplyApi;
+}
+})();

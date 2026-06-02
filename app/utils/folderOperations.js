@@ -15,6 +15,7 @@ import {
     loadSingleFolder, 
     deleteSingleFolder, 
     loadAllFolders, 
+    updateFoldersOrder,
     updateFolderCollectionCount,
     saveSingleCollection,
     loadSingleCollection,
@@ -22,6 +23,7 @@ import {
     loadCollectionsIndex,
     loadAllCollections
 } from './storageUtils';
+import { triggerBackgroundSync } from './sharedSync';
 
 // ========================================
 // FOLDER CRUD OPERATIONS
@@ -39,16 +41,25 @@ export const createFolder = async (name, color = null, collapsed = false) => {
             throw new Error('Folder name is required');
         }
 
+        const existingFolders = await loadAllFolders({
+            metadataOnly: false,
+            sortBy: 'order',
+            sortOrder: 'asc',
+        });
         const folder = new TaboxFolder(name.trim(), color, null, null, collapsed);
+        folder.order = 0;
         const success = await saveSingleFolder(folder, true); // Force timestamp update for new folders
 
         if (success) {
+            const reorderedFolders = [folder, ...existingFolders];
+            const orderSaved = await updateFoldersOrder(reorderedFolders);
+            if (!orderSaved) {
+                console.warn(`⚠️ Failed to persist folder order for new folder: ${name}`);
+            }
+
             // Ensure storage is committed before triggering sync
             await new Promise(resolve => setTimeout(resolve, 100));
-            
-            // Trigger sync for folder creation
-            await browser.storage.local.set({ localTimestamp: Date.now() });
-            browser.runtime.sendMessage({ type: 'updateRemote' }).catch(() => {});
+            await triggerBackgroundSync();
             
             return folder;
         } else {
@@ -78,10 +89,7 @@ export const updateFolder = async (folder, forceUpdateTimestamp = false) => {
         if (success) {
             // Ensure storage is committed before triggering sync
             await new Promise(resolve => setTimeout(resolve, 100));
-            
-            // Trigger sync for folder update
-            await browser.storage.local.set({ localTimestamp: Date.now() });
-            browser.runtime.sendMessage({ type: 'updateRemote' }).catch(() => {});
+            await triggerBackgroundSync();
             
             return true;
         } else {
@@ -90,6 +98,49 @@ export const updateFolder = async (folder, forceUpdateTimestamp = false) => {
         }
     } catch (error) {
         console.error('Error updating folder:', error);
+        return false;
+    }
+};
+
+/**
+ * Update folder details with a single persisted write.
+ * Useful for edit flows that can change more than one field at once.
+ * @param {string} folderId - Folder UID
+ * @param {{name?: string, color?: string}} updates - Folder fields to update
+ * @returns {Promise<boolean>} Success status
+ */
+export const updateFolderDetails = async (folderId, updates = {}) => {
+    try {
+        if (!folderId) {
+            throw new Error('Folder ID is required');
+        }
+
+        const folder = await loadSingleFolder(folderId);
+        if (!folder) {
+            throw new Error(`Folder ${folderId} not found`);
+        }
+
+        const nextName = updates.name !== undefined ? updates.name.trim() : folder.name;
+        const nextColor = updates.color !== undefined ? updates.color : folder.color;
+
+        if (!nextName) {
+            throw new Error('Folder name is required');
+        }
+
+        const hasNameChange = nextName !== folder.name;
+        const hasColorChange = nextColor !== folder.color;
+
+        if (!hasNameChange && !hasColorChange) {
+            return true;
+        }
+
+        folder.name = nextName;
+        folder.color = nextColor;
+        folder.lastUpdated = Date.now();
+
+        return await updateFolder(folder, true);
+    } catch (error) {
+        console.error('Error updating folder details:', error);
         return false;
     }
 };
@@ -124,48 +175,34 @@ export const deleteFolder = async (folderId, force = false, deleteCollections = 
         // If forcing delete, either delete collections or move them to root
         if (collectionsInFolder.length > 0 && force) {
             if (deleteCollections) {
-                for (const collectionMeta of collectionsInFolder) {
-                    if (!collectionMeta.uid) {
-                        console.error('⚠️ Skipping collection with undefined UID:', collectionMeta);
-                        continue;
-                    }
-                    
-                    const success = await deleteSingleCollection(collectionMeta.uid);
-                    if (success) {
-                        collectionsDeleted++;
-                    } else {
-                        console.warn(`⚠️ Failed to delete collection ${collectionMeta.uid}`);
-                    }
-                }
+                const validMetas = collectionsInFolder.filter(m => {
+                    if (!m.uid) { console.error('⚠️ Skipping collection with undefined UID:', m); return false; }
+                    return true;
+                });
+                const results = await Promise.all(validMetas.map(m => deleteSingleCollection(m.uid)));
+                collectionsDeleted = results.filter(Boolean).length;
+                results.forEach((ok, i) => { if (!ok) console.warn(`⚠️ Failed to delete collection ${validMetas[i].uid}`); });
             } else {
-                for (const collectionMeta of collectionsInFolder) {
-                    if (!collectionMeta.uid) {
-                        console.error('⚠️ Skipping collection with undefined UID:', collectionMeta);
-                        continue;
-                    }
-                    
-                    const collection = await loadSingleCollection(collectionMeta.uid);
-                    if (collection) {
-                        collection.parentId = null;
-                        await saveSingleCollection(collection, true);
-                        collectionsMovedToRoot++;
-                    } else {
-                        console.warn(`⚠️ Collection ${collectionMeta.uid} not found in storage, skipping`);
-                    }
-                }
+                const validMetas = collectionsInFolder.filter(m => {
+                    if (!m.uid) { console.error('⚠️ Skipping collection with undefined UID:', m); return false; }
+                    return true;
+                });
+                const loaded = await Promise.all(validMetas.map(m => loadSingleCollection(m.uid)));
+                const savePromises = loaded.map((collection, i) => {
+                    if (!collection) { console.warn(`⚠️ Collection ${validMetas[i].uid} not found in storage, skipping`); return Promise.resolve(false); }
+                    collection.parentId = null;
+                    return saveSingleCollection(collection, true);
+                });
+                const saved = await Promise.all(savePromises);
+                collectionsMovedToRoot = saved.filter(Boolean).length;
             }
         }
 
         const success = await deleteSingleFolder(folderId);
 
         if (success) {
-            // Ensure storage is committed before triggering sync
-            await new Promise(resolve => setTimeout(resolve, 100));
-            
-            // Trigger sync for folder deletion
-            await browser.storage.local.set({ localTimestamp: Date.now() });
-            browser.runtime.sendMessage({ type: 'updateRemote' }).catch(() => {});
-            
+            triggerBackgroundSync();
+
             return { success: true, collectionsMovedToRoot, collectionsDeleted };
         } else {
             console.error(`❌ Failed to delete folder: ${folderId}`);
@@ -232,35 +269,22 @@ export const duplicateFolder = async (folderId) => {
 
             for (const collection of collectionsInFolder) {
                 try {
-                    // Generate unique name for the duplicated collection
                     const collectionNewName = generateCopyName(collection.name, allCollections);
-                    
-                    // Deep clone tabs and chromeGroups to avoid read-only property errors
                     const clonedTabs = JSON.parse(JSON.stringify(collection.tabs || []));
                     const clonedGroups = JSON.parse(JSON.stringify(collection.chromeGroups || []));
-
-                    // Create new collection with same data but new UID, name, and parent
                     let duplicateCollection = new TaboxCollection(
                         collectionNewName,
                         clonedTabs,
                         clonedGroups,
                         collection.color,
-                        null, // createdOn - will be set to now
+                        null,
                         collection.window,
-                        null, // lastUpdated - will be set to now
-                        null  // lastOpened - null for new duplicate
+                        null,
+                        null
                     );
-
-                    // Apply unique IDs to tabs and groups
                     duplicateCollection = applyUid(duplicateCollection);
-
-                    // Set parent to the new folder
                     duplicateCollection.parentId = newFolder.uid;
-
-                    // Save the duplicated collection
                     await saveSingleCollection(duplicateCollection, true);
-                    
-                    // Add to allCollections for unique name generation in subsequent iterations
                     allCollections.push(duplicateCollection);
                     duplicatedCollections++;
                 } catch (collectionError) {
@@ -272,10 +296,7 @@ export const duplicateFolder = async (folderId) => {
         // Update folder collection count
         await updateFolderCollectionCount(newFolder.uid);
 
-        // Trigger sync (fire and forget - don't block UI)
-        browser.storage.local.set({ localTimestamp: Date.now() }).then(() => {
-            browser.runtime.sendMessage({ type: 'updateRemote' }).catch(() => {});
-        });
+        triggerBackgroundSync();
 
         return { 
             success: true, 
@@ -336,8 +357,7 @@ export const moveCollectionToFolder = async (collectionId, folderId) => {
             await new Promise(resolve => setTimeout(resolve, 100));
             
             // Trigger sync for collection movement
-            await browser.storage.local.set({ localTimestamp: Date.now() });
-            browser.runtime.sendMessage({ type: 'updateRemote' }).catch(() => {});
+            await triggerBackgroundSync();
 
             return true;
         } else {
@@ -387,8 +407,7 @@ export const removeCollectionFromFolder = async (collectionId) => {
             await new Promise(resolve => setTimeout(resolve, 100));
             
             // Trigger sync for collection removal from folder
-            await browser.storage.local.set({ localTimestamp: Date.now() });
-            browser.runtime.sendMessage({ type: 'updateRemote' }).catch(() => {});
+            await triggerBackgroundSync();
 
             return true;
         } else {
@@ -474,24 +493,7 @@ export const toggleFolderCollapsed = async (folderId) => {
  * @returns {Promise<boolean>} Success status
  */
 export const updateFolderName = async (folderId, newName) => {
-    try {
-        if (!folderId || !newName || newName.trim() === '') {
-            throw new Error('Folder ID and name are required');
-        }
-
-        const folder = await loadSingleFolder(folderId);
-        if (!folder) {
-            throw new Error(`Folder ${folderId} not found`);
-        }
-
-        folder.name = newName.trim();
-        folder.lastUpdated = Date.now();
-
-        return await updateFolder(folder, true);
-    } catch (error) {
-        console.error('Error updating folder name:', error);
-        return false;
-    }
+    return updateFolderDetails(folderId, { name: newName });
 };
 
 /**
@@ -501,24 +503,7 @@ export const updateFolderName = async (folderId, newName) => {
  * @returns {Promise<boolean>} Success status
  */
 export const updateFolderColor = async (folderId, newColor) => {
-    try {
-        if (!folderId || !newColor) {
-            throw new Error('Folder ID and color are required');
-        }
-
-        const folder = await loadSingleFolder(folderId);
-        if (!folder) {
-            throw new Error(`Folder ${folderId} not found`);
-        }
-
-        folder.color = newColor;
-        folder.lastUpdated = Date.now();
-
-        return await updateFolder(folder, true);
-    } catch (error) {
-        console.error('Error updating folder color:', error);
-        return false;
-    }
+    return updateFolderDetails(folderId, { color: newColor });
 };
 
 // ========================================

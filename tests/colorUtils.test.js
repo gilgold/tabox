@@ -68,27 +68,27 @@ describe('getBorderColor', () => {
 
     test('returns fallback for white backgrounds in light mode', () => {
         // Colors that match light mode backgrounds should return fallback
-        expect(getBorderColor('#fff')).toBe('var(--setting-row-border-color)');
-        expect(getBorderColor('#ffffff')).toBe('var(--setting-row-border-color)');
+        expect(getBorderColor('#fff')).toBe('var(--collection-default-color)');
+        expect(getBorderColor('#ffffff')).toBe('var(--collection-default-color)');
     });
 
     test('returns fallback for dark backgrounds in dark mode', () => {
         // Colors that match dark mode backgrounds should return fallback
-        expect(getBorderColor('#212121')).toBe('var(--setting-row-border-color)');
+        expect(getBorderColor('#212121')).toBe('var(--collection-default-color)');
     });
 
     test('returns fallback for expanded row backgrounds', () => {
-        expect(getBorderColor('#efefef')).toBe('var(--setting-row-border-color)');
-        expect(getBorderColor('#2f343b')).toBe('var(--setting-row-border-color)');
+        expect(getBorderColor('#efefef')).toBe('var(--collection-default-color)');
+        expect(getBorderColor('#2f343b')).toBe('var(--collection-default-color)');
     });
 
     test('returns fallback for null/undefined', () => {
-        expect(getBorderColor(null)).toBe('var(--setting-row-border-color)');
-        expect(getBorderColor(undefined)).toBe('var(--setting-row-border-color)');
+        expect(getBorderColor(null)).toBe('var(--collection-default-color)');
+        expect(getBorderColor(undefined)).toBe('var(--collection-default-color)');
     });
 
     test('handles CSS variable values', () => {
-        expect(getBorderColor('var(--bg-color)')).toBe('var(--setting-row-border-color)');
+        expect(getBorderColor('var(--bg-color)')).toBe('var(--collection-default-color)');
     });
 
     test('returns hex colors that do not conflict with backgrounds', () => {
@@ -98,8 +98,7 @@ describe('getBorderColor', () => {
     });
 
     test('handles case insensitivity for hex colors', () => {
-        expect(getBorderColor('#FFF')).toBe('var(--setting-row-border-color)');
-        expect(getBorderColor('#FFFFFF')).toBe('var(--setting-row-border-color)');
+        expect(getBorderColor('#FFF')).toBe('var(--collection-default-color)');
+        expect(getBorderColor('#FFFFFF')).toBe('var(--collection-default-color)');
     });
 });
-

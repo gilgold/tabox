@@ -16,6 +16,7 @@ export {
   loadSingleCollection,
   saveSingleCollection,
   deleteSingleCollection,
+  batchDeleteCollections,
   migrateLegacyStorage,
   getNewStorageStats,
   batchUpdateCollections,

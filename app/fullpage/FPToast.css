@@ -1,0 +1,282 @@
+/* ========================================
+   FPToast — Full-page toast notifications
+   Uses the Warm Atelier design tokens.
+   ======================================== */
+
+:root {
+    --fp-toast-accent-success: #4caf50;
+    --fp-toast-accent-error: #ef4444;
+    --fp-toast-accent-info: #3b82f6;
+}
+
+/* ---------- Toast wrapper ---------- */
+.fp-toast {
+    display: flex;
+    align-items: stretch;
+    min-width: 360px;
+    max-width: 480px;
+    background: var(--fp-surface-elevated, var(--settings-bg-color));
+    border: 1px solid var(--fp-border, rgba(0, 0, 0, 0.08));
+    border-radius: var(--fp-radius-md, 12px);
+    box-shadow: var(--fp-shadow-lg, 0 12px 32px rgba(0, 0, 0, 0.16), 0 4px 8px rgba(0, 0, 0, 0.08));
+    overflow: hidden;
+    user-select: none;
+    animation: fpToastSlideIn 0.3s var(--fp-ease, ease);
+    font-family: var(--fp-font-body, "Helvetica Neue", Helvetica, Arial, "Lucida Grande", sans-serif);
+}
+
+.fp-toast *,
+.fp-toast *::before,
+.fp-toast *::after {
+    box-sizing: border-box;
+}
+
+@keyframes fpToastSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(20px) scale(0.97);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+    }
+}
+
+/* ---------- Left accent strip ---------- */
+.fp-toast-accent {
+    width: 4px;
+    flex-shrink: 0;
+    border-radius: var(--fp-radius-md, 12px) 0 0 var(--fp-radius-md, 12px);
+}
+
+/* ---------- Body layout ---------- */
+.fp-toast-body {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    flex: 1;
+    min-width: 0;
+}
+
+/* ---------- Icon ---------- */
+.fp-toast-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--fp-radius-sm);
+    flex-shrink: 0;
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.fp-toast--success .fp-toast-icon {
+    background: rgba(76, 175, 80, 0.12);
+    color: #4caf50;
+}
+
+.fp-toast--undo .fp-toast-icon {
+    background: rgba(76, 175, 80, 0.12);
+    color: #4caf50;
+}
+
+.fp-toast--error .fp-toast-icon {
+    background: rgba(239, 68, 68, 0.12);
+    color: #ef4444;
+}
+
+.fp-toast--info .fp-toast-icon {
+    background: rgba(59, 130, 246, 0.12);
+    color: #3b82f6;
+}
+
+/* ---------- Text content ---------- */
+.fp-toast-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.fp-toast-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-color);
+    line-height: 1.3;
+    word-break: break-word;
+}
+
+.fp-toast-message {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--text-color);
+    opacity: 0.7;
+    line-height: 1.3;
+    margin-top: 1px;
+    word-break: break-word;
+}
+
+/* ---------- Actions area ---------- */
+.fp-toast-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+/* ---------- Undo button (pill) ---------- */
+.fp-toast-undo-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border: 1px solid var(--fp-border-strong, rgba(0, 0, 0, 0.12));
+    border-radius: 100px;
+    background: transparent;
+    color: var(--fp-toast-accent-success);
+    font-family: var(--fp-font-body, "Helvetica Neue", Helvetica, Arial, "Lucida Grande", sans-serif);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--fp-duration, 0.2s) var(--fp-ease, ease);
+    white-space: nowrap;
+    line-height: 1;
+}
+
+.fp-toast-undo-btn:hover {
+    background: rgba(76, 175, 80, 0.1);
+    border-color: var(--fp-toast-accent-success);
+}
+
+.fp-toast-undo-btn:active {
+    transform: scale(0.96);
+}
+
+/* ---------- Close button with countdown ---------- */
+.fp-toast-close-btn {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-color);
+    opacity: 0.5;
+    cursor: pointer;
+    padding: 0;
+    transition: all var(--fp-duration, 0.2s) var(--fp-ease, ease);
+    flex-shrink: 0;
+}
+
+.fp-toast-close-btn:hover {
+    background: var(--fp-border, rgba(0, 0, 0, 0.08));
+    opacity: 0.8;
+}
+
+.fp-toast-close-btn:active {
+    transform: scale(0.9);
+}
+
+/* ---------- Countdown SVG ---------- */
+.fp-toast-countdown {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+    pointer-events: none;
+}
+
+.fp-toast-countdown-bg {
+    fill: none;
+    stroke: var(--fp-border, rgba(0, 0, 0, 0.08));
+    stroke-width: 1.5;
+}
+
+.fp-toast-countdown-progress {
+    fill: none;
+    stroke: var(--fp-toast-accent-success);
+    stroke-width: 1.5;
+    stroke-dasharray: 75.4; /* 2 * PI * 12 */
+    stroke-dashoffset: 0;
+    stroke-linecap: round;
+}
+
+.fp-toast--error .fp-toast-countdown-progress {
+    stroke: var(--fp-toast-accent-error);
+}
+
+.fp-toast--info .fp-toast-countdown-progress {
+    stroke: var(--fp-toast-accent-info);
+}
+
+@keyframes fpToastCountdown {
+    from { stroke-dashoffset: 0; }
+    to   { stroke-dashoffset: 75.4; }
+}
+
+.fp-toast-close-icon {
+    position: relative;
+    z-index: 2;
+    pointer-events: none;
+}
+
+/* ========================================
+   Dark Theme
+   ======================================== */
+[data-theme="dark"] .fp-toast-undo-btn {
+    color: #6dd670;
+}
+
+[data-theme="dark"] .fp-toast-undo-btn:hover {
+    background: rgba(76, 175, 80, 0.15);
+    border-color: #6dd670;
+}
+
+[data-theme="dark"] .fp-toast--success .fp-toast-icon {
+    background: rgba(76, 175, 80, 0.18);
+    color: #6dd670;
+}
+
+[data-theme="dark"] .fp-toast--undo .fp-toast-icon {
+    background: rgba(76, 175, 80, 0.18);
+    color: #6dd670;
+}
+
+[data-theme="dark"] .fp-toast--error .fp-toast-icon {
+    background: rgba(239, 68, 68, 0.18);
+    color: #f87171;
+}
+
+[data-theme="dark"] .fp-toast--info .fp-toast-icon {
+    background: rgba(59, 130, 246, 0.18);
+    color: #60a5fa;
+}
+
+[data-theme="dark"] .fp-toast-countdown-progress {
+    stroke: #6dd670;
+}
+
+[data-theme="dark"] .fp-toast--error .fp-toast-countdown-progress {
+    stroke: #f87171;
+}
+
+[data-theme="dark"] .fp-toast--info .fp-toast-countdown-progress {
+    stroke: #60a5fa;
+}
+
+/* ---------- Reduced Motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+    .fp-toast {
+        animation: none !important;
+    }
+
+    .fp-toast-countdown-progress {
+        animation: none !important;
+        stroke-dashoffset: 0 !important;
+    }
+}

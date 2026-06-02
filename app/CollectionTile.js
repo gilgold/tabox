@@ -1,13 +1,13 @@
 import React, { useEffect, useState, useMemo, useRef, useEffectEvent } from 'react';
-import { MdCenterFocusWeak } from 'react-icons/md';
-import { FaTrash, FaPlay } from 'react-icons/fa';
+import { MdCenterFocusWeak, MdOutlineLaunch } from 'react-icons/md';
+import { FaTrash } from 'react-icons/fa';
 import { BsIncognito } from 'react-icons/bs';
 
 import ContextMenu from './ContextMenu';
 import { createCollectionMenuItems } from './utils/contextMenuItems';
 import TimeAgo from 'javascript-time-ago';
 import { useSetAtom, useAtomValue } from 'jotai';
-import { highlightedCollectionUidState, deletingCollectionUidsState, draggingTabState } from './atoms/animationsState';
+import { highlightedCollectionUidState, deletingCollectionUidsState } from './atoms/animationsState';
 import { trackingStateVersion } from './atoms/globalAppSettingsState';
 
 import { getColorValue } from './utils/colorMigration';
@@ -101,6 +101,10 @@ function CollectionTile(props) {
             e.target.closest('.tile-action-button') ||
             e.target.classList.contains('tile-actions') ||
             e.target.closest('.tile-actions') ||
+            e.target.classList.contains('tile-hover-menu') ||
+            e.target.closest('.tile-hover-menu') ||
+            e.target.classList.contains('tile-menu-item') ||
+            e.target.closest('.tile-menu-item') ||
             e.target.classList.contains('tile-color-picker') ||
             e.target.closest('.tile-color-picker') ||
             e.target.classList.contains('color-picker') ||
@@ -128,7 +132,6 @@ function CollectionTile(props) {
         const tabs = props.collection.tabs || [];
         return tabs.slice(0, 10).map(tab => tab.favIconUrl).filter(Boolean);
     }, [props.collection.tabs]);
-
     const formatTimeAgo = (timestamp) => {
         try {
             return timeAgo.format(new Date(timestamp));
@@ -182,7 +185,7 @@ function CollectionTile(props) {
             <div
                 className={`collection-tile ${props.activeId === props.collection.uid ? 'dragging' : ''} ${isAutoUpdate ? 'active-auto-tracking' : ''} ${isHighlighted ? 'new-tile-highlight' : ''} ${isDeleting ? 'new-tile-deleting' : ''} ${props.lightningEffect ? 'lightning-effect' : ''}`}
                 style={{
-                    ...(props.collection.color && props.collection.color !== 'default' && props.collection.color !== 'var(--setting-row-border-color)' && { borderColor: getColorValue(props.collection.color) })
+                    ...(props.collection.color && props.collection.color !== 'default' && props.collection.color !== 'var(--setting-row-border-color)' && props.collection.color !== 'var(--collection-default-color)' && { borderColor: getColorValue(props.collection.color) })
                 }}
                 onClick={_handleTileClick}
                 {...props.dragAttributes}
@@ -227,6 +230,11 @@ function CollectionTile(props) {
                 )}
             </div>
 
+            {/* Folder label (fullpage only) */}
+            {props.folderName && (
+                <div className="tile-folder-label">{props.folderName}</div>
+            )}
+
             {/* Footer */}
             <div className="tile-footer">
                 <div className="tile-stats">
@@ -245,62 +253,74 @@ function CollectionTile(props) {
             )}
 
             {/* Action buttons */}
-            <div 
-                className="tile-actions" 
+            <div
+                className="tile-actions tile-hover-menu"
                 onClick={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
                 onPointerDown={(e) => e.stopPropagation()}
             >
                 <button
-                    className="tile-action-button play-button"
+                    type="button"
+                    className="tile-action-button tile-menu-item play-button"
                     onClick={(e) => { e.stopPropagation(); _handleOpenTabs(); }}
                     onMouseDown={(e) => e.stopPropagation()}
                     onPointerDown={(e) => e.stopPropagation()}
+                    aria-label={isAutoUpdate ? "Focus collection window" : "Open collection tabs"}
                     data-tooltip-id="main-tooltip" data-tooltip-content={isAutoUpdate ? "Focus collection window" : "Open collection tabs"}
+                    data-tooltip-place="right"
                     data-tooltip-class-name="small-tooltip"
                 >
-                    {isAutoUpdate ? <MdCenterFocusWeak /> : <FaPlay />}
+                    {isAutoUpdate ? <MdCenterFocusWeak /> : <MdOutlineLaunch />}
+                    <span className="tile-menu-label">{isAutoUpdate ? 'Focus' : 'Open'}</span>
                 </button>
 
-                <ContextMenu
-                    menuItems={createCollectionMenuItems({
-                        isAutoUpdate,
-                        onExport: _exportCollectionToFile,
-                        onDelete: _handleDelete,
-                        onUpdate: _handleUpdate,
-                        onStopTracking: _handleStopTracking,
-                        onDuplicate: _handleDuplicate
-                    })}
-                    tooltip="Collection options"
-                />
+                <div
+                    className="tile-menu-item tile-menu-option"
+                >
+                    <ContextMenu
+                        menuItems={createCollectionMenuItems({
+                            isAutoUpdate,
+                            onExport: _exportCollectionToFile,
+                            onDelete: _handleDelete,
+                            onUpdate: _handleUpdate,
+                            onStopTracking: _handleStopTracking,
+                            onDuplicate: _handleDuplicate
+                        })}
+                        tooltip="Collection options"
+                        tooltipPlace="right"
+                    />
+                    <span className="tile-menu-label">More</span>
+                </div>
+
+                <div
+                    className="tile-menu-item tile-menu-color"
+                >
+                    <ColorPicker
+                        currentColor={props.collection.color}
+                        action={(newColor) => {
+                            const updatedCollection = { ...props.collection, color: newColor, lastUpdated: Date.now() };
+                            props.updateCollection(updatedCollection, true); // Manual color change - trigger lightning effect
+                        }}
+                        tooltip="Change collection color"
+                        tooltipPlace="right"
+                    />
+                    <span className="tile-menu-label">Color</span>
+                </div>
 
                 <button
-                    className="tile-action-button delete-button"
+                    type="button"
+                    className="tile-action-button tile-menu-item delete-button"
                     onClick={(e) => { e.stopPropagation(); _handleDelete(); }}
                     onMouseDown={(e) => e.stopPropagation()}
                     onPointerDown={(e) => e.stopPropagation()}
+                    aria-label="Delete collection"
                     data-tooltip-id="main-tooltip" data-tooltip-content="Delete collection"
+                    data-tooltip-place="right"
                     data-tooltip-class-name="small-tooltip"
                 >
                     <FaTrash />
+                    <span className="tile-menu-label">Delete</span>
                 </button>
-            </div>
-
-            {/* Color picker */}
-            <div 
-                className="tile-color-picker" 
-                onClick={(e) => e.stopPropagation()}
-                onMouseDown={(e) => e.stopPropagation()}
-                onPointerDown={(e) => e.stopPropagation()}
-            >
-                <ColorPicker 
-                    currentColor={props.collection.color}
-                    action={(newColor) => {
-                        const updatedCollection = { ...props.collection, color: newColor, lastUpdated: Date.now() };
-                        props.updateCollection(updatedCollection, true); // Manual color change - trigger lightning effect
-                    }}
-                    tooltip="Change collection color"
-                />
             </div>
         </div>
         </DroppableCollection>

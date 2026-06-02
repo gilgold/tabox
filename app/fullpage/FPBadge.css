@@ -1,0 +1,64 @@
+.fp-badge {
+    --fp-badge-accent: var(--settings-row-text-color);
+    --fp-badge-bg: color-mix(in srgb, var(--fp-badge-accent) 12%, transparent);
+    --fp-badge-border: color-mix(in srgb, var(--fp-badge-accent) 28%, transparent);
+    --fp-badge-text: color-mix(in srgb, var(--fp-badge-accent) 78%, var(--text-color));
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    box-sizing: border-box;
+    width: fit-content;
+    min-height: 22px;
+    padding: 3px 9px;
+    border: 1px solid var(--fp-badge-border);
+    border-radius: var(--fp-radius-xs, 6px);
+    background: var(--fp-badge-bg);
+    color: var(--fp-badge-text);
+    font-family: var(--fp-font-body);
+    font-size: 12px;
+    font-weight: 650;
+    line-height: 1.2;
+    white-space: nowrap;
+    letter-spacing: 0;
+}
+
+.fp-badge-accent-tabs {
+    --fp-badge-accent: #22c55e;
+}
+
+.fp-badge-accent-groups {
+    --fp-badge-accent: #f97316;
+}
+
+.fp-badge-accent-folder {
+    --fp-badge-accent: var(--settings-row-text-color);
+}
+
+.fp-badge-accent-match {
+    --fp-badge-accent: #94a3b8;
+}
+
+.fp-badge-accent-success {
+    --fp-badge-accent: #22c55e;
+}
+
+.fp-badge-accent-warning,
+.fp-badge-accent-session {
+    --fp-badge-accent: #f59e0b;
+}
+
+.fp-badge-accent-info {
+    --fp-badge-accent: var(--primary-color);
+}
+
+.fp-badge-accent-current-window {
+    --fp-badge-accent: var(--fp-current-windows-accent, #84cc16);
+}
+
+[data-theme="dark"] .fp-badge {
+    --fp-badge-bg: color-mix(in srgb, var(--fp-badge-accent) 18%, rgba(255, 255, 255, 0.04));
+    --fp-badge-border: color-mix(in srgb, var(--fp-badge-accent) 38%, rgba(255, 255, 255, 0.08));
+    --fp-badge-text: color-mix(in srgb, var(--fp-badge-accent) 86%, rgba(255, 255, 255, 0.92));
+}

@@ -27,8 +27,8 @@
     position: fixed;
     top: 0;
     right: 0;
-    width: 340px;
-    max-width: 85vw;
+    width: 420px;
+    max-width: 92vw;
     height: 100%;
     background: var(--bg-color);
     box-shadow: -4px 0 24px rgba(0, 0, 0, 0.2);
@@ -116,24 +116,75 @@
     flex-wrap: wrap;
 }
 
-.panel-title {
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: var(--text-color);
-    margin: 0;
-    word-break: break-word;
+.panel-title-slot {
     flex: 1;
     min-width: 0;
 }
 
-.panel-title-edit {
-    flex: 1;
-    min-width: 200px;
-}
-
-.panel-title-edit .auto-save-textbox {
+.panel-title {
     font-size: 1.25rem;
     font-weight: 600;
+    line-height: 1.2;
+    font-family: inherit;
+    letter-spacing: inherit;
+    color: var(--text-color);
+    margin: 0;
+    word-break: break-word;
+}
+
+.panel-title-edit {
+    width: 100%;
+    min-width: 0;
+}
+
+.panel-title-edit-active {
+    padding: 2px 0;
+}
+
+.panel-title-autosave {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    height: auto;
+    background: transparent;
+    border-radius: 8px;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.panel-title-autosave:hover {
+    background: rgba(var(--primary-color-rgb, 52, 152, 219), 0.06);
+    box-shadow: 0 0 0 1px rgba(var(--primary-color-rgb, 52, 152, 219), 0.16);
+}
+
+.panel-title-autosave:focus-within {
+    background: rgba(var(--primary-color-rgb, 52, 152, 219), 0.08);
+    box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb, 52, 152, 219), 0.55);
+    transform: none;
+}
+
+.panel-title-input {
+    display: block;
+    width: 100%;
+    height: auto;
+    min-height: 32px;
+    padding: 0 28px 0 10px;
+    font: inherit;
+    font-size: 1.25rem !important;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: inherit;
+    color: var(--text-color);
+    background: transparent;
+    border: none;
+    outline: none;
+    box-sizing: border-box;
+    border-radius: inherit;
+    box-shadow: none;
+    appearance: none;
+    -webkit-appearance: none;
 }
 
 .panel-edit-btn {
@@ -151,6 +202,7 @@
     opacity: 0.6;
 }
 
+.panel-edit-btn.active,
 .panel-edit-btn:hover {
     background: rgba(255, 255, 255, 0.1);
     color: var(--text-color);
@@ -267,6 +319,7 @@
 .panel-action-btn.flex-grow {
     flex: 1 1 auto;
     flex-shrink: 1;
+    max-width: 150px;
 }
 
 .panel-action-group {
@@ -311,6 +364,84 @@
 .panel-action-btn.stop-tracking:hover {
     background: rgba(251, 146, 60, 0.25);
     border-color: rgba(251, 146, 60, 0.4);
+}
+
+/* Panel tab search */
+.panel-search-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 12px;
+    padding: 7px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--divider-color);
+    background: var(--section-bg-color);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    flex-shrink: 0;
+}
+
+.panel-search-bar:focus-within {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb, 52, 152, 219), 0.15);
+}
+
+.panel-search-icon {
+    flex-shrink: 0;
+    color: var(--text-secondary-color);
+    opacity: 0.5;
+    transition: opacity 0.2s ease;
+}
+
+.panel-search-bar:focus-within .panel-search-icon {
+    opacity: 0.85;
+    color: var(--primary-color);
+}
+
+.panel-search-input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-color);
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    outline: none;
+}
+
+.panel-search-input::placeholder {
+    color: var(--text-secondary-color);
+    opacity: 0.5;
+}
+
+.panel-search-clear {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    color: var(--text-secondary-color);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.panel-search-clear:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+[data-theme="dark"] .panel-search-bar {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .panel-search-bar:focus-within {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb, 52, 152, 219), 0.12);
 }
 
 /* Panel content (tabs area) */

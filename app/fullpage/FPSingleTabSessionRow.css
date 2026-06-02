@@ -1,0 +1,233 @@
+.fp-single-tab-session-row {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 12px;
+    min-height: 70px;
+    padding: 12px 14px;
+    border-radius: var(--fp-card-radius, 16px);
+    border: 1px solid color-mix(in srgb, #f59e0b 18%, var(--fp-border, rgba(0, 0, 0, 0.06)));
+    border-left: 3.5px solid #f59e0b;
+    background:
+        linear-gradient(135deg, color-mix(in srgb, #f59e0b 7%, var(--fp-surface-elevated, var(--settings-bg-color))) 0%, var(--fp-surface-elevated, var(--settings-bg-color)) 56%);
+    box-shadow: var(--fp-shadow-sm);
+    cursor: pointer;
+    transition:
+        background 0.2s var(--fp-ease, ease),
+        border-color 0.2s var(--fp-ease, ease),
+        box-shadow 0.2s var(--fp-ease, ease),
+        transform 0.18s var(--fp-ease, ease);
+}
+
+.fp-single-tab-session-row:hover,
+.fp-single-tab-session-row:focus-visible,
+.fp-single-tab-session-row.is-selected {
+    border-color: color-mix(in srgb, #f59e0b 42%, var(--fp-border, rgba(0, 0, 0, 0.06)));
+    box-shadow:
+        0 10px 24px rgba(245, 158, 11, 0.12),
+        var(--fp-shadow-sm);
+}
+
+.fp-single-tab-session-row:hover {
+    background:
+        linear-gradient(135deg, color-mix(in srgb, #f59e0b 11%, var(--fp-surface-elevated, var(--settings-bg-color))) 0%, var(--fp-surface-elevated, var(--settings-bg-color)) 56%);
+    transform: translateY(-1px);
+}
+
+.fp-single-tab-session-row:focus-visible {
+    outline: 2px solid color-mix(in srgb, #f59e0b 58%, white);
+    outline-offset: 3px;
+}
+
+.fp-single-tab-session-row.is-selected {
+    background:
+        linear-gradient(135deg, color-mix(in srgb, #f59e0b 13%, var(--fp-surface-elevated, var(--settings-bg-color))) 0%, var(--fp-surface-elevated, var(--settings-bg-color)) 58%);
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, #f59e0b 52%, white),
+        0 0 0 5px color-mix(in srgb, #f59e0b 16%, transparent),
+        0 14px 32px rgba(245, 158, 11, 0.2),
+        var(--fp-shadow-sm);
+}
+
+.fp-single-tab-session-checkbox {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    opacity: 0;
+    transition: opacity 0.18s var(--fp-ease, ease);
+}
+
+.fp-single-tab-session-row:hover .fp-single-tab-session-checkbox,
+.fp-single-tab-session-row:focus-within .fp-single-tab-session-checkbox,
+.fp-single-tab-session-row.is-selected .fp-single-tab-session-checkbox,
+.fp-single-tab-session-checkbox.is-checked {
+    opacity: 1;
+}
+
+.fp-single-tab-session-favicon {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, #f59e0b 10%, transparent);
+    overflow: hidden;
+}
+
+.fp-single-tab-session-favicon img {
+    width: 18px;
+    height: 18px;
+    object-fit: contain;
+}
+
+.fp-single-tab-session-main {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.fp-single-tab-session-title-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.fp-single-tab-session-badge {
+    padding: 4px 8px;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+}
+
+.fp-single-tab-session-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--text-color);
+}
+
+.fp-single-tab-session-url {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--settings-row-text-color);
+    font-size: 12px;
+}
+
+.fp-single-tab-session-time {
+    color: var(--settings-row-text-color);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.fp-single-tab-session-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    opacity: 0;
+    transform: translateX(8px);
+    pointer-events: none;
+    transition:
+        opacity 0.18s var(--fp-ease, ease),
+        transform 0.18s var(--fp-ease, ease);
+}
+
+.fp-single-tab-session-row:hover .fp-single-tab-session-actions,
+.fp-single-tab-session-row:focus-within .fp-single-tab-session-actions,
+.fp-single-tab-session-row.is-selected .fp-single-tab-session-actions {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
+}
+
+.fp-single-tab-session-actions .fp-session-action-btn {
+    min-width: 120px;
+}
+
+.fp-single-tab-session-search-match {
+    background: rgba(251, 191, 36, 0.28);
+    color: inherit;
+    border-radius: 3px;
+    padding: 1px 3px;
+    font-weight: 700;
+}
+
+[data-theme="dark"] .fp-single-tab-session-row {
+    background:
+        linear-gradient(135deg, color-mix(in srgb, #f59e0b 12%, var(--fp-surface-elevated, var(--settings-bg-color))) 0%, var(--fp-surface-elevated, var(--settings-bg-color)) 58%);
+}
+
+[data-theme="dark"] .fp-single-tab-session-row:hover,
+[data-theme="dark"] .fp-single-tab-session-row.is-selected {
+    box-shadow:
+        0 14px 32px rgba(0, 0, 0, 0.28),
+        0 0 0 1px rgba(245, 158, 11, 0.2);
+}
+
+[data-theme="dark"] .fp-single-tab-session-row.is-selected {
+    box-shadow:
+        0 0 0 1px rgba(245, 158, 11, 0.34),
+        0 0 0 5px rgba(245, 158, 11, 0.14),
+        0 16px 36px rgba(0, 0, 0, 0.32),
+        0 0 22px rgba(245, 158, 11, 0.16);
+}
+
+[data-theme="dark"] .fp-single-tab-session-badge {
+    --fp-badge-accent: #fbbf24;
+}
+
+@media (max-width: 960px) {
+    .fp-single-tab-session-row {
+        grid-template-columns: auto auto minmax(0, 1fr);
+        grid-template-areas:
+            "checkbox favicon main"
+            "checkbox time time"
+            "checkbox actions actions";
+        align-items: start;
+    }
+
+    .fp-single-tab-session-checkbox {
+        grid-area: checkbox;
+        margin-top: 4px;
+    }
+
+    .fp-single-tab-session-favicon {
+        grid-area: favicon;
+    }
+
+    .fp-single-tab-session-main {
+        grid-area: main;
+    }
+
+    .fp-single-tab-session-time {
+        grid-area: time;
+        margin-left: 46px;
+    }
+
+    .fp-single-tab-session-actions {
+        grid-area: actions;
+        margin-left: 46px;
+        flex-wrap: wrap;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fp-single-tab-session-row,
+    .fp-single-tab-session-checkbox,
+    .fp-single-tab-session-actions {
+        transition: none !important;
+    }
+}

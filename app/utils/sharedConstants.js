@@ -9,6 +9,7 @@ export const STORAGE_KEYS = {
     COLLECTIONS_INDEX: 'collections_index',
     FOLDERS_INDEX: 'folders_index',
     LEGACY_TABS_ARRAY: 'tabsArray',
+    DELETED_COLLECTION_TOMBSTONES: 'deleted_collection_tombstones',
     COLLECTION_PREFIX: 'collection_',
     FOLDER_PREFIX: 'folder_',
     STORAGE_VERSION: 'tabox_storage_version'
@@ -22,4 +23,3 @@ export const generateUid = () => {
         crypto.randomUUID() : 
         Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
 };
-

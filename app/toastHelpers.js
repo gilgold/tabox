@@ -1,15 +1,31 @@
 import React from 'react';
 import toast from 'react-hot-toast';
-import { SnackBarWithUndo } from './SnackBarWithUndo';
+import { FPToast } from './fullpage/FPToast';
 import { UNDO_TIME } from './constants';
 
-// Track active toast IDs to enforce max limit
 const MAX_TOASTS = 2;
 const activeToastIds = [];
 
-/**
- * Enforce max toast limit by dismissing oldest toast if needed
- */
+let currentViewContext = 'popup';
+
+export const setToastViewContext = (context) => {
+    currentViewContext = context;
+};
+
+const isFullPage = () => currentViewContext === 'fullpage';
+const getPosition = () => isFullPage() ? 'bottom-right' : 'bottom-center';
+const createSharedToast = ({ duration, position, toasterId, ...toastProps }) => toast.custom(
+    (t) => (
+        <FPToast
+            t={t}
+            duration={duration}
+            visible={t.visible}
+            {...toastProps}
+        />
+    ),
+    { duration, position, toasterId }
+);
+
 const enforceToastLimit = () => {
     while (activeToastIds.length >= MAX_TOASTS) {
         const oldestId = activeToastIds.shift();
@@ -17,9 +33,6 @@ const enforceToastLimit = () => {
     }
 };
 
-/**
- * Track a new toast ID and remove it when dismissed
- */
 const trackToast = (toastId) => {
     activeToastIds.push(toastId);
 };
@@ -40,25 +53,19 @@ export const showUndoToast = (
     duration = UNDO_TIME
 ) => {
     enforceToastLimit();
-    
-    const toastId = toast.custom(
-        (t) => (
-            <SnackBarWithUndo
-                t={t}
-                icon={icon}
-                message={message}
-                collectionName={collectionName}
-                undoAction={undoAction}
-                duration={duration * 1000}
-                visible={t.visible}
-            />
-        ),
-        {
-            duration: duration * 1000,
-            position: 'bottom-center',
-        }
-    );
-    
+
+    const durationMs = duration * 1000;
+    const position = getPosition();
+    const toastId = createSharedToast({
+        duration: durationMs,
+        position,
+        variant: 'undo',
+        icon,
+        title: collectionName.trim(),
+        message,
+        undoAction,
+    });
+
     trackToast(toastId);
     return toastId;
 };
@@ -68,20 +75,18 @@ export const showUndoToast = (
  * @param {string} message - Message to display
  * @param {number} duration - Duration in ms (default 3000)
  */
-export const showSuccessToast = (message, duration = 3000) => {
+export const showSuccessToast = (message, duration = 3000, options = {}) => {
     enforceToastLimit();
-    
-    const toastId = toast.success(message, {
-        duration: duration,
-        position: 'bottom-center',
-        style: {
-            background: '#4caf50',
-            color: '#fff',
-            padding: '12px 16px',
-            borderRadius: '8px',
-        },
+
+    const position = getPosition();
+    const toastId = createSharedToast({
+        duration,
+        position,
+        toasterId: options.toasterId,
+        variant: 'success',
+        message,
     });
-    
+
     trackToast(toastId);
     return toastId;
 };
@@ -93,19 +98,15 @@ export const showSuccessToast = (message, duration = 3000) => {
  */
 export const showInfoToast = (message, duration = 4000) => {
     enforceToastLimit();
-    
-    const toastId = toast(message, {
-        duration: duration,
-        position: 'bottom-center',
-        icon: 'ℹ️',
-        style: {
-            background: '#2196f3',
-            color: '#fff',
-            padding: '12px 16px',
-            borderRadius: '8px',
-        },
+
+    const position = getPosition();
+    const toastId = createSharedToast({
+        duration,
+        position,
+        variant: 'info',
+        message,
     });
-    
+
     trackToast(toastId);
     return toastId;
 };
@@ -113,21 +114,18 @@ export const showInfoToast = (message, duration = 4000) => {
 /**
  * Show a simple error toast
  */
-export const showErrorToast = (message) => {
+export const showErrorToast = (message, options = {}) => {
     enforceToastLimit();
-    
-    const toastId = toast.error(message, {
+
+    const position = getPosition();
+    const toastId = createSharedToast({
         duration: 4000,
-        position: 'bottom-center',
-        style: {
-            background: '#f44336',
-            color: '#fff',
-            padding: '12px 16px',
-            borderRadius: '8px',
-        },
+        position,
+        toasterId: options.toasterId,
+        variant: 'error',
+        message,
     });
-    
+
     trackToast(toastId);
     return toastId;
 };
-

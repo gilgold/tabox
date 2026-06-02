@@ -1,10 +1,11 @@
 {
   "name": "tabox",
-  "version": "3.5.1",
+  "version": "4.1.0",
   "description": "Tabox - Save and share your tabs!",
   "main": "index.js",
   "scripts": {
     "test": "jest --transformIgnorePatterns \"node_modules/(?!@toolz/allow-react)/\" --env=jsdom --coverage",
+    "test:coverage:all": "jest --config jest.coverage-all.config.js --runInBand",
     "dev": "INLINE_RUNTIME_CHUNK=false NODE_ENV=development webpack --mode development --config webpack.js --watch",
     "build": "INLINE_RUNTIME_CHUNK=false NODE_ENV=production webpack --mode production --config webpack.js",
     "build:debug": "INLINE_RUNTIME_CHUNK=false NODE_ENV=production webpack --mode production --config webpack.js --env sourcemap=true",
@@ -33,6 +34,45 @@
     "transform": {
       ".+\\.(css|styl|less|sass|scss|png|jpg|ttf|woff|woff2)$": "jest-transform-stub",
       "^.+\\.js$": "babel-jest"
+    },
+    "collectCoverageFrom": [
+      "chrome/sync-transport.js",
+      "chrome/sync-merge.js",
+      "chrome/sync-apply.js",
+      "chrome/sync-session-state.js",
+      "app/utils/migrationSupport40.js"
+    ],
+    "coverageThreshold": {
+      "./chrome/sync-transport.js": {
+        "branches": 100,
+        "functions": 100,
+        "lines": 100,
+        "statements": 100
+      },
+      "./chrome/sync-merge.js": {
+        "branches": 100,
+        "functions": 100,
+        "lines": 100,
+        "statements": 100
+      },
+      "./chrome/sync-apply.js": {
+        "branches": 100,
+        "functions": 100,
+        "lines": 100,
+        "statements": 100
+      },
+      "./chrome/sync-session-state.js": {
+        "branches": 100,
+        "functions": 100,
+        "lines": 100,
+        "statements": 100
+      },
+      "./app/utils/migrationSupport40.js": {
+        "branches": 100,
+        "functions": 100,
+        "lines": 100,
+        "statements": 100
+      }
     },
     "reporters": [
       "default",
@@ -102,5 +142,5 @@
     "webpack-cli": "^6.0.1",
     "webpack-extension-manifest-plugin": "^0.8.0"
   },
-  "packageManager": "yarn@3.6.4+sha512.e70835d4d6d62c07be76b3c1529cb640c7443f0fe434ef4b6478a5a399218cbaf1511b396b3c56eb03bc86424cff2320f6167ad2fde273aa0df6e60b7754029f"
+  "packageManager": "yarn@4.12.0"
 }

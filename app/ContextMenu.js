@@ -6,7 +6,9 @@ import { activeContextMenuState } from './atoms/animationsState';
 
 function ContextMenu({ 
     menuItems = [],
-    tooltip = "Options"
+    tooltip = "Options",
+    tooltipPlace,
+    onOpenChange,
 }) {
     const [activeMenuId, setActiveMenuId] = useAtom(activeContextMenuState);
     const [menuPosition, setMenuPosition] = React.useState({ top: 0, right: 0 });
@@ -16,6 +18,10 @@ function ContextMenu({
     
     // Derive showMenu from global state
     const showMenu = activeMenuId === menuId;
+
+    useEffect(() => {
+        onOpenChange?.(showMenu);
+    }, [onOpenChange, showMenu]);
 
     // Filter menu items based on condition (if provided)
     const visibleMenuItems = menuItems.filter(item => {
@@ -132,6 +138,7 @@ function ContextMenu({
                 ref={menuButtonRef}
                 className="action-icon menu-icon"
                 data-tooltip-id="main-tooltip" data-tooltip-content={tooltip}
+                data-tooltip-place={tooltipPlace}
                 onClick={handleMenuClick}
             >
                 <MdOutlineMoreHoriz />
@@ -170,4 +177,4 @@ function ContextMenu({
     );
 }
 
-export default ContextMenu; 
+export default ContextMenu;

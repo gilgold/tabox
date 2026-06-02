@@ -5,7 +5,7 @@ class TaboxCollection {
       this.name = name;
       this.tabs = tabs;
       this.chromeGroups = chromeGroups;
-      this.color = color ?? 'var(--setting-row-border-color)';
+      this.color = color ?? 'var(--collection-default-color)';
       this.createdOn = createdOn ?? Date.now();
       // Only set current time if lastUpdated is explicitly null/undefined, preserve existing timestamps (including 0)
       this.lastUpdated = lastUpdated !== null && lastUpdated !== undefined ? lastUpdated : Date.now();

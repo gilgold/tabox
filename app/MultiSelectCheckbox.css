@@ -1,0 +1,116 @@
+.multi-select-checkbox {
+    --multi-select-checkbox-accent: var(--primary-color);
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    cursor: pointer;
+    transition:
+        transform 0.16s var(--fp-ease, ease),
+        opacity 0.16s var(--fp-ease, ease);
+}
+
+.multi-select-checkbox:disabled {
+    cursor: default;
+    opacity: 0.6;
+}
+
+.multi-select-checkbox:focus-visible {
+    outline: none;
+}
+
+.multi-select-checkbox-frame {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 8px;
+    border: 1.5px solid color-mix(in srgb, var(--multi-select-checkbox-accent) 46%, var(--fp-border, rgba(0, 0, 0, 0.12)));
+    background: color-mix(in srgb, var(--fp-surface-elevated, var(--settings-bg-color)) 96%, var(--multi-select-checkbox-accent));
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+    transition:
+        transform 0.18s var(--fp-ease, ease),
+        border-color 0.18s var(--fp-ease, ease),
+        background 0.18s var(--fp-ease, ease),
+        box-shadow 0.18s var(--fp-ease, ease);
+}
+
+.multi-select-checkbox:hover .multi-select-checkbox-frame,
+.multi-select-checkbox:focus-visible .multi-select-checkbox-frame {
+    transform: scale(1.04);
+    border-color: color-mix(in srgb, var(--multi-select-checkbox-accent) 68%, white);
+    background: color-mix(in srgb, var(--fp-surface-elevated, var(--settings-bg-color)) 90%, var(--multi-select-checkbox-accent));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--multi-select-checkbox-accent) 12%, transparent);
+}
+
+.multi-select-checkbox:active .multi-select-checkbox-frame {
+    transform: scale(0.96);
+}
+
+.multi-select-checkbox:focus-visible .multi-select-checkbox-frame {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--multi-select-checkbox-accent) 18%, transparent);
+}
+
+.multi-select-checkbox.is-checked .multi-select-checkbox-frame {
+    border-color: color-mix(in srgb, var(--multi-select-checkbox-accent) 78%, white);
+    background: color-mix(in srgb, var(--fp-surface-elevated, var(--settings-bg-color)) 84%, var(--multi-select-checkbox-accent));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--multi-select-checkbox-accent) 16%, transparent);
+}
+
+.multi-select-checkbox-checkmark {
+    position: relative;
+    z-index: 1;
+    width: 13px;
+    height: 8px;
+    border-left: 2.6px solid var(--multi-select-checkbox-accent);
+    border-bottom: 2.6px solid var(--multi-select-checkbox-accent);
+    opacity: 0;
+    transform: translateY(-1px) rotate(-45deg) scale(0.58);
+    transform-origin: center;
+    filter: drop-shadow(0 0 0 color-mix(in srgb, var(--multi-select-checkbox-accent) 0%, transparent));
+    transition:
+        opacity 0.16s var(--fp-ease, ease),
+        transform 0.2s var(--fp-ease, ease),
+        filter 0.2s var(--fp-ease, ease);
+}
+
+.multi-select-checkbox.is-checked .multi-select-checkbox-checkmark {
+    opacity: 1;
+    transform: translateY(-1px) rotate(-45deg) scale(1);
+    filter:
+        drop-shadow(0 0 2px color-mix(in srgb, var(--multi-select-checkbox-accent) 92%, white))
+        drop-shadow(0 0 6px color-mix(in srgb, var(--multi-select-checkbox-accent) 68%, transparent))
+        drop-shadow(0 0 12px color-mix(in srgb, var(--multi-select-checkbox-accent) 52%, transparent));
+}
+
+[data-theme="dark"] .multi-select-checkbox-frame {
+    border-color: color-mix(in srgb, var(--multi-select-checkbox-accent) 40%, rgba(255, 255, 255, 0.24));
+    background: color-mix(in srgb, var(--fp-surface-elevated, var(--settings-bg-color)) 94%, var(--multi-select-checkbox-accent));
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+
+[data-theme="dark"] .multi-select-checkbox:hover .multi-select-checkbox-frame,
+[data-theme="dark"] .multi-select-checkbox:focus-visible .multi-select-checkbox-frame {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--multi-select-checkbox-accent) 18%, transparent);
+}
+
+[data-theme="dark"] .multi-select-checkbox.is-checked .multi-select-checkbox-frame {
+    background: color-mix(in srgb, var(--fp-surface-elevated, var(--settings-bg-color)) 80%, var(--multi-select-checkbox-accent));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--multi-select-checkbox-accent) 24%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .multi-select-checkbox,
+    .multi-select-checkbox-frame,
+    .multi-select-checkbox-checkmark {
+        transition: none !important;
+    }
+}

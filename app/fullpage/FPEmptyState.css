@@ -1,0 +1,123 @@
+/* ========================================
+   FP Empty State — Warm, inviting, editorial
+   Serif headline · soft entrance · depth
+   ======================================== */
+
+.fp-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 32px;
+    text-align: center;
+    min-height: 300px;
+    animation: fp-empty-in 0.5s var(--fp-ease, ease) both;
+    animation-delay: 0.1s;
+}
+
+.fp-empty-state-has-image {
+    justify-content: flex-start;
+    padding-top: 128px;
+}
+
+.fp-empty-image {
+    width: min(100%, 620px);
+    max-width: 100%;
+    height: auto;
+    margin: 0 0 24px;
+    display: block;
+    object-fit: contain;
+    opacity: 0.5;
+    filter: drop-shadow(0 18px 28px rgba(0, 0, 0, 0.08));
+    -webkit-mask-image:
+        linear-gradient(to right, transparent, black 15%, black 85%, transparent),
+        linear-gradient(to bottom, transparent, black 15%, black 85%, transparent);
+    -webkit-mask-composite: source-in;
+    mask-image:
+        linear-gradient(to right, transparent, black 15%, black 85%, transparent),
+        linear-gradient(to bottom, transparent, black 15%, black 85%, transparent);
+    mask-composite: intersect;
+}
+
+@keyframes fp-empty-in {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fp-empty-icon {
+    font-size: 52px;
+    margin-bottom: 20px;
+    opacity: 0.35;
+    line-height: 1;
+    filter: grayscale(0.2);
+}
+
+.fp-empty-title {
+    font-family: var(--fp-font-display);
+    font-size: 22px;
+    font-weight: 650;
+    font-style: normal;
+    color: var(--text-color);
+    margin: 0 0 10px;
+    opacity: 0.7;
+    letter-spacing: -0.01em;
+    line-height: 1.3;
+}
+
+.fp-empty-description {
+    font-family: var(--fp-font-body);
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--settings-row-text-color);
+    margin: 0 0 28px;
+    max-width: 340px;
+    line-height: 1.6;
+    opacity: 0.5;
+    letter-spacing: 0.005em;
+}
+
+.fp-empty-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.fp-empty-action-btn {
+    padding: 9px 22px;
+    border-radius: var(--fp-radius-sm, 8px);
+    border: 1px solid var(--fp-border, var(--divider-color));
+    background: var(--fp-surface-elevated, var(--input-bg-color));
+    color: var(--text-color);
+    font-family: var(--fp-font-body);
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 0.01em;
+    box-shadow: var(--fp-shadow-xs);
+    transition:
+        background var(--fp-duration, 0.2s) var(--fp-ease, ease),
+        border-color var(--fp-duration, 0.2s) var(--fp-ease, ease),
+        box-shadow var(--fp-duration, 0.2s) var(--fp-ease, ease),
+        transform 0.1s var(--fp-ease, ease);
+}
+
+.fp-empty-action-btn:hover {
+    background: var(--setting-row-hover-bg-color);
+    border-color: var(--fp-border-strong, var(--setting-row-border-color));
+    box-shadow: var(--fp-shadow-sm);
+}
+
+.fp-empty-action-btn:active {
+    transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fp-empty-state {
+        animation: none !important;
+    }
+}

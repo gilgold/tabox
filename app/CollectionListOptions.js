@@ -4,18 +4,16 @@ import { settingsDataState } from './atoms/globalAppSettingsState';
 import { highlightedCollectionUidState } from './atoms/animationsState';
 import './CollectionListOptions.css';
 import { PiGridNineFill } from "react-icons/pi";
-import { SortType } from './model/SortOptions';
 import { browser } from '../static/globals';
-import Select from 'react-select';
+import Select, { components } from 'react-select';
 import { 
-    MdSortByAlpha, 
-    MdAccessTime, 
-    MdPalette,
+    MdAccessTime,
     MdArrowUpward,
     MdArrowDownward,
+    MdPalette,
     MdOpenInNew,
     MdHistory,
-    MdSort,
+    MdSortByAlpha,
     MdViewList,
     MdCreateNewFolder,
 } from 'react-icons/md';
@@ -24,6 +22,7 @@ import Modal from 'react-modal';
 import { CollectionFilter } from './CollectionFilter';
 import { showSuccessToast, showErrorToast } from './toastHelpers';
 import { Tooltip } from 'react-tooltip';
+import { loadBrowserSessions, subscribeToBrowserSessions } from './utils/browserSessions';
 
 
 // Lazy load rarely-used modals for better performance
@@ -37,31 +36,31 @@ const sortOptions = [
     { value: 'COLOR', label: 'Color', icon: MdPalette }
 ];
 
-// Custom Option component with icon
-const CustomOption = (props) => {
-    const { data, innerRef, innerProps } = props;
-    const IconComponent = data.icon;
-    
-    return (
-        <div ref={innerRef} {...innerProps} className="custom-select-option">
-            <IconComponent className="option-icon" size={16} />
-            <span className="option-label">{data.label}</span>
-        </div>
-    );
-};
+function SortOption(props) {
+    const { icon: Icon } = props.data;
 
-// Custom SingleValue component with icon
-const CustomSingleValue = (props) => {
-    const { data } = props;
-    const IconComponent = data.icon;
-    
     return (
-        <div className="custom-select-single-value">
-            <IconComponent className="option-icon" size={16} />
-            <span className="option-label">{data.label}</span>
-        </div>
+        <components.Option {...props}>
+            <div className="toolbar-select-option">
+                <Icon size={16} />
+                <span>{props.label}</span>
+            </div>
+        </components.Option>
     );
-};
+}
+
+function SortSingleValue(props) {
+    const { icon: Icon } = props.data;
+
+    return (
+        <components.SingleValue {...props}>
+            <div className="toolbar-select-single-value">
+                <Icon size={16} />
+                <span>{props.data.label}</span>
+            </div>
+        </components.SingleValue>
+    );
+}
 
 export function CollectionListOptions(props) {
     const settingsData = useAtomValue(settingsDataState);
@@ -75,38 +74,7 @@ export function CollectionListOptions(props) {
     const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
     const isMountedRef = useRef(true);
     const fileInputRef = useRef(null);
-
-    // Custom styles for React Select - only for padding/height fixes
-    const customStyles = {
-        control: (provided) => ({
-            ...provided,
-            minHeight: '26px',
-            height: '26px',
-            border: '1px solid var(--text-color)',
-            borderRadius: '6px',
-            backgroundColor: 'var(--input-bg-color)',
-            boxShadow: 'none',
-            ':hover': {
-                backgroundColor: 'var(--setting-row-hover-bg-color)',
-                borderColor: 'var(--text-color)'
-            },
-        }),
-        valueContainer: (provided) => ({
-            ...provided,
-            height: '24px',
-            padding: '0 8px',
-            display: 'flex',
-            alignItems: 'center'
-        }),
-        indicatorSeparator: () => ({
-            display: 'none'
-        }),
-        dropdownIndicator: (provided) => ({
-            ...provided,
-            color: 'var(--text-color)',
-            padding: '2px 8px'
-        })
-    };
+    const menuPortalTarget = typeof document !== 'undefined' ? document.body : null;
 
     useEffect(() => {
         const loadData = async () => {
@@ -141,9 +109,7 @@ export function CollectionListOptions(props) {
                     }
                 }
 
-                // Load sessions for restore functionality
-                let { sessions } = await browser.storage.local.get('sessions');
-                sessions = sessions || [];
+                const sessions = await loadBrowserSessions();
                 
                 // Only update state if component is still mounted
                 if (isMountedRef.current) {
@@ -156,9 +122,16 @@ export function CollectionListOptions(props) {
 
         loadData();
 
-        // Cleanup function
+        const unsubscribe = subscribeToBrowserSessions(async () => {
+            const sessions = await loadBrowserSessions();
+            if (isMountedRef.current) {
+                setSessionList(sessions);
+            }
+        });
+
         return () => {
             isMountedRef.current = false;
+            unsubscribe();
         };
     }, []);
 
@@ -262,6 +235,20 @@ export function CollectionListOptions(props) {
         }
     };
 
+    useEffect(() => {
+        const openFolder = () => setIsFolderModalOpen(true);
+        const openImport = () => fileInputRef.current?.click();
+        const openSession = () => { if (sessionList.length > 0) setIsSessionModalOpen(true); };
+        window.addEventListener('tabox:open-create-folder', openFolder);
+        window.addEventListener('tabox:open-import', openImport);
+        window.addEventListener('tabox:open-restore-session', openSession);
+        return () => {
+            window.removeEventListener('tabox:open-create-folder', openFolder);
+            window.removeEventListener('tabox:open-import', openImport);
+            window.removeEventListener('tabox:open-restore-session', openSession);
+        };
+    }, [sessionList]);
+
     const handleCreateFolder = () => {
         setIsFolderModalOpen(true);
     };
@@ -357,82 +344,96 @@ export function CollectionListOptions(props) {
 
     return (
         <>
-            <div className="collections-toolbar">
-                <div className="toolbar-left">
-                    <div className="sort-controls">
-                        <MdSort className="sort-icon" />
-                        <div id="toolbar-sort-select" className="sort-type-select-wrapper">
+            <div className="collections-toolbar-wrapper">
+                <div className="collections-toolbar fp-toolbar">
+                    <CollectionFilter onFiltersChange={handleFiltersChange} />
+
+                    <div className="fp-toolbar-divider" />
+
+                    <div className="fp-toolbar-group">
+                        <div id="toolbar-sort-select" className="toolbar-select-shell">
                             <Select
-                                className="sort-type-select"
-                                classNamePrefix="react-select"
-                                value={sortOptions.find(option => option.value === sortType)}
+                                className="toolbar-select"
+                                classNamePrefix="toolbar-select"
+                                value={sortOptions.find((option) => option.value === sortType)}
                                 onChange={handleSortTypeChange}
                                 options={sortOptions}
-                                styles={customStyles}
-                                components={{ 
-                                    Option: CustomOption,
-                                    SingleValue: CustomSingleValue 
-                                }}
                                 isSearchable={false}
                                 isClearable={false}
-                                placeholder="Sort by..."
+                                components={{
+                                    Option: SortOption,
+                                    SingleValue: SortSingleValue,
+                                }}
+                                aria-label="Sort collections"
+                                menuPortalTarget={menuPortalTarget}
+                                menuPosition="fixed"
+                                styles={{
+                                    menuPortal: (base) => ({
+                                        ...base,
+                                        zIndex: 1000001,
+                                    }),
+                                }}
                             />
                         </div>
-                        
                         <button
+                            type="button"
                             id="toolbar-sort-direction"
-                            className="toolbar-button"
+                            className="fp-toolbar-btn"
                             onClick={toggleSortDirection}
                         >
                             {/* Inverted: Up arrow for descending (higher values first), Down arrow for ascending (lower values first) */}
                             {sortAscending ? <MdArrowDownward size={ICON_SIZE} /> : <MdArrowUpward size={ICON_SIZE} />}
                         </button>
                     </div>
-                </div>
 
-                <div className="toolbar-center">
-                    <CollectionFilter onFiltersChange={handleFiltersChange} />
-                </div>
+                    <div className="fp-toolbar-divider" />
 
-                <div className="toolbar-right">
-                    <button
-                        id="toolbar-open-new-window"
-                        className={`toolbar-toggle-button ${openInNewWindow ? 'active' : ''}`}
-                        onClick={toggleNewWindow}
-                    >
-                        <MdOpenInNew size={ICON_SIZE} />
-                    </button>
-                    <button
-                        id="toolbar-create-folder"
-                        className="toolbar-button"
-                        onClick={handleCreateFolder}
-                    >
-                        <MdCreateNewFolder size={ICON_SIZE} />
-                    </button>
-                    <button
-                        id="toolbar-view-mode"
-                        className="toolbar-button"
-                        onClick={toggleViewMode}
-                    >
-                        {viewMode === 'list' ? <PiGridNineFill size={ICON_SIZE} /> : <MdViewList size={ICON_SIZE} />}
-                    </button>
-                    <span id="toolbar-restore-session">
+                    <div className="fp-toolbar-group">
                         <button
-                            className="toolbar-button"
-                            onClick={handleRestoreSession}
-                            disabled={sessionList.length === 0}
-                            style={{ pointerEvents: sessionList.length === 0 ? 'none' : 'auto' }}
+                            type="button"
+                            id="toolbar-open-new-window"
+                            className={`fp-toolbar-btn ${openInNewWindow ? 'active' : ''}`}
+                            onClick={toggleNewWindow}
                         >
-                            <MdHistory size={ICON_SIZE} />
+                            <MdOpenInNew size={ICON_SIZE} />
                         </button>
-                    </span>
-                    <button
-                        id="toolbar-import"
-                        className="toolbar-button"
-                        onClick={handleImportClick}
-                    >
-                        <TbFileImport size={ICON_SIZE} />
-                    </button>
+                        <button
+                            type="button"
+                            id="toolbar-create-folder"
+                            className="fp-toolbar-btn"
+                            onClick={handleCreateFolder}
+                        >
+                            <MdCreateNewFolder size={ICON_SIZE} />
+                        </button>
+                        <button
+                            type="button"
+                            id="toolbar-view-mode"
+                            className="fp-toolbar-btn"
+                            onClick={toggleViewMode}
+                        >
+                            {viewMode === 'list' ? <PiGridNineFill size={ICON_SIZE} /> : <MdViewList size={ICON_SIZE} />}
+                        </button>
+                        <span id="toolbar-restore-session">
+                            <button
+                                type="button"
+                                className="fp-toolbar-btn"
+                                onClick={handleRestoreSession}
+                                disabled={sessionList.length === 0}
+                                style={{ pointerEvents: sessionList.length === 0 ? 'none' : 'auto' }}
+                            >
+                                <MdHistory size={ICON_SIZE} />
+                            </button>
+                        </span>
+                        <button
+                            type="button"
+                            id="toolbar-import"
+                            className="fp-toolbar-btn"
+                            onClick={handleImportClick}
+                            aria-label="Import collections from file"
+                        >
+                            <TbFileImport size={ICON_SIZE} />
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -477,7 +478,7 @@ export function CollectionListOptions(props) {
                 place="bottom"
             />
             <Tooltip
-                anchorSelect="#toolbar-sort-select .react-select__control"
+                anchorSelect="#toolbar-sort-select .toolbar-select__control"
                 content="Choose how collections are sorted"
                 className="small-tooltip"
                 place="bottom"
@@ -502,7 +503,7 @@ export function CollectionListOptions(props) {
             />
             <Tooltip
                 anchorSelect="#toolbar-restore-session, #toolbar-restore-session button"
-                content={sessionList.length === 0 ? "No previous sessions available" : "Restore previous session"}
+                content={sessionList.length === 0 ? "No recently closed items available" : "Restore recently closed item"}
                 className="small-tooltip"
                 place="bottom"
             />
