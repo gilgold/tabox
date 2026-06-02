@@ -1,5 +1,4 @@
 /* eslint-disable no-unused-vars */
-/* eslint-disable no-undef */
 
 // Storage utilities for background script - NEW INDEXED STORAGE HELPERS
 

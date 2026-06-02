@@ -1,4 +1,3 @@
-/* eslint-disable no-useless-escape */
 import './App.css';
 import 'react-tooltip/dist/react-tooltip.css';
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
@@ -1081,10 +1080,11 @@ function App({ mode = 'popup' }) {
     
     setDataLoading(true);
     const migrationAlreadyChecked = migrationChecked || hasSessionMigrationCheck();
-    
+    // Declared outside the try so the catch block below can still read it.
+    let extensionUpdated = false;
+
     try {
       // Check for extension updates and run migrations safely
-      let extensionUpdated = false;
       let previousVersion = null;
       
       // Prevent duplicate migration checks
@@ -1388,7 +1388,7 @@ function App({ mode = 'popup' }) {
       return true;
     } catch (error) {
       console.error('Emergency storage cleanup failed:', error);
-      openErrorSnackbar('Emergency cleanup failed: ' + error.message);
+      showErrorToast('Emergency cleanup failed: ' + error.message);
       return false;
     }
   };
