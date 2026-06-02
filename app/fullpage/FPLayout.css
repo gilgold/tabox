@@ -827,8 +827,18 @@ html.fullpage-mode .fp-sidebar-folder-item {
 
 html.fullpage-mode .fp-sidebar-nav-item:hover,
 html.fullpage-mode .fp-sidebar-folder-item:hover,
-html.fullpage-mode .fp-sidebar-shortcut-hint:hover {
-    background: var(--color-hover-bg);
+html.fullpage-mode .fp-sidebar-shortcut-hint:hover,
+html.fullpage-mode .cmd-palette-row:hover,
+html.fullpage-mode .cmd-palette-row.selected {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+html.fullpage-mode[data-theme="dark"] .fp-sidebar-nav-item:hover,
+html.fullpage-mode[data-theme="dark"] .fp-sidebar-folder-item:hover,
+html.fullpage-mode[data-theme="dark"] .fp-sidebar-shortcut-hint:hover,
+html.fullpage-mode[data-theme="dark"] .cmd-palette-row:hover,
+html.fullpage-mode[data-theme="dark"] .cmd-palette-row.selected {
+    background: rgba(255, 255, 255, 0.08);
 }
 
 html.fullpage-mode .fp-sidebar-nav-item.active,
@@ -1147,8 +1157,8 @@ html.fullpage-mode .fp-content-list-mode .fp-card-title {
 
 html.fullpage-mode .fp-content-list-mode .fp-card-favicons {
     min-height: 24px;
+    flex: 0 0 220px;
     max-width: 220px;
-    flex-basis: 220px;
     padding-right: 8px;
 }
 
@@ -1395,6 +1405,7 @@ html.fullpage-mode .fp-single-tab-session-row {
 
 html.fullpage-mode .fp-session-action-btn-save,
 html.fullpage-mode .fp-current-window-card .fp-card-action-btn.save {
+    min-height: 38px;
     background: transparent;
     border: 1px solid var(--color-primary);
     color: var(--color-primary);

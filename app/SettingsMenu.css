@@ -980,10 +980,14 @@ html.fullpage-mode .fp-settings-sidebar-item {
 }
 
 html.fullpage-mode .fp-settings-sidebar-item:hover {
-    background: var(--color-hover-bg);
+    background: rgba(0, 0, 0, 0.06);
     border-color: transparent;
     transform: none;
     box-shadow: none;
+}
+
+html.fullpage-mode[data-theme="dark"] .fp-settings-sidebar-item:hover {
+    background: rgba(255, 255, 255, 0.08);
 }
 
 html.fullpage-mode .fp-settings-sidebar-item.active {

@@ -31,6 +31,22 @@
     --fp-badge-accent: #22c55e;
 }
 
+/* List view: give the tab-count, status, and timestamp fixed-width columns so
+   they line up vertically across rows regardless of their content width
+   (e.g. "46 tabs" vs "2 tabs", "Focused" vs "Background"). */
+.fp-content-list-mode .fp-current-window-card .fp-card-meta-chip.tabs {
+    min-width: 66px;
+}
+
+.fp-content-list-mode .fp-current-window-card .fp-card-meta-chip.current-window-status {
+    min-width: 98px;
+}
+
+.fp-content-list-mode .fp-current-window-card .fp-card-time {
+    min-width: 56px;
+    text-align: right;
+}
+
 .fp-current-window-card .fp-card-matching-tab-title .fp-card-search-match {
     background: color-mix(in srgb, var(--fp-current-windows-accent, #84CC16) 24%, transparent);
 }

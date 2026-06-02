@@ -633,6 +633,22 @@ function FPSidebar({
                 </div>
             )}
 
+            {/* Command palette shortcut hint */}
+            <button
+                className="fp-sidebar-shortcut-hint"
+                onClick={() => setCommandPaletteOpen(true)}
+                data-tooltip-id="main-tooltip"
+                data-tooltip-content={collapsed ? `${isMac ? '⌘' : 'Ctrl+'}K — Command Palette` : ''}
+            >
+                <MdSearch size={20} />
+                {!collapsed && (
+                    <>
+                        <span>Command Palette</span>
+                        <kbd>{isMac ? '⌘' : 'Ctrl+'}K</kbd>
+                    </>
+                )}
+            </button>
+
             {/* Stats */}
             {!collapsed && (
                 <div className="fp-sidebar-stats">
@@ -646,22 +662,6 @@ function FPSidebar({
                     </div>
                 </div>
             )}
-
-            {/* Command palette shortcut hint */}
-            <button
-                className="fp-sidebar-shortcut-hint"
-                onClick={() => setCommandPaletteOpen(true)}
-                data-tooltip-id="main-tooltip"
-                data-tooltip-content={collapsed ? `${isMac ? '⌘' : 'Ctrl+'}K — Command Palette` : ''}
-            >
-                <MdSearch size={15} />
-                {!collapsed && (
-                    <>
-                        <span>Command Palette</span>
-                        <kbd>{isMac ? '⌘' : 'Ctrl+'}K</kbd>
-                    </>
-                )}
-            </button>
 
             {/* Folder creation modal */}
             <Suspense fallback={null}>

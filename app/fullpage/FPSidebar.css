@@ -148,7 +148,7 @@
 }
 
 .fp-sidebar-nav-item:hover {
-    background: var(--fp-border, var(--setting-row-hover-bg-color));
+    background: rgba(0, 0, 0, 0.08);
 }
 
 .fp-sidebar-nav-item.active {
@@ -323,7 +323,11 @@
 }
 
 .fp-sidebar-folder-item:hover {
-    background: var(--fp-border, var(--setting-row-hover-bg-color));
+    background: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="dark"] .fp-sidebar-folder-item:hover {
+    background: rgba(255, 255, 255, 0.08);
 }
 
 .fp-sidebar-folder-item.active {
@@ -454,9 +458,8 @@
 
 /* ---- Stats ---- */
 .fp-sidebar-stats {
-    margin: 10px 12px 14px;
-    padding: 12px 2px 2px;
-    border-top: 1px solid var(--fp-border, var(--divider-color));
+    margin: 0 12px 14px;
+    padding: 0 2px 2px;
     display: flex;
     gap: 8px;
     flex-shrink: 0;
@@ -508,7 +511,7 @@
     align-items: center;
     justify-content: center;
     gap: 8px;
-    margin: 0 12px 14px;
+    margin: 12px 12px 12px;
     padding: 8px 14px;
     border-radius: var(--fp-radius-sm, 8px);
     border: 1px dashed var(--fp-border, var(--divider-color));
@@ -527,7 +530,7 @@
 
 .fp-sidebar-shortcut-hint:hover {
     opacity: 0.75;
-    background: var(--fp-border, var(--setting-row-hover-bg-color));
+    background: rgba(0, 0, 0, 0.08);
     border-color: color-mix(in srgb, var(--primary-color) 40%, transparent);
 }
 
@@ -546,10 +549,10 @@
 
 .fp-sidebar-shortcut-hint kbd {
     font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
-    font-size: 10px;
+    font-size: 13px;
     font-weight: 600;
-    padding: 2px 6px;
-    border-radius: 4px;
+    padding: 4px 9px;
+    border-radius: 5px;
     background: rgba(0, 0, 0, 0.06);
     border: 1px solid rgba(0, 0, 0, 0.08);
     line-height: 1;
