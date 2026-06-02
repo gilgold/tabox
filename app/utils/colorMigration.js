@@ -58,6 +58,13 @@ const LEGACY_COLOR_MAPPING = {
     'var(--collection-default-color)': 'default'
 };
 
+// Chrome's native tab-group color enum values (stored on chromeGroups[].color).
+// These are valid as-is and must NOT be remapped to the collection palette,
+// otherwise tab-group recreation via browser.tabGroups.update() breaks.
+const CHROME_TAB_GROUP_COLORS = new Set([
+    'grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'orange', 'cyan'
+]);
+
 /**
  * Migrate a single color from old hex code to new color name
  * @param {string} oldColor - Old hex color code
@@ -65,9 +72,15 @@ const LEGACY_COLOR_MAPPING = {
  */
 export const migrateColor = (oldColor) => {
     if (!oldColor) return 'default';
-    
+
     // If it's already a color name from the new system, return as is
     if (COLOR_PALETTE[oldColor]) {
+        return oldColor;
+    }
+
+    // Chrome tab-group colors (e.g. grey/pink/orange) are a separate color
+    // space from the collection palette - leave them untouched.
+    if (CHROME_TAB_GROUP_COLORS.has(oldColor)) {
         return oldColor;
     }
     

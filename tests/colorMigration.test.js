@@ -55,6 +55,16 @@ describe('migrateColor', () => {
         expect(migrateColor('default')).toBe('default');
     });
 
+    test('preserves Chrome native tab-group colors unchanged', () => {
+        // These are stored on chromeGroups[].color and must not be remapped,
+        // otherwise tab-group recreation via tabGroups.update() breaks.
+        expect(migrateColor('grey')).toBe('grey');
+        expect(migrateColor('pink')).toBe('pink');
+        expect(migrateColor('orange')).toBe('orange');
+        expect(migrateColor('cyan')).toBe('cyan');
+        expect(migrateColor('yellow')).toBe('yellow');
+    });
+
     test('migrates legacy hex colors to new names', () => {
         // Test uppercase legacy colors
         expect(migrateColor('#B60205')).toBe('red');
