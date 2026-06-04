@@ -1,11 +1,14 @@
-import React, { memo, useCallback, useMemo, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { browser } from '../static/globals';
 import { AiFillPushpin } from 'react-icons/ai';
 import { FaVolumeMute } from 'react-icons/fa';
-import { MdDragIndicator } from 'react-icons/md';
+import { MdDragIndicator, MdContentCopy } from 'react-icons/md';
 import { HiOutlineExternalLink } from 'react-icons/hi';
 import { HiOutlineTrash, HiOutlineArrowRightOnRectangle } from 'react-icons/hi2';
 import { getColorCode } from './utils';
+import { copyToClipboard, unwrapDeferredUrl } from './utils/index';
+import { showSuccessToast, showErrorToast } from './toastHelpers';
 import MoveToCollectionModal from './MoveToCollectionModal';
 import ClickableTabUrl from './fullpage/ClickableTabUrl';
 
@@ -19,7 +22,48 @@ const TabRow = memo(({
     dragHandleProps = {},
 }) => {
     const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
+    const [ctxMenu, setCtxMenu] = useState(null);
     const fallbackFavicon = './images/favicon-fallback.png';
+
+    const handleContextMenu = useCallback((event) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const menuWidth = 196;
+        const menuHeight = 150;
+        const pad = 8;
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+
+        let x = event.clientX;
+        let y = event.clientY;
+        if (x + menuWidth + pad > viewportWidth) x = viewportWidth - menuWidth - pad;
+        if (y + menuHeight + pad > viewportHeight) y = viewportHeight - menuHeight - pad;
+        if (x < pad) x = pad;
+        if (y < pad) y = pad;
+
+        setCtxMenu({ x, y });
+    }, []);
+
+    const handleCopyUrl = useCallback(async () => {
+        setCtxMenu(null);
+        const url = unwrapDeferredUrl(tab.url);
+        if (!url) {
+            showErrorToast('Failed to copy URL');
+            return;
+        }
+        try {
+            await copyToClipboard(url);
+            showSuccessToast('URL copied');
+        } catch {
+            showErrorToast('Failed to copy URL');
+        }
+    }, [tab.url]);
+
+    const handleMoveFromMenu = useCallback(() => {
+        setCtxMenu(null);
+        setIsMoveModalOpen(true);
+    }, []);
 
     // Helper function to escape regex special characters
     const escapeRegex = (string) => {
@@ -156,6 +200,30 @@ const TabRow = memo(({
         updateCollection(currentCollection, true); // Manual tab deletion - trigger lightning effect
     }, [collection, tab.uid, tab.groupUid, updateCollection]);
 
+    const handleDeleteFromMenu = useCallback(() => {
+        setCtxMenu(null);
+        handleTabDelete();
+    }, [handleTabDelete]);
+
+    // Close the context menu on any outside interaction while it is open
+    useEffect(() => {
+        if (!ctxMenu) return undefined;
+        const close = () => setCtxMenu(null);
+        const onKeyDown = (event) => {
+            if (event.key === 'Escape') setCtxMenu(null);
+        };
+        document.addEventListener('click', close);
+        document.addEventListener('scroll', close, true);
+        document.addEventListener('contextmenu', close);
+        document.addEventListener('keydown', onKeyDown);
+        return () => {
+            document.removeEventListener('click', close);
+            document.removeEventListener('scroll', close, true);
+            document.removeEventListener('contextmenu', close);
+            document.removeEventListener('keydown', onKeyDown);
+        };
+    }, [ctxMenu]);
+
     const handleFaviconError = useCallback((e) => {
         e.target.src = fallbackFavicon;
     }, [fallbackFavicon]);
@@ -183,7 +251,7 @@ const TabRow = memo(({
 
     return (
         <div className='tab-line' id={`tab-line-${tab.uid}`} key={`tab-line-${tab.uid}`}>
-            <div className={`row single-tab-row ${isDragging ? 'tab-row-dragging' : ''} ${tab.pinned ? 'pinned-tab' : ''}`} key={`line-${tab.uid}`}>
+            <div className={`row single-tab-row ${isDragging ? 'tab-row-dragging' : ''} ${tab.pinned ? 'pinned-tab' : ''}`} key={`line-${tab.uid}`} onContextMenu={handleContextMenu}>
                 {(tab.groupId > -1 && group) ?
                     <div
                         className="group-indicator"
@@ -254,29 +322,35 @@ const TabRow = memo(({
                     >
                         <HiOutlineExternalLink />
                     </button>
-                    <button 
-                        className="tab-action-btn tab-action-move" 
-                        data-tooltip-id="main-tooltip" data-tooltip-content="Move to another collection" 
-                        onClick={(e) => { 
-                            e.stopPropagation(); 
-                            setIsMoveModalOpen(true); 
-                        }}
-                    >
-                        <HiOutlineArrowRightOnRectangle />
-                    </button>
-                    <button 
-                        className="tab-action-btn tab-action-delete" 
-                        data-tooltip-id="main-tooltip" data-tooltip-content="Delete this tab" 
-                        onClick={(e) => { 
-                            e.stopPropagation(); 
-                            handleTabDelete(); 
-                        }}
-                    >
-                        <HiOutlineTrash />
-                    </button>
                 </div>
             </div>
-            
+
+            {ctxMenu && createPortal(
+                <div
+                    className="fp-tab-ctx-menu"
+                    // position/z-index inline so the menu stacks above the collection
+                    // detail panel (z-index 60000) in the popup, where the .fp-tab-ctx-menu
+                    // stylesheet's lower z-index would otherwise hide it behind the panel.
+                    style={{ position: 'fixed', top: ctxMenu.y, left: ctxMenu.x, zIndex: 70000 }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <button type="button" className="fp-tab-ctx-item" onClick={handleCopyUrl}>
+                        <MdContentCopy />
+                        Copy URL
+                    </button>
+                    <button type="button" className="fp-tab-ctx-item" onClick={handleMoveFromMenu}>
+                        <HiOutlineArrowRightOnRectangle />
+                        Move to another collection
+                    </button>
+                    <div className="fp-tab-ctx-divider" />
+                    <button type="button" className="fp-tab-ctx-item danger" onClick={handleDeleteFromMenu}>
+                        <HiOutlineTrash />
+                        Delete tab
+                    </button>
+                </div>,
+                document.body
+            )}
+
             {isMoveModalOpen && (
                 <MoveToCollectionModal
                     isOpen={isMoveModalOpen}

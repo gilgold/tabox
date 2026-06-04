@@ -4,14 +4,18 @@ import { MdOutlineMoreHoriz } from 'react-icons/md';
 import { useAtom } from 'jotai';
 import { activeContextMenuState } from './atoms/animationsState';
 
-function ContextMenu({ 
+function ContextMenu({
     menuItems = [],
     tooltip = "Options",
     tooltipPlace,
     onOpenChange,
+    triggerRef,
 }) {
     const [activeMenuId, setActiveMenuId] = useAtom(activeContextMenuState);
     const [menuPosition, setMenuPosition] = React.useState({ top: 0, right: 0 });
+    // When opened via right-click, the menu is positioned at the cursor instead
+    // of being anchored to the "..." button. null means button-anchored mode.
+    const [cursorPosition, setCursorPosition] = React.useState(null);
     const menuButtonRef = useRef(null);
     // Generate a stable unique ID for this menu instance
     const menuId = useMemo(() => `context-menu-${Math.random().toString(36).substr(2, 9)}`, []);
@@ -22,6 +26,47 @@ function ContextMenu({
     useEffect(() => {
         onOpenChange?.(showMenu);
     }, [onOpenChange, showMenu]);
+
+    // Once the menu closes, clear any cursor position so the next "..." click
+    // anchors to the button again.
+    useEffect(() => {
+        if (!showMenu) {
+            setCursorPosition(null);
+        }
+    }, [showMenu]);
+
+    // Allow a host element to open this same menu via right-click, positioned at
+    // the cursor. Keeps a single menu definition shared with the "..." button.
+    useEffect(() => {
+        const triggerEl = triggerRef?.current;
+        if (!triggerEl) {
+            return undefined;
+        }
+
+        const handleContextMenu = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+
+            const menuWidth = 220;
+            const menuHeight = 280;
+            const pad = 8;
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+
+            let x = event.clientX;
+            let y = event.clientY;
+            if (x + menuWidth + pad > vw) x = vw - menuWidth - pad;
+            if (y + menuHeight + pad > vh) y = vh - menuHeight - pad;
+            if (x < pad) x = pad;
+            if (y < pad) y = pad;
+
+            setCursorPosition({ x, y });
+            setActiveMenuId(menuId);
+        };
+
+        triggerEl.addEventListener('contextmenu', handleContextMenu);
+        return () => triggerEl.removeEventListener('contextmenu', handleContextMenu);
+    }, [triggerRef, menuId, setActiveMenuId]);
 
     // Filter menu items based on condition (if provided)
     const visibleMenuItems = menuItems.filter(item => {
@@ -65,7 +110,9 @@ function ContextMenu({
 
     // Refine position after menu renders with actual height
     useEffect(() => {
-        if (!showMenu || !menuButtonRef.current) {
+        // In cursor mode the menu is already clamped to the viewport at open
+        // time and has no button to anchor to, so skip button-relative refinement.
+        if (cursorPosition || !showMenu || !menuButtonRef.current) {
             return;
         }
 
@@ -117,7 +164,7 @@ function ContextMenu({
         return () => {
             cancelAnimationFrame(rafId);
         };
-    }, [showMenu, visibleMenuItems.length, menuId]);
+    }, [showMenu, visibleMenuItems.length, menuId, cursorPosition]);
 
     const handleMenuClick = (e) => {
         e.stopPropagation();
@@ -144,10 +191,14 @@ function ContextMenu({
                 <MdOutlineMoreHoriz />
             </span>
             {showMenu && createPortal(
-                <div 
+                <div
                     id={menuId}
-                    className="context-menu" 
-                    style={{
+                    className="context-menu"
+                    style={cursorPosition ? {
+                        top: `${cursorPosition.y}px`,
+                        left: `${cursorPosition.x}px`,
+                        position: 'fixed'
+                    } : {
                         top: `${menuPosition.top}px`,
                         right: `${menuPosition.right}px`,
                         position: 'fixed'

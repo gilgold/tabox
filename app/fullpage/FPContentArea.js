@@ -75,11 +75,13 @@ import { CiExport } from 'react-icons/ci';
 import { PiGridNineFill } from 'react-icons/pi';
 import { TbFileImport } from 'react-icons/tb';
 import { browser } from '../../static/globals';
-import { showSuccessToast, showErrorToast } from '../toastHelpers';
+import { showSuccessToast, showErrorToast, showInfoToast } from '../toastHelpers';
+import { useTrackedSync } from '../useTrackedSync';
 import Modal from 'react-modal';
 import './FPContentArea.css';
 import useCollectionItemCrossDrag from '../useCollectionItemCrossDrag';
 import { downloadTextFile } from '../utils';
+import { buildCollectionUrlList, buildFolderUrlList, getCollectionUrls, copyToClipboard } from '../utils/index';
 import {
     buildCollectionSubsetExport,
     openCollectionsInSequence,
@@ -906,6 +908,7 @@ function FPContentArea({
     const search = useAtomValue(searchState);
     const sidebarNavigation = useAtomValue(sidebarNavigationState);
     const collectionRevealBatch = useAtomValue(collectionRevealBatchState);
+    const runTrackedSync = useTrackedSync();
     const highlightedCollectionUid = useAtomValue(highlightedCollectionUidState);
     const [disableDrag, setDisableDrag] = useState(false);
     const [showEntranceAnimation, setShowEntranceAnimation] = useState(true);
@@ -1823,6 +1826,18 @@ function FPContentArea({
         closeCardCtxMenu();
     }, [closeCardCtxMenu]);
 
+    const handleCopyCollectionUrls = useCallback(async (collection) => {
+        try {
+            const urlList = buildCollectionUrlList(collection);
+            if (!urlList) { showInfoToast('No URLs to copy'); return; }
+            await copyToClipboard(urlList);
+            const count = urlList.split('\n').length;
+            showSuccessToast(`${count} URL${count === 1 ? '' : 's'} copied`);
+        } catch (e) {
+            showErrorToast('Failed to copy URLs');
+        }
+    }, []);
+
     const handleFolderContextMenu = useCallback((e, folder) => {
         e.preventDefault();
         e.stopPropagation();
@@ -1955,6 +1970,22 @@ function FPContentArea({
         }
     }, [folderCtxMenu, closeFolderCtxMenu, onDataUpdate]);
 
+    const handleFolderCtxCopyUrls = useCallback(async () => {
+        if (!folderCtxMenu) return;
+        const folder = folderCtxMenu.folder;
+        closeFolderCtxMenu();
+        try {
+            const { getFolderCollections } = await import('../utils/folderOperations');
+            const collections = await getFolderCollections(folder.uid);
+            const totalUrls = collections.reduce((n, c) => n + getCollectionUrls(c).length, 0);
+            if (totalUrls === 0) { showInfoToast('No URLs to copy'); return; }
+            await copyToClipboard(buildFolderUrlList(folder, collections));
+            showSuccessToast(`${totalUrls} URL${totalUrls === 1 ? '' : 's'} copied`);
+        } catch (e) {
+            showErrorToast('Failed to copy URLs');
+        }
+    }, [folderCtxMenu, closeFolderCtxMenu]);
+
     const handleFolderCtxDelete = useCallback(async () => {
         if (!folderCtxMenu) return;
         const folder = folderCtxMenu.folder;
@@ -1965,30 +1996,32 @@ function FPContentArea({
             return;
         }
 
-        const result = await deleteFolder(folder.uid, true, false);
+        const result = await deleteFolder(folder.uid, true, false, { skipSync: true });
         if (result.success) {
             showSuccessToast('Folder deleted');
             if (onDataUpdate) await onDataUpdate();
+            await runTrackedSync();
         } else {
             showErrorToast('Failed to delete folder');
         }
-    }, [folderCtxMenu, closeFolderCtxMenu, groupedSectionCollectionsMap, onDataUpdate]);
+    }, [folderCtxMenu, closeFolderCtxMenu, groupedSectionCollectionsMap, onDataUpdate, runTrackedSync]);
 
     const handleDeleteConfirm = useCallback(async (deleteCollections) => {
         if (!deleteModal) return;
         const { folder } = deleteModal;
         setDeleteModal(null);
-        const result = await deleteFolder(folder.uid, true, deleteCollections);
+        const result = await deleteFolder(folder.uid, true, deleteCollections, { skipSync: true });
         if (result.success) {
             const msg = deleteCollections
                 ? `Folder and ${result.collectionsDeleted} collection(s) deleted`
                 : `Folder deleted (${result.collectionsMovedToRoot} collection(s) moved to root)`;
             showSuccessToast(msg);
             if (onDataUpdate) await onDataUpdate();
+            await runTrackedSync();
         } else {
             showErrorToast('Failed to delete folder');
         }
-    }, [deleteModal, onDataUpdate]);
+    }, [deleteModal, onDataUpdate, runTrackedSync]);
 
     const activeParentId = useMemo(() => (
         activeCollection ? normalizeCollectionParentId(activeCollection, folderUidSet) : null
@@ -3973,20 +4006,6 @@ function FPContentArea({
                         <span>{cardCtxMenu.isAutoUpdate ? 'Focus Window' : 'Open Tabs'}</span>
                     </button>
                     <div className="fp-card-ctx-divider" />
-                    <button
-                        className="fp-card-ctx-item"
-                        onClick={() => handleCtxMenuAction(cardCtxMenu.operations._exportCollectionToFile)}
-                    >
-                        <CiExport size={16} />
-                        <span>Export Collection</span>
-                    </button>
-                    <button
-                        className="fp-card-ctx-item"
-                        onClick={() => handleCtxMenuAction(cardCtxMenu.operations._handleDuplicate)}
-                    >
-                        <MdContentCopy size={16} />
-                        <span>Duplicate Collection</span>
-                    </button>
                     {!cardCtxMenu.isAutoUpdate && (
                         <button
                             className="fp-card-ctx-item"
@@ -4005,6 +4024,27 @@ function FPContentArea({
                             <span>Stop Auto Update</span>
                         </button>
                     )}
+                    <button
+                        className="fp-card-ctx-item"
+                        onClick={() => handleCtxMenuAction(cardCtxMenu.operations._exportCollectionToFile)}
+                    >
+                        <CiExport size={16} />
+                        <span>Export Collection</span>
+                    </button>
+                    <button
+                        className="fp-card-ctx-item"
+                        onClick={() => handleCtxMenuAction(cardCtxMenu.operations._handleDuplicate)}
+                    >
+                        <MdContentCopy size={16} />
+                        <span>Duplicate Collection</span>
+                    </button>
+                    <button
+                        className="fp-card-ctx-item"
+                        onClick={() => { const c = cardCtxMenu.collection; setCardCtxMenu(null); handleCopyCollectionUrls(c); }}
+                    >
+                        <MdContentCopy size={16} />
+                        <span>Copy all URLs</span>
+                    </button>
                     <div className="fp-card-ctx-divider" />
                     <button
                         className="fp-card-ctx-item fp-card-ctx-danger"
@@ -4035,6 +4075,9 @@ function FPContentArea({
                 </button>
                     <button className="fp-sidebar-ctx-item" onClick={handleFolderCtxDuplicate}>
                         <MdContentCopy size={16} /> <span>Duplicate Folder</span>
+                    </button>
+                    <button className="fp-sidebar-ctx-item" onClick={handleFolderCtxCopyUrls}>
+                        <MdContentCopy size={16} /> <span>Copy all URLs in folder</span>
                     </button>
                     <div className="fp-sidebar-ctx-divider" />
                     <button className="fp-sidebar-ctx-item fp-sidebar-ctx-danger" onClick={handleFolderCtxDelete}>

@@ -9,9 +9,47 @@ const STORAGE_KEYS = {
     FOLDERS_INDEX: 'folders_index',
     LEGACY_TABS_ARRAY: 'tabsArray',
     DELETED_COLLECTION_TOMBSTONES: 'deleted_collection_tombstones',
+    DELETED_FOLDER_TOMBSTONES: 'deleted_folder_tombstones',
     COLLECTION_PREFIX: 'collection_',
     FOLDER_PREFIX: 'folder_',
     STORAGE_VERSION: 'tabox_storage_version'
+};
+
+// Deferred-loading URL helpers.
+// SYNCHRONIZED WITH app/utils/urlUtils.js (unwrapDeferredUrl / isDeferredLoadingUrl).
+// The service worker loads its scripts via importScripts and cannot import the app ES
+// module, so this is an intentional duplicate. Keep both copies in sync.
+const DEFERRED_PAGE_MARKER = 'deferedLoading.html';
+
+const isDeferredLoadingUrl = (url) =>
+    typeof url === 'string' && url.indexOf(DEFERRED_PAGE_MARKER) > -1;
+
+const unwrapDeferredUrl = (url) => {
+    if (!isDeferredLoadingUrl(url)) {
+        return url;
+    }
+
+    try {
+        const parsed = new URL(url);
+
+        // Current format: payload lives in the hash fragment.
+        if (parsed.hash && parsed.hash.length > 1) {
+            const decoded = JSON.parse(decodeURIComponent(parsed.hash.slice(1)));
+            if (decoded && typeof decoded.url === 'string' && decoded.url) {
+                return decoded.url;
+            }
+        }
+
+        // Legacy format: payload lives in the query string.
+        const queryUrl = parsed.searchParams.get('url');
+        if (queryUrl) {
+            return queryUrl;
+        }
+    } catch (error) {
+        // Malformed wrapper - fall through and return the original string.
+    }
+
+    return url;
 };
 
 const syncTransportApi = typeof require === 'function'
@@ -62,6 +100,16 @@ const loadDeletedCollectionTombstonesBG = async () => {
         return tombstones || {};
     } catch (error) {
         console.error('Background: Failed to load deleted collection tombstones:', error);
+        return {};
+    }
+};
+
+const loadDeletedFolderTombstonesBG = async () => {
+    try {
+        const { [STORAGE_KEYS.DELETED_FOLDER_TOMBSTONES]: tombstones } = await browser.storage.local.get(STORAGE_KEYS.DELETED_FOLDER_TOMBSTONES);
+        return tombstones || {};
+    } catch (error) {
+        console.error('Background: Failed to load deleted folder tombstones:', error);
         return {};
     }
 };
@@ -1803,15 +1851,12 @@ async function updateCollection(collection, windowId) {
         }
         
         tabs = [...tabs].map(t => {
-            if (t.url.indexOf('deferedLoading.html') > -1) {
-                const url = new URL(t.url);
-                const urlParams = url.searchParams;
-                const params = Object.fromEntries(urlParams.entries());
-                t.url = params?.url || t.url;
-            }
+            // Never persist the deferred-loading wrapper as the saved tab URL.
+            const resolvedUrl = unwrapDeferredUrl(t.url);
             // Store incognito status per tab for reference
             return {
                 ...t,
+                url: resolvedUrl,
                 wasIncognito: t.incognito === true
             };
         })
@@ -1913,6 +1958,11 @@ async function syncData(token) {
                 }
 
                 const localSyncData = await prepareSyncDataForUpload();
+                // Use the real last-local-change time (not Date.now()) so the merge's
+                // single-sided-deletion heuristic does not mistake brand-new remote
+                // entities (e.g. a folder duplicated on another device) for local
+                // deletions and drop them.
+                localSyncData.timestamp = localTimestamp;
                 const mergedSyncData = mergeSyncSnapshots({
                     localSnapshot: localSyncData,
                     remoteSnapshot: remoteSyncData
@@ -1928,7 +1978,7 @@ async function syncData(token) {
                 const uploadResult = await uploadPreparedSyncData(token, mergedSyncData);
                 return uploadResult !== false;
             }
-            
+
             const tabsArray = await _loadSettingsFile(token, syncFileId);
             if (tabsArray !== false) {
                 await browser.storage.local.set({
@@ -1987,6 +2037,11 @@ async function syncData(token) {
                 }
 
                 const localSyncData = await prepareSyncDataForUpload();
+                // Use the real last-local-change time (not Date.now()) so the merge's
+                // single-sided-deletion heuristic does not mistake brand-new remote
+                // entities (e.g. a folder duplicated on another device) for local
+                // deletions and drop them.
+                localSyncData.timestamp = localTimestamp;
                 const mergedSyncData = mergeSyncSnapshots({
                     localSnapshot: localSyncData,
                     remoteSnapshot: remoteSyncData
@@ -2002,7 +2057,7 @@ async function syncData(token) {
                 const uploadResult = await uploadPreparedSyncData(token, mergedSyncData);
                 return uploadResult !== false;
             }
-            
+
             // Pass skipLock=true since syncData already holds the lock
             const result = await updateRemote(token, null, true);
             return result !== false;
@@ -2274,13 +2329,19 @@ const prepareSyncDataForUpload = async (collections, useIncrementalSync = false)
             uid,
             lastUpdated
         }));
-        
+        const deletedFolderTombstones = await loadDeletedFolderTombstonesBG();
+        const deletedFolders = Object.entries(deletedFolderTombstones).map(([uid, lastUpdated]) => ({
+            uid,
+            lastUpdated
+        }));
+
         // v4.0 enhanced sync format with version detection and folders support
         const syncData = {
             timestamp: Date.now(),
             tabsArray: normalizedTabsArray,
             foldersArray: foldersArray,
             deletedCollections,
+            deletedFolders,
             syncVersion: SYNC_VERSION,
             storageVersion: 3,
             extensionVersion: (typeof chrome !== 'undefined' && chrome.runtime) ? 
@@ -2381,6 +2442,8 @@ async function getAuthTokenWithRecovery(operation = 'unknown') {
 const backgroundUtilsApi = {
     STORAGE_KEYS,
     SYNC_VERSION,
+    unwrapDeferredUrl,
+    isDeferredLoadingUrl,
     loadCollectionsIndexBG,
     loadSingleCollectionBG,
     saveSingleCollectionBG,

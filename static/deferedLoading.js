@@ -3,9 +3,15 @@ export function sanitizeUrl(url) {
         if (!url || typeof url !== 'string') {
             return '#';
         }
-        
-        const sanitizedURL = decodeURIComponent(url).trim().replaceAll(/\t|\n|\r/g, '');
-        
+
+        // Do NOT decodeURIComponent here. The caller already supplies the real, decoded
+        // URL (the hash JSON payload, or URLSearchParams which decodes once). A second
+        // decode corrupts valid URLs whose path/query legitimately contain percent-encoded
+        // reserved characters (e.g. %26, %2B, %23) - turning `?a=1%26b=2` into two params.
+        // We only strip control characters / surrounding whitespace, then validate the
+        // scheme via the URL parser (which rejects javascript:, data:, etc.).
+        const sanitizedURL = url.trim().replaceAll(/\t|\n|\r/g, '');
+
         // Additional validation
         if (sanitizedURL === '' || sanitizedURL === 'undefined' || sanitizedURL === 'null') {
             return '#';
@@ -34,8 +40,24 @@ export function sanitizeUrl(url) {
 export function extractUrlParams(href = window.location.href) {
     try {
         const url = new URL(href);
-        const urlParams = url.searchParams;
-        return Object.fromEntries(urlParams.entries());
+
+        // Current format: a JSON payload in the hash fragment, e.g.
+        //   deferedLoading.html#<encodeURIComponent(JSON.stringify({ url, favicon }))>
+        // The hash is never sent in the request, so ad-blocker filters that match the
+        // legacy `?url=http...` redirect pattern can't block the placeholder page.
+        if (url.hash && url.hash.length > 1) {
+            try {
+                const decoded = JSON.parse(decodeURIComponent(url.hash.slice(1)));
+                if (decoded && typeof decoded === 'object') {
+                    return decoded;
+                }
+            } catch {
+                // Malformed hash payload - fall back to legacy query parsing.
+            }
+        }
+
+        // Legacy format (<= v4.1): ?url=<enc>&favicon=<enc>
+        return Object.fromEntries(url.searchParams.entries());
     } catch (error) {
         console.error('Failed to extract URL parameters:', error);
         return {};
@@ -44,13 +66,25 @@ export function extractUrlParams(href = window.location.href) {
 
 export function showManualRedirectOption(url, doc = document) {
     const container = doc.querySelector('.defer-container');
-    if (container) {
-        container.innerHTML = `
+    if (!container) {
+        return;
+    }
+
+    // SECURITY: never interpolate the URL into the innerHTML string. `sanitizeUrl` only
+    // validates the scheme and returns the raw URL, so a value like
+    // `https://evil/"><img src=x onerror=...>` would break out of the href attribute and
+    // inject markup. Build the static markup first, then assign the href as a *property*
+    // (treated as data, not parsed as HTML).
+    container.innerHTML = `
             <div class="tabox-icon">⚠</div>
             <div class="message">Automatic redirect failed</div>
             <p class="sub-message">Please click the link below to continue:</p>
-            <a href="${url}" class="button" target="_self" style="background: #e74c3c;">Go to Page</a>
+            <a id="manual-redirect-link" class="button" target="_self" style="background: #e74c3c;">Go to Page</a>
         `;
+
+    const link = doc.getElementById ? doc.getElementById('manual-redirect-link') : null;
+    if (link) {
+        link.href = url;
     }
 }
 
@@ -65,13 +99,26 @@ export function initializeDeferredLoading({
 
     if (sanitizedUrl === '#') {
         logger.error('Invalid or missing URL parameter');
+        // This page is a normal (non-sandboxed) extension page under
+        // `script-src 'self'`, so inline event handlers (onclick=...) are blocked by CSP.
+        // Wire the close button via addEventListener instead.
         doc.body.innerHTML = `
             <div style="text-align: center; padding: 50px; color: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
                 <h2>Error Loading Content</h2>
                 <p>This tab cannot be loaded due to an invalid URL.</p>
-                <button onclick="window.close()" style="margin-top: 20px; padding: 10px 20px; background: #177CB6; color: white; border: none; border-radius: 6px; cursor: pointer;">Close Tab</button>
+                <button id="defer-close-button" style="margin-top: 20px; padding: 10px 20px; background: #177CB6; color: white; border: none; border-radius: 6px; cursor: pointer;">Close Tab</button>
             </div>
         `;
+        const closeButton = doc.getElementById && doc.getElementById('defer-close-button');
+        if (closeButton) {
+            closeButton.addEventListener('click', () => {
+                try {
+                    win.close();
+                } catch (closeError) {
+                    logger.warn('Unable to close tab:', closeError);
+                }
+            });
+        }
         throw new Error('Invalid URL - stopping execution');
     }
 

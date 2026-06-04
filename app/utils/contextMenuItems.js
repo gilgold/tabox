@@ -12,8 +12,25 @@ export const createCollectionMenuItems = ({
     onUpdate,
     onStopTracking,
     onDelete,
-    onDuplicate
+    onDuplicate,
+    onCopyUrls
 }) => [
+    {
+        id: 'update',
+        text: 'Update Collection',
+        icon: <MdOutlineRefresh size={ICON_SIZE} />,
+        action: onUpdate,
+        className: '',
+        condition: !isAutoUpdate
+    },
+    {
+        id: 'stop-tracking',
+        text: 'Stop Auto Update',
+        icon: <FaStop size={ICON_SIZE} />,
+        action: onStopTracking,
+        className: '',
+        condition: isAutoUpdate
+    },
     {
         id: 'export',
         text: 'Export Collection',
@@ -31,20 +48,12 @@ export const createCollectionMenuItems = ({
         condition: true
     },
     {
-        id: 'update',
-        text: 'Update Collection',
-        icon: <MdOutlineRefresh size={ICON_SIZE} />,
-        action: onUpdate,
+        id: 'copy-urls',
+        text: 'Copy all URLs',
+        icon: <MdContentCopy size={ICON_SIZE} />,
+        action: onCopyUrls,
         className: '',
-        condition: !isAutoUpdate
-    },
-    {
-        id: 'stop-tracking',
-        text: 'Stop Auto Update',
-        icon: <FaStop size={ICON_SIZE} />,
-        action: onStopTracking,
-        className: '',
-        condition: isAutoUpdate
+        condition: true
     },
     {
         id: 'delete',

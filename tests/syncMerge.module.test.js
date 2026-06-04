@@ -9,6 +9,7 @@ describe('sync merge module', () => {
             timestamp: 0,
             tabsArray: [],
             deletedCollections: [],
+            deletedFolders: [],
             foldersArray: [],
             syncVersion: '4.0',
             storageVersion: 3,
@@ -22,6 +23,7 @@ describe('sync merge module', () => {
             timestamp: 0,
             tabsArray: [],
             deletedCollections: [],
+            deletedFolders: [],
             foldersArray: [],
             syncVersion: '4.0',
             storageVersion: 3,
@@ -38,6 +40,9 @@ describe('sync merge module', () => {
             ],
             deletedCollections: [
                 { uid: 'deleted-a' }
+            ],
+            deletedFolders: [
+                { uid: 'deleted-folder-a' }
             ],
             foldersArray: [
                 { uid: 'folder-a' }
@@ -61,6 +66,12 @@ describe('sync merge module', () => {
             deletedCollections: [
                 {
                     uid: 'deleted-a',
+                    lastUpdated: 0
+                }
+            ],
+            deletedFolders: [
+                {
+                    uid: 'deleted-folder-a',
                     lastUpdated: 0
                 }
             ],
@@ -166,6 +177,98 @@ describe('sync merge module', () => {
                 uid: 'collection-deleted-remotely',
                 lastUpdated: 1100
             }
+        ]);
+    });
+
+    test('applies a folder deletion tombstone so a folder deleted on one device is removed (not resurrected) on merge', () => {
+        const merged = mergeSyncSnapshots({
+            localSnapshot: {
+                timestamp: 1050,
+                tabsArray: [],
+                foldersArray: [
+                    {
+                        uid: 'folder-deleted-remotely',
+                        name: 'Should Be Deleted',
+                        createdOn: 10,
+                        lastUpdated: 900,
+                        order: 0
+                    }
+                ]
+            },
+            remoteSnapshot: {
+                timestamp: 1100,
+                tabsArray: [],
+                foldersArray: [],
+                deletedFolders: [
+                    { uid: 'folder-deleted-remotely', lastUpdated: 1100 }
+                ]
+            }
+        });
+
+        expect(merged.foldersArray).toEqual([]);
+        expect(merged.deletedFolders).toEqual([
+            { uid: 'folder-deleted-remotely', lastUpdated: 1100 }
+        ]);
+    });
+
+    test('keeps a folder edited after its tombstone (re-created folder survives deletion tombstone)', () => {
+        const merged = mergeSyncSnapshots({
+            localSnapshot: {
+                timestamp: 1200,
+                tabsArray: [],
+                foldersArray: [
+                    {
+                        uid: 'folder-recreated',
+                        name: 'Recreated',
+                        createdOn: 10,
+                        lastUpdated: 1300,
+                        order: 0
+                    }
+                ]
+            },
+            remoteSnapshot: {
+                timestamp: 1100,
+                tabsArray: [],
+                foldersArray: [],
+                deletedFolders: [
+                    { uid: 'folder-recreated', lastUpdated: 1100 }
+                ]
+            }
+        });
+
+        expect(merged.foldersArray).toEqual([
+            expect.objectContaining({ uid: 'folder-recreated', name: 'Recreated' })
+        ]);
+        // The tombstone is older than the surviving folder, so it is dropped.
+        expect(merged.deletedFolders).toEqual([]);
+    });
+
+    test('keeps the newest folder tombstone for the same uid and sorts deterministically', () => {
+        const merged = mergeSyncSnapshots({
+            localSnapshot: {
+                timestamp: 1000,
+                tabsArray: [],
+                foldersArray: [],
+                deletedFolders: [
+                    { uid: 'folder-late', lastUpdated: 700 },
+                    { uid: 'folder-shared', lastUpdated: 900 }
+                ]
+            },
+            remoteSnapshot: {
+                timestamp: 1000,
+                tabsArray: [],
+                foldersArray: [],
+                deletedFolders: [
+                    { uid: 'folder-early', lastUpdated: 400 },
+                    { uid: 'folder-shared', lastUpdated: 600 }
+                ]
+            }
+        });
+
+        expect(merged.deletedFolders).toEqual([
+            { uid: 'folder-early', lastUpdated: 400 },
+            { uid: 'folder-late', lastUpdated: 700 },
+            { uid: 'folder-shared', lastUpdated: 900 }
         ]);
     });
 

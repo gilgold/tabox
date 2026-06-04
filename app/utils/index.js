@@ -57,6 +57,18 @@ export {
   getColorValue
 } from './colorMigration.js';
 
+// Deferred-loading URL helpers
+export {
+  unwrapDeferredUrl,
+  isDeferredLoadingUrl,
+  getCollectionUrls,
+  buildCollectionUrlList,
+  buildFolderUrlList
+} from './urlUtils.js';
+
+// Clipboard helpers
+export { copyToClipboard } from './clipboardUtils.js';
+
 /**
  * Emergency data recovery function
  * @returns {Promise<boolean>} Recovery success

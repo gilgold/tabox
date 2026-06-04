@@ -25,6 +25,7 @@ function CollectionListItem(props) {
     const [showAllMatchingTabs, setShowAllMatchingTabs] = useState(false);
     const [isInteractionActive, setIsInteractionActive] = useState(false);
     const mountedRef = useRef(true);
+    const itemRef = useRef(null);
     
     // Prevent expansion when dragging a tab or group (unless it's from this collection)
     const isDraggingItem = dragSession !== null;
@@ -245,6 +246,7 @@ function CollectionListItem(props) {
     return (
         <DroppableCollection collection={props.collection}>
             <div
+                ref={itemRef}
                 onClick={_handleRowClick}
                 className={[
                     'row',
@@ -373,6 +375,7 @@ function CollectionListItem(props) {
                     })}
                     tooltip="Collection options"
                     onOpenChange={setIsInteractionActive}
+                    triggerRef={itemRef}
                 />
                 
                 {/* Chevron indicator for panel */}

@@ -84,6 +84,7 @@ webpack.js            # Webpack config
 - Indexed storage system in `app/utils/storageUtils.js`
 - Keys: `collections_index`, `folders_index`, `collection_<uid>`, `folder_<uid>`
 - Versioned with `CURRENT_STORAGE_VERSION` for migrations (`app/utils/migrationCoordinator.js`)
+- **Never run per-item collection storage ops in parallel** (e.g. `Promise.all` of `deleteSingleCollection`/`saveSingleCollection`). They each read-modify-write the shared `collections_index`, so concurrent calls lose updates and leave stale index entries pointing at removed records. Use the atomic batch helpers (`batchDeleteCollections`, `batchUpdateCollections`) which do a single index pass.
 
 ### State Management
 - Jotai atoms in `app/atoms/` for global state (theme, sync status, search, settings)
@@ -92,6 +93,22 @@ webpack.js            # Webpack config
 
 ### Communication
 - Popup ↔ Background: `browser.runtime.sendMessage()` via webextension-polyfill
+
+### Sync subsystem (read before touching sync — it is subtle and has regressed repeatedly)
+- **Flow**: UI triggers a sync via `triggerBackgroundSync()` (`app/utils/sharedSync.js`) or `App._update()` → sends an `updateRemote` message → background `handleRemoteUpdate()` → `syncData()`. `syncData` either does a full download (`_loadSettingsFile`) or, when local/remote timestamps are within ~60s (the "conflict window"), a three-way merge via `mergeSyncSnapshots()`. Uploads go through `uploadPreparedSyncData()` (a blind PATCH overwrite — it does **not** merge), and incoming data is applied atomically via `applySyncSnapshotAtomically()`.
+- **Pure, testable sync modules**, loaded by `background.js` via `importScripts` and dual-exported (`globalThis.*` + `module.exports`), each with a `*.module.test.js`: `chrome/sync-merge.js`, `sync-apply.js`, `sync-throttle.js`, `sync-transport.js`, `sync-session-state.js`. Prefer adding logic here (unit-testable) over inlining in `background.js`.
+- **`STORAGE_KEYS` is duplicated in THREE files that MUST stay in sync**: `app/utils/sharedConstants.js`, `chrome/background-utils.js`, and `chrome/sync-apply.js`. `sharedConstants.test.js` enforces the key set.
+- **Deletions propagate via tombstones, not absence.** Keys: `deleted_collection_tombstones`, `deleted_folder_tombstones`. Adding a new deletable entity type requires wiring the tombstone through the *entire* pipeline: mark on delete + clear on save (`storageUtils.js`), include in the upload payload (`prepareSyncDataForUpload` in `background-utils.js`), merge/apply/serialize (`sync-merge.js`), and persist + add to `SYNC_MANAGED_KEYS` (`sync-apply.js`). The timestamp heuristic in `resolveSingleSidedEntity` is only an unreliable fallback — without a tombstone a deleted entity gets resurrected (or its deletion is dropped) on the other device.
+- **Merge timestamp semantics**: the local snapshot fed to `mergeSyncSnapshots` must carry the persisted `localTimestamp` (real last-local-change time), **not** `Date.now()`. Using `Date.now()` makes the single-sided-deletion heuristic treat every brand-new remote entity as a local deletion and drop it.
+- **Both devices must run the same extension version** for sync to converge — a device on an older build that lacks a tombstone type (or a merge fix) produces the asymmetric "folder lingers empty / item resurrects" symptoms. When debugging "X doesn't sync", confirm the build/version on *both* devices first.
+
+### MV3 service-worker constraints (sync reliability)
+- **Always `await triggerBackgroundSync()`** in operations that mutate then sync (folder create/update/delete/duplicate/move). Fire-and-forget returns before the `updateRemote` message is dispatched, and the SW/popup can tear down before the round-trip completes → the sync is lost.
+- **Do not defer sync work to a standalone `setTimeout`** in the service worker — it can be discarded when the worker goes idle. Keep the triggering message handler awaiting the work instead. (This is why `chrome/sync-throttle.js` coalesces overlapping syncs into an awaited trailing run rather than scheduling a timer, and must never silently drop a sync.)
+
+### Sync UI feedback
+- The "Syncing…" indicator (Header/Footer) is driven by the `syncInProgressState` Jotai atom. `App._update()` toggles it; plain `triggerBackgroundSync()` does **not**. Operations that trigger their own sync should use the `useTrackedSync()` hook (`app/useTrackedSync.js`) so the indicator reflects the sync.
+- **Show success/undo toasts immediately**, before awaiting the (multi-second) sync round-trip — do the local mutation, show the toast, then await the tracked sync. Pass `{ skipSync: true }` to the op (e.g. `deleteFolder`) so the caller controls sync timing.
 
 ## Code Conventions
 

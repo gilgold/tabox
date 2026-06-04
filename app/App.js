@@ -1241,6 +1241,9 @@ function App({ mode = 'popup' }) {
         if (result.orphansRepaired > 0) {
           console.log(`🔧 Repaired ${result.orphansRepaired} orphan collection(s) - they are now visible at root level`);
         }
+        if (result.ghostsPruned > 0) {
+          console.log(`🔧 Pruned ${result.ghostsPruned} stale index entr(ies) with no backing storage`);
+        }
       }).catch(err => {
         console.warn('Non-critical: orphan repair failed:', err);
       });

@@ -138,6 +138,7 @@ describe('sync apply module', () => {
             setPayload: {
                 [STORAGE_KEYS.COLLECTIONS_INDEX]: {},
                 deleted_collection_tombstones: {},
+                deleted_folder_tombstones: {},
                 [STORAGE_KEYS.FOLDERS_INDEX]: {},
                 [STORAGE_KEYS.LEGACY_TABS_ARRAY]: [],
                 [STORAGE_KEYS.STORAGE_VERSION]: 3
@@ -146,6 +147,49 @@ describe('sync apply module', () => {
             collections: [],
             folders: []
         });
+    });
+
+    test('refuses to delete local collections when the incoming snapshot is empty', () => {
+        // A stale/corrupt empty remote snapshot must not wipe existing local data.
+        const payload = buildIndexedSyncPayload({
+            currentStorage: {
+                collections_index: {
+                    'collection-local': { name: 'Local', type: 'collection', order: 0 }
+                },
+                'collection_collection-local': {
+                    uid: 'collection-local',
+                    name: 'Local',
+                    tabs: [{ uid: 't1', url: 'https://example.com' }],
+                    createdOn: 10,
+                    lastUpdated: 20
+                },
+                folders_index: {
+                    'folder-local': { name: 'Local Folder', type: 'folder', order: 0 }
+                },
+                'folder_folder-local': {
+                    uid: 'folder-local',
+                    name: 'Local Folder',
+                    createdOn: 5,
+                    lastUpdated: 15
+                }
+            },
+            syncData: { tabsArray: [], foldersArray: [] }
+        });
+
+        // Nothing is deleted.
+        expect(payload.removeKeys).toEqual([]);
+        // Local data is preserved in the rebuilt index and mirror.
+        expect(payload.setPayload[STORAGE_KEYS.COLLECTIONS_INDEX]).toHaveProperty('collection-local');
+        expect(payload.setPayload[STORAGE_KEYS.FOLDERS_INDEX]).toHaveProperty('folder-local');
+        expect(payload.setPayload[`${STORAGE_KEYS.COLLECTION_PREFIX}collection-local`]).toEqual(
+            expect.objectContaining({ uid: 'collection-local' })
+        );
+        expect(payload.setPayload[STORAGE_KEYS.LEGACY_TABS_ARRAY]).toEqual([
+            expect.objectContaining({ uid: 'collection-local' })
+        ]);
+        expect(payload.collections).toEqual([
+            expect.objectContaining({ uid: 'collection-local' })
+        ]);
     });
 
     test('normalizes missing collection and folder fields while building the indexed payload', () => {
@@ -200,6 +244,25 @@ describe('sync apply module', () => {
 
         expect(payload.setPayload.deleted_collection_tombstones).toEqual({
             'deleted-valid': 55
+        });
+    });
+
+    test('persists deleted folder tombstones and ignores malformed ones while building the indexed payload', () => {
+        const payload = buildIndexedSyncPayload({
+            currentStorage: {},
+            syncData: {
+                tabsArray: [],
+                foldersArray: [],
+                deletedFolders: [
+                    { uid: 'folder-deleted', lastUpdated: 77 },
+                    { uid: 'folder-missing-time' },
+                    { lastUpdated: 12 },
+                ]
+            }
+        });
+
+        expect(payload.setPayload.deleted_folder_tombstones).toEqual({
+            'folder-deleted': 77
         });
     });
 

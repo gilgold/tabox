@@ -21,6 +21,7 @@ import {
   cleanupOldBackups 
 } from './backupUtils.js';
 import { COLOR_PALETTE } from './colorMigration.js';
+import { unwrapDeferredUrl } from './urlUtils.js';
 
 /**
  * Migration configuration
@@ -39,9 +40,10 @@ const MIGRATION_CONFIG = {
     }
   },
   
-  // Migration paths
+  // Migration paths. The effective path is computed dynamically by
+  // assessMigrationSupport40 based on the current data; this map is a documented default.
   MIGRATION_PATHS: {
-    '4.0': ['timestamp_migration']
+    '4.0': ['timestamp_migration', 'repair_deferred_urls']
   }
 };
 
@@ -94,9 +96,22 @@ class MigrationCoordinator {
       const needsColorMigration = this.needsColorMigration(currentData);
 
       if (migrationHistory.completedVersions && migrationHistory.completedVersions.includes(majorMinorVersion)) {
-        
-        // Even if version migration is complete, check if color migration is needed
-        if (needsColorMigration) {
+
+        // Even after this major.minor is marked complete, re-run the idempotent,
+        // detection-gated repairs when the current data still needs them. These steps
+        // only act when their condition is present and become no-ops afterwards, so it
+        // is safe to re-check them. This is what lets a patch update (e.g. 4.1 -> 4.1.1)
+        // repair data written by an earlier build of the same major.minor.
+        const supportPath = supportAssessment.migrationPath || [];
+        const repairSteps = [];
+        if (needsColorMigration || supportPath.includes('color_migration')) {
+          repairSteps.push('color_migration');
+        }
+        if (supportPath.includes('repair_deferred_urls')) {
+          repairSteps.push('repair_deferred_urls');
+        }
+
+        if (repairSteps.length > 0) {
           return {
             currentVersion,
             detectedFormat: detection.format,
@@ -104,13 +119,13 @@ class MigrationCoordinator {
             dataErrors: detection.errors,
             collections: detection.info.collectionCount || 0,
             migrationNeeded: true,
-            migrationPath: ['color_migration'],
-            recommendations: ['Color system migration needed for old hex colors'],
+            migrationPath: repairSteps,
+            recommendations: ['Idempotent data repair needed (legacy colors and/or deferred-loading URLs)'],
             risks: [],
             alreadyCompleted: false
           };
         }
-        
+
         return {
           currentVersion,
           detectedFormat: detection.format,
@@ -376,7 +391,10 @@ class MigrationCoordinator {
           
         case 'timestamp_migration':
           return await this.migrateTimestamps(data);
-          
+
+        case 'repair_deferred_urls':
+          return await this.repairDeferredUrls(data);
+
         default:
           throw new Error(`Unknown migration step: ${step}`);
       }
@@ -388,40 +406,65 @@ class MigrationCoordinator {
   }
 
   /**
-   * Repair old collection colors in 4.0-era local data
+   * Repair old collection colors in 4.0-era local data.
+   *
+   * Migration is triggered by hex colors found in the indexed collection_<uid> /
+   * folder_<uid> records (see migrationSupport40.hasLegacyColorValues), so this must
+   * rewrite those records - not only the legacy tabsArray mirror. Otherwise the records
+   * keep their hex colors, the step never actually fixes anything, and detection
+   * re-triggers it on every launch.
    * @param {object} data - Current format data with old colors
    * @returns {Promise<object>} Data with migrated colors
    */
   async migrateColorsOnly(data) {
     try {
-      
-      if (!data.tabsArray || !Array.isArray(data.tabsArray)) {
-        console.warn('⚠️ No tabsArray found in data - returning data unchanged');
-        return {
-          ...data,
-          colorSystemVersion: '2.0',
-          lastUpdated: Date.now(),
-          colorMigrationTimestamp: Date.now()
-        };
+      const { migrateAllCollectionColors, migrateColor } = await import('./colorMigration.js');
+
+      const result = { ...data };
+
+      // 1) Legacy tabsArray mirror (backups/exports/sync stay consistent).
+      if (Array.isArray(result.tabsArray)) {
+        result.tabsArray = migrateAllCollectionColors(result.tabsArray);
       }
-      
-      // Import color migration utilities
-      const { migrateAllCollectionColors } = await import('./colorMigration.js');
-      
-      // Migrate colors in all collections
-      const colorMigratedCollections = migrateAllCollectionColors(data.tabsArray);
-      
-      const result = {
-        ...data,
-        tabsArray: colorMigratedCollections,
-        colorSystemVersion: '2.0', // Mark as migrated to new color system
-        lastUpdated: Date.now(),
-        colorMigrationTimestamp: Date.now()
-      };
-      
-      
+
+      // 2) Indexed records - the source of truth for display and the keys detection
+      //    actually inspects. Collections migrate color + chromeGroups colors; folders
+      //    migrate their single color value.
+      Object.keys(result).forEach((key) => {
+        const value = result[key];
+        if (!value || typeof value !== 'object') {
+          return;
+        }
+
+        if (key.startsWith('collection_')) {
+          result[key] = migrateAllCollectionColors([value])[0];
+        } else if (key.startsWith('folder_') && typeof value.color === 'string' && typeof migrateColor === 'function') {
+          const migrated = migrateColor(value.color);
+          if (migrated !== value.color) {
+            result[key] = { ...value, color: migrated };
+          }
+        }
+      });
+
+      // 3) Keep collections_index color metadata in sync with the migrated records.
+      const index = result.collections_index;
+      if (index && typeof index === 'object' && !Array.isArray(index)) {
+        const nextIndex = { ...index };
+        Object.keys(nextIndex).forEach((uid) => {
+          const record = result[`collection_${uid}`];
+          if (record && typeof record.color === 'string' && nextIndex[uid]) {
+            nextIndex[uid] = { ...nextIndex[uid], color: record.color };
+          }
+        });
+        result.collections_index = nextIndex;
+      }
+
+      result.colorSystemVersion = '2.0'; // Mark as migrated to new color system
+      result.lastUpdated = Date.now();
+      result.colorMigrationTimestamp = Date.now();
+
       return result;
-      
+
     } catch (error) {
       console.error('❌ Color migration failed:', error);
       console.error('Error details:', error.stack);
@@ -498,6 +541,57 @@ class MigrationCoordinator {
       console.error('❌ Timestamp migration failed:', error);
       console.error('Error details:', error.stack);
       throw new Error(`Timestamp migration failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Repair collections whose tab URLs were persisted as the deferred-loading wrapper
+   * (chrome-extension://.../deferedLoading.html?url=...). Rewrites them back to the real
+   * destination across the indexed collection_<uid> records and the legacy tabsArray
+   * mirror. Idempotent: tabs that are already real URLs are left untouched.
+   * @param {object} data - Current storage data
+   * @returns {Promise<object>} Data with deferred wrapper URLs unwrapped
+   */
+  async repairDeferredUrls(data) {
+    try {
+      const repairTabs = (tabs) => (
+        Array.isArray(tabs)
+          ? tabs.map((tab) => {
+            if (!tab || typeof tab.url !== 'string') {
+              return tab;
+            }
+            const unwrapped = unwrapDeferredUrl(tab.url);
+            return unwrapped === tab.url ? tab : { ...tab, url: unwrapped };
+          })
+          : tabs
+      );
+
+      const result = { ...data };
+
+      // Repair the indexed collection_<uid> records (the source of truth for display).
+      Object.keys(result).forEach((key) => {
+        if (key.startsWith('collection_') && result[key] && Array.isArray(result[key].tabs)) {
+          result[key] = { ...result[key], tabs: repairTabs(result[key].tabs) };
+        }
+      });
+
+      // Repair the legacy tabsArray mirror so backups/exports/sync stay consistent.
+      if (Array.isArray(result.tabsArray)) {
+        result.tabsArray = result.tabsArray.map((collection) => (
+          collection && Array.isArray(collection.tabs)
+            ? { ...collection, tabs: repairTabs(collection.tabs) }
+            : collection
+        ));
+      }
+
+      result.deferredUrlRepairTimestamp = Date.now();
+
+      return result;
+
+    } catch (error) {
+      console.error('❌ Deferred URL repair failed:', error);
+      console.error('Error details:', error.stack);
+      throw new Error(`Deferred URL repair failed: ${error.message}`);
     }
   }
 
@@ -615,7 +709,8 @@ class MigrationCoordinator {
   getTargetVersionForStep(step) {
     const stepVersionMap = {
       'color_migration': '4.0',
-      'timestamp_migration': '4.0' // v3 storage version, still app version 4.0
+      'timestamp_migration': '4.0', // v3 storage version, still app version 4.0
+      'repair_deferred_urls': '4.0' // idempotent data repair, no schema change
     };
     
     return stepVersionMap[step] || MIGRATION_CONFIG.CURRENT_VERSION;

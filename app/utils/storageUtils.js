@@ -136,6 +136,48 @@ export const getAllStorageData = async () => {
 };
 
 /**
+ * Restore storage to a pre-transaction snapshot WITHOUT clearing the storage area.
+ *
+ * `browser.storage.local.clear()` is intentionally avoided: it is not atomic with the
+ * subsequent restore, so an interruption (the popup closing, the service worker being
+ * killed, a quota error) between clear and set permanently destroys all data. Instead
+ * we diff against the snapshot and touch only the keys that actually changed.
+ *
+ * Safety: an empty/failed snapshot ({} from a failed read) must never trigger a wipe,
+ * so the "remove added keys" pass is skipped when the snapshot is empty.
+ * @param {object} snapshot - Storage contents captured before the transaction
+ * @returns {Promise<void>}
+ */
+const restoreStorageSnapshot = async (snapshot) => {
+    if (!snapshot || Object.keys(snapshot).length === 0) {
+        // Nothing trustworthy to restore from - do not risk deleting live data.
+        return;
+    }
+
+    const current = await getAllStorageData();
+
+    // Restore keys that the transaction modified or deleted.
+    const restore = {};
+    Object.keys(snapshot).forEach((key) => {
+        if (JSON.stringify(current[key]) !== JSON.stringify(snapshot[key])) {
+            restore[key] = snapshot[key];
+        }
+    });
+
+    // Remove keys that the transaction added (present now, absent in the snapshot).
+    const removeKeys = Object.keys(current).filter(
+        (key) => !Object.prototype.hasOwnProperty.call(snapshot, key)
+    );
+
+    if (Object.keys(restore).length > 0) {
+        await browser.storage.local.set(restore);
+    }
+    if (removeKeys.length > 0) {
+        await browser.storage.local.remove(removeKeys);
+    }
+};
+
+/**
  * Create atomic storage transaction (Legacy)
  * @param {Function} transaction - Function that performs storage operations
  * @returns {Promise<boolean>} Success status
@@ -145,20 +187,17 @@ export const atomicStorageTransaction = async (transaction) => {
         if (!browser || !browser.storage) {
             throw new Error('Browser storage API not available');
         }
-        
+
         const fullSnapshot = await getAllStorageData();
-        
+
         try {
             await transaction();
             return true;
         } catch (transactionError) {
             console.error('Transaction failed, rolling back:', transactionError);
-            
-            if (fullSnapshot) {
-                await browser.storage.local.clear();
-                await browser.storage.local.set(fullSnapshot);
-            }
-            
+
+            await restoreStorageSnapshot(fullSnapshot);
+
             return false;
         }
     } catch (error) {
@@ -345,6 +384,53 @@ const markDeletedCollectionTombstones = async (uids = [], deletedAt = Date.now()
 
     await browser.storage.local.set({
         [STORAGE_KEYS.DELETED_COLLECTION_TOMBSTONES]: tombstones
+    });
+};
+
+const loadDeletedFolderTombstones = async () => {
+    try {
+        const { [STORAGE_KEYS.DELETED_FOLDER_TOMBSTONES]: tombstones } = await browser.storage.local.get(STORAGE_KEYS.DELETED_FOLDER_TOMBSTONES);
+        return tombstones || {};
+    } catch (error) {
+        console.error('Failed to load deleted folder tombstones:', error);
+        return {};
+    }
+};
+
+const clearDeletedFolderTombstones = async (uids = []) => {
+    if (!Array.isArray(uids) || uids.length === 0) {
+        return;
+    }
+
+    const tombstones = await loadDeletedFolderTombstones();
+    let changed = false;
+
+    uids.forEach((uid) => {
+        if (tombstones[uid]) {
+            delete tombstones[uid];
+            changed = true;
+        }
+    });
+
+    if (changed) {
+        await browser.storage.local.set({
+            [STORAGE_KEYS.DELETED_FOLDER_TOMBSTONES]: tombstones
+        });
+    }
+};
+
+const markDeletedFolderTombstones = async (uids = [], deletedAt = Date.now()) => {
+    if (!Array.isArray(uids) || uids.length === 0) {
+        return;
+    }
+
+    const tombstones = await loadDeletedFolderTombstones();
+    uids.forEach((uid) => {
+        tombstones[uid] = deletedAt;
+    });
+
+    await browser.storage.local.set({
+        [STORAGE_KEYS.DELETED_FOLDER_TOMBSTONES]: tombstones
     });
 };
 
@@ -1198,9 +1284,12 @@ export const saveSingleFolder = async (folder, forceUpdateTimestamp = false, sup
         await browser.storage.local.set({
             [STORAGE_KEYS.FOLDERS_INDEX]: foldersIndex
         });
-        
+
+        // A saved folder is live again - clear any stale deletion tombstone for it.
+        await clearDeletedFolderTombstones([folder.uid]);
+
         return true;
-        
+
     } catch (error) {
         console.error('Failed to save folder:', error);
         return false;
@@ -1334,20 +1423,25 @@ export const loadAllFolders = async (options = {}) => {
 export const deleteSingleFolder = async (uid) => {
     try {
         const folderKey = `${STORAGE_KEYS.FOLDER_PREFIX}${uid}`;
-        
+        const deletedAt = Date.now();
+
         // Remove from storage
         await browser.storage.local.remove(folderKey);
-        
+
         // Update index
         const foldersIndex = await loadFoldersIndex();
         delete foldersIndex[uid];
-        
+
         await browser.storage.local.set({
             [STORAGE_KEYS.FOLDERS_INDEX]: foldersIndex
         });
-        
+
+        // Record a tombstone so the deletion propagates to other devices, instead
+        // of the folder being resurrected by the timestamp-based merge heuristic.
+        await markDeletedFolderTombstones([uid], deletedAt);
+
         return true;
-        
+
     } catch (error) {
         console.error(`Failed to delete folder ${uid}:`, error);
         return false;
@@ -1464,91 +1558,125 @@ export const updateCollectionsOrder = async (collections) => {
 // ========================================
 
 /**
- * Detect and repair orphan collections
- * Orphan collections are those with a parentId that points to a non-existent folder.
- * This can happen due to:
- * - Sync race conditions (collections sync before folders)
- * - Folder deletion that didn't properly clean up parentId references
- * - Incomplete sync where folder data was lost
- * 
- * This function finds orphan collections and resets their parentId to null,
- * effectively moving them to the root level so they become visible again.
- * 
- * @returns {Promise<{success: boolean, orphansFound: number, orphansRepaired: number, orphanUids: string[]}>}
+ * Detect and repair index/storage inconsistencies for collections.
+ *
+ * Handles two classes of corruption that older code could produce:
+ * - Ghost entries: index references a collection whose storage record is gone
+ *   (e.g. a concurrent folder-delete that raced on the shared index and left
+ *   dangling pointers - the "found in index but not in storage" warning). These
+ *   are pruned from the index so they stop being requested on every load.
+ * - Orphan collections: index entry has a parentId pointing at a non-existent
+ *   folder (sync races, lost folder data). These are moved back to root level
+ *   so they become visible again.
+ *
+ * Both fixes are local index/storage hygiene, applied in a single index write.
+ *
+ * @returns {Promise<{success: boolean, orphansFound: number, orphansRepaired: number, orphanUids: string[], ghostsPruned: number, ghostUids: string[]}>}
  */
 export const repairOrphanCollections = async () => {
+    const emptyResult = {
+        success: true,
+        orphansFound: 0,
+        orphansRepaired: 0,
+        orphanUids: [],
+        ghostsPruned: 0,
+        ghostUids: [],
+    };
+
     try {
         // Load collections index and folders index
         const collectionsIndex = await loadCollectionsIndex();
         const foldersIndex = await loadFoldersIndex();
-        
+
+        const indexedUids = Object.keys(collectionsIndex);
+        if (indexedUids.length === 0) {
+            return emptyResult;
+        }
+
         // Get set of valid folder UIDs
         const validFolderUids = new Set(Object.keys(foldersIndex));
-        
-        // Find orphan collections (have parentId but folder doesn't exist)
-        const orphanUids = [];
-        for (const [uid, meta] of Object.entries(collectionsIndex)) {
-            if (meta.parentId && !validFolderUids.has(meta.parentId)) {
-                orphanUids.push(uid);
-            }
+
+        // Single read to find which indexed collections actually have storage records.
+        // loadMultipleCollections omits any uid whose storage key is missing.
+        const storedCollections = await loadMultipleCollections(indexedUids);
+
+        // Ghost entries: in the index but with no backing storage record.
+        const ghostUids = indexedUids.filter(uid => !storedCollections[uid]);
+
+        // Orphan collections: backing record exists but parentId points nowhere.
+        // (Ghosts are excluded - they're being pruned, not repaired.)
+        const orphanUids = indexedUids.filter(uid => (
+            storedCollections[uid] &&
+            collectionsIndex[uid].parentId &&
+            !validFolderUids.has(collectionsIndex[uid].parentId)
+        ));
+
+        if (ghostUids.length === 0 && orphanUids.length === 0) {
+            return emptyResult;
         }
-        
-        if (orphanUids.length === 0) {
-            return { 
-                success: true, 
-                orphansFound: 0, 
-                orphansRepaired: 0, 
-                orphanUids: [] 
-            };
+
+        let indexChanged = false;
+
+        // Prune ghost index entries.
+        if (ghostUids.length > 0) {
+            console.warn(`⚠️ Pruning ${ghostUids.length} ghost index entr(ies) with no backing storage:`, ghostUids);
+            ghostUids.forEach((uid) => {
+                delete collectionsIndex[uid];
+            });
+            indexChanged = true;
         }
-        
-        console.warn(`⚠️ Found ${orphanUids.length} orphan collection(s) with invalid parentId references:`, orphanUids);
-        
-        // Repair each orphan collection
+
+        // Repair each orphan collection (reset parentId to null in index + storage).
         let orphansRepaired = 0;
-        for (const uid of orphanUids) {
-            try {
-                // Update collection index
-                collectionsIndex[uid].parentId = null;
-                
-                // Load and update the full collection record
-                const collection = await loadSingleCollection(uid);
-                if (collection) {
+        if (orphanUids.length > 0) {
+            console.warn(`⚠️ Found ${orphanUids.length} orphan collection(s) with invalid parentId references:`, orphanUids);
+            for (const uid of orphanUids) {
+                try {
+                    const collection = storedCollections[uid];
                     collection.parentId = null;
                     // Don't update lastUpdated - this is a repair operation, not a user edit
                     const collectionKey = `${STORAGE_KEYS.COLLECTION_PREFIX}${uid}`;
                     await browser.storage.local.set({
                         [collectionKey]: collection
                     });
+                    collectionsIndex[uid].parentId = null;
+                    indexChanged = true;
                     orphansRepaired++;
+                } catch (err) {
+                    console.error(`Failed to repair orphan collection ${uid}:`, err);
                 }
-            } catch (err) {
-                console.error(`Failed to repair orphan collection ${uid}:`, err);
             }
         }
-        
-        // Save updated collections index
-        await browser.storage.local.set({
-            [STORAGE_KEYS.COLLECTIONS_INDEX]: collectionsIndex
-        });
-        
-        console.log(`✅ Repaired ${orphansRepaired}/${orphanUids.length} orphan collection(s)`);
-        
-        return { 
-            success: true, 
-            orphansFound: orphanUids.length, 
-            orphansRepaired, 
-            orphanUids 
+
+        // Save updated collections index once.
+        if (indexChanged) {
+            await browser.storage.local.set({
+                [STORAGE_KEYS.COLLECTIONS_INDEX]: collectionsIndex
+            });
+        }
+
+        if (orphanUids.length > 0) {
+            console.log(`✅ Repaired ${orphansRepaired}/${orphanUids.length} orphan collection(s)`);
+        }
+        if (ghostUids.length > 0) {
+            console.log(`✅ Pruned ${ghostUids.length} ghost index entr(ies)`);
+        }
+
+        return {
+            success: true,
+            orphansFound: orphanUids.length,
+            orphansRepaired,
+            orphanUids,
+            ghostsPruned: ghostUids.length,
+            ghostUids,
         };
-        
+
     } catch (error) {
         console.error('Failed to repair orphan collections:', error);
-        return { 
-            success: false, 
-            orphansFound: 0, 
-            orphansRepaired: 0, 
-            orphanUids: [],
-            error: error.message 
+        return {
+            ...emptyResult,
+            success: false,
+            error: error.message
         };
     }
-}; 
+};

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef, useEffectEvent } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useEffectEvent, useCallback } from 'react';
 import { MdCenterFocusWeak, MdOutlineLaunch } from 'react-icons/md';
 import { FaTrash } from 'react-icons/fa';
 import { BsIncognito } from 'react-icons/bs';
@@ -11,6 +11,8 @@ import { highlightedCollectionUidState, deletingCollectionUidsState } from './at
 import { trackingStateVersion } from './atoms/globalAppSettingsState';
 
 import { getColorValue } from './utils/colorMigration';
+import { buildCollectionUrlList, copyToClipboard } from './utils/index';
+import { showSuccessToast, showErrorToast, showInfoToast } from './toastHelpers';
 import ColorPicker from './ColorPicker';
 import { useCollectionOperations } from './useCollectionOperations';
 import { browser } from '../static/globals';
@@ -25,6 +27,7 @@ function CollectionTile(props) {
     const [collectionName, setCollectionName] = useState(props.collection.name);
     const [isAutoUpdate, setIsAutoUpdate] = useState(false);
     const mountedRef = useRef(true);
+    const tileRef = useRef(null);
 
     // Check if this tile should be highlighted
     const isHighlighted = highlightedCollectionUid === props.collection.uid;
@@ -52,6 +55,22 @@ function CollectionTile(props) {
         addCollection: props.addCollection,
         onDataUpdate: props.onDataUpdate
     });
+
+    // Copy all collection URLs to the clipboard
+    const _handleCopyUrls = useCallback(async () => {
+        const urlList = buildCollectionUrlList(props.collection);
+        if (!urlList) {
+            showInfoToast('No URLs to copy');
+            return;
+        }
+        try {
+            await copyToClipboard(urlList);
+            const count = urlList.split('\n').length;
+            showSuccessToast(`${count} URL${count === 1 ? '' : 's'} copied`);
+        } catch (error) {
+            showErrorToast('Failed to copy URLs');
+        }
+    }, [props.collection]);
 
     // Handle highlight effect
     useEffect(() => {
@@ -183,6 +202,7 @@ function CollectionTile(props) {
     return (
         <DroppableCollection collection={props.collection}>
             <div
+                ref={tileRef}
                 className={`collection-tile ${props.activeId === props.collection.uid ? 'dragging' : ''} ${isAutoUpdate ? 'active-auto-tracking' : ''} ${isHighlighted ? 'new-tile-highlight' : ''} ${isDeleting ? 'new-tile-deleting' : ''} ${props.lightningEffect ? 'lightning-effect' : ''}`}
                 style={{
                     ...(props.collection.color && props.collection.color !== 'default' && props.collection.color !== 'var(--setting-row-border-color)' && props.collection.color !== 'var(--collection-default-color)' && { borderColor: getColorValue(props.collection.color) })
@@ -284,10 +304,12 @@ function CollectionTile(props) {
                             onDelete: _handleDelete,
                             onUpdate: _handleUpdate,
                             onStopTracking: _handleStopTracking,
-                            onDuplicate: _handleDuplicate
+                            onDuplicate: _handleDuplicate,
+                            onCopyUrls: _handleCopyUrls
                         })}
                         tooltip="Collection options"
                         tooltipPlace="right"
+                        triggerRef={tileRef}
                     />
                     <span className="tile-menu-label">More</span>
                 </div>

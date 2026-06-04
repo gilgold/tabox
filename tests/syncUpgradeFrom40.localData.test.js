@@ -170,6 +170,46 @@ describe('4.0 upgrade compatibility - local data', () => {
         );
     });
 
+    test('prunes ghost index entries whose backing storage was removed', async () => {
+        // Simulates the corruption left by a concurrent folder-delete that raced on
+        // the shared collections_index: the index still references a collection whose
+        // storage record is gone (the "found in index but not in storage" warning).
+        browser.storage.local._data = {
+            collections_index: {
+                'collection-live': { name: 'Live', type: 'collection', parentId: null, order: 0 },
+                'collection-ghost': { name: 'Ghost', type: 'collection', parentId: null, order: 1 }
+            },
+            'collection_collection-live': {
+                uid: 'collection-live',
+                name: 'Live',
+                parentId: null,
+                tabs: [{ uid: 'tab-1', url: 'https://example.com' }],
+                chromeGroups: []
+            }
+            // No collection_collection-ghost record on purpose.
+        };
+
+        const result = await storageUtils.repairOrphanCollections();
+
+        expect(result).toEqual(
+            expect.objectContaining({
+                success: true,
+                orphansFound: 0,
+                orphansRepaired: 0,
+                ghostsPruned: 1,
+                ghostUids: ['collection-ghost']
+            })
+        );
+
+        // The ghost is gone from the persisted index...
+        const index = await storageUtils.loadCollectionsIndex();
+        expect(Object.keys(index)).toEqual(['collection-live']);
+
+        // ...and the live collection still loads cleanly.
+        const collections = await storageUtils.loadAllCollections({ metadataOnly: false });
+        expect(collections.map((collection) => collection.uid)).toEqual(['collection-live']);
+    });
+
     test('backfills missing optional 4.0 local fields without losing upgraded data', async () => {
         browser.storage.local._data = createVersion40LocalSnapshot({
             missingOptionalFields: true

@@ -19,11 +19,13 @@ import {
     updateFolderCollectionCount,
     saveSingleCollection,
     loadSingleCollection,
-    deleteSingleCollection,
+    batchDeleteCollections,
+    batchUpdateCollections,
     loadCollectionsIndex,
     loadAllCollections
 } from './storageUtils';
 import { triggerBackgroundSync } from './sharedSync';
+import { useTrackedSync } from '../useTrackedSync';
 
 // ========================================
 // FOLDER CRUD OPERATIONS
@@ -152,7 +154,7 @@ export const updateFolderDetails = async (folderId, updates = {}) => {
  * @param {boolean} deleteCollections - If true, delete collections instead of moving to root
  * @returns {Promise<{success: boolean, collectionsMovedToRoot?: number, collectionsDeleted?: number}>} Result
  */
-export const deleteFolder = async (folderId, force = false, deleteCollections = false) => {
+export const deleteFolder = async (folderId, force = false, deleteCollections = false, { skipSync = false } = {}) => {
     try {
         if (!folderId) {
             throw new Error('Folder ID is required');
@@ -179,29 +181,45 @@ export const deleteFolder = async (folderId, force = false, deleteCollections = 
                     if (!m.uid) { console.error('⚠️ Skipping collection with undefined UID:', m); return false; }
                     return true;
                 });
-                const results = await Promise.all(validMetas.map(m => deleteSingleCollection(m.uid)));
-                collectionsDeleted = results.filter(Boolean).length;
-                results.forEach((ok, i) => { if (!ok) console.warn(`⚠️ Failed to delete collection ${validMetas[i].uid}`); });
+                // Delete in a single atomic index pass. Running deleteSingleCollection
+                // concurrently races on the shared collections_index (lost update),
+                // leaving stale index entries for already-removed storage keys.
+                const ok = await batchDeleteCollections(validMetas.map(m => m.uid));
+                collectionsDeleted = ok ? validMetas.length : 0;
+                if (!ok) console.warn(`⚠️ Failed to delete collections for folder ${folderId}`);
             } else {
                 const validMetas = collectionsInFolder.filter(m => {
                     if (!m.uid) { console.error('⚠️ Skipping collection with undefined UID:', m); return false; }
                     return true;
                 });
                 const loaded = await Promise.all(validMetas.map(m => loadSingleCollection(m.uid)));
-                const savePromises = loaded.map((collection, i) => {
-                    if (!collection) { console.warn(`⚠️ Collection ${validMetas[i].uid} not found in storage, skipping`); return Promise.resolve(false); }
-                    collection.parentId = null;
-                    return saveSingleCollection(collection, true);
-                });
-                const saved = await Promise.all(savePromises);
-                collectionsMovedToRoot = saved.filter(Boolean).length;
+                const collectionsToMove = loaded
+                    .filter((collection, i) => {
+                        if (!collection) { console.warn(`⚠️ Collection ${validMetas[i].uid} not found in storage, skipping`); return false; }
+                        return true;
+                    })
+                    .map(collection => {
+                        collection.parentId = null;
+                        return collection;
+                    });
+                // Move in a single atomic index pass to avoid racing on collections_index.
+                const ok = await batchUpdateCollections(collectionsToMove);
+                collectionsMovedToRoot = ok ? collectionsToMove.length : 0;
+                if (!ok) console.warn(`⚠️ Failed to move collections to root for folder ${folderId}`);
             }
         }
 
         const success = await deleteSingleFolder(folderId);
 
         if (success) {
-            triggerBackgroundSync();
+            // By default, await the sync so the deletion reliably reaches the remote
+            // before the popup can tear down (Manifest V3 service worker lifecycle);
+            // an un-awaited call returns before the updateRemote round-trip dispatches.
+            // Callers that want to show their toast immediately and reflect a
+            // "Syncing..." indicator pass skipSync and drive the sync themselves.
+            if (!skipSync) {
+                await triggerBackgroundSync();
+            }
 
             return { success: true, collectionsMovedToRoot, collectionsDeleted };
         } else {
@@ -296,12 +314,15 @@ export const duplicateFolder = async (folderId) => {
         // Update folder collection count
         await updateFolderCollectionCount(newFolder.uid);
 
-        triggerBackgroundSync();
+        // Await the sync so the duplicate reliably reaches the remote before the
+        // operation resolves (and before the popup can tear down). Matches the
+        // awaited sync in createFolder/updateFolder.
+        await triggerBackgroundSync();
 
-        return { 
-            success: true, 
-            newFolder, 
-            duplicatedCollections 
+        return {
+            success: true,
+            newFolder,
+            duplicatedCollections
         };
     } catch (error) {
         console.error('Error duplicating folder:', error);
@@ -521,6 +542,7 @@ export function useFolderOperations({
     onFolderUpdate,
     onFolderDelete
 }) {
+    const runTrackedSync = useTrackedSync();
 
     const handleDeleteFolder = async (force = false, deleteCollections = false) => {
         try {
@@ -528,7 +550,9 @@ export function useFolderOperations({
             const allFolders = await loadAllFolders();
             const allCollections = await loadAllCollections();
 
-            const result = await deleteFolder(folder.uid, force, deleteCollections);
+            // Perform the local deletion only; we drive the sync ourselves below so
+            // the success toast can appear immediately (the sync takes a few seconds).
+            const result = await deleteFolder(folder.uid, force, deleteCollections, { skipSync: true });
 
             if (result.success) {
                 // Notify parent component
@@ -537,13 +561,13 @@ export function useFolderOperations({
                 }
 
                 // Create message based on what happened
-                const actionMessage = result.collectionsDeleted > 0 
+                const actionMessage = result.collectionsDeleted > 0
                     ? ` (${result.collectionsDeleted} collections deleted)`
-                    : result.collectionsMovedToRoot > 0 
+                    : result.collectionsMovedToRoot > 0
                         ? ` (${result.collectionsMovedToRoot} collections moved to root)`
                         : '';
 
-                // Show success message with undo option (only if collections weren't deleted)
+                // Show the toast immediately, before the sync round-trip.
                 if (!deleteCollections || result.collectionsDeleted === 0) {
                     showUndoToast(
                         <FaTrash />,
@@ -568,6 +592,10 @@ export function useFolderOperations({
                     // Simple success message when collections were deleted (no undo possible)
                     showSuccessToast(`Folder and ${result.collectionsDeleted} collections deleted successfully`);
                 }
+
+                // Now sync to remote while showing the "Syncing..." indicator. Awaiting
+                // keeps the popup/service worker alive until the deletion reaches Drive.
+                await runTrackedSync();
 
                 return true;
             } else {

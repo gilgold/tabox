@@ -279,5 +279,8 @@
         </a>
     </div>
 </body>
-<script src="deferedLoading.js" type="text/javascript"></script>
+<!-- deferedLoading.js is copied verbatim (not webpack-bundled) and uses ES module
+     `export` syntax, so it MUST load as a module. As a classic script the `export`
+     tokens throw "Unexpected token 'export'" and abort before the redirect runs. -->
+<script src="deferedLoading.js" type="module"></script>
 </html>

@@ -1,10 +1,13 @@
 import { applyUid } from '../utils';
+import { unwrapDeferredUrl } from './urlUtils';
 
 export function buildCollectionFromSnapshot({ snapshot, name, parentId = '' } = {}) {
     const nextSnapshot = {
         ...snapshot,
         name,
-        tabs: (snapshot.tabs || []).map((tab) => ({ ...tab })),
+        // Resolve any deferred-loading wrapper URLs so we never persist the placeholder
+        // page (chrome-extension://.../deferedLoading.html) as a saved tab URL.
+        tabs: (snapshot.tabs || []).map((tab) => ({ ...tab, url: unwrapDeferredUrl(tab.url) })),
         chromeGroups: (snapshot.chromeGroups || []).map((group) => ({ ...group })),
         createdOn: Date.now(),
         lastUpdated: Date.now(),

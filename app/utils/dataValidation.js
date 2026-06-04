@@ -167,6 +167,67 @@ export const validateDocumentFormat = (data) => {
 };
 
 /**
+ * Detect the live, runtime indexed-storage shape used by storageUtils.js.
+ * This is distinct from the export "document" format above: here `collections_index`
+ * is an OBJECT keyed by uid and each collection lives under a `collection_<uid>` key.
+ * @param {object} data - Raw storage data
+ * @returns {boolean}
+ */
+export const isIndexedStorageFormat = (data) => {
+  if (!data || typeof data !== 'object') {
+    return false;
+  }
+
+  const index = data.collections_index;
+  const hasObjectIndex = !!index && typeof index === 'object' && !Array.isArray(index);
+  const hasIndexedRecords = Object.keys(data).some(
+    (key) => key.startsWith('collection_') || key.startsWith('folder_')
+  );
+
+  return hasObjectIndex || hasIndexedRecords;
+};
+
+/**
+ * Validate the runtime indexed-storage shape (4.0+).
+ *
+ * Intentionally lenient: it checks the structural integrity of the indexed
+ * `collection_<uid>` records, NOT the strict per-tab rules used for the legacy
+ * `tabsArray` mirror. A single restored/loading tab that is missing a `url` in the
+ * mirror must never mark the live indexed storage as "unsafe" (that previously caused
+ * migrations to abort and roll back).
+ * @param {object} data - Raw storage data
+ * @returns {object} { isValid: boolean, errors: string[], collectionCount: number }
+ */
+export const validateIndexedStorageFormat = (data) => {
+  const errors = [];
+
+  const index = data.collections_index;
+  if (index !== undefined && (typeof index !== 'object' || index === null || Array.isArray(index))) {
+    errors.push('collections_index must be an object keyed by uid');
+  }
+
+  const collectionKeys = Object.keys(data).filter((key) => key.startsWith('collection_'));
+  collectionKeys.forEach((key) => {
+    const record = data[key];
+    if (!record || typeof record !== 'object') {
+      errors.push(`${key} record must be an object`);
+    } else if (record.tabs !== undefined && !Array.isArray(record.tabs)) {
+      errors.push(`${key}.tabs must be an array`);
+    }
+  });
+
+  const collectionCount = (index && typeof index === 'object' && !Array.isArray(index))
+    ? Object.keys(index).length
+    : collectionKeys.length;
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+    collectionCount
+  };
+};
+
+/**
  * Detect and validate current data format
  * @param {object} data - Raw storage data
  * @returns {object} { format: string, isValid: boolean, errors: string[], info: object }
@@ -195,6 +256,23 @@ export const detectAndValidateFormat = (data) => {
     };
   }
   
+  // Detect runtime indexed storage (4.0+): collections_index as an object keyed by
+  // uid and/or collection_<uid>/folder_<uid> records. Checked before the array branch
+  // because the live storage also keeps a legacy `tabsArray` mirror, and that mirror
+  // must not be strict-validated here.
+  if (isIndexedStorageFormat(data)) {
+    const validation = validateIndexedStorageFormat(data);
+    return {
+      format: 'indexed',
+      isValid: validation.isValid,
+      errors: validation.errors,
+      info: {
+        version: '4.0+',
+        collectionCount: validation.collectionCount
+      }
+    };
+  }
+
   // Detect array format (3.0-3.5)
   if (data.tabsArray) {
     const validation = validateArrayFormat(data);
