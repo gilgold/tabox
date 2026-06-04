@@ -5,6 +5,7 @@ try {
   importScripts('sync-transport.js');
   importScripts('sync-merge.js');
   importScripts('sync-apply.js');
+  importScripts('sync-throttle.js');
   importScripts('background-utils.js');
 }
 catch (e) {
@@ -19,20 +20,16 @@ catch (e) {
     writeSyncSessionState
   } = syncSessionStateApi;
   let updateInProgress = false;
-  
-  // Sync throttling to prevent multiple sync operations
-  let syncThrottleTimeout = null;
-  const throttleSync = async (operation) => {
-    if (syncThrottleTimeout) {
-      return false;
-    }
-    
-    syncThrottleTimeout = setTimeout(() => {
-      syncThrottleTimeout = null;
-    }, 2000); // Prevent sync for 2 seconds after last operation
-    
-    return await operation();
-  };
+
+  // Sync coalescing to prevent overlapping sync operations.
+  // The first call runs immediately; a call made while a sync is in flight is
+  // coalesced into a single trailing run that fires as soon as the current one
+  // finishes, and the caller awaits it. This ensures a closely-following sync
+  // (e.g. deleting a just-duplicated collection) is never silently dropped.
+  const syncThrottleApi = typeof require === 'function'
+    ? require('./sync-throttle.js')
+    : globalThis.TaboxSyncThrottle;
+  const throttleSync = syncThrottleApi.createSyncThrottle();
 
   // Auto-update debouncing - wait 2 seconds after last event
   let autoUpdateTimeouts = new Map();
@@ -408,7 +405,10 @@ async function setInitialOptions() {
     await browser.storage.local.set({ [TOOLBAR_FULLPAGE_SETTING_KEY]: false });
   }
   if (chkEnableTabDiscard == null) {
-    await browser.storage.local.set({ chkEnableTabDiscard: true });
+    // Smart tab loading defaults OFF. It previously defaulted ON and was force-enabled
+    // for every user on update, which (combined with the ad-blocker-blocked deferred
+    // page) broke tab restores at scale. Users can opt in from Settings.
+    await browser.storage.local.set({ chkEnableTabDiscard: false });
   }
   if (currentSortValue == null) {
     await browser.storage.local.set({ currentSortValue: 'DATE' });
@@ -843,34 +843,43 @@ async function openTabs(collection, window, newWindow = null, trackOpenedWindow 
   
   for (let index = 0; index < totalTabs; index++) {
     const tabInGrp = collection.tabs[index];
-    
+
+    // Resolve the real destination URL. Collections saved by older builds (or while a
+    // deferred tab was still on the placeholder page) may have persisted the
+    // deferedLoading.html wrapper as the tab URL. Always open the real URL; this is also
+    // what makes turning the setting off actually work for already-saved collections.
+    const realUrl = unwrapDeferredUrl(tabInGrp.url);
+
     // Skip duplicates
-    if (duplicateUrls.has(tabInGrp.url)) {
+    if (duplicateUrls.has(realUrl)) {
       continue;
     }
-    
+
     // Skip URLs that can't be opened in incognito windows
     if (isIncognitoWindow) {
-      const isBlockedUrl = INCOGNITO_BLOCKED_PREFIXES.some(prefix => 
-        tabInGrp.url.toLowerCase().startsWith(prefix)
+      const isBlockedUrl = INCOGNITO_BLOCKED_PREFIXES.some(prefix =>
+        realUrl.toLowerCase().startsWith(prefix)
       );
       if (isBlockedUrl) {
         skippedIncognitoTabs.push({
-          url: tabInGrp.url,
+          url: realUrl,
           title: tabInGrp.title,
           reason: 'URL type not allowed in incognito'
         });
         continue;
       }
     }
-    
+
     // Pre-calculate deferred URL
     // Note: Don't use deferred loading in incognito as extension pages may have issues
-    const shouldDefer = !isIncognitoWindow && chkEnableTabDiscard && shouldDiscardTab(tabInGrp);
-    const finalUrl = shouldDefer 
-      ? `${runtimeUrl}?url=${encodeURIComponent(tabInGrp.url)}&favicon=${encodeURIComponent(tabInGrp?.favIconUrl || '')}`
-      : tabInGrp.url;
-    
+    const shouldDefer = !isIncognitoWindow && chkEnableTabDiscard && shouldDiscardTab({ ...tabInGrp, url: realUrl });
+    // Carry the destination in the URL hash (not the query string). Ad blockers match the
+    // `?url=http...` redirect pattern and block the placeholder page (ERR_BLOCKED_BY_CLIENT);
+    // a hash fragment is never sent in the request and avoids those filters.
+    const finalUrl = shouldDefer
+      ? `${runtimeUrl}#${encodeURIComponent(JSON.stringify({ url: realUrl, favicon: tabInGrp?.favIconUrl || '' }))}`
+      : realUrl;
+
     tabsToCreate.push({
       originalTab: tabInGrp,
       properties: {
@@ -1777,14 +1786,9 @@ try {
     if (request.type === 'updateRemote') {
       console.log('🔄 [SYNC] updateRemote message received - starting sync');
       try {
-        // Use throttled sync to prevent multiple simultaneous operations
+        // Coalesce overlapping syncs; a request made during an in-flight sync
+        // awaits a trailing run that pushes the latest local state.
         const result = await throttleSync(() => handleRemoteUpdate());
-        if (result === false && syncThrottleTimeout) {
-          // Operation was throttled, return success to prevent error handling
-          console.log('🔄 [SYNC] updateRemote throttled');
-          return Promise.resolve(true);
-        }
-        
         if (result === false) {
           console.log('🔄 [SYNC] updateRemote FAILED');
           logSyncOperation('error', 'Remote update failed');

@@ -60,6 +60,17 @@ describe('migration support 4.0 module', () => {
         expect(assessment.migrationPath).toEqual(['color_migration']);
     });
 
+    test('flags collections whose tab URLs are deferred-loading wrappers for repair', () => {
+        const snapshot = createVersion40LocalSnapshot();
+        const wrapper = `chrome-extension://abc/deferedLoading.html?url=${encodeURIComponent('https://real.example/x')}`;
+        snapshot['collection_collection-root-a'].tabs = [{ uid: 't1', url: wrapper }];
+
+        const assessment = migrationSupport40.assessMigrationSupport40(snapshot);
+
+        expect(assessment.migrationNeeded).toBe(true);
+        expect(assessment.migrationPath).toContain('repair_deferred_urls');
+    });
+
     test('refuses automatic migration for pre-4.0 array-only runtime data', () => {
         const assessment = migrationSupport40.assessMigrationSupport40({
             tabsArray: [

@@ -33,6 +33,9 @@ jest.mock('../app/utils/colorMigration.js', () => ({
         ...collection,
         color: 'blue',
     }))),
+    migrateColor: jest.fn((color) => (
+        typeof color === 'string' && color.startsWith('#') ? 'blue' : color
+    )),
 }));
 
 describe('migrationCoordinator', () => {
@@ -161,6 +164,56 @@ describe('migrationCoordinator', () => {
             migrationNeeded: true,
             migrationPath: ['color_migration'],
         }));
+    });
+
+    test('requests a deferred-url repair when the version is complete but wrapper URLs remain', async () => {
+        storageUtils.getAllStorageData.mockResolvedValue({
+            collections_index: { c1: { name: 'C1' } },
+            collection_c1: {
+                uid: 'c1',
+                name: 'C1',
+                tabs: [{ url: 'chrome-extension://x/deferedLoading.html?url=https%3A%2F%2Freal.example' }],
+            },
+        });
+        storageUtils.safeStorageGet.mockResolvedValue({
+            migration_history: {
+                completedVersions: ['4.0'],
+                lastMigrationTimestamp: 1,
+                migrationAttempts: 1,
+            },
+        });
+        migrationSupport40.assessMigrationSupport40.mockReturnValue({
+            currentVersion: '4.0',
+            supported: true,
+            migrationNeeded: true,
+            migrationPath: ['repair_deferred_urls'],
+        });
+
+        const result = await migrationCoordinator.assessMigrationNeeds();
+
+        expect(result).toEqual(expect.objectContaining({
+            migrationNeeded: true,
+            migrationPath: ['repair_deferred_urls'],
+        }));
+    });
+
+    test('repairDeferredUrls unwraps wrapper URLs in indexed records and the tabsArray mirror', async () => {
+        const real = 'https://example.com/page';
+        const wrapper = `chrome-extension://x/deferedLoading.html?url=${encodeURIComponent(real)}`;
+        const data = {
+            collections_index: { c1: {} },
+            collection_c1: { uid: 'c1', tabs: [{ url: wrapper }, { url: 'https://clean.example' }] },
+            tabsArray: [{ uid: 'c1', tabs: [{ url: wrapper }] }],
+            other_key: { keep: true },
+        };
+
+        const result = await migrationCoordinator.repairDeferredUrls(data);
+
+        expect(result.collection_c1.tabs[0].url).toBe(real);
+        expect(result.collection_c1.tabs[1].url).toBe('https://clean.example');
+        expect(result.tabsArray[0].tabs[0].url).toBe(real);
+        // Unrelated keys are preserved untouched.
+        expect(result.other_key).toEqual({ keep: true });
     });
 
     test('skips executeMigration when a migration lock already exists', async () => {
@@ -301,6 +354,22 @@ describe('migrationCoordinator', () => {
             colorSystemVersion: '2.0',
             tabsArray: [{ uid: 'collection-1', color: 'blue' }],
         }));
+    });
+
+    test('migrates colors in indexed collection/folder records and syncs the index', async () => {
+        const result = await migrationCoordinator.migrateColorsOnly({
+            collections_index: { c1: { color: '#123456' } },
+            collection_c1: { uid: 'c1', color: '#123456', tabs: [] },
+            folder_f1: { uid: 'f1', color: '#abcdef' },
+        });
+
+        // Indexed records are the source of truth for display and must be migrated,
+        // not just the legacy tabsArray mirror.
+        expect(result.collection_c1.color).toBe('blue');
+        expect(result.folder_f1.color).toBe('blue');
+        // Index color metadata is kept in sync with the record.
+        expect(result.collections_index.c1.color).toBe('blue');
+        expect(result.colorSystemVersion).toBe('2.0');
     });
 
     test('adds timestamps and lastOpened fallbacks during timestamp migration', async () => {

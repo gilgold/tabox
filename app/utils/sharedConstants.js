@@ -10,6 +10,7 @@ export const STORAGE_KEYS = {
     FOLDERS_INDEX: 'folders_index',
     LEGACY_TABS_ARRAY: 'tabsArray',
     DELETED_COLLECTION_TOMBSTONES: 'deleted_collection_tombstones',
+    DELETED_FOLDER_TOMBSTONES: 'deleted_folder_tombstones',
     COLLECTION_PREFIX: 'collection_',
     FOLDER_PREFIX: 'folder_',
     STORAGE_VERSION: 'tabox_storage_version'

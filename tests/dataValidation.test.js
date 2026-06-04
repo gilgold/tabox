@@ -184,3 +184,54 @@ describe('dataValidation', () => {
         expect(unsafe).toBe(false);
     });
 });
+
+describe('dataValidation - runtime indexed storage', () => {
+    const indexedSnapshot = (overrides = {}) => ({
+        collections_index: { c1: { name: 'C1', type: 'collection' } },
+        collection_c1: { uid: 'c1', name: 'C1', tabs: [{ uid: 't1', url: 'https://x.com' }] },
+        tabox_storage_version: 3,
+        ...overrides,
+    });
+
+    test('detects the live indexed-storage shape (object index + collection_ records)', () => {
+        const result = detectAndValidateFormat(indexedSnapshot());
+
+        expect(result).toEqual(expect.objectContaining({
+            format: 'indexed',
+            isValid: true,
+            info: expect.objectContaining({ version: '4.0+', collectionCount: 1 }),
+        }));
+    });
+
+    test('isDataSafe stays true even when the legacy tabsArray mirror has an imperfect tab', () => {
+        // A restored/loading tab missing a url in the mirror previously failed isDataSafe
+        // (document branch never matched, so the strict tabsArray branch ran) and aborted
+        // the migration into a destructive rollback.
+        const data = indexedSnapshot({
+            tabsArray: [{ uid: 'c1', name: 'C1', tabs: [{ title: 'still loading, no url yet' }] }],
+        });
+
+        expect(detectAndValidateFormat(data).format).toBe('indexed');
+        expect(isDataSafe(data)).toBe(true);
+    });
+
+    test('flags structurally broken indexed records', () => {
+        const result = detectAndValidateFormat({
+            collections_index: { c1: { name: 'C1' } },
+            collection_c1: { uid: 'c1', tabs: 'not-an-array' },
+        });
+
+        expect(result.format).toBe('indexed');
+        expect(result.isValid).toBe(false);
+    });
+
+    test('still recognizes the export document format (array index + app_metadata)', () => {
+        const result = detectAndValidateFormat({
+            collections_index: [],
+            app_metadata: { version: '4.0', lastUpdated: Date.now() },
+            user_settings: {},
+        });
+
+        expect(result.format).toBe('document');
+    });
+});

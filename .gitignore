@@ -20,3 +20,6 @@ chrome/api-keys.local.json
 coverage
 test-results
 .superpowers/
+
+# Local competitive/market research notes (not for publishing)
+market-research/

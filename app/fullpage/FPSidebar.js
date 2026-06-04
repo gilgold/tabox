@@ -12,7 +12,9 @@ import { downloadTextFile } from '../utils';
 import { loadAllCollections } from '../utils/storageUtils';
 import { getColorValue } from '../utils/colorMigration';
 import { browser } from '../../static/globals';
-import { showSuccessToast, showErrorToast } from '../toastHelpers';
+import { showSuccessToast, showErrorToast, showInfoToast } from '../toastHelpers';
+import { useTrackedSync } from '../useTrackedSync';
+import { buildFolderUrlList, getCollectionUrls, copyToClipboard } from '../utils/index';
 import { reorderSidebarFolders } from './sidebarFolderReorder';
 import {
     moveCollectionToFolder,
@@ -120,6 +122,7 @@ function FPSidebar({
     const [collapsed, setCollapsed] = useAtom(sidebarCollapsedState);
     const setSearch = useSetAtom(searchState);
     const setCommandPaletteOpen = useSetAtom(commandPaletteOpenState);
+    const runTrackedSync = useTrackedSync();
     const isMac = useMemo(() => navigator.platform?.toUpperCase().includes('MAC'), []);
 
     const [saveModalOpen, setSaveModalOpen] = useState(false);
@@ -455,6 +458,25 @@ function FPSidebar({
         }
     }, [ctxMenu, closeCtxMenu, onDataUpdate]);
 
+    const handleCtxCopyUrls = useCallback(async () => {
+        if (!ctxMenu) return;
+        const folder = ctxMenu.folder;
+        closeCtxMenu();
+        try {
+            const { getFolderCollections } = await import('../utils/folderOperations');
+            const collections = await getFolderCollections(folder.uid);
+            const totalUrls = collections.reduce((n, c) => n + getCollectionUrls(c).length, 0);
+            if (totalUrls === 0) {
+                showInfoToast('No URLs to copy');
+                return;
+            }
+            await copyToClipboard(buildFolderUrlList(folder, collections));
+            showSuccessToast(`${totalUrls} URL${totalUrls === 1 ? '' : 's'} copied`);
+        } catch {
+            showErrorToast('Failed to copy URLs');
+        }
+    }, [ctxMenu, closeCtxMenu]);
+
     const handleCtxDelete = useCallback(async () => {
         if (!ctxMenu) return;
         const folder = ctxMenu.folder;
@@ -463,22 +485,23 @@ function FPSidebar({
         if (count > 0) {
             setDeleteModal({ folder, collectionCount: count });
         } else {
-            const result = await deleteFolder(folder.uid, true, false);
+            const result = await deleteFolder(folder.uid, true, false, { skipSync: true });
             if (result.success) {
                 if (navigation === folder.uid) setNavigation('all');
                 showSuccessToast('Folder deleted');
                 if (onDataUpdate) await onDataUpdate();
+                await runTrackedSync();
             } else {
                 showErrorToast('Failed to delete folder');
             }
         }
-    }, [ctxMenu, closeCtxMenu, folderCounts, navigation, setNavigation, onDataUpdate]);
+    }, [ctxMenu, closeCtxMenu, folderCounts, navigation, setNavigation, onDataUpdate, runTrackedSync]);
 
     const handleDeleteConfirm = useCallback(async (deleteCollections) => {
         if (!deleteModal) return;
         const { folder } = deleteModal;
         setDeleteModal(null);
-        const result = await deleteFolder(folder.uid, true, deleteCollections);
+        const result = await deleteFolder(folder.uid, true, deleteCollections, { skipSync: true });
         if (result.success) {
             if (navigation === folder.uid) setNavigation('all');
             const msg = deleteCollections
@@ -486,10 +509,11 @@ function FPSidebar({
                 : `Folder deleted (${result.collectionsMovedToRoot} collection(s) moved to root)`;
             showSuccessToast(msg);
             if (onDataUpdate) await onDataUpdate();
+            await runTrackedSync();
         } else {
             showErrorToast('Failed to delete folder');
         }
-    }, [deleteModal, navigation, setNavigation, onDataUpdate]);
+    }, [deleteModal, navigation, setNavigation, onDataUpdate, runTrackedSync]);
 
     const navItems = [
         { key: 'all', label: 'All Collections', count: allCount, icon: HiCollection },
@@ -725,6 +749,9 @@ function FPSidebar({
                 </button>
                 <button className="fp-sidebar-ctx-item" onClick={handleCtxDuplicate}>
                     <MdContentCopy size={16} /> <span>Duplicate Folder</span>
+                </button>
+                <button className="fp-sidebar-ctx-item" onClick={handleCtxCopyUrls}>
+                    <MdContentCopy size={16} /> <span>Copy all URLs in folder</span>
                 </button>
                 <div className="fp-sidebar-ctx-divider" />
                 <button className="fp-sidebar-ctx-item fp-sidebar-ctx-danger" onClick={handleCtxDelete}>

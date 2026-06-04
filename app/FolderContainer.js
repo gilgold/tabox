@@ -10,6 +10,8 @@ import DroppableFolderContent from './DroppableFolderContent';
 import { useFolderOperations, duplicateFolder } from './utils/folderOperations';
 import { loadCollectionsIndex } from './utils/storageUtils';
 import { downloadTextFile } from './utils';
+import { buildFolderUrlList, getCollectionUrls, copyToClipboard } from './utils/index';
+import { showSuccessToast, showErrorToast, showInfoToast } from './toastHelpers';
 import { browser } from '../static/globals';
 import { useDndContext } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -36,6 +38,7 @@ function FolderContainer({
     const [localExpanded, setLocalExpanded] = useState(!folder.collapsed);
     const { active } = useDndContext(); // Get current drag state
     const isMountedRef = useRef(true);
+    const headerRef = useRef(null);
     
     // Sync local state with folder prop changes
     useEffect(() => {
@@ -687,6 +690,26 @@ function FolderContainer({
         }
     };
 
+    const handleCopyFolderUrls = async () => {
+        try {
+            const { getFolderCollections } = await import('./utils/folderOperations');
+            const collections = await getFolderCollections(folder.uid);
+
+            const totalUrls = collections.reduce((n, c) => n + getCollectionUrls(c).length, 0);
+
+            if (totalUrls === 0) {
+                showInfoToast('No URLs to copy');
+                return;
+            }
+
+            await copyToClipboard(buildFolderUrlList(folder, collections));
+            showSuccessToast(`${totalUrls} URL${totalUrls === 1 ? '' : 's'} copied`);
+        } catch (error) {
+            console.error('Error copying folder URLs:', error);
+            showErrorToast('Failed to copy URLs');
+        }
+    };
+
     const handleDuplicateFolder = async () => {
         try {
             const result = await duplicateFolder(folder.uid);
@@ -713,8 +736,9 @@ function FolderContainer({
                 className={`folder-container ${viewMode === 'grid' ? 'folder-container-grid' : 'folder-container-list'} ${lightningEffect ? 'lightning-effect' : ''}`}
             >
             <DroppableFolderHeader folder={folder}>
-                <div 
-                    style={headerStyle} 
+                <div
+                    ref={headerRef}
+                    style={headerStyle}
                     className="folder-header"
                     onClick={(e) => {
                         // Only toggle if not clicking on interactive elements
@@ -870,6 +894,14 @@ function FolderContainer({
                                 condition: true
                             },
                             {
+                                id: 'copy-folder-urls',
+                                text: 'Copy all URLs in folder',
+                                icon: <MdContentCopy size={16} />,
+                                action: handleCopyFolderUrls,
+                                className: '',
+                                condition: true
+                            },
+                            {
                                 id: 'stop-tracking-folder',
                                 text: 'Stop Auto Tracking Folder',
                                 icon: <FaStop size={16} />,
@@ -887,6 +919,7 @@ function FolderContainer({
                             }
                         ]}
                         tooltip="Folder options"
+                        triggerRef={headerRef}
                     />
                     <button 
                         style={expandButtonStyle}

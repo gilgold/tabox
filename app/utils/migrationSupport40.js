@@ -36,6 +36,17 @@ const hasLegacyColorValues = (data) => (
     ))
 );
 
+// Collections saved by smart tab loading (<= v4.1) may have persisted the deferred
+// placeholder page (deferedLoading.html) as a tab URL. Detect those so the repair step
+// can rewrite them back to the real destination.
+const hasDeferredUrlCorruption = (data) => (
+    Object.entries(data).some(([key, value]) => (
+        key.startsWith(COLLECTION_PREFIX) &&
+        value && Array.isArray(value.tabs) &&
+        value.tabs.some((tab) => typeof tab?.url === 'string' && tab.url.indexOf('deferedLoading.html') > -1)
+    ))
+);
+
 export const assessMigrationSupport40 = (data = {}) => {
     if (hasLegacyArrayOnlyData(data)) {
         return {
@@ -65,6 +76,10 @@ export const assessMigrationSupport40 = (data = {}) => {
 
     if (hasMissingTimestampFields(data)) {
         migrationPath.push('timestamp_migration');
+    }
+
+    if (hasDeferredUrlCorruption(data)) {
+        migrationPath.push('repair_deferred_urls');
     }
 
     return {

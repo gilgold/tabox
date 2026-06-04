@@ -49,6 +49,14 @@ function normalizeSyncSnapshot(syncData = {}, now = Date.now()) {
                     lastUpdated: Number.isFinite(tombstone.lastUpdated) ? tombstone.lastUpdated : 0
                 }))
             : [],
+        deletedFolders: Array.isArray(syncData.deletedFolders)
+            ? syncData.deletedFolders
+                .filter((tombstone) => tombstone?.uid)
+                .map((tombstone) => ({
+                    uid: tombstone.uid,
+                    lastUpdated: Number.isFinite(tombstone.lastUpdated) ? tombstone.lastUpdated : 0
+                }))
+            : [],
         foldersArray: Array.isArray(syncData.foldersArray)
             ? syncData.foldersArray.map((folder, index) => normalizeFolder(folder, index, now))
             : [],
@@ -185,14 +193,22 @@ function mergeSyncSnapshots({ localSnapshot, remoteSnapshot, now = Date.now() })
         normalizedLocalSnapshot.deletedCollections,
         normalizedRemoteSnapshot.deletedCollections
     );
-    const mergedFolders = mergeEntityCollections(
-        {
-            localEntities: normalizedLocalSnapshot.foldersArray,
-            remoteEntities: normalizedRemoteSnapshot.foldersArray,
-            localSnapshotTimestamp: normalizedLocalSnapshot.timestamp,
-            remoteSnapshotTimestamp: normalizedRemoteSnapshot.timestamp
-        }
+    const mergedFolderDeletionTombstones = mergeDeletionTombstones(
+        normalizedLocalSnapshot.deletedFolders,
+        normalizedRemoteSnapshot.deletedFolders
     );
+    const mergedFolders = applyDeletionTombstones(
+        mergeEntityCollections(
+            {
+                localEntities: normalizedLocalSnapshot.foldersArray,
+                remoteEntities: normalizedRemoteSnapshot.foldersArray,
+                localSnapshotTimestamp: normalizedLocalSnapshot.timestamp,
+                remoteSnapshotTimestamp: normalizedRemoteSnapshot.timestamp
+            }
+        ),
+        mergedFolderDeletionTombstones
+    );
+    const deletedFolders = serializeDeletionTombstones(mergedFolderDeletionTombstones, mergedFolders);
     const mergedCollections = normalizeOrphanedCollections(
         applyDeletionTombstones(mergeEntityCollections(
             {
@@ -210,6 +226,7 @@ function mergeSyncSnapshots({ localSnapshot, remoteSnapshot, now = Date.now() })
         timestamp: Math.max(normalizedLocalSnapshot.timestamp, normalizedRemoteSnapshot.timestamp),
         tabsArray: sortByOrderAndUid(mergedCollections),
         deletedCollections,
+        deletedFolders,
         foldersArray: mergedFolders,
         syncVersion: normalizedRemoteSnapshot.syncVersion,
         storageVersion: normalizedRemoteSnapshot.storageVersion,

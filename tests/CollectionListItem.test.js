@@ -15,7 +15,11 @@ jest.mock('../app/useCollectionOperations', () => ({
     useCollectionOperations: (...args) => mockUseCollectionOperations(...args),
 }));
 
-jest.mock('../app/ContextMenu', () => function MockContextMenu({ menuItems, tooltip, onOpenChange }) {
+const contextMenuProps = { last: null };
+
+jest.mock('../app/ContextMenu', () => function MockContextMenu(props) {
+    const { menuItems, tooltip, onOpenChange } = props;
+    contextMenuProps.last = props;
     return (
         <>
             <button type="button" data-testid="context-menu-open" onClick={() => onOpenChange?.(true)}>
@@ -149,6 +153,16 @@ describe('CollectionListItem', () => {
             return {};
         });
         mockTabsCreate.mockReset();
+    });
+
+    test('wires the row as a right-click trigger for the collection context menu', () => {
+        contextMenuProps.last = null;
+
+        const { container } = renderItem();
+
+        const row = container.querySelector('.collection-list-item');
+        expect(row).toBeInTheDocument();
+        expect(contextMenuProps.last?.triggerRef?.current).toBe(row);
     });
 
     test('opens the detail panel from the row while keeping action buttons separate', async () => {

@@ -1,8 +1,21 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { renderWithProviders } from './helpers/renderWithProviders';
 import ContextMenu from '../app/ContextMenu';
+
+// Host that wires a triggerRef element to a ContextMenu, mirroring how
+// CollectionTile / FolderContainer enable right-click on a whole region.
+function RightClickHost({ menuItems, onOpenChange }) {
+    const triggerRef = useRef(null);
+    return (
+        <div>
+            <div ref={triggerRef} data-testid="trigger">Right click me</div>
+            <ContextMenu menuItems={menuItems} triggerRef={triggerRef} onOpenChange={onOpenChange} />
+            <button type="button">Outside</button>
+        </div>
+    );
+}
 
 describe('ContextMenu', () => {
     beforeEach(() => {
@@ -61,6 +74,39 @@ describe('ContextMenu', () => {
 
         await waitFor(() => {
             expect(screen.queryByText('Only item')).not.toBeInTheDocument();
+        });
+    });
+
+    test('opens at the cursor when the trigger element is right-clicked', () => {
+        renderWithProviders(
+            <RightClickHost menuItems={[{ id: 'edit', text: 'Edit', action: jest.fn() }]} />,
+        );
+
+        // Menu is closed until the trigger is right-clicked.
+        expect(screen.queryByText('Edit')).not.toBeInTheDocument();
+
+        fireEvent.contextMenu(screen.getByTestId('trigger'), { clientX: 50, clientY: 60 });
+
+        const menuItem = screen.getByText('Edit');
+        expect(menuItem).toBeInTheDocument();
+
+        const menu = document.querySelector('.context-menu');
+        expect(menu).toHaveStyle('left: 50px');
+        expect(menu).toHaveStyle('top: 60px');
+    });
+
+    test('right-click menu closes when clicking outside', async () => {
+        renderWithProviders(
+            <RightClickHost menuItems={[{ id: 'edit', text: 'Edit', action: jest.fn() }]} />,
+        );
+
+        fireEvent.contextMenu(screen.getByTestId('trigger'), { clientX: 50, clientY: 60 });
+        expect(screen.getByText('Edit')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByText('Outside'));
+
+        await waitFor(() => {
+            expect(screen.queryByText('Edit')).not.toBeInTheDocument();
         });
     });
 

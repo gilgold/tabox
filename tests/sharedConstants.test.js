@@ -17,6 +17,7 @@ describe('STORAGE_KEYS', () => {
             'FOLDERS_INDEX',
             'LEGACY_TABS_ARRAY',
             'DELETED_COLLECTION_TOMBSTONES',
+            'DELETED_FOLDER_TOMBSTONES',
             'COLLECTION_PREFIX',
             'FOLDER_PREFIX',
             'STORAGE_VERSION'

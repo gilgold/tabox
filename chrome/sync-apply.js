@@ -4,6 +4,7 @@ const STORAGE_KEYS = {
     FOLDERS_INDEX: 'folders_index',
     LEGACY_TABS_ARRAY: 'tabsArray',
     DELETED_COLLECTION_TOMBSTONES: 'deleted_collection_tombstones',
+    DELETED_FOLDER_TOMBSTONES: 'deleted_folder_tombstones',
     COLLECTION_PREFIX: 'collection_',
     FOLDER_PREFIX: 'folder_',
     STORAGE_VERSION: 'tabox_storage_version'
@@ -48,12 +49,34 @@ const normalizeFolder = (folder, index, collections, now) => {
 };
 
 function buildIndexedSyncPayload({ currentStorage = {}, syncData = {}, now = Date.now() }) {
-    const collections = Array.isArray(syncData.tabsArray)
+    let collections = Array.isArray(syncData.tabsArray)
         ? syncData.tabsArray.map((collection, index) => normalizeCollection(collection, index, now))
         : [];
-    const folders = Array.isArray(syncData.foldersArray)
+    let folders = Array.isArray(syncData.foldersArray)
         ? syncData.foldersArray.map((folder, index) => normalizeFolder(folder, index, collections, now))
         : [];
+
+    // Defense-in-depth: a completely empty incoming snapshot must never wipe existing
+    // local data. A stale/corrupt remote (or a device that lost its localTimestamp) could
+    // otherwise delete every collection. When the snapshot is empty but local storage has
+    // data, preserve the local set instead of applying the deletion. A snapshot with any
+    // collections/folders is treated as authoritative (legitimate deletions still apply).
+    const localCollectionIndex = currentStorage[STORAGE_KEYS.COLLECTIONS_INDEX] || {};
+    const localFolderIndex = currentStorage[STORAGE_KEYS.FOLDERS_INDEX] || {};
+    const incomingIsEmpty = collections.length === 0 && folders.length === 0;
+    const localHasData = Object.keys(localCollectionIndex).length > 0
+        || Object.keys(localFolderIndex).length > 0;
+
+    if (incomingIsEmpty && localHasData) {
+        collections = Object.keys(localCollectionIndex)
+            .map((uid) => currentStorage[`${STORAGE_KEYS.COLLECTION_PREFIX}${uid}`])
+            .filter(Boolean)
+            .map((collection, index) => normalizeCollection(collection, index, now));
+        folders = Object.keys(localFolderIndex)
+            .map((uid) => currentStorage[`${STORAGE_KEYS.FOLDER_PREFIX}${uid}`])
+            .filter(Boolean)
+            .map((folder, index) => normalizeFolder(folder, index, collections, now));
+    }
 
     const collectionsIndex = collections.reduce((index, collection) => {
         index[collection.uid] = {
@@ -102,12 +125,23 @@ function buildIndexedSyncPayload({ currentStorage = {}, syncData = {}, now = Dat
             return entries;
         }, {})
         : {};
+    const deletedFolders = Array.isArray(syncData.deletedFolders)
+        ? syncData.deletedFolders.reduce((entries, tombstone) => {
+            if (!tombstone?.uid || !Number.isFinite(tombstone.lastUpdated)) {
+                return entries;
+            }
+
+            entries[tombstone.uid] = tombstone.lastUpdated;
+            return entries;
+        }, {})
+        : {};
 
     const setPayload = {
         [STORAGE_KEYS.COLLECTIONS_INDEX]: collectionsIndex,
         [STORAGE_KEYS.FOLDERS_INDEX]: foldersIndex,
         [STORAGE_KEYS.LEGACY_TABS_ARRAY]: collections,
         [STORAGE_KEYS.DELETED_COLLECTION_TOMBSTONES]: deletedCollections,
+        [STORAGE_KEYS.DELETED_FOLDER_TOMBSTONES]: deletedFolders,
         [STORAGE_KEYS.STORAGE_VERSION]: 3
     };
 
@@ -132,6 +166,7 @@ const SYNC_MANAGED_KEYS = new Set([
     STORAGE_KEYS.FOLDERS_INDEX,
     STORAGE_KEYS.LEGACY_TABS_ARRAY,
     STORAGE_KEYS.DELETED_COLLECTION_TOMBSTONES,
+    STORAGE_KEYS.DELETED_FOLDER_TOMBSTONES,
     STORAGE_KEYS.STORAGE_VERSION
 ]);
 

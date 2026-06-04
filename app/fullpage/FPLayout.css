@@ -1491,7 +1491,11 @@ html.fullpage-mode .legacy-import-preview-search-match-url {
     color: var(--color-secondary);
 }
 
-html.fullpage-mode .tab-url-preview-button:hover,
+html.fullpage-mode .tab-url-preview-button:hover {
+    color: var(--color-primary);
+    text-decoration: underline;
+}
+
 html.fullpage-mode .tab-url-preview-button:focus-visible {
     color: var(--color-primary);
     outline: none;
