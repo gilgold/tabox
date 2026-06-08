@@ -113,7 +113,12 @@ describe('4.0 upgrade compatibility - local data', () => {
         ]);
     });
 
-    test('repairs incomplete indexed data from the 4.0 tabsArray mirror without wiping folders', async () => {
+    test('preserves an incomplete indexed record without reverting it to the stale tabsArray mirror (#102)', async () => {
+        // The indexed collection_<uid> record is the source of truth. Even when its
+        // backing record is degraded (missing its tabs array), migration must NOT pull
+        // content back from the frozen, write-stale tabsArray mirror — doing so used to
+        // resurrect/revert user data (#102). The record must survive with its metadata
+        // and folder membership intact, and folders must not be wiped.
         browser.storage.local._data = createVersion40LocalSnapshot({
             incompleteIndexedCollections: true
         });
@@ -131,14 +136,23 @@ describe('4.0 upgrade compatibility - local data', () => {
         });
 
         expect(result.success).toBe(true);
-        expect(collections.find((collection) => collection.uid === 'collection-folder-b')).toEqual(
+
+        const repaired = collections.find((collection) => collection.uid === 'collection-folder-b');
+        // The record still exists and keeps its folder membership and repaired metadata...
+        expect(repaired).toEqual(
             expect.objectContaining({
-                tabs: expect.arrayContaining([
-                    expect.objectContaining({ title: 'Beta Home' }),
-                    expect.objectContaining({ title: 'Beta Notes' })
-                ]),
-                parentId: 'folder-alpha'
+                uid: 'collection-folder-b',
+                parentId: 'folder-alpha',
+                order: expect.any(Number),
+                lastUpdated: expect.any(Number)
             })
+        );
+        // ...but its content was NOT overwritten from the stale mirror.
+        expect(repaired.tabs).not.toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ title: 'Beta Home' }),
+                expect.objectContaining({ title: 'Beta Notes' })
+            ])
         );
         expect(folders.map((folder) => folder.uid)).toEqual(['folder-alpha', 'folder-empty']);
     });

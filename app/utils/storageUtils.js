@@ -647,288 +647,255 @@ export const batchDeleteCollections = async (uids = []) => {
 };
 
 /**
- * Check if migration needs repair by validating that collections have their tabs data
+ * Decide whether IN-PLACE repair of indexed records is needed.
+ *
+ * IMPORTANT: this NEVER signals "rebuild from tabsArray". The indexed
+ * collection_<uid> records are the source of truth; tabsArray is a frozen,
+ * write-stale mirror and is never authoritative. We only report repair when an
+ * indexed record is missing its backing data or required metadata fields.
  */
-const checkIfMigrationNeedsRepair = async (existingIndex, tabsArray) => {
+const checkIfMigrationNeedsRepair = async (existingIndex) => {
     try {
-        // If no legacy data exists, we can't repair - assume migration is fine
-        if (!tabsArray || tabsArray.length === 0) {
+        if (!existingIndex || Object.keys(existingIndex).length === 0) {
             return false;
         }
-        
-        // Check if legacy storage has more collections with tabs than the index reports
-        const legacyCollectionsWithTabs = tabsArray.filter(c => c.tabs && c.tabs.length > 0);
-        const indexCollectionsWithTabs = Object.values(existingIndex).filter(meta => meta.tabCount > 0);
-        
-        // If legacy has significantly more collections with tabs, we need to repair
-        if (legacyCollectionsWithTabs.length > indexCollectionsWithTabs.length) {
-            return true;
-        }
-        
-        // Spot-check a few collections to ensure tabs are actually in storage
+
         const uidsToCheck = Object.keys(existingIndex).slice(0, 3);
         for (const uid of uidsToCheck) {
             const collectionKey = `${STORAGE_KEYS.COLLECTION_PREFIX}${uid}`;
             const result = await browser.storage.local.get(collectionKey);
             const collection = result[collectionKey];
-            
-            // If collection exists in index but not in storage, or has no tabs array, we need repair
-            if (!collection || !collection.tabs) {
+
+            if (!collection || !Array.isArray(collection.tabs)) {
                 return true;
             }
-            
-            // If index says it should have tabs but storage has empty array, check legacy
+
             const indexMeta = existingIndex[uid];
-            if (indexMeta.tabCount > 0 && collection.tabs.length === 0) {
-                const legacyCollection = tabsArray.find(c => c.uid === uid);
-                if (legacyCollection && legacyCollection.tabs && legacyCollection.tabs.length > 0) {
-                    return true;
-                }
-            }
-
-            const legacyCollection = tabsArray.find(c => c.uid === uid);
-            if (legacyCollection) {
-                const collectionMissingMetadata = (
-                    collection.lastUpdated === undefined ||
-                    collection.lastOpened === undefined ||
-                    collection.order === undefined
-                );
-                const indexMissingMetadata = (
-                    indexMeta.lastUpdated === undefined ||
-                    indexMeta.lastOpened === undefined ||
-                    indexMeta.order === undefined
-                );
-                const legacyMissingMetadata = (
-                    legacyCollection.lastUpdated === undefined ||
-                    legacyCollection.lastOpened === undefined ||
-                    legacyCollection.order === undefined
-                );
-
-                if (collectionMissingMetadata || indexMissingMetadata || legacyMissingMetadata) {
-                    return true;
-                }
+            const recordMissingMetadata = (
+                collection.lastUpdated === undefined ||
+                collection.lastOpened === undefined ||
+                collection.order === undefined
+            );
+            const indexMissingMetadata = (
+                indexMeta.lastUpdated === undefined ||
+                indexMeta.lastOpened === undefined ||
+                indexMeta.order === undefined
+            );
+            if (recordMissingMetadata || indexMissingMetadata) {
+                return true;
             }
         }
 
         const foldersIndex = await loadFoldersIndex();
         if (Object.keys(foldersIndex).length > 0) {
             const folders = await loadMultipleFolders(Object.keys(foldersIndex));
-
             for (const uid of Object.keys(foldersIndex)) {
                 const folder = folders[uid];
                 const folderMeta = foldersIndex[uid];
-
                 if (!folder || folder.lastUpdated === undefined || folder.order === undefined) {
                     return true;
                 }
-
                 if (folderMeta.lastUpdated === undefined || folderMeta.order === undefined) {
                     return true;
                 }
             }
         }
-        
-        // Migration appears valid
+
         return false;
-        
     } catch (error) {
+        // If we cannot check, DO NOT assume rebuild. Returning false keeps live data
+        // untouched (the data-safety guard is the backstop). Returning true here used
+        // to trigger a destructive rebuild — that is exactly the #102 bug.
         console.error('Error checking migration repair needs:', error);
-        // If we can't check, assume repair is needed to be safe
-        return true;
+        return false;
     }
 };
 
 /**
- * Migrate legacy tabsArray to new indexed structure
+ * Migrate / repair indexed storage. ADDITIVE ONLY.
+ *
+ * The indexed collection_<uid> records are the source of truth. The legacy
+ * tabsArray is a frozen, write-stale mirror; it may only contribute collections
+ * whose uid is entirely absent from the index AND not tombstoned. Existing
+ * records are never overwritten or reverted — only missing metadata is repaired
+ * in place. (See #102.)
  */
 export const migrateLegacyStorage = async () => {
     try {
-        // Check current state
         const storageData = await browser.storage.local.get([
             STORAGE_KEYS.STORAGE_VERSION,
             STORAGE_KEYS.COLLECTIONS_INDEX,
-            STORAGE_KEYS.LEGACY_TABS_ARRAY
+            STORAGE_KEYS.LEGACY_TABS_ARRAY,
         ]);
-        
-        const version = storageData[STORAGE_KEYS.STORAGE_VERSION];
-        const existingIndex = storageData[STORAGE_KEYS.COLLECTIONS_INDEX];
-        const tabsArray = storageData[STORAGE_KEYS.LEGACY_TABS_ARRAY];
-        const supportAssessment = assessMigrationSupport40(await browser.storage.local.get(null));
 
+        const version = storageData[STORAGE_KEYS.STORAGE_VERSION];
+        const existingIndex = storageData[STORAGE_KEYS.COLLECTIONS_INDEX] || {};
+        const tabsArray = storageData[STORAGE_KEYS.LEGACY_TABS_ARRAY];
+
+        const supportAssessment = assessMigrationSupport40(await browser.storage.local.get(null));
         if (!supportAssessment.supported) {
-            return {
-                success: false,
-                unsupportedPre40: true,
-                error: 'Automatic migration is only supported for 4.0+ local data'
-            };
+            return { success: false, unsupportedPre40: true, error: 'Automatic migration is only supported for 4.0+ local data' };
         }
-        
-        // CRITICAL FIX: Validate that existing index has valid data with tabs
-        if (version >= CURRENT_STORAGE_VERSION && existingIndex && Object.keys(existingIndex).length > 0) {
-            // Check if we need to repair broken migration (missing tabs)
-            const needsRepair = await checkIfMigrationNeedsRepair(existingIndex, tabsArray);
-            
-            if (needsRepair) {
-                console.warn('⚠️ Detected incomplete migration - repairing data...');
-                // Continue with re-migration below
-            } else {
-                // Migration is valid, we're done
+
+        const hasIndex = Object.keys(existingIndex).length > 0;
+        const hasLegacyData = Array.isArray(tabsArray) && tabsArray.length > 0;
+
+        // Fast path: only safe to skip when the index is healthy AND there is no
+        // frozen tabsArray that could still contribute recoverable orphan collections.
+        if (version >= CURRENT_STORAGE_VERSION && hasIndex && !hasLegacyData) {
+            const needsRepair = await checkIfMigrationNeedsRepair(existingIndex);
+            if (!needsRepair) {
                 return { success: true, migrated: false };
             }
         }
-        
-        // No legacy data to migrate — preserve whatever indexed data already exists
-        if (!tabsArray || tabsArray.length === 0) {
-            const existingFoldersData = await browser.storage.local.get(STORAGE_KEYS.FOLDERS_INDEX);
-            const existingFoldersIndex = existingFoldersData[STORAGE_KEYS.FOLDERS_INDEX] || {};
-            
-            const setPayload = {
-                [STORAGE_KEYS.FOLDERS_INDEX]: existingFoldersIndex,
-                [STORAGE_KEYS.STORAGE_VERSION]: CURRENT_STORAGE_VERSION
-            };
-            
-            // Only write an empty collections_index if one doesn't already exist.
-            // An existing index (even from a previous version) contains valid pointers
-            // to collection_<uid> records that must not be wiped.
-            if (!existingIndex || Object.keys(existingIndex).length === 0) {
-                setPayload[STORAGE_KEYS.COLLECTIONS_INDEX] = {};
-            }
-            
-            await browser.storage.local.set(setPayload);
-            return { success: true, migrated: false };
-        }
-        
-        // Check if this is a repair operation
-        const isRepair = existingIndex && Object.keys(existingIndex).length > 0;
-        
-        if (isRepair) {
-        } else {
-        }
-        
-        const index = {};
+
+        const tombstones = await loadDeletedCollectionTombstones();
+        const folderTombstones = await loadDeletedFolderTombstones();
+
+        const nextIndex = { ...existingIndex };
         const savePromises = [];
-        
-        // Process each collection
-        for (const [collectionIndex, collection] of tabsArray.entries()) {
-            if (!collection.uid) {
-                console.warn('Skipping collection without UID:', collection);
-                continue;
+        let addedCount = 0;
+        let repairedCount = 0;
+
+        // Repair metadata IN PLACE on existing indexed records (never revert content).
+        // Batch all existing records in ONE storage read; collect patches into a
+        // single payload so we make at most one set call for the whole repair pass.
+        const existingRecords = await loadMultipleCollections(Object.keys(existingIndex));
+        const patchedPayload = {};
+        for (const uid of Object.keys(existingIndex)) {
+            const key = `${STORAGE_KEYS.COLLECTION_PREFIX}${uid}`;
+            const existing = existingRecords[uid];
+            if (!existing) continue;
+
+            const order = existing.order !== undefined ? existing.order : (existingIndex[uid].order !== undefined ? existingIndex[uid].order : 999999); // missing order → sort last (sentinel)
+            const lastUpdated = existing.lastUpdated !== undefined && existing.lastUpdated !== null
+                ? existing.lastUpdated
+                : (existing.createdOn || Date.now());
+            const lastOpened = existing.lastOpened !== undefined ? existing.lastOpened : null;
+
+            const needsRecordPatch = existing.order === undefined || existing.lastUpdated === undefined || existing.lastOpened === undefined;
+            if (needsRecordPatch) {
+                patchedPayload[key] = { ...existing, order, lastUpdated, lastOpened };
+                repairedCount++;
             }
-            
-            // Ensure collection has required properties
-            const normalizedCollection = {
-                ...collection,
-                uid: collection.uid,
-                name: collection.name || 'Untitled Collection',
-                tabs: collection.tabs || [],
-                createdOn: collection.createdOn || Date.now(),
-                lastUpdated: collection.lastUpdated !== null && collection.lastUpdated !== undefined ? collection.lastUpdated : Date.now(),
-                lastOpened: collection.lastOpened !== null && collection.lastOpened !== undefined ? collection.lastOpened : null,
-                color: collection.color || 'default',
-                parentId: collection.parentId !== undefined ? collection.parentId : null,
-                order: collection.order !== undefined ? collection.order : collectionIndex
-            };
-            
-            // Save individual collection
-            const collectionKey = `${STORAGE_KEYS.COLLECTION_PREFIX}${collection.uid}`;
-            savePromises.push(
-                browser.storage.local.set({
-                    [collectionKey]: normalizedCollection
-                })
-            );
-            
-            // Add to index
-            const collectionSize = JSON.stringify(normalizedCollection).length;
-            index[collection.uid] = {
-                name: normalizedCollection.name,
+
+            nextIndex[uid] = {
+                ...existingIndex[uid],
                 type: 'collection',
-                tabCount: normalizedCollection.tabs.length,
-                lastUpdated: normalizedCollection.lastUpdated,
-                lastOpened: normalizedCollection.lastOpened,
-                createdOn: normalizedCollection.createdOn,
-                color: normalizedCollection.color,
-                size: collectionSize,
-                parentId: normalizedCollection.parentId,
-                order: normalizedCollection.order
+                tabCount: Array.isArray(existing.tabs) ? existing.tabs.length : (existingIndex[uid].tabCount || 0),
+                order: existingIndex[uid].order !== undefined ? existingIndex[uid].order : order,
+                lastUpdated: existingIndex[uid].lastUpdated !== undefined ? existingIndex[uid].lastUpdated : lastUpdated,
+                lastOpened: existingIndex[uid].lastOpened !== undefined ? existingIndex[uid].lastOpened : lastOpened,
+                parentId: existingIndex[uid].parentId !== undefined ? existingIndex[uid].parentId : (existing.parentId !== undefined ? existing.parentId : null),
             };
         }
 
-        // Preserve any existing folders that might have been synced from Google Drive,
-        // but normalize missing 4.0 metadata during migration repair.
-        const existingFoldersData = await browser.storage.local.get(STORAGE_KEYS.FOLDERS_INDEX);
-        const existingFoldersIndex = existingFoldersData[STORAGE_KEYS.FOLDERS_INDEX] || {};
-        const existingFolderUids = Object.keys(existingFoldersIndex);
-        const existingFolders = existingFolderUids.length > 0 ? await loadMultipleFolders(existingFolderUids) : {};
-        const normalizedFoldersIndex = {};
-        
-        existingFolderUids.forEach((uid, folderIndex) => {
-            const folderMeta = existingFoldersIndex[uid] || {};
-            const folderRecord = existingFolders[uid] || {};
-            const fallbackCreatedOn = folderRecord.createdOn || folderMeta.createdOn || Date.now();
-            const fallbackLastUpdated = (
-                folderRecord.lastUpdated !== null && folderRecord.lastUpdated !== undefined
-                    ? folderRecord.lastUpdated
-                    : (folderMeta.lastUpdated !== null && folderMeta.lastUpdated !== undefined
-                        ? folderMeta.lastUpdated
-                        : fallbackCreatedOn)
-            );
+        // ONE batched write for all coalesced metadata patches.
+        if (Object.keys(patchedPayload).length > 0) {
+            savePromises.push(browser.storage.local.set(patchedPayload));
+        }
+
+        // Add collections that exist ONLY in the frozen tabsArray, gated by tombstones.
+        if (Array.isArray(tabsArray) && tabsArray.length > 0) {
+            for (const [collectionIndex, collection] of tabsArray.entries()) {
+                if (!collection || !collection.uid) continue;
+                const uid = collection.uid;
+                if (existingIndex[uid]) continue;        // live record wins — never overwrite/revert
+                if (tombstones[uid]) continue;           // user deleted it — never resurrect
+
+                const normalized = {
+                    ...collection,
+                    uid,
+                    name: collection.name || 'Untitled Collection',
+                    tabs: collection.tabs || [],
+                    createdOn: collection.createdOn || Date.now(),
+                    lastUpdated: collection.lastUpdated != null ? collection.lastUpdated : Date.now(),
+                    lastOpened: collection.lastOpened != null ? collection.lastOpened : null,
+                    color: collection.color || 'default',
+                    parentId: collection.parentId !== undefined ? collection.parentId : null,
+                    order: collection.order !== undefined ? collection.order : collectionIndex,
+                };
+
+                const key = `${STORAGE_KEYS.COLLECTION_PREFIX}${uid}`;
+                savePromises.push(browser.storage.local.set({ [key]: normalized }));
+                nextIndex[uid] = {
+                    name: normalized.name,
+                    type: 'collection',
+                    tabCount: normalized.tabs.length,
+                    lastUpdated: normalized.lastUpdated,
+                    lastOpened: normalized.lastOpened,
+                    createdOn: normalized.createdOn,
+                    color: normalized.color,
+                    size: JSON.stringify(normalized).length,
+                    parentId: normalized.parentId,
+                    order: normalized.order,
+                };
+                addedCount++;
+            }
+        }
+
+        // Folders: repair in place, never drop, skip tombstoned.
+        const existingFoldersIndex = (await browser.storage.local.get(STORAGE_KEYS.FOLDERS_INDEX))[STORAGE_KEYS.FOLDERS_INDEX] || {};
+        const folderUids = Object.keys(existingFoldersIndex).filter((uid) => !folderTombstones[uid]);
+        const existingFolders = folderUids.length > 0 ? await loadMultipleFolders(folderUids) : {};
+        const nextFoldersIndex = {};
+
+        // Precompute collection counts per parent once (O(collections)) instead of
+        // scanning nextIndex per folder (O(folders × collections)).
+        const collectionCountByParent = {};
+        Object.values(nextIndex).forEach((m) => {
+            if (m.parentId != null) {
+                collectionCountByParent[m.parentId] = (collectionCountByParent[m.parentId] || 0) + 1;
+            }
+        });
+
+        folderUids.forEach((uid, folderIndex) => {
+            const meta = existingFoldersIndex[uid] || {};
+            const record = existingFolders[uid] || {};
+            const createdOn = record.createdOn || meta.createdOn || Date.now();
+            const lastUpdated = record.lastUpdated != null ? record.lastUpdated : (meta.lastUpdated != null ? meta.lastUpdated : createdOn);
+            const order = record.order !== undefined ? record.order : (meta.order !== undefined ? meta.order : folderIndex);
+
             const normalizedFolder = {
                 uid,
-                name: folderRecord.name || folderMeta.name || 'Untitled Folder',
+                name: record.name || meta.name || 'Untitled Folder',
                 type: 'folder',
-                color: folderRecord.color || folderMeta.color || 'var(--folder-default-color)',
-                collapsed: folderRecord.collapsed !== undefined ? folderRecord.collapsed : (folderMeta.collapsed !== undefined ? folderMeta.collapsed : false),
-                createdOn: fallbackCreatedOn,
-                lastUpdated: fallbackLastUpdated,
-                order: folderRecord.order !== undefined ? folderRecord.order : (folderMeta.order !== undefined ? folderMeta.order : folderIndex)
+                color: record.color || meta.color || 'var(--folder-default-color)',
+                collapsed: record.collapsed !== undefined ? record.collapsed : (meta.collapsed !== undefined ? meta.collapsed : false),
+                createdOn,
+                lastUpdated,
+                order,
             };
 
-            savePromises.push(
-                browser.storage.local.set({
-                    [`${STORAGE_KEYS.FOLDER_PREFIX}${uid}`]: normalizedFolder
-                })
-            );
+            const recordNeedsPatch = record.lastUpdated === undefined || record.order === undefined || record.createdOn === undefined;
+            if (recordNeedsPatch) {
+                savePromises.push(browser.storage.local.set({ [`${STORAGE_KEYS.FOLDER_PREFIX}${uid}`]: normalizedFolder }));
+            }
 
-            normalizedFoldersIndex[uid] = {
+            nextFoldersIndex[uid] = {
                 name: normalizedFolder.name,
                 type: 'folder',
                 color: normalizedFolder.color,
                 collapsed: normalizedFolder.collapsed,
-                collectionCount: Object.values(index).filter(meta => meta.parentId === uid).length,
+                collectionCount: collectionCountByParent[uid] || 0,
                 lastUpdated: normalizedFolder.lastUpdated,
                 createdOn: normalizedFolder.createdOn,
                 order: normalizedFolder.order,
-                size: JSON.stringify(normalizedFolder).length
+                size: JSON.stringify(normalizedFolder).length,
             };
         });
 
-        // Save all collections and normalized folders in parallel
         await Promise.all(savePromises);
-        
-        // Save indices and update version (preserve folders that might already exist from sync)
         await browser.storage.local.set({
-            [STORAGE_KEYS.COLLECTIONS_INDEX]: index,
-            [STORAGE_KEYS.FOLDERS_INDEX]: normalizedFoldersIndex,
-            [STORAGE_KEYS.STORAGE_VERSION]: CURRENT_STORAGE_VERSION
+            [STORAGE_KEYS.COLLECTIONS_INDEX]: nextIndex,
+            [STORAGE_KEYS.FOLDERS_INDEX]: nextFoldersIndex,
+            [STORAGE_KEYS.STORAGE_VERSION]: CURRENT_STORAGE_VERSION,
         });
-        
-        // Keep legacy data for safety (can be cleaned up later)
-        // We don't remove tabsArray immediately in case rollback is needed
-        
-        const totalTabs = Object.values(index).reduce((sum, meta) => sum + meta.tabCount, 0);
-        
-        if (isRepair) {
-        } else {
-        }
-        
-        return { 
-            success: true, 
-            migrated: true,
-            repaired: isRepair,
-            count: Object.keys(index).length,
-            totalTabs
-        };
-        
+
+        const migrated = addedCount > 0 || repairedCount > 0;
+        const totalTabs = Object.values(nextIndex).reduce((sum, meta) => sum + (meta.tabCount || 0), 0);
+
+        return { success: true, migrated, count: Object.keys(nextIndex).length, totalTabs };
     } catch (error) {
         console.error('❌ Migration failed:', error);
         return { success: false, error: error.message };
