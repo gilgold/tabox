@@ -30,28 +30,32 @@ const TRACKED_SINGLETON_KEYS = [
 const isTrackedKey = (key) =>
     isCollectionKey(key) || isFolderKey(key) || TRACKED_SINGLETON_KEYS.includes(key);
 
+const collectFolderIndexUids = (foldersIndex) => Object.keys(foldersIndex || {});
+
 /**
  * Capture everything needed to (a) verify the invariant and (b) fully restore.
- * Only keys actually present are recorded, so restore can tell "existed before"
- * (re-set) apart from "created by the failed run" (remove).
+ * Collection presence is measured by record (migrations never delete records).
+ * Folder presence is measured by folders_index membership (migrations drop
+ * folders from the index, not by deleting the record).
  */
 const captureSnapshot = async () => {
     const all = await browser.storage.local.get(null);
     const records = {};
     const collections = [];
-    const folders = [];
 
     Object.keys(all).forEach((key) => {
         if (!isTrackedKey(key)) return;
         records[key] = all[key];
         if (isCollectionKey(key) && all[key]) collections.push(all[key]);
-        else if (isFolderKey(key) && all[key]) folders.push(all[key]);
     });
+
+    const folderUids = collectFolderIndexUids(all[STORAGE_KEYS.FOLDERS_INDEX]);
 
     return {
         records,
         keys: new Set(Object.keys(records)),
-        shape: snapshotShape(collections, folders),
+        folderUids,
+        shape: snapshotShape(collections, folderUids.map((uid) => ({ uid }))),
     };
 };
 
@@ -80,16 +84,23 @@ const restoreSnapshot = async (snapshot) => {
 
 /**
  * Build the "after" shape from current storage for invariant verification.
+ * A folder the user legitimately deleted (now tombstoned) during the run is not
+ * counted as lost, so genuine deletions don't trigger a false restore.
  */
-const captureCurrentShape = async () => {
+const captureCurrentShape = async (snapshot) => {
     const all = await browser.storage.local.get(null);
     const collections = [];
-    const folders = [];
     Object.keys(all).forEach((key) => {
         if (isCollectionKey(key) && all[key]) collections.push(all[key]);
-        else if (isFolderKey(key) && all[key]) folders.push(all[key]);
     });
-    return snapshotShape(collections, folders);
+
+    const currentFolderUids = new Set(collectFolderIndexUids(all[STORAGE_KEYS.FOLDERS_INDEX]));
+    const currentFolderTombstones = all[STORAGE_KEYS.DELETED_FOLDER_TOMBSTONES] || {};
+    snapshot.folderUids.forEach((uid) => {
+        if (currentFolderTombstones[uid]) currentFolderUids.add(uid);
+    });
+
+    return snapshotShape(collections, [...currentFolderUids].map((uid) => ({ uid })));
 };
 
 /**
@@ -118,7 +129,7 @@ export const withDataSafetyGuard = async (label, fn) => {
         return { success: false, restored: true, error: error.message };
     }
 
-    const afterShape = await captureCurrentShape();
+    const afterShape = await captureCurrentShape(snapshot);
     const verdict = verifyMigrationInvariant(snapshot.shape, afterShape);
 
     if (!verdict.ok) {

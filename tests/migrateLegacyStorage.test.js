@@ -128,3 +128,34 @@ describe('migrateLegacyStorage — guarded happy path', () => {
         expect(Object.keys(store.collections_index).sort()).toEqual(['a', 'b']);
     });
 });
+
+describe('migrateLegacyStorage — folders', () => {
+    test('preserves a healthy folder and its index entry', async () => {
+        store = makeStore({
+            collections_index: { a: { name: 'A', type: 'collection', tabCount: 1, parentId: 'fa', order: 0, lastUpdated: 1, lastOpened: null } },
+            collection_a: { uid: 'a', name: 'A', tabs: [{ url: '1' }], parentId: 'fa', order: 0, lastUpdated: 1, lastOpened: null },
+            folders_index: { fa: { name: 'FA', type: 'folder', color: 'c', order: 0, lastUpdated: 1, createdOn: 1 } },
+            folder_fa: { uid: 'fa', name: 'FA', type: 'folder', color: 'c', order: 0, lastUpdated: 1, createdOn: 1 },
+        });
+        const result = await migrateLegacyStorage();
+        expect(result.success).toBe(true);
+        expect(store.folders_index.fa).toBeDefined();
+        expect(store.folder_fa).toBeDefined();
+    });
+
+    test('does not resurrect a tombstoned folder', async () => {
+        store = makeStore({
+            collections_index: { a: { name: 'A', type: 'collection', tabCount: 1, parentId: null, order: 0, lastUpdated: 1, lastOpened: null } },
+            // Missing `order` on the record forces the migration past its fast-path
+            // into the full repair pass, where tombstoned folders are dropped from
+            // the index — the path that exercises the guard's tombstone-aware logic.
+            collection_a: { uid: 'a', name: 'A', tabs: [{ url: '1' }], lastUpdated: 1, lastOpened: null },
+            folders_index: { fdel: { name: 'Old', type: 'folder', order: 0, lastUpdated: 1, createdOn: 1 } },
+            folder_fdel: { uid: 'fdel', name: 'Old', type: 'folder', order: 0, lastUpdated: 1, createdOn: 1 },
+            deleted_folder_tombstones: { fdel: 100 },
+        });
+        const result = await migrateLegacyStorage();
+        expect(result.success).toBe(true);
+        expect(store.folders_index.fdel).toBeUndefined(); // tombstoned → excluded from index, guard does not flag
+    });
+});

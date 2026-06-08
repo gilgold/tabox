@@ -104,3 +104,37 @@ test('restores a tombstone mutation made during a failed run', async () => {
     });
     expect(store.deleted_collection_tombstones).toEqual({ x: 111 });
 });
+
+test('restores when a LIVE folder is dropped from the index', async () => {
+    store = {
+        collections_index: { a: { name: 'A' } },
+        collection_a: { uid: 'a', name: 'A', tabs: [{ url: 'x' }] },
+        folders_index: { f1: { name: 'F1' }, f2: { name: 'F2' } },
+        folder_f1: { uid: 'f1' },
+        folder_f2: { uid: 'f2' },
+    };
+    const result = await withDataSafetyGuard('test', async () => {
+        store.folders_index = { f1: { name: 'F1' } }; // dropped f2 from index (record lingers)
+        return { success: true };
+    });
+    expect(result.success).toBe(false);
+    expect(result.restored).toBe(true);
+    expect(store.folders_index).toEqual({ f1: { name: 'F1' }, f2: { name: 'F2' } });
+});
+
+test('does NOT restore when a tombstoned folder is removed from the index', async () => {
+    store = {
+        collections_index: { a: { name: 'A' } },
+        collection_a: { uid: 'a', name: 'A', tabs: [{ url: 'x' }] },
+        folders_index: { f1: { name: 'F1' }, f2: { name: 'F2' } },
+        folder_f1: { uid: 'f1' },
+        folder_f2: { uid: 'f2' },
+    };
+    const result = await withDataSafetyGuard('test', async () => {
+        store.folders_index = { f1: { name: 'F1' } };
+        store.deleted_folder_tombstones = { f2: 123 }; // user legitimately deleted f2
+        return { success: true, migrated: true };
+    });
+    expect(result.success).toBe(true); // legitimate deletion, not flagged as loss
+    expect(store.folders_index).toEqual({ f1: { name: 'F1' } });
+});
