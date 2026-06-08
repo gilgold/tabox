@@ -22,6 +22,7 @@ import {
 } from './backupUtils.js';
 import { COLOR_PALETTE } from './colorMigration.js';
 import { unwrapDeferredUrl } from './urlUtils.js';
+import { withDataSafetyGuard } from './migrationSafety';
 
 /**
  * Migration configuration
@@ -219,11 +220,16 @@ class MigrationCoordinator {
       const operationId = `migration_${Date.now()}`;
       this.rollbackChainId = await createRollbackChain(operationId, assessment.migrationPath);
 
-      // Execute migration steps
-      const migrationResult = await this.executeMigrationSteps(
-        assessment.currentVersion,
-        assessment.migrationPath
+      // Second snapshot layered on top of the coordinator's own createRollbackChain
+      // backup — kept deliberately as defense-in-depth so a failed migration can always
+      // be unwound even when the rollback chain itself is incomplete.
+      const guarded = await withDataSafetyGuard(`coordinator:${(assessment.migrationPath || []).join(',')}`, () =>
+        this.executeMigrationSteps(assessment.currentVersion, assessment.migrationPath)
       );
+      // If the guard restored due to an invariant violation, surface it as a failed step result.
+      const migrationResult = guarded.restored
+        ? { success: false, error: 'data-safety guard restored snapshot', restored: true }
+        : guarded;
 
       if (migrationResult.success) {
         // Update schema version
@@ -253,8 +259,10 @@ class MigrationCoordinator {
         // Clear migration lock on failure
         await this.clearMigrationLock();
         
-        const rollbackSuccess = await executeRollback(this.rollbackChainId);
-        
+        const rollbackSuccess = migrationResult.restored
+          ? true // data-safety guard already restored the pre-migration snapshot
+          : await executeRollback(this.rollbackChainId);
+
         return {
           success: false,
           message: 'Migration failed and was rolled back',

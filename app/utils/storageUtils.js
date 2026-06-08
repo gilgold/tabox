@@ -6,6 +6,7 @@
 import { browser } from '../../static/globals';
 import { STORAGE_KEYS, CURRENT_STORAGE_VERSION, generateUid } from './sharedConstants';
 import { assessMigrationSupport40 } from './migrationSupport40';
+import { withDataSafetyGuard } from './migrationSafety';
 
 // Re-export for backward compatibility
 export { STORAGE_KEYS, CURRENT_STORAGE_VERSION };
@@ -720,7 +721,8 @@ const checkIfMigrationNeedsRepair = async (existingIndex) => {
  * records are never overwritten or reverted — only missing metadata is repaired
  * in place. (See #102.)
  */
-export const migrateLegacyStorage = async () => {
+/** @private — always invoke via migrateLegacyStorage, which wraps this in withDataSafetyGuard. */
+const migrateLegacyStorageUnsafe = async () => {
     try {
         const storageData = await browser.storage.local.get([
             STORAGE_KEYS.STORAGE_VERSION,
@@ -901,6 +903,9 @@ export const migrateLegacyStorage = async () => {
         return { success: false, error: error.message };
     }
 };
+
+export const migrateLegacyStorage = () =>
+    withDataSafetyGuard('migrateLegacyStorage', migrateLegacyStorageUnsafe);
 
 /**
  * Load all collections using the new system (with backward compatibility)

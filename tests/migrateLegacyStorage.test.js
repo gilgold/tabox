@@ -108,3 +108,23 @@ describe('migrateLegacyStorage — additive merge', () => {
         expect(store.collections_index.a.order).toBeDefined();
     });
 });
+
+describe('migrateLegacyStorage — guarded happy path', () => {
+    test('all live collections survive the guarded migration unchanged', async () => {
+        store = makeStore({
+            collections_index: {
+                a: { name: 'A', type: 'collection', tabCount: 1, parentId: null, order: 0, lastUpdated: 1, lastOpened: null },
+                b: { name: 'B', type: 'collection', tabCount: 1, parentId: null, order: 1, lastUpdated: 1, lastOpened: null },
+            },
+            collection_a: { uid: 'a', name: 'A', tabs: [{ url: '1' }], order: 0, lastUpdated: 1, lastOpened: null },
+            collection_b: { uid: 'b', name: 'B', tabs: [{ url: '2' }], order: 1, lastUpdated: 1, lastOpened: null },
+        });
+
+        const result = await migrateLegacyStorage();
+
+        expect(result.success).toBe(true);
+        expect(store.collection_a).toBeDefined();
+        expect(store.collection_b).toBeDefined();
+        expect(Object.keys(store.collections_index).sort()).toEqual(['a', 'b']);
+    });
+});
