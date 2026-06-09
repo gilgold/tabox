@@ -938,13 +938,18 @@ function App({ mode = 'popup' }) {
     await reloadCollectionsAndFoldersFromStorage({ updateSyncTime: true });
   };
 
-  // Run orphan detection once data has loaded, regardless of which code path
-  // hydrated it. (loadCollectionsFromStorage early-returns before its finally
-  // when data is already loaded — e.g. in the full-page view — so we cannot
-  // rely on that finally to flip this flag.)
+  // Enable orphan detection once migration has been checked — NOT on dataLoaded,
+  // which never flips on some paths (e.g. the full-page view hydrated via sync).
+  // A fallback timer guarantees detection still runs if no signal arrives, so it
+  // can never be permanently blocked by a single data-load code path.
   useEffect(() => {
-    if (dataLoaded) setOrphanScanReady(true);
-  }, [dataLoaded]);
+    if (migrationChecked || dataLoaded) {
+      setOrphanScanReady(true);
+      return undefined;
+    }
+    const fallback = setTimeout(() => setOrphanScanReady(true), 2000);
+    return () => clearTimeout(fallback);
+  }, [migrationChecked, dataLoaded]);
 
   const orphanRecovery = useOrphanRecovery(orphanScanReady, {
     onRecovered: async (count) => {
