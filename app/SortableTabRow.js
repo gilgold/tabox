@@ -30,7 +30,7 @@ function SortableTabRow(props) {
     };
 
     return (
-        <div ref={setNodeRef} style={style} className="collection-draggable-tab">
+        <div ref={setNodeRef} style={style} className={'collection-draggable-tab' + (props.isSettled ? ' dnd-settled' : '')}>
             <TabRow
                 tab={props.tab}
                 updateCollection={props.updateCollection}

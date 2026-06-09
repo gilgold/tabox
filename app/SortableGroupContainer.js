@@ -66,7 +66,7 @@ function SortableGroupContainer(props) {
         };
 
     return (
-        <div ref={setNodeRef} style={style} className="collection-draggable-group">
+        <div ref={setNodeRef} style={style} className={'collection-draggable-group' + (props.isSettled ? ' dnd-settled' : '')}>
             <GroupContainer
                 {...props}
                 isDragging={isDragging}

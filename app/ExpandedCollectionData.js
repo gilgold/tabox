@@ -74,10 +74,20 @@ function ExpandedCollectionData(props) {
     const [optimisticCollection, setOptimisticCollection] = useState(null);
     const [activeOverlay, setActiveOverlay] = useState(null);
     const [activeDropTargetId, setActiveDropTargetId] = useState(null);
+    const [settledItemId, setSettledItemId] = useState(null);
+    const settleTimerRef = useRef(null);
     const [dragSession, setDragSession] = useAtom(dragSessionState);
     const dragSessionRef = useRef(dragSession);
     const activeResolvedDropTargetRef = useRef(null);
     const dragPointerRef = useRef(null);
+
+    useEffect(() => () => clearTimeout(settleTimerRef.current), []);
+
+    const flashSettledItem = (itemId) => {
+        clearTimeout(settleTimerRef.current);
+        setSettledItemId(itemId);
+        settleTimerRef.current = setTimeout(() => setSettledItemId(null), 900);
+    };
 
     dragSessionRef.current = dragSession;
 
@@ -500,6 +510,7 @@ function ExpandedCollectionData(props) {
         }
 
         setOptimisticCollection(updatedCollection);
+        flashSettledItem(currentSession.itemId);
         props.updateCollection(updatedCollection, false);
     };
 
@@ -755,6 +766,7 @@ function ExpandedCollectionData(props) {
                                         onToggleExpanded={handleToggleGroupExpanded}
                                         disableDrag={false}
                                         dragSession={isLocalDrag ? dragSession : null}
+                                        isSettled={settledItemId === item.groupUid}
                                     >
                                         {item.tabs.map((tab) => (
                                             <SortableTabRow
@@ -765,6 +777,7 @@ function ExpandedCollectionData(props) {
                                                 group={item.group}
                                                 disableDrag={tab.pinned}
                                                 search={props.search}
+                                                isSettled={settledItemId === tab.uid}
                                             />
                                         ))}
                                     </SortableGroupContainer>
@@ -786,6 +799,7 @@ function ExpandedCollectionData(props) {
                                         group={null}
                                         disableDrag={item.tab.pinned}
                                         search={props.search}
+                                        isSettled={settledItemId === item.tab.uid}
                                     />
                                 </div>
                                 {renderTabGap(item.tab.uid, collectionDropTargetSides.AFTER)}
