@@ -1158,3 +1158,32 @@ html.fullpage-mode .fp-settings-modal-shell .settings-section,
 html.fullpage-mode .fp-settings-modal-shell .setting-item {
     color: var(--color-text);
 }
+
+/* Orphan-recovery discoverability: dot on the settings gear + count badge on the
+   full-page "Recovery" category, shown whenever collections can be restored. */
+.settings-orphan-dot {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--focus-btn-bg-color, #e74c3c);
+    border: 1.5px solid var(--bg-color, #fff);
+    box-sizing: border-box;
+}
+
+.fp-settings-sidebar-badge {
+    margin-left: auto;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--primary-color, #1698e2);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+    box-sizing: border-box;
+}

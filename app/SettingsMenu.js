@@ -558,6 +558,13 @@ export default function SettingsMenu(props) {
                         color={isDrawerOpen ? 'var(--primary-color)' : 'var(--text-color)'}
                         size="28"
                     />
+                    {orphanRecovery.showEntry && (
+                        <span
+                            className="settings-orphan-dot"
+                            aria-label={`${orphanRecovery.orphanCount} collections can be restored`}
+                            title={`${orphanRecovery.orphanCount} collections can be restored`}
+                        />
+                    )}
                 </div>
             </div>
 
@@ -636,6 +643,9 @@ export default function SettingsMenu(props) {
                                         >
                                             <SectionIcon className="fp-settings-sidebar-item-icon" />
                                             <span>{section.title}</span>
+                                            {section.key === 'recovery' && orphanRecovery.showEntry && (
+                                                <span className="fp-settings-sidebar-badge">{orphanRecovery.orphanCount}</span>
+                                            )}
                                         </button>
                                     );
                                 })}
