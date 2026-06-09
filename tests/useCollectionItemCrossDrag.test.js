@@ -164,6 +164,45 @@ describe('useCollectionItemCrossDrag', () => {
         expect(store.get(dragSessionState)).toBeNull();
     });
 
+    test('does not rewrite the drag session atom when the hovered collection is unchanged', async () => {
+        const sourceCollection = { uid: 'source', tabs: [makeTab('tab-a')], chromeGroups: [] };
+        const targetCollection = { uid: 'target', tabs: [], chromeGroups: [] };
+        const store = createStore();
+        const rafSpy = jest.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => { cb(); return 1; });
+
+        store.set(dragSessionState, {
+            kind: 'tab',
+            itemId: 'tab-a',
+            sourceCollectionUid: sourceCollection.uid,
+            snapshot: { tab: sourceCollection.tabs[0] },
+            pointer: { x: 10, y: 10 },
+            overCollectionUid: null,
+        });
+
+        const { container } = render(
+            <Provider store={store}>
+                <PopupHarness
+                    sourceCollection={sourceCollection}
+                    targetCollection={targetCollection}
+                    updateCollection={jest.fn(() => Promise.resolve())}
+                    onDataUpdate={jest.fn(() => Promise.resolve())}
+                />
+            </Provider>,
+        );
+
+        document.elementsFromPoint = jest.fn(() => [container.querySelector('[data-collection-uid="target"]')]);
+
+        fireEvent.mouseMove(document, { clientX: 20, clientY: 20 });
+        const sessionAfterFirstMove = store.get(dragSessionState);
+        expect(sessionAfterFirstMove.overCollectionUid).toBe('target');
+
+        fireEvent.mouseMove(document, { clientX: 40, clientY: 40 });
+        // Same hovered collection — the atom value must be referentially unchanged.
+        expect(store.get(dragSessionState)).toBe(sessionAfterFirstMove);
+
+        rafSpy.mockRestore();
+    });
+
     test('does not highlight or transfer to a collection behind the open detail panel', async () => {
         const sourceCollection = {
             uid: 'source',

@@ -62,23 +62,13 @@ function useCollectionItemCrossDrag({
             const current = dragSessionRef.current;
             const overCollectionUid = readOverCollectionUid(x, y, current?.sourceCollectionUid);
 
-            setDragSession((current) => {
-                if (!current) {
-                    return current;
-                }
-
-                const pointer = { x, y };
-                if (
-                    current.pointer?.x === pointer.x &&
-                    current.pointer?.y === pointer.y &&
-                    current.overCollectionUid === overCollectionUid
-                ) {
-                    return current;
+            setDragSession((session) => {
+                if (!session || session.overCollectionUid === overCollectionUid) {
+                    return session;
                 }
 
                 return {
-                    ...current,
-                    pointer,
+                    ...session,
                     overCollectionUid,
                 };
             });
