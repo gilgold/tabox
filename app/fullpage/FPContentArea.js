@@ -2314,9 +2314,41 @@ function FPContentArea({
                 side,
             };
 
+            const collectionOperation = resolveCollectionDropOperation({
+                collections: sourceCollections,
+                folders,
+                activeId: activeCollection.uid,
+                target: resolvedTarget,
+                viewMode,
+                sortBy: sortByField,
+                sortOrder,
+            });
+
+            if (!collectionOperation) {
+                setPreviewTarget(null);
+                previewTargetRef.current = null;
+                return;
+            }
+
             setPreviewTarget(resolvedTarget);
             previewTargetRef.current = resolvedTarget;
             lastMeaningfulDropTargetRef.current = resolvedTarget;
+            return;
+        }
+
+        const sectionOperation = resolveCollectionDropOperation({
+            collections: sourceCollections,
+            folders,
+            activeId: activeCollection.uid,
+            target: nextTarget,
+            viewMode,
+            sortBy: sortByField,
+            sortOrder,
+        });
+
+        if (!sectionOperation) {
+            setPreviewTarget(null);
+            previewTargetRef.current = null;
             return;
         }
 
@@ -3619,6 +3651,7 @@ function FPContentArea({
                 : null;
             const normalizedSectionParentId = isRootSection ? null : section.id;
             const previewBelongsToSection = previewTarget?.parentId === normalizedSectionParentId;
+            const isAmbientSectionTarget = !!activeCollection && normalizedSectionParentId !== activeParentId;
             const isCollapsedSectionTarget = isCollapsed &&
                 previewBelongsToSection &&
                 (
@@ -3632,7 +3665,7 @@ function FPContentArea({
                     className={`fp-grouped-section fp-grouped-section-${section.kind}${isCollapsed ? ' collapsed' : ''}`}
                 >
                     <FPSectionDropZone
-                        className={`fp-grouped-section-header-dropzone${isCollapsed ? ' collapsed' : ''}`}
+                        className={`fp-grouped-section-header-dropzone${isCollapsed ? ' collapsed' : ''}${isAmbientSectionTarget ? ' dnd-drop-ambient' : ''}`}
                         parentId={normalizedSectionParentId}
                         canHighlight={isCollapsedSectionTarget}
                     >
@@ -3715,7 +3748,7 @@ function FPContentArea({
                             ) : (
                                 <FPSectionContentDropZone
                                     id={`empty-${section.id}`}
-                                    className={`fp-grouped-empty-dropzone-wrapper${viewMode === 'list' ? ' fp-content-list-mode' : ''}`}
+                                    className={`fp-grouped-empty-dropzone-wrapper${viewMode === 'list' ? ' fp-content-list-mode' : ''}${isAmbientSectionTarget ? ' dnd-drop-ambient' : ''}`}
                                     parentId={normalizedSectionParentId}
                                     canHighlight={previewBelongsToSection && previewTarget?.kind === collectionDropKinds.sectionEmpty}
                                 >

@@ -114,6 +114,14 @@
     box-shadow: inset 0 0 0 2px var(--dnd-accent), 0 0 0 2px var(--dnd-accent-bg);
 }
 
+/* Ambient affordance: valid, non-current container targets during a collection drag */
+.dnd-drop-ambient {
+    outline: 1.5px dashed var(--dnd-accent-border-soft);
+    outline-offset: -1.5px;
+    background: var(--dnd-accent-bg-soft);
+    border-radius: 10px;
+}
+
 .dnd-settled {
     animation: dnd-settle-flash 0.9s ease-out;
 }

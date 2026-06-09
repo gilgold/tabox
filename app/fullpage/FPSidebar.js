@@ -472,7 +472,9 @@ function FPSidebar({
         { key: 'sessions', label: 'Recently Closed', count: sessionCount, icon: MdHistory },
     ];
 
-    const isNoFolderDropTarget = isDraggingCollection;
+    const draggedParentId = draggingCollection?.collection?.parentId || null;
+    const draggedIsAtRoot = !draggedParentId || !folders.some((folder) => folder.uid === draggedParentId);
+    const isNoFolderDropTarget = isDraggingCollection && !draggedIsAtRoot;
     const isNoFolderHovered = isNoFolderDropTarget && dragOverTargetId === 'no-folder';
     const noFolderDragClasses = isNoFolderDropTarget
         ? `${isNoFolderHovered ? ' fp-sidebar-drop-over' : ' fp-sidebar-drop-active'}`
