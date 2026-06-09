@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { browser } from '../static/globals';
 import { detectRecoverableCollections, recoverOrphanedCollections } from './utils/orphanRecovery';
 
@@ -58,7 +58,9 @@ export default function useOrphanRecovery(ready, { onRecovered } = {}) {
         setDismissed(true);
     }, []);
 
-    return {
+    // Memoize so the context value identity is stable across unrelated App
+    // re-renders (recover/dismiss are already stable via useCallback).
+    return useMemo(() => ({
         orphans,
         orphanCount: orphans.length,
         showModal: orphans.length > 0 && !dismissed,
@@ -66,5 +68,5 @@ export default function useOrphanRecovery(ready, { onRecovered } = {}) {
         busy,
         recover,
         dismiss,
-    };
+    }), [orphans, dismissed, busy, recover, dismiss]);
 }
