@@ -1603,14 +1603,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@dnd-kit/utilities@npm:^3.2.2":
-  version: 3.2.2
-  resolution: "@dnd-kit/utilities@npm:3.2.2"
+"@dnd-kit/utilities@npm:^3.2.2, @dnd-kit/utilities@npm:^3.3.0":
+  version: 3.3.0
+  resolution: "@dnd-kit/utilities@npm:3.3.0"
   dependencies:
     tslib: "npm:^2.0.0"
   peerDependencies:
     react: ">=16.8.0"
-  checksum: 10/6cfe46a5fcdaced943982e7ae66b08b89235493e106eb5bc833737c25905e13375c6ecc3aa0c357d136cb21dae3966213dba063f19b7a60b1235a29a7b05ff84
+  checksum: 10/31fa6f4c54587299d3b61346e2bb5f3c709a49724e8ea2748b7b80639e42d04e4b6d46c206bf257b6b5126011bd78bf5774906485ad05001d08e2a5842d9aa18
   languageName: node
   linkType: hard
 
@@ -3742,7 +3742,7 @@ __metadata:
 
 "crxbox@file:/Users/gilgo/Projects/crxbox/crxbox-0.2.1.tgz::locator=tabox%40workspace%3A.":
   version: 0.2.1
-  resolution: "crxbox@file:/Users/gilgo/Projects/crxbox/crxbox-0.2.1.tgz#/Users/gilgo/Projects/crxbox/crxbox-0.2.1.tgz::hash=098ff1&locator=tabox%40workspace%3A."
+  resolution: "crxbox@file:/Users/gilgo/Projects/crxbox/crxbox-0.2.1.tgz#/Users/gilgo/Projects/crxbox/crxbox-0.2.1.tgz::hash=1f2e43&locator=tabox%40workspace%3A."
   peerDependencies:
     "@playwright/test": ">=1.40.0"
   checksum: 10/0420b539a469dbbf7b394673693850522ac0f073f1245a9239e24ad6c8df18e28d9ec844d500f4f814910573ec6c8906d3718bf01f07e69b3668f2faa14d3e03
@@ -8523,7 +8523,7 @@ __metadata:
     "@babel/runtime": "npm:^7.26.0"
     "@dnd-kit/core": "npm:^6.3.1"
     "@dnd-kit/sortable": "npm:^10.0.0"
-    "@dnd-kit/utilities": "npm:^3.2.2"
+    "@dnd-kit/utilities": "npm:^3.3.0"
     "@playwright/test": "npm:1.60.0"
     "@testing-library/dom": "npm:^10.4.1"
     "@testing-library/jest-dom": "npm:^6.6.3"
