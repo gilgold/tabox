@@ -36,4 +36,17 @@ describe('findSidebarDropTarget', () => {
 
         expect(findSidebarDropTarget(500, 500)).toBeNull();
     });
+
+    test('folder wins over no-folder when the point is inside both rects', () => {
+        document.body.innerHTML = `
+            <div data-sidebar-folder-uid="folder-1"></div>
+            <div data-sidebar-no-folder="true"></div>
+        `;
+        const [f1, root] = document.body.children;
+        const sharedRect = () => mockRect(0, 0, 200, 40);
+        f1.getBoundingClientRect = sharedRect;
+        root.getBoundingClientRect = sharedRect;
+
+        expect(findSidebarDropTarget(100, 20)).toBe('folder-1');
+    });
 });

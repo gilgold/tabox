@@ -2202,7 +2202,7 @@ function FPContentArea({
         const col = sourceCollections.find(c => c.uid === event.active.id);
         if (col) {
             setActiveCollection(col);
-            setDraggingCollection({ collection: col });
+            setDraggingCollection({ collection: col, overSidebarTarget: null });
         }
         activeDragRectRef.current = null;
         setPreviewTarget(null);
