@@ -2002,14 +2002,12 @@ function App({ mode = 'popup' }) {
   if (isFullPage) {
     return <>
       <OrphanRecoveryContext.Provider value={orphanRecovery}>
-        {/* "Choose what to restore" dismisses the modal for good; the recovery
-            entry stays available in Settings → Recovery (the selective picker). */}
         <OrphanRecoveryModal
           isOpen={orphanRecovery.showModal}
           orphans={orphanRecovery.orphans}
           busy={orphanRecovery.busy}
           onRestoreAll={() => orphanRecovery.recover()}
-          onChoose={() => orphanRecovery.dismiss()}
+          onRestoreSelected={(uids) => orphanRecovery.recover(uids)}
           onDismiss={() => orphanRecovery.dismiss()}
         />
         {tooltipPortal}
@@ -2047,14 +2045,12 @@ function App({ mode = 'popup' }) {
 
   return <>
     <OrphanRecoveryContext.Provider value={orphanRecovery}>
-      {/* "Choose what to restore" dismisses the modal for good; the recovery
-          entry stays available in Settings → Recovery (the selective picker). */}
       <OrphanRecoveryModal
         isOpen={orphanRecovery.showModal}
         orphans={orphanRecovery.orphans}
         busy={orphanRecovery.busy}
         onRestoreAll={() => orphanRecovery.recover()}
-        onChoose={() => orphanRecovery.dismiss()}
+        onRestoreSelected={(uids) => orphanRecovery.recover(uids)}
         onDismiss={() => orphanRecovery.dismiss()}
       />
       {tooltipPortal}
