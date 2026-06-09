@@ -112,6 +112,7 @@ import {
     resolveCollectionDropTarget,
     sortCollectionsWithinParent,
 } from '../utils/collectionSectionDragEngine';
+import { resolveGroupedSectionTarget } from './groupedSectionHitTest';
 import { persistCollectionLayoutChanges } from '../utils/sharedCollectionSync';
 import { getMatchingSessionWindows } from '../utils/searchUtils';
 import { getBrowserSessionEntryKey, restoreBrowserSession } from '../utils/browserSessions';
@@ -487,191 +488,6 @@ const getPointerCoordinates = (event) => {
     }
 
     return getActualPointerCoordinates(event);
-};
-
-const findGroupedSectionBodyTargetAtPoint = (point) => {
-    if (!point || typeof document === 'undefined') {
-        return null;
-    }
-
-    const sectionBodies = Array.from(document.querySelectorAll('[data-grouped-section-body-parent-id]'));
-
-    for (const body of sectionBodies) {
-        const rect = body.getBoundingClientRect();
-        const rawParentId = body.getAttribute('data-grouped-section-body-parent-id');
-        const parentId = rawParentId === ROOT_LEVEL_SECTION_ID ? null : rawParentId;
-        const cards = Array.from(body.querySelectorAll('[data-sortable-collection-id]'))
-            .filter((card) => {
-                const cardRect = card.getBoundingClientRect();
-                return cardRect.width > 0 && cardRect.height > 0;
-            });
-
-        if (cards.length === 0) {
-            const emptySectionTopSlack = 32;
-            const emptySectionBottomSlack = 64;
-            if (
-                point.x < rect.left ||
-                point.x > rect.right ||
-                point.y < rect.top - emptySectionTopSlack ||
-                point.y > rect.bottom + emptySectionBottomSlack
-            ) {
-                continue;
-            }
-
-            return {
-                kind: collectionDropKinds.sectionEmpty,
-                parentId,
-            };
-        }
-
-        const firstRect = cards[0].getBoundingClientRect();
-        const lastRect = cards[cards.length - 1].getBoundingClientRect();
-        const sectionLeft = Math.min(rect.left, firstRect.left, lastRect.left);
-        const sectionRight = Math.max(rect.right, firstRect.right, lastRect.right);
-        const topBandSlack = Math.max(24, Math.min(40, firstRect.height / 2));
-        const bottomBandSlack = Math.max(24, Math.min(40, lastRect.height / 2));
-        const extraBottomHit = 64;
-
-        if (point.x < sectionLeft || point.x > sectionRight) {
-            continue;
-        }
-
-        if (
-            point.y >= firstRect.top - topBandSlack &&
-            point.y <= firstRect.top + topBandSlack
-        ) {
-            return {
-                kind: collectionDropKinds.sectionStart,
-                parentId,
-            };
-        }
-
-        if (
-            point.y >= lastRect.bottom - bottomBandSlack &&
-            point.y <= lastRect.bottom + extraBottomHit
-        ) {
-            return {
-                kind: collectionDropKinds.sectionEnd,
-                parentId,
-            };
-        }
-    }
-
-    return null;
-};
-
-const findGroupedEmptySectionTargetAtPoint = (point) => {
-    if (!point || typeof document === 'undefined') {
-        return null;
-    }
-
-    const sectionBodies = Array.from(document.querySelectorAll('[data-grouped-section-body-parent-id]'));
-
-    for (const body of sectionBodies) {
-        const rect = body.getBoundingClientRect();
-        const cards = Array.from(body.querySelectorAll('[data-sortable-collection-id]'))
-            .filter((card) => {
-                const cardRect = card.getBoundingClientRect();
-                return cardRect.width > 0 && cardRect.height > 0;
-            });
-
-        if (cards.length > 0) {
-            continue;
-        }
-
-        const hitSlop = 18;
-        if (
-            point.x < rect.left - hitSlop ||
-            point.x > rect.right + hitSlop ||
-            point.y < rect.top - hitSlop ||
-            point.y > rect.bottom + hitSlop
-        ) {
-            continue;
-        }
-
-        const rawParentId = body.getAttribute('data-grouped-section-body-parent-id');
-        return {
-            kind: collectionDropKinds.sectionEmpty,
-            parentId: rawParentId === ROOT_LEVEL_SECTION_ID ? null : rawParentId,
-        };
-    }
-
-    return null;
-};
-
-const findGroupedGridCollectionTargetAtPoint = (point, activeId, folderUidSet) => {
-    if (!point || typeof document === 'undefined') {
-        return null;
-    }
-
-    const sectionBodies = Array.from(document.querySelectorAll('[data-grouped-section-body-parent-id]'));
-
-    for (const body of sectionBodies) {
-        const rect = body.getBoundingClientRect();
-        if (
-            point.x < rect.left ||
-            point.x > rect.right ||
-            point.y < rect.top ||
-            point.y > rect.bottom
-        ) {
-            continue;
-        }
-
-        const rawParentId = body.getAttribute('data-grouped-section-body-parent-id');
-        const parentId = rawParentId === ROOT_LEVEL_SECTION_ID ? null : rawParentId;
-        const cards = Array.from(body.querySelectorAll('[data-sortable-collection-id]'))
-            .map((card) => {
-                const collectionId = card.getAttribute('data-sortable-collection-id');
-                const cardRect = card.getBoundingClientRect();
-                return { collectionId, rect: cardRect };
-            })
-            .filter(({ collectionId, rect }) => (
-                collectionId &&
-                collectionId !== activeId &&
-                rect.width > 0 &&
-                rect.height > 0
-            ));
-
-        if (cards.length === 0) {
-            return {
-                kind: collectionDropKinds.sectionEmpty,
-                parentId,
-            };
-        }
-
-        const nearestCard = cards.reduce((closest, candidate) => {
-            const candidateCenterX = candidate.rect.left + (candidate.rect.width / 2);
-            const candidateCenterY = candidate.rect.top + (candidate.rect.height / 2);
-            const candidateDistance = Math.hypot(point.x - candidateCenterX, point.y - candidateCenterY);
-
-            if (!closest || candidateDistance < closest.distance) {
-                return {
-                    collectionId: candidate.collectionId,
-                    rect: candidate.rect,
-                    distance: candidateDistance,
-                };
-            }
-
-            return closest;
-        }, null);
-
-        if (!nearestCard) {
-            return null;
-        }
-
-        return {
-            kind: collectionDropKinds.collection,
-            parentId,
-            collectionId: nearestCard.collectionId,
-            side: getCollectionTargetSide({
-                viewMode: 'grid',
-                point,
-                rect: nearestCard.rect,
-            }),
-        };
-    }
-
-    return null;
 };
 
 function FPSectionDropZone({
@@ -2245,22 +2061,17 @@ function FPContentArea({
         });
         const point = getPointerCoordinates(event);
         const pointerPoint = getActualPointerCoordinates(event) || point;
-        const groupedEmptySectionTarget = shouldRenderGroupedAllCollections && pointerPoint
-            ? findGroupedEmptySectionTargetAtPoint(pointerPoint)
+        const groupedSectionTarget = shouldRenderGroupedAllCollections && pointerPoint
+            ? resolveGroupedSectionTarget({
+                point: pointerPoint,
+                viewMode,
+                activeId: activeCollection?.uid,
+                // Don't let a grid card hit override a base target that is
+                // already collection-kind.
+                allowGridCollectionTarget: baseTarget?.kind !== collectionDropKinds.collection,
+            })
             : null;
-        const groupedGridCollectionTarget = (
-            shouldRenderGroupedAllCollections &&
-            viewMode === 'grid' &&
-            pointerPoint &&
-            groupedEmptySectionTarget?.kind !== collectionDropKinds.sectionEmpty &&
-            baseTarget?.kind !== collectionDropKinds.collection
-        )
-            ? findGroupedGridCollectionTargetAtPoint(pointerPoint, activeCollection?.uid, folderUidSet)
-            : null;
-        const sectionBodyTarget = shouldRenderGroupedAllCollections && viewMode === 'list'
-            ? findGroupedSectionBodyTargetAtPoint(pointerPoint)
-            : null;
-        let nextTarget = groupedEmptySectionTarget || groupedGridCollectionTarget || sectionBodyTarget || baseTarget;
+        let nextTarget = groupedSectionTarget || baseTarget;
 
         if (
             shouldRenderGroupedAllCollections &&
