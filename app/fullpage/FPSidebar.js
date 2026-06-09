@@ -17,7 +17,6 @@ import { useTrackedSync } from '../useTrackedSync';
 import { buildFolderUrlList, getCollectionUrls, copyToClipboard } from '../utils/index';
 import { reorderSidebarFolders } from './sidebarFolderReorder';
 import {
-    moveCollectionToFolder,
     duplicateFolder,
     deleteFolder,
     updateFolderDetails,
@@ -60,7 +59,6 @@ function SortableSidebarFolderItem({
     disableSorting,
     onSelect,
     onContextMenu,
-    onDrop,
 }) {
     const {
         attributes,
@@ -86,8 +84,6 @@ function SortableSidebarFolderItem({
             style={style}
             data-sidebar-folder-uid={folder.uid}
             className={`fp-sidebar-folder-row ${isDragging ? 'fp-sidebar-folder-row-sorting' : ''}`}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => onDrop(e, folder.uid)}
         >
             <button
                 type="button"
@@ -264,18 +260,6 @@ function FPSidebar({
             showSuccessToast('Folder updated');
         })();
     }, [folders, onFolderOptimisticUpdate]);
-
-    // Folder drop handler
-    const handleFolderDrop = async (e, folderId) => {
-        const collectionUid = e.dataTransfer.getData('text/plain');
-        if (!collectionUid) return;
-        const success = await moveCollectionToFolder(collectionUid, folderId);
-        if (success) {
-            if (triggerFolderLightningEffect) triggerFolderLightningEffect(folderId);
-            if (triggerSync) triggerSync();
-            if (onDataUpdate) await onDataUpdate();
-        }
-    };
 
     const handleFolderSortEnd = useCallback(async (event) => {
         if (!updateFolders) return;
@@ -644,7 +628,6 @@ function FPSidebar({
                                                 disableSorting={isDraggingCollection}
                                                 onSelect={setNavigation}
                                                 onContextMenu={handleFolderContextMenu}
-                                                onDrop={handleFolderDrop}
                                             />
                                         );
                                     })}
