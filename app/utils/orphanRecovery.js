@@ -61,9 +61,14 @@ export const recoverOrphanedCollections = async (uids = []) => {
     }
 
     return withDataSafetyGuard('orphan-recovery', async () => {
-        const index = (await browser.storage.local.get(STORAGE_KEYS.COLLECTIONS_INDEX))[STORAGE_KEYS.COLLECTIONS_INDEX] || {};
-        const tombstones = (await browser.storage.local.get(STORAGE_KEYS.DELETED_COLLECTION_TOMBSTONES))[STORAGE_KEYS.DELETED_COLLECTION_TOMBSTONES] || {};
-        const foldersIndex = (await browser.storage.local.get(STORAGE_KEYS.FOLDERS_INDEX))[STORAGE_KEYS.FOLDERS_INDEX] || {};
+        const initials = await browser.storage.local.get([
+            STORAGE_KEYS.COLLECTIONS_INDEX,
+            STORAGE_KEYS.DELETED_COLLECTION_TOMBSTONES,
+            STORAGE_KEYS.FOLDERS_INDEX,
+        ]);
+        const index = initials[STORAGE_KEYS.COLLECTIONS_INDEX] || {};
+        const tombstones = initials[STORAGE_KEYS.DELETED_COLLECTION_TOMBSTONES] || {};
+        const foldersIndex = initials[STORAGE_KEYS.FOLDERS_INDEX] || {};
 
         const keys = uids.map((uid) => `${STORAGE_KEYS.COLLECTION_PREFIX}${uid}`);
         const records = await browser.storage.local.get(keys);
@@ -80,11 +85,13 @@ export const recoverOrphanedCollections = async (uids = []) => {
             const record = records[key];
             if (!record || !Array.isArray(record.tabs)) return;
 
-            const order = record.order !== undefined ? record.order : 999999 + i; // missing order -> sort last
+            // Missing order -> sort last. The sentinel is not unique across separate
+            // recovery runs; that is acceptable (the user can reorder afterward).
+            const order = record.order !== undefined ? record.order : 999999 + i;
             const lastUpdated = record.lastUpdated != null ? record.lastUpdated : (record.createdOn || now);
             const lastOpened = record.lastOpened !== undefined ? record.lastOpened : null;
             const parentDead = record.parentId && !(record.parentId in foldersIndex);
-            const parentId = parentDead ? null : (record.parentId != null ? record.parentId : null);
+            const parentId = parentDead ? null : (record.parentId ?? null);
 
             const needsPatch = record.order === undefined
                 || record.lastUpdated === undefined

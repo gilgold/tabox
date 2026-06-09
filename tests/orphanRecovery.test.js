@@ -101,6 +101,18 @@ describe('recoverOrphanedCollections', () => {
         expect(store.collections_index.tomb).toBeUndefined();          // tombstoned, not resurrected
     });
 
+    test('patches missing metadata on the record and writes it back', async () => {
+        store = makeStore({
+            collection_bare: { uid: 'bare', name: 'Bare', tabs: [{ url: 'a' }], createdOn: 7 }, // no order/lastUpdated/lastOpened
+        });
+
+        const result = await recoverOrphanedCollections(['bare']);
+
+        expect(result.recovered).toBe(1);
+        expect(store.collection_bare).toMatchObject({ order: expect.any(Number), lastUpdated: 7, lastOpened: null });
+        expect(store.collections_index.bare).toMatchObject({ lastUpdated: 7, lastOpened: null });
+    });
+
     test('rolls back via the data-safety guard if the write throws', async () => {
         store = makeStore({
             collections_index: { live: { name: 'Live', type: 'collection' } },
