@@ -243,7 +243,7 @@ describe('collection drag components', () => {
         );
 
         const style = container.firstChild.getAttribute('style');
-        expect(style).toContain('opacity: 0.25');
+        expect(style).toContain('opacity: 0.35');
         expect(style).not.toContain('height: 0');
     });
 

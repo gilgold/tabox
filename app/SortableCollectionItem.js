@@ -25,7 +25,7 @@ function SortableCollectionItem(props) {
     const style = {
         transform: CSS.Transform.toString(transform),
         transition,
-        opacity: isDragging ? 0.6 : 1,
+        opacity: isDragging ? 0.35 : 1,
         borderTop: isDragging ? '1px solid var(--primary-color)' : '1px solid transparent',
         borderBottom: isDragging ? '1px solid var(--primary-color)' : '1px solid transparent',
     };

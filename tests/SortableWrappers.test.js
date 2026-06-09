@@ -61,7 +61,7 @@ describe('sortable wrappers', () => {
             }),
         }));
         expect(screen.getByTestId('collection-item')).toHaveTextContent('data-attr');
-        expect(container.firstChild).toHaveStyle('opacity: 0.6');
+        expect(container.firstChild).toHaveStyle('opacity: 0.35');
     });
 
     test('wraps CollectionTile with sortable drag props', () => {

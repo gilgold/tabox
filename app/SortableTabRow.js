@@ -25,7 +25,7 @@ function SortableTabRow(props) {
     const style = {
         transform: CSS.Transform.toString(transform),
         transition,
-        opacity: isDragging ? 0.25 : 1,
+        opacity: isDragging ? 0.35 : 1,
         position: 'relative',
     };
 

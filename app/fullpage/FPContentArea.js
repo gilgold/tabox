@@ -816,7 +816,7 @@ function SortableFPCard({
     const style = {
         transform: suppressTransforms ? undefined : CSS.Transform.toString(adjustedTransform),
         transition: suppressTransforms ? 'none' : transition,
-        opacity: isDragging && !hideWhileDragging ? 0.5 : undefined,
+        opacity: isDragging && !hideWhileDragging ? 0.35 : undefined,
         ...(isRevealActive ? {
             '--fp-reveal-index': revealIndex,
             '--fp-reveal-color': normalizeColorKey(collection.color) !== 'default'
