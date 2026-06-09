@@ -24,3 +24,14 @@ playwright-report
 
 # Local competitive/market research notes (not for publishing)
 market-research/
+
+# Stale build output / scratch artifacts (not part of the product)
+v4/
+output/
+# Local seed/test data scripts
+seed-test-data.js
+seed-test-data-standalone.js
+quick-seed.js
+# Cross-project working notes (crxbox), kept locally, not committed to tabox
+crxbox-assessment.md
+crxbox-feedback.md
