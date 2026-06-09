@@ -819,7 +819,11 @@ function SyncDebugRecoveryPanel({
                 onSelectionChange={setOrphanSelectedIds}
                 onConfirm={async () => {
                     const res = await orphanRecovery.recover(orphanSelectedIds);
-                    if (res?.success) setOrphanPickerOpen(false);
+                    if (res?.success) {
+                        setOrphanPickerOpen(false);
+                    } else {
+                        showErrorToast(res?.error || 'Could not restore the selected collections', { toasterId: feedbackToasterId });
+                    }
                 }}
             />
         </>
