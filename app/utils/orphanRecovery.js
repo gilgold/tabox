@@ -8,6 +8,10 @@ import { STORAGE_KEYS } from './sharedConstants';
  */
 export const detectRecoverableCollections = async () => {
     try {
+        // get(null) loads every key (including all collection_<uid> records with
+        // their tabs) into memory in one pass. That is the only way to enumerate
+        // unknown keys in extension storage; this function returns a lean summary
+        // and retains nothing, so the spike is transient.
         const all = await browser.storage.local.get(null);
         const index = all[STORAGE_KEYS.COLLECTIONS_INDEX] || {};
         const tombstones = all[STORAGE_KEYS.DELETED_COLLECTION_TOMBSTONES] || {};
@@ -17,8 +21,8 @@ export const detectRecoverableCollections = async () => {
         for (const key of Object.keys(all)) {
             if (!key.startsWith(prefix)) continue;
             const uid = key.slice(prefix.length);
-            if (index[uid]) continue;        // already visible
-            if (tombstones[uid]) continue;   // user deleted it deliberately
+            if (uid in index) continue;        // already visible
+            if (uid in tombstones) continue;   // user deleted it deliberately
 
             const record = all[key];
             if (!record || typeof record !== 'object' || !Array.isArray(record.tabs)) continue;
@@ -27,7 +31,7 @@ export const detectRecoverableCollections = async () => {
                 uid,
                 name: record.name || 'Untitled Collection',
                 tabCount: record.tabs.length,
-                createdOn: record.createdOn || 0,
+                createdOn: record.createdOn != null ? record.createdOn : 0,
                 lastUpdated: record.lastUpdated != null ? record.lastUpdated : null,
                 parentId: record.parentId != null ? record.parentId : null,
                 color: record.color || 'default',

@@ -52,4 +52,15 @@ describe('detectRecoverableCollections', () => {
 
         expect(orphans).toEqual([]);
     });
+
+    test('handles storage with no collections_index key at all', async () => {
+        store = {
+            tabox_storage_version: 3,
+            collection_lonely: { uid: 'lonely', name: 'Lonely', tabs: [{ url: 'x' }], createdOn: 50 },
+        };
+
+        const orphans = await detectRecoverableCollections();
+
+        expect(orphans.map((o) => o.uid)).toEqual(['lonely']);
+    });
 });
