@@ -19,6 +19,7 @@ chrome/api-keys.local.json
 *.zip
 coverage
 test-results
+playwright-report
 .superpowers/
 
 # Local competitive/market research notes (not for publishing)

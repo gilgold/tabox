@@ -2288,6 +2288,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@playwright/test@npm:1.60.0":
+  version: 1.60.0
+  resolution: "@playwright/test@npm:1.60.0::__archiveUrl=https%3A%2F%2Fnpm.dev.wixpress.com%2Fapi%2Fnpm%2Fnpm-repos%2F%40playwright%2Ftest%2F-%2Ftest-1.60.0.tgz"
+  dependencies:
+    playwright: "npm:1.60.0"
+  bin:
+    playwright: cli.js
+  checksum: 10/a13d369014e1934b0aa484c5d59537f5249af0fe006ac4ecbcbe14c673221412706193ea2d9cf3b2c0cc69e3ddbb4daddb006f0bedfdeb05f687776ed8c35f5f
+  languageName: node
+  linkType: hard
+
 "@sinclair/typebox@npm:^0.27.8":
   version: 0.27.8
   resolution: "@sinclair/typebox@npm:0.27.8"
@@ -3729,6 +3740,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"crxbox@file:/Users/gilgo/Projects/crxbox/crxbox-0.2.1.tgz::locator=tabox%40workspace%3A.":
+  version: 0.2.1
+  resolution: "crxbox@file:/Users/gilgo/Projects/crxbox/crxbox-0.2.1.tgz#/Users/gilgo/Projects/crxbox/crxbox-0.2.1.tgz::hash=098ff1&locator=tabox%40workspace%3A."
+  peerDependencies:
+    "@playwright/test": ">=1.40.0"
+  checksum: 10/0420b539a469dbbf7b394673693850522ac0f073f1245a9239e24ad6c8df18e28d9ec844d500f4f814910573ec6c8906d3718bf01f07e69b3668f2faa14d3e03
+  languageName: node
+  linkType: hard
+
 "css-loader@npm:^7.1.2":
   version: 7.1.2
   resolution: "css-loader@npm:7.1.2"
@@ -4826,12 +4846,31 @@ __metadata:
   languageName: node
   linkType: hard
 
+"fsevents@npm:2.3.2":
+  version: 2.3.2
+  resolution: "fsevents@npm:2.3.2::__archiveUrl=https%3A%2F%2Fnpm.dev.wixpress.com%2Fapi%2Fnpm%2Fnpm-repos%2Ffsevents%2F-%2Ffsevents-2.3.2.tgz"
+  dependencies:
+    node-gyp: "npm:latest"
+  checksum: 10/6b5b6f5692372446ff81cf9501c76e3e0459a4852b3b5f1fc72c103198c125a6b8c72f5f166bdd76ffb2fca261e7f6ee5565daf80dca6e571e55bcc589cc1256
+  conditions: os=darwin
+  languageName: node
+  linkType: hard
+
 "fsevents@npm:^2.3.2":
   version: 2.3.3
   resolution: "fsevents@npm:2.3.3"
   dependencies:
     node-gyp: "npm:latest"
   checksum: 10/4c1ade961ded57cdbfbb5cac5106ec17bc8bccd62e16343c569a0ceeca83b9dfef87550b4dc5cbb89642da412b20c5071f304c8c464b80415446e8e155a038c0
+  conditions: os=darwin
+  languageName: node
+  linkType: hard
+
+"fsevents@patch:fsevents@npm%3A2.3.2#optional!builtin<compat/fsevents>":
+  version: 2.3.2
+  resolution: "fsevents@patch:fsevents@npm%3A2.3.2%3A%3A__archiveUrl=https%253A%252F%252Fnpm.dev.wixpress.com%252Fapi%252Fnpm%252Fnpm-repos%252Ffsevents%252F-%252Ffsevents-2.3.2.tgz#optional!builtin<compat/fsevents>::version=2.3.2&hash=df0bf1"
+  dependencies:
+    node-gyp: "npm:latest"
   conditions: os=darwin
   languageName: node
   linkType: hard
@@ -7242,6 +7281,30 @@ __metadata:
   languageName: node
   linkType: hard
 
+"playwright-core@npm:1.60.0":
+  version: 1.60.0
+  resolution: "playwright-core@npm:1.60.0::__archiveUrl=https%3A%2F%2Fnpm.dev.wixpress.com%2Fapi%2Fnpm%2Fnpm-repos%2Fplaywright-core%2F-%2Fplaywright-core-1.60.0.tgz"
+  bin:
+    playwright-core: cli.js
+  checksum: 10/66c0f83d627e673261c848dd6fe1f2856d5b5b6859268acb61a45c00f5bf926e596a351a9c481a3a4e82a45022c7c6b5d99ebc3906fc6876ac582ed6f7e16190
+  languageName: node
+  linkType: hard
+
+"playwright@npm:1.60.0":
+  version: 1.60.0
+  resolution: "playwright@npm:1.60.0::__archiveUrl=https%3A%2F%2Fnpm.dev.wixpress.com%2Fapi%2Fnpm%2Fnpm-repos%2Fplaywright%2F-%2Fplaywright-1.60.0.tgz"
+  dependencies:
+    fsevents: "npm:2.3.2"
+    playwright-core: "npm:1.60.0"
+  dependenciesMeta:
+    fsevents:
+      optional: true
+  bin:
+    playwright: cli.js
+  checksum: 10/8569770637ee35d08cca3b53a5b56c21e9236bd1ac4718456d5988fb8acd51c5b3cc2cf90748363a36199529e870a9b6c68d6fc9e19571261cd867005d6331c1
+  languageName: node
+  linkType: hard
+
 "possible-typed-array-names@npm:^1.0.0":
   version: 1.1.0
   resolution: "possible-typed-array-names@npm:1.1.0"
@@ -8461,12 +8524,14 @@ __metadata:
     "@dnd-kit/core": "npm:^6.3.1"
     "@dnd-kit/sortable": "npm:^10.0.0"
     "@dnd-kit/utilities": "npm:^3.2.2"
+    "@playwright/test": "npm:1.60.0"
     "@testing-library/dom": "npm:^10.4.1"
     "@testing-library/jest-dom": "npm:^6.6.3"
     "@testing-library/react": "npm:^16.1.0"
     babel-jest: "npm:^29.7.0"
     babel-loader: "npm:^9.2.1"
     copy-webpack-plugin: "npm:^13.0.0"
+    crxbox: "file:/Users/gilgo/Projects/crxbox/crxbox-0.2.1.tgz"
     css-loader: "npm:^7.1.2"
     eslint: "npm:^9.18.0"
     eslint-plugin-jest: "npm:^28.10.0"
