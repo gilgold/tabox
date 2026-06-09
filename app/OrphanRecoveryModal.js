@@ -13,8 +13,8 @@ function OrphanRecoveryModal({ isOpen, orphans = [], busy = false, onRestoreAll,
     const label = count === 1 ? 'collection' : 'collections';
 
     return (
-        <div className="orphan-recovery-overlay" role="dialog" aria-modal="true" aria-label="Recover hidden collections">
-            <div className="orphan-recovery-modal">
+        <div className="orphan-recovery-overlay">
+            <div className="orphan-recovery-modal" role="dialog" aria-modal="true" aria-label="Recover hidden collections">
                 <h3><MdSettingsBackupRestore size={18} style={{ verticalAlign: 'text-bottom', marginRight: 6 }} />We found collections we can restore</h3>
                 <p>
                     An earlier update accidentally hid <strong>{count} {label}</strong>. They&apos;re still safe on your
