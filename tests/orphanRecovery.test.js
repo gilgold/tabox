@@ -3,7 +3,7 @@ jest.mock('../static/globals', () => ({
 }));
 
 import { browser } from '../static/globals';
-import { detectRecoverableCollections } from '../app/utils/orphanRecovery';
+import { detectRecoverableCollections, recoverOrphanedCollections } from '../app/utils/orphanRecovery';
 
 let store;
 const makeStore = (overrides = {}) => ({
@@ -24,6 +24,9 @@ beforeEach(() => {
         return {};
     });
     browser.storage.local.set.mockImplementation(async (items) => { Object.assign(store, items); });
+    browser.storage.local.remove.mockImplementation(async (keys) => {
+        (Array.isArray(keys) ? keys : [keys]).forEach((k) => delete store[k]);
+    });
 });
 
 describe('detectRecoverableCollections', () => {
@@ -62,5 +65,60 @@ describe('detectRecoverableCollections', () => {
         const orphans = await detectRecoverableCollections();
 
         expect(orphans.map((o) => o.uid)).toEqual(['lonely']);
+    });
+});
+
+describe('recoverOrphanedCollections', () => {
+    test('additively re-links orphans into the index without touching existing collections', async () => {
+        store = makeStore({
+            collections_index: { live: { name: 'Live', type: 'collection', tabCount: 1, order: 0 } },
+            collection_live: { uid: 'live', name: 'Live', tabs: [{ url: 'x' }], order: 0, lastUpdated: 5, lastOpened: null },
+            collection_old: { uid: 'old', name: 'Old', tabs: [{ url: 'a' }], createdOn: 100, order: 3, lastUpdated: 100, lastOpened: null },
+        });
+
+        const result = await recoverOrphanedCollections(['old']);
+
+        expect(result).toMatchObject({ success: true, recovered: 1, uids: ['old'] });
+        expect(store.collections_index.live).toBeDefined();            // untouched
+        expect(store.collections_index.old).toMatchObject({ name: 'Old', tabCount: 1, order: 3, parentId: null });
+        expect(store.collection_old.tabs).toHaveLength(1);             // record unchanged
+    });
+
+    test('is idempotent, skips tombstoned uids, and reroots collections whose folder is gone', async () => {
+        store = makeStore({
+            collections_index: { live: { name: 'Live', type: 'collection' } },
+            collection_live: { uid: 'live', name: 'Live', tabs: [] },
+            collection_orphan: { uid: 'orphan', name: 'Orphan', tabs: [], createdOn: 1, parentId: 'missing-folder' },
+            collection_tomb: { uid: 'tomb', name: 'Tomb', tabs: [], createdOn: 1 },
+            deleted_collection_tombstones: { tomb: 123 },
+            folders_index: {},
+        });
+
+        const result = await recoverOrphanedCollections(['orphan', 'tomb', 'live']);
+
+        expect(result.recovered).toBe(1);                              // only 'orphan'
+        expect(store.collections_index.orphan.parentId).toBeNull();    // dead parent -> root
+        expect(store.collections_index.tomb).toBeUndefined();          // tombstoned, not resurrected
+    });
+
+    test('rolls back via the data-safety guard if the write throws', async () => {
+        store = makeStore({
+            collections_index: { live: { name: 'Live', type: 'collection' } },
+            collection_live: { uid: 'live', name: 'Live', tabs: [] },
+            collection_old: { uid: 'old', name: 'Old', tabs: [], createdOn: 1 },
+        });
+        const indexBefore = { ...store.collections_index };
+
+        // Make the index-writing set call throw once.
+        const realSet = browser.storage.local.set.getMockImplementation();
+        browser.storage.local.set.mockImplementationOnce(async (items) => {
+            if (items.collections_index) throw new Error('disk full');
+            return realSet(items);
+        });
+
+        const result = await recoverOrphanedCollections(['old']);
+
+        expect(result.success).toBe(false);
+        expect(store.collections_index).toEqual(indexBefore);          // unchanged after rollback
     });
 });
