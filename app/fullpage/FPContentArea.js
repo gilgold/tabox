@@ -48,6 +48,7 @@ import {
 } from '../utils/storageUtils';
 import { getColorValue, normalizeColorKey } from '../utils/colorMigration';
 import { dndPointerSensorOptions } from '../utils/dndShared';
+import { findSidebarDropTarget } from './sidebarDropTargets';
 import {
     MdArrowUpward,
     MdArrowDownward,
@@ -920,6 +921,7 @@ function FPContentArea({
     const [activeSectionReveal, setActiveSectionReveal] = useState(null);
     const [activeCardReveal, setActiveCardReveal] = useState(null);
     const activeDragRectRef = useRef(null);
+    const lastSidebarHoverRef = useRef(null);
     const contentScrollRef = useRef(null);
     const revealTimersRef = useRef([]);
     const revealRunRef = useRef(null);
@@ -2188,6 +2190,7 @@ function FPContentArea({
         lastMeaningfulDropTargetRef.current = null;
         setDraggingCollection(null);
         activeDragRectRef.current = null;
+        lastSidebarHoverRef.current = null;
     }, [setDraggingCollection]);
 
     const handleDragStart = (event) => {
@@ -2322,22 +2325,20 @@ function FPContentArea({
         lastMeaningfulDropTargetRef.current = nextTarget;
     };
 
-    const findSidebarDropTarget = (x, y) => {
-        const folderItems = document.querySelectorAll('[data-sidebar-folder-uid]');
-        for (const item of folderItems) {
-            const rect = item.getBoundingClientRect();
-            if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-                return item.getAttribute('data-sidebar-folder-uid');
-            }
+    const handleDragMove = (event) => {
+        if (!activeCollection) {
+            return;
         }
-        const noFolderItem = document.querySelector('[data-sidebar-no-folder]');
-        if (noFolderItem) {
-            const rect = noFolderItem.getBoundingClientRect();
-            if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-                return 'no-folder';
-            }
+
+        const point = getActualPointerCoordinates(event);
+        const sidebarTarget = point ? findSidebarDropTarget(point.x, point.y) : null;
+
+        if (lastSidebarHoverRef.current === sidebarTarget) {
+            return;
         }
-        return null;
+
+        lastSidebarHoverRef.current = sidebarTarget;
+        setDraggingCollection({ collection: activeCollection, overSidebarTarget: sidebarTarget });
     };
 
     const handleDragEnd = async (event) => {
@@ -3830,6 +3831,7 @@ function FPContentArea({
                             sensors={sensors}
                             collisionDetection={customCollisionDetection}
                             onDragStart={handleDragStart}
+                            onDragMove={handleDragMove}
                             onDragOver={handleDragOver}
                             onDragEnd={handleDragEnd}
                             onDragCancel={resetDragState}

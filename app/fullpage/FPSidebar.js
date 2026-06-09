@@ -111,8 +111,6 @@ function FPSidebar({
     onFolderOptimisticUpdate,
     onDataUpdate,
     updateFolders,
-    triggerSync,
-    triggerFolderLightningEffect,
     onCollectionsRevealed,
 }) {
     const [navigation, setNavigation] = useAtom(sidebarNavigationState);
@@ -130,43 +128,11 @@ function FPSidebar({
     const [deleteModal, setDeleteModal] = useState(null);
     const ctxMenuRef = useRef(null);
 
-    // Cross-context collection drag state
+    // Cross-context collection drag state, published by FPContentArea's
+    // DndContext (onDragMove) into the shared atom.
     const draggingCollection = useAtomValue(draggingCollectionState);
     const isDraggingCollection = draggingCollection !== null;
-    const [dragOverTargetId, setDragOverTargetId] = useState(null);
-
-    useEffect(() => {
-        if (!isDraggingCollection) {
-            setDragOverTargetId(null);
-            return;
-        }
-        const handler = (e) => {
-            const x = e.clientX;
-            const y = e.clientY;
-
-            const folderItems = document.querySelectorAll('[data-sidebar-folder-uid]');
-            for (const item of folderItems) {
-                const rect = item.getBoundingClientRect();
-                if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-                    setDragOverTargetId(item.getAttribute('data-sidebar-folder-uid'));
-                    return;
-                }
-            }
-
-            const noFolderItem = document.querySelector('[data-sidebar-no-folder]');
-            if (noFolderItem) {
-                const rect = noFolderItem.getBoundingClientRect();
-                if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-                    setDragOverTargetId('no-folder');
-                    return;
-                }
-            }
-
-            setDragOverTargetId(null);
-        };
-        document.addEventListener('mousemove', handler);
-        return () => document.removeEventListener('mousemove', handler);
-    }, [isDraggingCollection]);
+    const dragOverTargetId = draggingCollection?.overSidebarTarget ?? null;
 
     const [currentWindowCount, setCurrentWindowCount] = useState(0);
     useEffect(() => {
