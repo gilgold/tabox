@@ -2068,6 +2068,18 @@ function FPContentArea({
 
         const activeId = args.active?.id;
         const pointerCollisions = pointerWithin(args);
+        const isCollectionCollision = (collision) => {
+            const collisionId = typeof collision.id === 'string' && collision.id.startsWith('collection-drop-')
+                ? collision.id.slice('collection-drop-'.length)
+                : collision.id;
+            return collisionId !== activeId && displayCollections.some((collection) => collection.uid === collisionId);
+        };
+        const isSectionCollision = (collision) => {
+            const dragType = collision?.data?.droppableContainer?.data?.current?.dragType;
+            return dragType === collectionDropKinds.sectionStart ||
+                dragType === collectionDropKinds.sectionEnd ||
+                dragType === collectionDropKinds.sectionEmpty;
+        };
         const getCollisionParentId = (collision) => {
             const dragType = collision?.data?.droppableContainer?.data?.current?.dragType;
             const dataParentId = collision?.data?.droppableContainer?.data?.current?.parentId;
@@ -2086,35 +2098,9 @@ function FPContentArea({
             const collection = displayCollections.find((entry) => entry.uid === collisionId);
             return collection ? normalizeCollectionParentId(collection, folderUidSet) : undefined;
         };
-        const pointerCollectionTargets = pointerCollisions.filter((collision) => {
-            const collisionId = typeof collision.id === 'string' && collision.id.startsWith('collection-drop-')
-                ? collision.id.slice('collection-drop-'.length)
-                : collision.id;
-            return collisionId !== activeId && displayCollections.some((collection) => collection.uid === collisionId);
-        });
-        const pointerSectionTargets = pointerCollisions.filter((collision) => {
-            const dragType = collision?.data?.droppableContainer?.data?.current?.dragType;
-            return dragType === collectionDropKinds.sectionStart ||
-                dragType === collectionDropKinds.sectionEnd ||
-                dragType === collectionDropKinds.sectionEmpty;
-        });
-        const cornerCollisions = closestCorners(args);
-        const allCollisions = [...pointerCollisions, ...cornerCollisions];
-        const uniqueCollisions = allCollisions.filter((collision, index, array) => (
-            index === array.findIndex((entry) => entry.id === collision.id)
-        ));
-        const collectionTargets = uniqueCollisions.filter((collision) => {
-            const collisionId = typeof collision.id === 'string' && collision.id.startsWith('collection-drop-')
-                ? collision.id.slice('collection-drop-'.length)
-                : collision.id;
-            return collisionId !== activeId && displayCollections.some((collection) => collection.uid === collisionId);
-        });
-        const sectionTargets = uniqueCollisions.filter((collision) => {
-            const dragType = collision?.data?.droppableContainer?.data?.current?.dragType;
-            return dragType === collectionDropKinds.sectionStart ||
-                dragType === collectionDropKinds.sectionEnd ||
-                dragType === collectionDropKinds.sectionEmpty;
-        });
+
+        const pointerCollectionTargets = pointerCollisions.filter(isCollectionCollision);
+        const pointerSectionTargets = pointerCollisions.filter(isSectionCollision);
 
         if (shouldRenderGroupedAllCollections) {
             if (pointerCollectionTargets.length > 0) {
@@ -2124,16 +2110,9 @@ function FPContentArea({
             if (viewMode === 'grid') {
                 if (pointerSectionTargets.length > 0) {
                     const hoveredParentId = getCollisionParentId(pointerSectionTargets[0]);
-                    const cornerCollectionTargets = closestCorners(args).filter((collision) => {
-                        const collisionId = typeof collision.id === 'string' && collision.id.startsWith('collection-drop-')
-                            ? collision.id.slice('collection-drop-'.length)
-                            : collision.id;
-                        if (collisionId === activeId || !displayCollections.some((collection) => collection.uid === collisionId)) {
-                            return false;
-                        }
-
-                        return getCollisionParentId(collision) === hoveredParentId;
-                    });
+                    const cornerCollectionTargets = closestCorners(args).filter((collision) => (
+                        isCollectionCollision(collision) && getCollisionParentId(collision) === hoveredParentId
+                    ));
 
                     if (cornerCollectionTargets.length > 0) {
                         return cornerCollectionTargets;
@@ -2149,9 +2128,19 @@ function FPContentArea({
                 return pointerSectionTargets;
             }
 
+            // List mode fallback: widen with corner collisions only when the
+            // pointer found nothing.
+            const cornerCollisions = closestCorners(args);
+            const uniqueCollisions = [...pointerCollisions, ...cornerCollisions].filter((collision, index, array) => (
+                index === array.findIndex((entry) => entry.id === collision.id)
+            ));
+            const collectionTargets = uniqueCollisions.filter(isCollectionCollision);
+
             if (collectionTargets.length > 0) {
                 return collectionTargets;
             }
+
+            const sectionTargets = uniqueCollisions.filter(isSectionCollision);
 
             if (sectionTargets.length > 0) {
                 return sectionTargets;
@@ -2161,6 +2150,12 @@ function FPContentArea({
         }
 
         if (canReorderFlatCollections) {
+            const cornerCollisions = closestCorners(args);
+            const uniqueCollisions = [...pointerCollisions, ...cornerCollisions].filter((collision, index, array) => (
+                index === array.findIndex((entry) => entry.id === collision.id)
+            ));
+            const collectionTargets = uniqueCollisions.filter(isCollectionCollision);
+
             if (collectionTargets.length > 0) {
                 return collectionTargets;
             }
