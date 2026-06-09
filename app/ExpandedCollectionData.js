@@ -813,7 +813,7 @@ function ExpandedCollectionData(props) {
                         {activeOverlay?.kind === 'group' ? (
                             <div
                                 style={{
-                                    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.3)',
+                                    boxShadow: 'var(--dnd-overlay-shadow)',
                                     borderRadius: '8px',
                                     overflow: 'hidden',
                                     cursor: 'grabbing',
@@ -835,7 +835,7 @@ function ExpandedCollectionData(props) {
                         ) : activeOverlay?.kind === 'tab' ? (
                             <div
                                 style={{
-                                    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.3)',
+                                    boxShadow: 'var(--dnd-overlay-shadow)',
                                     borderRadius: '8px',
                                     overflow: 'hidden',
                                     cursor: 'grabbing',

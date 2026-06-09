@@ -2,8 +2,8 @@ import React from 'react';
  
 function DroppableGroupHeader({ group, children, dropProps = null, showDropZone = false }) {
     const style = {
-        backgroundColor: showDropZone ? 'rgba(var(--primary-color-rgb, 52, 152, 219), 0.15)' : 'transparent',
-        border: showDropZone ? '2px dashed var(--primary-color)' : '2px dashed transparent',
+        backgroundColor: showDropZone ? 'var(--dnd-accent-bg)' : 'transparent',
+        border: showDropZone ? '2px dashed var(--dnd-accent)' : '2px dashed transparent',
         borderRadius: '6px',
         transition: 'all 0.2s ease',
         padding: showDropZone ? '6px' : '0px',
@@ -15,7 +15,7 @@ function DroppableGroupHeader({ group, children, dropProps = null, showDropZone 
         position: 'absolute',
         top: showDropZone ? '8px' : '-20px',
         right: '8px',
-        background: 'var(--primary-color)',
+        background: 'var(--dnd-accent)',
         color: 'white',
         padding: '4px 8px',
         borderRadius: '4px',

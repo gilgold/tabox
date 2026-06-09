@@ -922,7 +922,7 @@ html.fullpage-mode .fp-card-actions.fp-card-hover-menu .fp-card-rail-delete:focu
 
 /* ---- States ---- */
 .fp-card-dragging {
-    opacity: 0.35;
+    opacity: var(--dnd-source-opacity);
     transform: scale(0.97) !important;
 }
 
