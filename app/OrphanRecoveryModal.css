@@ -9,17 +9,18 @@
 }
 
 .orphan-recovery-modal {
-    background: var(--background-color, #fff);
+    background: var(--settings-bg-color, #fff);
     color: var(--text-color, #1a1a1a);
+    border: 1px solid var(--divider-color, #d1d1d1);
     border-radius: 12px;
     padding: 24px;
     max-width: 420px;
     width: calc(100% - 32px);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
 }
 
-.orphan-recovery-modal h3 { margin: 0 0 8px; font-size: 18px; }
-.orphan-recovery-modal p { margin: 0 0 16px; font-size: 14px; line-height: 1.5; }
+.orphan-recovery-modal h3 { margin: 0 0 8px; font-size: 18px; color: var(--text-color, #1a1a1a); }
+.orphan-recovery-modal p { margin: 0 0 16px; font-size: 14px; line-height: 1.5; opacity: 0.85; }
 
 .orphan-recovery-actions {
     display: flex;
@@ -40,12 +41,20 @@
 .orphan-recovery-actions .secondary,
 .orphan-recovery-actions .tertiary {
     background: transparent;
-    border: 1px solid var(--border-color, #d4d4d8);
+    border: 1px solid var(--setting-row-border-color, #bebebe);
     border-radius: 8px;
     padding: 10px 14px;
     cursor: pointer;
-    color: inherit;
+    color: var(--text-color, #1a1a1a);
 }
 
-.orphan-recovery-actions .tertiary { border-color: transparent; }
+.orphan-recovery-actions .secondary:hover {
+    background: var(--setting-row-hover-bg-color, #efefef);
+}
+
+.orphan-recovery-actions .tertiary {
+    border-color: transparent;
+    opacity: 0.7;
+}
+.orphan-recovery-actions .tertiary:hover { opacity: 1; }
 .orphan-recovery-actions button:disabled { opacity: 0.6; cursor: default; }
