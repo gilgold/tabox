@@ -1,3 +1,5 @@
+import { arrayMove } from '@dnd-kit/sortable';
+
 export const reorderSidebarFolders = (folders = [], activeId, overId) => {
     if (!Array.isArray(folders) || !activeId || !overId || activeId === overId) {
         return folders;
@@ -10,9 +12,5 @@ export const reorderSidebarFolders = (folders = [], activeId, overId) => {
         return folders;
     }
 
-    const reorderedFolders = [...folders];
-    const [movedFolder] = reorderedFolders.splice(activeIndex, 1);
-    reorderedFolders.splice(overIndex, 0, movedFolder);
-
-    return reorderedFolders;
+    return arrayMove(folders, activeIndex, overIndex);
 };
