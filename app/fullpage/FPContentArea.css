@@ -1116,7 +1116,7 @@ html.fullpage-mode .fp-content .folder-stats-text {
 .fp-grouped-empty-dropzone {
     padding: 12px 14px;
     border-radius: 12px;
-    border: 1px dashed color-mix(in srgb, var(--dnd-accent) 22%, transparent);
+    border: 1px dashed var(--dnd-accent-border-faint);
     background: transparent;
     color: var(--settings-row-text-color);
     font-size: 12px;

@@ -76,6 +76,7 @@
     --dnd-accent: var(--primary-color);
     --dnd-accent-border: color-mix(in srgb, var(--dnd-accent) 72%, transparent);
     --dnd-accent-border-soft: color-mix(in srgb, var(--dnd-accent) 50%, transparent);
+    --dnd-accent-border-faint: color-mix(in srgb, var(--dnd-accent) 22%, transparent);
     --dnd-accent-bg: color-mix(in srgb, var(--dnd-accent) 14%, transparent);
     --dnd-accent-bg-soft: color-mix(in srgb, var(--dnd-accent) 6%, transparent);
     --dnd-overlay-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
