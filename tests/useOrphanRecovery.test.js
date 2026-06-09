@@ -61,3 +61,24 @@ test('recover() restores, re-detects, and fires onRecovered', async () => {
     expect(onRecovered).toHaveBeenCalledWith(1);
     await waitFor(() => expect(result.current.orphanCount).toBe(0));
 });
+
+test('busy is true during recovery and a concurrent recover() is ignored', async () => {
+    detectRecoverableCollections.mockResolvedValue([{ uid: 'a', name: 'A' }]);
+    let resolveRecover;
+    recoverOrphanedCollections.mockReturnValue(new Promise((res) => { resolveRecover = res; }));
+
+    const { result } = renderHook(() => useOrphanRecovery(true));
+    await waitFor(() => expect(result.current.orphanCount).toBe(1));
+
+    let firstCall;
+    act(() => { firstCall = result.current.recover(); });
+    await waitFor(() => expect(result.current.busy).toBe(true));
+
+    // A second call while busy is rejected without invoking recovery again.
+    const second = await result.current.recover();
+    expect(second).toMatchObject({ success: false, error: 'busy' });
+    expect(recoverOrphanedCollections).toHaveBeenCalledTimes(1);
+
+    await act(async () => { resolveRecover({ success: true, recovered: 1, uids: ['a'] }); await firstCall; });
+    expect(result.current.busy).toBe(false);
+});

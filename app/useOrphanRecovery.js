@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { browser } from '../static/globals';
 import { detectRecoverableCollections, recoverOrphanedCollections } from './utils/orphanRecovery';
 
@@ -13,6 +13,12 @@ export default function useOrphanRecovery(ready, { onRecovered } = {}) {
     const [orphans, setOrphans] = useState([]);
     const [dismissed, setDismissed] = useState(true); // suppress modal until detection confirms otherwise
     const [busy, setBusy] = useState(false);
+
+    // Hold the latest onRecovered without making `recover` change identity every
+    // render (consumers commonly pass an inline callback).
+    const onRecoveredRef = useRef(onRecovered);
+    useEffect(() => { onRecoveredRef.current = onRecovered; });
+    const busyRef = useRef(false);
 
     useEffect(() => {
         if (!ready) return undefined;
@@ -30,19 +36,22 @@ export default function useOrphanRecovery(ready, { onRecovered } = {}) {
     const recover = useCallback(async (uids) => {
         const target = (uids && uids.length) ? uids : orphans.map((o) => o.uid);
         if (target.length === 0) return { success: true, recovered: 0, uids: [] };
+        if (busyRef.current) return { success: false, recovered: 0, uids: [], error: 'busy' };
+        busyRef.current = true;
         setBusy(true);
         try {
             const result = await recoverOrphanedCollections(target);
             const remaining = await detectRecoverableCollections();
             setOrphans(remaining);
-            if (result.success && result.recovered > 0 && typeof onRecovered === 'function') {
-                await onRecovered(result.recovered);
+            if (result.success && result.recovered > 0 && typeof onRecoveredRef.current === 'function') {
+                await onRecoveredRef.current(result.recovered);
             }
             return result;
         } finally {
+            busyRef.current = false;
             setBusy(false);
         }
-    }, [orphans, onRecovered]);
+    }, [orphans]);
 
     const dismiss = useCallback(async () => {
         await browser.storage.local.set({ [DISMISS_KEY]: true });
