@@ -33,6 +33,17 @@ test('shows modal when orphans exist and not dismissed', async () => {
     expect(result.current.showEntry).toBe(true);
 });
 
+test('does not show the modal when the dismiss flag is already persisted', async () => {
+    detectRecoverableCollections.mockResolvedValue([{ uid: 'a', name: 'A' }]);
+    browser.storage.local.get.mockResolvedValue({ orphanRecoveryModalDismissed: true });
+
+    const { result } = renderHook(() => useOrphanRecovery(true));
+    await waitFor(() => expect(result.current.orphanCount).toBe(1));
+
+    expect(result.current.showModal).toBe(false); // suppressed by persisted flag
+    expect(result.current.showEntry).toBe(true);  // entry still available in settings
+});
+
 test('dismiss() persists the flag and hides the modal but keeps the entry', async () => {
     detectRecoverableCollections.mockResolvedValue([{ uid: 'a', name: 'A' }]);
     const { result } = renderHook(() => useOrphanRecovery(true));

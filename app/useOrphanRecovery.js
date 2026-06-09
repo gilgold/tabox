@@ -58,8 +58,10 @@ export default function useOrphanRecovery(ready, { onRecovered } = {}) {
         setDismissed(true);
     }, []);
 
-    // Memoize so the context value identity is stable across unrelated App
-    // re-renders (recover/dismiss are already stable via useCallback).
+    // Memoize so the context value identity only changes when something real
+    // changes. `dismiss` is stable; `recover` changes when `orphans` changes
+    // (it closes over the current list for the restore-all path), so it is
+    // listed in the deps below alongside the state it derives from.
     return useMemo(() => ({
         orphans,
         orphanCount: orphans.length,
