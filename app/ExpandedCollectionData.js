@@ -27,6 +27,7 @@ import SortableGroupContainer from './SortableGroupContainer';
 import SortableTabRow from './SortableTabRow';
 import TabRow from './TabRow';
 import { getCurrentTabsAndGroups } from './utils';
+import { dndPointerSensorOptions } from './utils/dndShared';
 import {
     applyCollectionDropIntent,
     buildCollectionDragModel,
@@ -88,11 +89,7 @@ function ExpandedCollectionData(props) {
     }, [props.collection]);
 
     const sensors = useSensors(
-        useSensor(PointerSensor, {
-            activationConstraint: {
-                distance: 5,
-            },
-        }),
+        useSensor(PointerSensor, dndPointerSensorOptions),
     );
 
     const measuring = {

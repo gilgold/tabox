@@ -16,6 +16,7 @@ import { showSuccessToast, showErrorToast, showInfoToast } from '../toastHelpers
 import { useTrackedSync } from '../useTrackedSync';
 import { buildFolderUrlList, getCollectionUrls, copyToClipboard } from '../utils/index';
 import { reorderSidebarFolders } from './sidebarFolderReorder';
+import { dndPointerSensorOptions } from '../utils/dndShared';
 import {
     duplicateFolder,
     deleteFolder,
@@ -226,7 +227,7 @@ function FPSidebar({
 
     const sortableFolderIds = useMemo(() => folders.map((folder) => folder.uid), [folders]);
     const folderSortSensors = useSensors(
-        useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+        useSensor(PointerSensor, dndPointerSensorOptions),
     );
 
     const handleFolderCreate = async (name, color) => {

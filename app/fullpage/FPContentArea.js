@@ -47,6 +47,7 @@ import {
     batchDeleteCollections,
 } from '../utils/storageUtils';
 import { getColorValue, normalizeColorKey } from '../utils/colorMigration';
+import { dndPointerSensorOptions } from '../utils/dndShared';
 import {
     MdArrowUpward,
     MdArrowDownward,
@@ -2055,7 +2056,7 @@ function FPContentArea({
 
     // DnD
     const sensors = useSensors(
-        useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+        useSensor(PointerSensor, dndPointerSensorOptions)
     );
 
     const customCollisionDetection = useCallback((args) => {
