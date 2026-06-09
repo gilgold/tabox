@@ -289,3 +289,58 @@ test('indicator gating: no-op targets show nothing, valid containers show ambien
   await expect(root2).not.toHaveClass(/fp-sidebar-drop-over/);
   await cancelDrag(page);
 });
+
+// --- 6. suppressed no-op hover must not fall back to a stale target -----------
+
+test('dropping on a suppressed no-op target does not move the collection', async ({ ext }) => {
+  await ext.storage.local.set({
+    ...buildSeed({
+      collections: [
+        { uid: 'col-a', name: 'Alpha', order: 0 },
+        { uid: 'col-b', name: 'Beta', order: 1 },
+        { uid: 'col-c', name: 'Gamma', order: 2 },
+      ],
+    }),
+    fpViewMode: 'list',
+  });
+  const page = await openFullPage(ext);
+  await expect(page.locator('[data-sortable-collection-id]')).toHaveCount(3);
+
+  const gap = page.locator('.fp-collection-insert-gap');
+
+  // 1. Hover a valid target so the indicator shows (and the engine records a
+  //    meaningful drop target for the dead-zone fallback).
+  await startDrag(page, cardLocator(page, 'col-a'));
+  await dragOver(page, cardLocator(page, 'col-c'));
+  await expect(gap).toBeVisible();
+
+  // 2. Move to an explicitly suppressed no-op position: the TOP half of Beta
+  //    resolves to "insert before Beta", which is Alpha's own slot (Alpha is
+  //    collapsed while dragging) — the engine returns no operation and clears
+  //    the preview (no gap). dnd-kit only re-fires onDragOver when the `over`
+  //    droppable CHANGES, so force an over-change that lands directly in
+  //    Beta's top half: park on Gamma, then jump in a single mousemove.
+  //    Retry the pair in case a mid-flight layout shift (the gap moving)
+  //    swallows one of the over-changes.
+  await expect(async () => {
+    const boxC = await cardLocator(page, 'col-c').boundingBox();
+    await page.mouse.move(boxC.x + boxC.width / 2, boxC.y + boxC.height * 0.75, { steps: 1 });
+    const boxB = await cardLocator(page, 'col-b').boundingBox();
+    await page.mouse.move(boxB.x + boxB.width / 2, boxB.y + boxB.height * 0.25, { steps: 1 });
+    await expect(gap).toHaveCount(0, { timeout: 250 });
+  }).toPass();
+
+  // 3. Release while no indicator is showing: the drop must be a no-op, not a
+  //    fall-back to the stale Gamma target from step 1.
+  await drop(page);
+  await expect(page.locator('.dnd-drag-overlay')).toHaveCount(0);
+
+  // Give a (buggy) pending write time to land before asserting stability.
+  await page.waitForTimeout(400);
+  await expect
+    .poll(async () => {
+      const idx = await ext.storage.local.get('collections_index');
+      return [idx['col-a'].order, idx['col-b'].order, idx['col-c'].order];
+    })
+    .toEqual([0, 1, 2]);
+});

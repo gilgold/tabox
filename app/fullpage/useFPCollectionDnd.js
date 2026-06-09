@@ -372,6 +372,7 @@ export function useFPCollectionDnd({
             if (!collectionOperation) {
                 setPreviewTarget(null);
                 previewTargetRef.current = null;
+                lastMeaningfulDropTargetRef.current = null;
                 return;
             }
 
@@ -394,6 +395,7 @@ export function useFPCollectionDnd({
         if (!sectionOperation) {
             setPreviewTarget(null);
             previewTargetRef.current = null;
+            lastMeaningfulDropTargetRef.current = null;
             return;
         }
 
