@@ -1029,9 +1029,10 @@ html.fullpage-mode .fp-card-actions.fp-card-hover-menu .fp-card-rail-delete:focu
 }
 
 /* ---- Drag Overlay ---- */
-.fp-card-drag-overlay {
+/* Card-specific overrides on top of the shared .dnd-drag-overlay class */
+.fp-card-drag-overlay.dnd-drag-overlay {
     box-shadow: var(--fp-shadow-xl);
-    opacity: 0.92;
+    border-radius: var(--fp-card-radius, 16px);
 }
 
 .fp-card-drag-overlay > div {

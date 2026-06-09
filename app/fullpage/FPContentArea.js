@@ -3848,7 +3848,7 @@ function FPContentArea({
                             >
                                 {activeCollection ? (
                                     <div
-                                        className="fp-card-drag-overlay"
+                                        className="fp-card-drag-overlay dnd-drag-overlay"
                                         data-fp-drag-overlay="true"
                                         style={activeDragRectRef.current ? { width: activeDragRectRef.current.width, height: activeDragRectRef.current.height } : undefined}
                                     >

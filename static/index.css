@@ -88,6 +88,20 @@
     50% { opacity: 1; }
 }
 
+/* Shared drag overlay lift treatment (tab, group, and FP card overlays) */
+.dnd-drag-overlay {
+    box-shadow: var(--dnd-overlay-shadow);
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: grabbing;
+    opacity: 0.92;
+    z-index: var(--dnd-overlay-z, 999999);
+}
+
+.dnd-drag-overlay--group {
+    width: min(400px, 90vw);
+}
+
 /* Cross-collection drop target (DroppableCollection wrapper) */
 .dnd-container-target {
     position: relative;

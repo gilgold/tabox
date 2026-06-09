@@ -811,16 +811,7 @@ function ExpandedCollectionData(props) {
                 {createPortal(
                     <DragOverlay adjustScale={false} dropAnimation={null}>
                         {activeOverlay?.kind === 'group' ? (
-                            <div
-                                style={{
-                                    boxShadow: 'var(--dnd-overlay-shadow)',
-                                    borderRadius: '8px',
-                                    overflow: 'hidden',
-                                    cursor: 'grabbing',
-                                    zIndex: 999999,
-                                    width: '400px',
-                                }}
-                            >
+                            <div className="dnd-drag-overlay dnd-drag-overlay--group">
                                 <GroupContainer
                                     group={activeOverlay.group}
                                     tabs={activeOverlay.tabs}
@@ -833,15 +824,7 @@ function ExpandedCollectionData(props) {
                                 />
                             </div>
                         ) : activeOverlay?.kind === 'tab' ? (
-                            <div
-                                style={{
-                                    boxShadow: 'var(--dnd-overlay-shadow)',
-                                    borderRadius: '8px',
-                                    overflow: 'hidden',
-                                    cursor: 'grabbing',
-                                    zIndex: 999999,
-                                }}
-                            >
+                            <div className="dnd-drag-overlay">
                                 <TabRow
                                     tab={activeOverlay.tab}
                                     updateCollection={props.updateCollection}
