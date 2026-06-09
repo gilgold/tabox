@@ -1,0 +1,51 @@
+.orphan-recovery-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.orphan-recovery-modal {
+    background: var(--background-color, #fff);
+    color: var(--text-color, #1a1a1a);
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 420px;
+    width: calc(100% - 32px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+
+.orphan-recovery-modal h3 { margin: 0 0 8px; font-size: 18px; }
+.orphan-recovery-modal p { margin: 0 0 16px; font-size: 14px; line-height: 1.5; }
+
+.orphan-recovery-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.orphan-recovery-actions .primary {
+    background: var(--primary-color, #2563eb);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.orphan-recovery-actions .secondary,
+.orphan-recovery-actions .tertiary {
+    background: transparent;
+    border: 1px solid var(--border-color, #d4d4d8);
+    border-radius: 8px;
+    padding: 10px 14px;
+    cursor: pointer;
+    color: inherit;
+}
+
+.orphan-recovery-actions .tertiary { border-color: transparent; }
+.orphan-recovery-actions button:disabled { opacity: 0.6; cursor: default; }
