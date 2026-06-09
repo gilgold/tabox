@@ -3,23 +3,32 @@
 
 export const T = 1_710_000_000_000;
 
-export const collection = (uid, name, { order = 0, parentId = null } = {}) => ({
+// Tab record for seeding a collection's `tabs` array.
+export const tab = (uid, title, { groupUid, groupId } = {}) => ({
+  uid,
+  title,
+  url: `https://${uid}.example.com`,
+  groupId: groupId ?? -1,
+  ...(groupUid !== undefined ? { groupUid } : {}),
+});
+
+export const collection = (uid, name, { order = 0, parentId = null, tabs, chromeGroups } = {}) => ({
   uid,
   name,
   color: '#4fc3f7',
   parentId,
   order,
-  tabs: [{ title: `${name} tab`, url: `https://${uid}.example.com` }],
-  chromeGroups: [],
+  tabs: tabs ?? [{ title: `${name} tab`, url: `https://${uid}.example.com` }],
+  chromeGroups: chromeGroups ?? [],
   lastUpdated: T,
   lastOpened: null,
   createdOn: T,
 });
 
-export const collectionIndexEntry = (name, { order = 0, parentId = null } = {}) => ({
+export const collectionIndexEntry = (name, { order = 0, parentId = null, tabCount = 1 } = {}) => ({
   name,
   type: 'collection',
-  tabCount: 1,
+  tabCount,
   lastUpdated: T,
   lastOpened: null,
   createdOn: T,
@@ -54,12 +63,25 @@ export const folderIndexEntry = (name, { order = 0 } = {}) => ({
 });
 
 // Build a full storage seed from a flat spec of collections/folders.
+// A collection spec may include optional `tabs` / `chromeGroups` arrays;
+// when `tabs` is given it is used verbatim and the index entry's tabCount
+// is derived from it. Omitted → single default tab (legacy behavior).
 export function buildSeed({ collections = [], folders = [] } = {}) {
   const seed = { collections_index: {}, folders_index: {} };
   collections.forEach((c, i) => {
     const order = c.order ?? i;
-    seed.collections_index[c.uid] = collectionIndexEntry(c.name, { order, parentId: c.parentId ?? null });
-    seed[`collection_${c.uid}`] = collection(c.uid, c.name, { order, parentId: c.parentId ?? null });
+    const parentId = c.parentId ?? null;
+    seed.collections_index[c.uid] = collectionIndexEntry(c.name, {
+      order,
+      parentId,
+      tabCount: c.tabs ? c.tabs.length : 1,
+    });
+    seed[`collection_${c.uid}`] = collection(c.uid, c.name, {
+      order,
+      parentId,
+      tabs: c.tabs,
+      chromeGroups: c.chromeGroups,
+    });
   });
   folders.forEach((f, i) => {
     const order = f.order ?? i;

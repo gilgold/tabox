@@ -1,5 +1,5 @@
 import { test, expect } from 'crxbox';
-import { buildSeed, openFullPage } from './support/fixtures.mjs';
+import { buildSeed, openFullPage, tab } from './support/fixtures.mjs';
 import { startDrag, dragOver, drop } from './support/dnd.mjs';
 
 // Baseline coverage for the CURRENT full-page drag-and-drop behavior, pinned
@@ -16,34 +16,36 @@ import { startDrag, dragOver, drop } from './support/dnd.mjs';
 
 // --- seed helpers -----------------------------------------------------------
 
-const tab = (uid, title, extra = {}) => ({
-  uid,
-  title,
-  url: `https://${uid}.example.com`,
-  groupId: -1,
-  ...extra,
-});
-
 // col-a with three ungrouped tabs (tab-1/2/3).
-function seedWithTabs() {
-  const seed = buildSeed({ collections: [{ uid: 'col-a', name: 'Alpha', order: 0 }] });
-  seed['collection_col-a'].tabs = [tab('tab-1', 'One'), tab('tab-2', 'Two'), tab('tab-3', 'Three')];
-  seed.collections_index['col-a'].tabCount = 3;
-  return seed;
-}
+const seedWithTabs = () =>
+  buildSeed({
+    collections: [
+      {
+        uid: 'col-a',
+        name: 'Alpha',
+        order: 0,
+        tabs: [tab('tab-1', 'One'), tab('tab-2', 'Two'), tab('tab-3', 'Three')],
+      },
+    ],
+  });
 
 // col-a with a tab group "Work" (tab-1, tab-2) followed by ungrouped tab-3.
-function seedWithGroup() {
-  const seed = buildSeed({ collections: [{ uid: 'col-a', name: 'Alpha', order: 0 }] });
-  seed['collection_col-a'].chromeGroups = [{ uid: 'g1', id: 1, title: 'Work', color: 'blue' }];
-  seed['collection_col-a'].tabs = [
-    tab('tab-1', 'One', { groupUid: 'g1', groupId: 1 }),
-    tab('tab-2', 'Two', { groupUid: 'g1', groupId: 1 }),
-    tab('tab-3', 'Three'),
-  ];
-  seed.collections_index['col-a'].tabCount = 3;
-  return seed;
-}
+const seedWithGroup = () =>
+  buildSeed({
+    collections: [
+      {
+        uid: 'col-a',
+        name: 'Alpha',
+        order: 0,
+        chromeGroups: [{ uid: 'g1', id: 1, title: 'Work', color: 'blue' }],
+        tabs: [
+          tab('tab-1', 'One', { groupUid: 'g1', groupId: 1 }),
+          tab('tab-2', 'Two', { groupUid: 'g1', groupId: 1 }),
+          tab('tab-3', 'Three'),
+        ],
+      },
+    ],
+  });
 
 // --- shared helpers ---------------------------------------------------------
 
@@ -64,7 +66,7 @@ async function openDetailPanel(page, uid) {
       const stable = prev !== null && key === prev;
       prev = key;
       return stable;
-    })
+    }, { message: 'detail panel bounding box never stabilized' })
     .toBe(true);
   return panel;
 }
@@ -132,7 +134,7 @@ test('list mode shows an insert gap while dragging and drop reorders within the 
   await dragOver(page, cardC);
   await expect(page.locator('.fp-collection-insert-gap')).toBeVisible();
 
-  // Aim at the bottom third of Gamma so the gap (and drop) lands AFTER it.
+  // Aim near the bottom edge of Gamma (85% of its height) so the gap (and drop) lands AFTER it.
   const box = await cardC.boundingBox();
   await page.mouse.move(box.x + box.width / 2, box.y + box.height * 0.85, { steps: 4 });
   await drop(page);
@@ -264,15 +266,14 @@ test('drags a whole tab group below an ungrouped tab', async ({ ext }) => {
 // --- 8. tab → another collection card (cross-collection transfer) -----------
 
 test('drags a tab from the detail panel onto another collection card', async ({ ext }) => {
-  const seed = buildSeed({
-    collections: [
-      { uid: 'col-a', name: 'Alpha', order: 0 },
-      { uid: 'col-b', name: 'Beta', order: 1 },
-    ],
-  });
-  seed['collection_col-a'].tabs = [tab('tab-1', 'One'), tab('tab-2', 'Two')];
-  seed.collections_index['col-a'].tabCount = 2;
-  await ext.storage.local.set(seed);
+  await ext.storage.local.set(
+    buildSeed({
+      collections: [
+        { uid: 'col-a', name: 'Alpha', order: 0, tabs: [tab('tab-1', 'One'), tab('tab-2', 'Two')] },
+        { uid: 'col-b', name: 'Beta', order: 1 },
+      ],
+    }),
+  );
 
   const page = await openFullPage(ext);
   const panel = await openDetailPanel(page, 'col-a');
@@ -291,11 +292,11 @@ test('drags a tab from the detail panel onto another collection card', async ({ 
       const colA = await ext.storage.local.get('collection_col-a');
       const colB = await ext.storage.local.get('collection_col-b');
       return {
-        aCount: colA.tabs.length,
+        aTabs: colA.tabs.map((t) => t.uid),
         bHasTab1: colB.tabs.some((t) => t.uid === 'tab-1'),
       };
     })
-    .toEqual({ aCount: 1, bHasTab1: true });
+    .toEqual({ aTabs: ['tab-2'], bHasTab1: true });
 });
 
 // --- 9. card → folder section header in the content area --------------------
