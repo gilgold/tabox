@@ -1,8 +1,8 @@
 // e2e/support/dnd.mjs
 // Manual pointer-driven drag for mid-drag assertions (indicators, hover
 // highlights). ext.dragAndDrop() is atomic — press/assert/release needs raw
-// mouse control. dnd-kit's sensors activate after 5–6px of travel depending
-// on the surface; the 12px diagonal move below clears all of them.
+// mouse control. dnd-kit's sensors activate after the unified 5px of travel
+// (app/utils/dndShared.js); the 12px diagonal move below clears it comfortably.
 
 export async function startDrag(page, sourceLocator) {
   const box = await sourceLocator.boundingBox();

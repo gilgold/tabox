@@ -1,10 +1,11 @@
 import { test, expect } from 'crxbox';
 import { buildSeed, openFullPage } from './support/fixtures.mjs';
 
-// Full-page drag-and-drop: collection cards (FPContentArea, distance:5, rectSortingStrategy)
-// and sidebar folders (FPSidebar, distance:6, vertical). Both persist `order` into their
-// respective index (collections_index / folders_index). Uses crxbox's ext.dragAndDrop()
-// helper to trip the activation-distance sensors.
+// Full-page drag-and-drop: collection cards (FPContentArea, rectSortingStrategy) and
+// sidebar folders (FPSidebar, vertical). Every surface shares the unified 5px activation
+// distance (app/utils/dndShared.js). Both persist `order` into their respective index
+// (collections_index / folders_index). Uses crxbox's ext.dragAndDrop() helper to trip
+// the activation-distance sensors.
 
 test('reorders collection cards in the content grid', async ({ ext, context }) => {
   await ext.storage.local.set(
@@ -62,7 +63,7 @@ test('reorders folders in the sidebar', async ({ ext, context }) => {
   await expect(page.locator('[data-sidebar-folder-uid]')).toHaveCount(3);
   expect(await folderOrder()).toEqual(['f1', 'f2', 'f3']);
 
-  // Drag Work (f1) onto Personal (f2) → [f2, f1, f3]. (sidebar sensor distance is 6px)
+  // Drag Work (f1) onto Personal (f2) → [f2, f1, f3]. (unified 5px sensor; generous nudge)
   await ext.dragAndDrop(
     page.locator('[data-sidebar-folder-uid="f1"] .fp-sidebar-folder-item'),
     page.locator('[data-sidebar-folder-uid="f2"] .fp-sidebar-folder-item'),
