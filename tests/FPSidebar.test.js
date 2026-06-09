@@ -22,6 +22,12 @@ jest.mock('@dnd-kit/core', () => ({
 }));
 
 jest.mock('@dnd-kit/sortable', () => ({
+    arrayMove: (array, from, to) => {
+        const next = [...array];
+        const [moved] = next.splice(from, 1);
+        next.splice(to, 0, moved);
+        return next;
+    },
     SortableContext: ({ children }) => <>{children}</>,
     verticalListSortingStrategy: jest.fn(),
     useSortable: jest.fn(() => ({
