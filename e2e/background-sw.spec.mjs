@@ -1,4 +1,8 @@
 import { test, expect } from 'crxbox';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const { version } = require('../chrome/manifest.json');
 
 // Exercises crxbox's background/service-worker helpers against Tabox's real MV3 worker:
 //   ext.background.sendMessage / evaluate / waitForReady / kill
@@ -63,8 +67,8 @@ test.describe('background / service worker helpers', () => {
   test('evaluate runs inside the SW context (manifest + chrome.storage)', async ({ ext }) => {
     await ext.storage.local.set({ autoBackups: [AUTO_BACKUP] });
 
-    const version = await ext.background.evaluate(() => chrome.runtime.getManifest().version);
-    expect(version).toBe('4.1.2');
+    const manifestVersion = await ext.background.evaluate(() => chrome.runtime.getManifest().version);
+    expect(manifestVersion).toBe(version);
 
     // chrome.* APIs are reachable from the worker context.
     const backupCount = await ext.background.evaluate(async () => {
