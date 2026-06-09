@@ -410,7 +410,7 @@ export default function SettingsMenu(props) {
         },
     ];
 
-    const orphanRecoveryItem = buildOrphanRecoveryMenuItem(orphanRecovery);
+    const orphanRecoveryItem = buildOrphanRecoveryMenuItem(orphanRecovery, { onActivate: closeMenu });
     const popupBackupSection = {
         key: 'backup',
         title: 'Backup & Restore',
