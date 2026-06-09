@@ -41,6 +41,13 @@ jest.mock('../app/fullpage/FPLayout', () => function MockFPLayout({ allCollectio
 });
 jest.mock('react-tooltip', () => ({ Tooltip: () => null }));
 
+// Orphan recovery is orthogonal to sync/upgrade coverage; stub it so its
+// on-mount async detection doesn't read shared storage across these tests.
+jest.mock('../app/useOrphanRecovery', () => ({
+    __esModule: true,
+    default: () => ({ orphans: [], orphanCount: 0, showModal: false, showEntry: false, busy: false, recover: () => {}, dismiss: () => {} }),
+}));
+
 const App = require('../app/App').default;
 
 describe('4.0 upgrade compatibility - multi-device and UI coverage', () => {

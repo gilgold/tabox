@@ -938,6 +938,14 @@ function App({ mode = 'popup' }) {
     await reloadCollectionsAndFoldersFromStorage({ updateSyncTime: true });
   };
 
+  // Run orphan detection once data has loaded, regardless of which code path
+  // hydrated it. (loadCollectionsFromStorage early-returns before its finally
+  // when data is already loaded — e.g. in the full-page view — so we cannot
+  // rely on that finally to flip this flag.)
+  useEffect(() => {
+    if (dataLoaded) setOrphanScanReady(true);
+  }, [dataLoaded]);
+
   const orphanRecovery = useOrphanRecovery(orphanScanReady, {
     onRecovered: async (count) => {
       await refreshDataAfterFolderOperation();
@@ -1205,7 +1213,6 @@ function App({ mode = 'popup' }) {
       await loadDataWithNewSystem();
     } finally {
       setDataLoading(false);
-      setOrphanScanReady(true);
     }
   }
 
