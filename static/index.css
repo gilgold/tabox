@@ -103,16 +103,44 @@
     width: min(400px, 90vw);
 }
 
-/* Cross-collection drop target (DroppableCollection wrapper) */
+/* Cross-collection drop target (DroppableCollection wrapper).
+   The wrapper sits BEHIND an opaque card, so the is-over treatment renders as
+   pseudo-element overlays ON TOP of the card (a tinted veil + a hint pill).
+   Pseudo-elements are never returned by document.elementsFromPoint, so the
+   drop hit-testing in useCollectionItemCrossDrag is unaffected. */
 .dnd-container-target {
     position: relative;
-    border-radius: 8px;
+    border-radius: var(--dnd-container-radius, 8px);
     transition: background 0.15s ease, box-shadow 0.15s ease;
 }
 
-.dnd-container-target.is-over {
-    background: var(--dnd-accent-bg);
-    box-shadow: inset 0 0 0 2px var(--dnd-accent), 0 0 0 2px var(--dnd-accent-bg);
+.dnd-container-target.is-over::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: var(--dnd-container-radius, 8px);
+    background: color-mix(in srgb, var(--dnd-accent) 18%, transparent);
+    box-shadow: inset 0 0 0 2px var(--dnd-accent);
+    pointer-events: none;
+    z-index: 5;
+}
+
+.dnd-container-target.is-over::before {
+    content: attr(data-drop-hint);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: var(--dnd-accent);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 6;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
 /* Ambient affordance: valid, non-current container targets during a collection drag */

@@ -285,6 +285,9 @@ test('drags a tab from the detail panel onto another collection card', async ({ 
   await startDrag(page, tabDragHandle(rows.filter({ hasText: 'One' })));
   await dragOver(page, cardLocator(page, 'col-b'));
   await expect(page.locator('[data-collection-uid="col-b"][data-collection-drop-zone]')).toBeVisible();
+  // The hovered target must announce itself mid-drag: the DroppableCollection
+  // wrapper exposes the drop hint that the .is-over::before pill renders.
+  await expect(page.locator('[data-collection-uid="col-b"][data-drop-hint="Move tab here"]')).toBeVisible();
   await drop(page);
 
   await expect

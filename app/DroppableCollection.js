@@ -8,12 +8,14 @@ function DroppableCollection({ collection, children, disabled = false }) {
         && !disabled
         && dragSession.sourceCollectionUid !== collection.uid
         && dragSession.overCollectionUid === collection.uid;
+    const dropHint = dragSession?.kind === 'group' ? 'Move group here' : 'Move tab here';
 
     return (
         <div
             className={`dnd-container-target${showDropZone ? ' is-over' : ''}`}
             data-collection-drop-zone={disabled ? undefined : 'true'}
             data-collection-uid={disabled ? undefined : collection.uid}
+            data-drop-hint={showDropZone ? dropHint : undefined}
         >
             {children}
         </div>

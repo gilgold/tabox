@@ -10,6 +10,13 @@
    Color-highlight hover · frosted action bar · grain
    ======================================== */
 
+/* Cross-collection drop veil (static/index.css .dnd-container-target): in the
+   full-page view the DroppableCollection wrapper is the direct parent of
+   .fp-card inside the sortable shell, so match the veil radius to the card. */
+[data-sortable-collection-id] > .dnd-container-target {
+    --dnd-container-radius: var(--fp-card-radius, 16px);
+}
+
 .fp-card {
     position: relative;
     background: var(--fp-surface-elevated, var(--settings-bg-color));
