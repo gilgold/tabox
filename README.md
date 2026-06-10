@@ -1,6 +1,6 @@
 # Tabox - Save and Share Tab Groups
 
-[![CircleCI](https://circleci.com/gh/gilgold/tabox/tree/main.svg?style=svg)](https://circleci.com/gh/gilgold/tabox/tree/main)
+[![Release](https://github.com/gilgold/tabox/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/gilgold/tabox/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 ![Chrome Web Store](https://img.shields.io/chrome-web-store/users/bdbliblipiempfdkkkjohnecmeknnpoa)
 ![Chrome Web Store](https://img.shields.io/chrome-web-store/v/bdbliblipiempfdkkkjohnecmeknnpoa)
