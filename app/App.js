@@ -8,9 +8,11 @@ import CollectionList from './CollectionList';
 import Footer from './Footer';
 import FPLayout from './fullpage/FPLayout';
 import CommandPalette from './CommandPalette';
+import TabSwitcher from './TabSwitcher';
 import { useAtom, useSetAtom, useAtomValue } from 'jotai';
 import { highlightedCollectionUidState } from './atoms/animationsState';
 import { commandPaletteOpenState } from './atoms/commandPaletteState';
+import { tabSwitcherOpenState } from './atoms/tabSwitcherState';
 import { sidebarNavigationState } from './atoms/fullpageState';
 import {
     settingsDataState,
@@ -246,6 +248,7 @@ function App({ mode = 'popup' }) {
   const setViewContext = useSetAtom(viewContextState);
   const isPanelOpen = useAtomValue(detailPanelOpenState);
   const setCommandPaletteOpen = useSetAtom(commandPaletteOpenState);
+  const setTabSwitcherOpen = useSetAtom(tabSwitcherOpenState);
   const setSidebarNavigation = useSetAtom(sidebarNavigationState);
   const search = useAtomValue(searchState);
   const [listKey, setListKey] = useAtom(listKeyState);
@@ -1820,17 +1823,23 @@ function App({ mode = 'popup' }) {
     };
   }, [isFullPage, setViewContext]);
 
-  // Command Palette: global Cmd/Ctrl+K shortcut
+  // Command Palette (Cmd/Ctrl+K) and Tab Switcher (Cmd/Ctrl+Shift+S) shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === 'k') {
         e.preventDefault();
+        setTabSwitcherOpen(false);
         setCommandPaletteOpen(prev => !prev);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        setCommandPaletteOpen(false);
+        setTabSwitcherOpen(prev => !prev);
       }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [setCommandPaletteOpen]);
+  }, [setCommandPaletteOpen, setTabSwitcherOpen]);
 
   // Build folder name lookup map for command palette hints
   const folderNameMap = useMemo(() => {
@@ -1991,6 +2000,8 @@ function App({ mode = 'popup' }) {
     />
   );
 
+  const tabSwitcherEl = <TabSwitcher />;
+
   if (isFullPage) {
     return <>
       <OrphanRecoveryContext.Provider value={orphanRecovery}>
@@ -2004,6 +2015,7 @@ function App({ mode = 'popup' }) {
         />
         {tooltipPortal}
         {commandPaletteEl}
+        {tabSwitcherEl}
         <FPLayout
           folders={displayFolders}
           collections={collectionsToShow}
@@ -2047,6 +2059,7 @@ function App({ mode = 'popup' }) {
       />
       {tooltipPortal}
       {commandPaletteEl}
+      {tabSwitcherEl}
       <div className={`App${isFullPage ? ' fullpage' : ''}`}>
       <Header
         isFullPage={isFullPage}
