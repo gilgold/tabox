@@ -131,7 +131,12 @@ describe('createThumbnailCapture', () => {
         const browser = makeBrowser();
         const capture = createThumbnailCapture(browser, { downscale: identityDownscale });
         await capture.captureAllWindows();
+        // Captures are staggered to respect the 2/sec captureVisibleTab quota:
+        // only the first window has fired after one debounce interval.
         await jest.advanceTimersByTimeAsync(700);
+        expect(browser.tabs.captureVisibleTab).toHaveBeenCalledTimes(1);
+        await jest.advanceTimersByTimeAsync(2000);
+        expect(browser.tabs.captureVisibleTab).toHaveBeenCalledTimes(2);
         expect(browser.tabs.captureVisibleTab).toHaveBeenCalledWith(1, expect.anything());
         expect(browser.tabs.captureVisibleTab).toHaveBeenCalledWith(2, expect.anything());
     });

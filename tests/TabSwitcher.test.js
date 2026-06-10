@@ -112,6 +112,18 @@ describe('TabSwitcher', () => {
         fireEvent.keyDown(input, { key: 'Enter' });
         await waitFor(() => expect(browser.tabs.update).toHaveBeenCalledWith(21, { active: true }));
         expect(browser.windows.update).toHaveBeenCalledWith(2, { focused: true });
+        // Switching to another window's tab dismisses the popup.
+        expect(window.close).toHaveBeenCalled();
+    });
+
+    test('activating the current tab closes only the switcher, not the popup', async () => {
+        twoWindowSeed();
+        renderOpenSwitcher();
+        const rows = await screen.findAllByTestId('tab-switcher-row');
+        // Row 0 (tab 11) is the active tab of the current window.
+        fireEvent.click(rows[0]);
+        await waitFor(() => expect(browser.tabs.update).toHaveBeenCalledWith(11, { active: true }));
+        expect(window.close).not.toHaveBeenCalled();
     });
 
     test('clicking a row activates that tab', async () => {

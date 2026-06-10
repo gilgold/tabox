@@ -111,7 +111,11 @@
     async function captureAllWindows() {
       try {
         const windows = await browser.windows.getAll({ windowTypes: ['normal'] });
-        windows.forEach((win) => scheduleCapture(win.id));
+        // Stagger the per-window debounces so N windows don't all fire in the
+        // same second against captureVisibleTab's 2-calls-per-second quota.
+        windows.forEach((win, index) => {
+          setTimeout(() => scheduleCapture(win.id), index * CAPTURE_DEBOUNCE_MS);
+        });
       } catch { /* noop */ }
     }
 

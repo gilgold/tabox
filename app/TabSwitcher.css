@@ -266,9 +266,16 @@
     border-left: 1px solid var(--setting-row-hover-bg-color);
 }
 
+/* No selected entry — render nothing instead of a bare bordered band. */
+.tab-switcher-preview.empty {
+    display: none;
+}
+
+/* Fixed height (not max-height) so toggling screenshot vs. fallback card
+   never shifts the list above. */
 .tab-switcher-card.popup .tab-switcher-preview {
     border-top: 1px solid var(--setting-row-hover-bg-color);
-    max-height: 190px;
+    height: 190px;
 }
 
 .tab-switcher-preview-shot {

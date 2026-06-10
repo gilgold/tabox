@@ -103,6 +103,21 @@ function TabPreviewPane({ entry }) {
         return () => { cancelled = true; };
     }, [debouncedEntry, hasPermission]);
 
+    // After the permission is granted the background capture is debounced, so
+    // the one-shot storage read above lands before the thumbnail exists. Watch
+    // storage.session for the selected tab's thumbnail so it appears right away.
+    useEffect(() => {
+        if (!hasPermission || !debouncedEntry || !browser.storage.onChanged) return undefined;
+        const key = `thumb_${debouncedEntry.tabId}`;
+        const handler = (changes, area) => {
+            if (area === 'session' && changes[key]?.newValue) {
+                setThumbnail(changes[key].newValue.dataUrl);
+            }
+        };
+        browser.storage.onChanged.addListener(handler);
+        return () => browser.storage.onChanged.removeListener(handler);
+    }, [hasPermission, debouncedEntry]);
+
     const requestPermission = useCallback(async () => {
         try {
             const granted = await browser.permissions.request(ALL_URLS);
@@ -164,6 +179,10 @@ function TabSwitcher() {
         } catch {
             setEntries([]);
         }
+        // Context-menu items are portaled to <body>, so clicking one moves DOM
+        // focus off the overlay and keyboard nav (bound to the overlay's
+        // onKeyDown) goes dead. Refocus the search input to restore it.
+        inputRef.current?.focus();
     }, []);
 
     const scrollSelectedIntoView = useCallback((index) => {
@@ -180,7 +199,9 @@ function TabSwitcher() {
                 await browser.windows.update(entry.windowId, { focused: true });
             }
             close();
-            if (viewContext === 'popup') window.close();
+            // Activating the already-active tab of the current window should
+            // only close the switcher, not the whole popup.
+            if (viewContext === 'popup' && !(entry.active && entry.isCurrentWindow)) window.close();
         } catch {
             // The tab vanished while the switcher was open — drop the stale row.
             showErrorToast('That tab is no longer open');
@@ -227,6 +248,9 @@ function TabSwitcher() {
                 } catch {
                     showErrorToast('Failed to copy URL');
                 }
+                // Copy URL doesn't refresh the list, so restore keyboard nav
+                // here too (the portaled menu click moved focus to <body>).
+                inputRef.current?.focus();
             },
         },
         {
