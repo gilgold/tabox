@@ -12,7 +12,7 @@ Tabox is a Chrome/Edge extension (Manifest v3) for saving open tabs and tab grou
 - **Tests**: Jest 29, React Testing Library
 - **Lint**: ESLint 9 (eslint:recommended + react plugin)
 - **Package Manager**: Yarn 3.6.4 (Berry)
-- **CI/CD**: GitHub Actions (.github/workflows/release.yml) — lints and tests on every push/PR; builds and publishes to Chrome Web Store on merge to main
+- **CI/CD**: GitHub Actions (.github/workflows/release.yml) — lints and tests on every push/PR; builds and publishes to the Chrome Web Store and Microsoft Edge Add-ons on merge to main
 
 ## Common Commands
 

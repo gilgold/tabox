@@ -80,6 +80,7 @@ jobs:
             || { echo "bundled clientSecret is empty"; exit 1; }
           echo "Bundled api-keys.json is present and populated"
       - name: Package extension
+        id: package
         run: |
           cd build
           zip -r ../tabox.zip .
@@ -134,3 +135,71 @@ jobs:
             *)
               echo "Publish failed (status=${PUBLISH_STATUS})"; exit 1 ;;
           esac
+      - name: Upload & publish to Microsoft Edge Add-ons
+        # https://learn.microsoft.com/en-us/microsoft-edge/extensions/update/api/using-addons-api?tabs=v1-1
+        # Runs as long as the package was built, even if the Chrome publish
+        # step failed, so one store's outage doesn't block the other.
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+        env:
+          EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
+          EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
+          EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID }}
+          API_ROOT: https://api.addons.microsoftedge.microsoft.com
+        run: |
+          set -euo pipefail
+
+          if [ -z "${EDGE_CLIENT_ID}" ] || [ -z "${EDGE_API_KEY}" ] || [ -z "${EDGE_PRODUCT_ID}" ]; then
+            echo "EDGE_CLIENT_ID / EDGE_API_KEY / EDGE_PRODUCT_ID secrets are missing or empty"; exit 1
+          fi
+
+          poll_operation() {
+            # $1 = operation status URL; polls until the API reports a
+            # terminal state (anything other than InProgress).
+            local url="$1" status response
+            for _ in $(seq 1 30); do
+              response=$(curl -sS --fail \
+                -H "Authorization: ApiKey ${EDGE_API_KEY}" \
+                -H "X-ClientID: ${EDGE_CLIENT_ID}" \
+                "${url}")
+              status=$(echo "${response}" | jq -r '.status // "InProgress"')
+              if [ "${status}" != "InProgress" ]; then
+                echo "${response}"
+                [ "${status}" = "Succeeded" ] && return 0 || return 1
+              fi
+              sleep 10
+            done
+            echo "Timed out waiting for ${url}"; return 1
+          }
+
+          echo "Uploading package to draft submission..."
+          UPLOAD_OP=$(curl -sS --fail -i \
+            -H "Authorization: ApiKey ${EDGE_API_KEY}" \
+            -H "X-ClientID: ${EDGE_CLIENT_ID}" \
+            -H "Content-Type: application/zip" \
+            -X POST -T tabox.zip \
+            "${API_ROOT}/v1/products/${EDGE_PRODUCT_ID}/submissions/draft/package" \
+            | tr -d '\r' | sed -n 's/^Location: *//ip')
+          if [ -z "${UPLOAD_OP}" ]; then
+            echo "Upload request did not return an operation ID"; exit 1
+          fi
+
+          echo "Waiting for package validation (operation ${UPLOAD_OP})..."
+          poll_operation "${API_ROOT}/v1/products/${EDGE_PRODUCT_ID}/submissions/draft/package/operations/${UPLOAD_OP}" \
+            || { echo "Edge package upload failed"; exit 1; }
+
+          echo "Publishing draft submission..."
+          PUBLISH_OP=$(curl -sS --fail -i \
+            -H "Authorization: ApiKey ${EDGE_API_KEY}" \
+            -H "X-ClientID: ${EDGE_CLIENT_ID}" \
+            -X POST \
+            -d '{"notes":"Automated publish from GitHub Actions"}' \
+            "${API_ROOT}/v1/products/${EDGE_PRODUCT_ID}/submissions" \
+            | tr -d '\r' | sed -n 's/^Location: *//ip')
+          if [ -z "${PUBLISH_OP}" ]; then
+            echo "Publish request did not return an operation ID"; exit 1
+          fi
+
+          echo "Waiting for publish operation ${PUBLISH_OP}..."
+          poll_operation "${API_ROOT}/v1/products/${EDGE_PRODUCT_ID}/submissions/operations/${PUBLISH_OP}" \
+            || { echo "Edge publish failed"; exit 1; }
+          echo "Edge Add-ons publish submitted successfully"
