@@ -208,3 +208,77 @@ describe('CollectionDetailPanel title editing', () => {
         expect(container.querySelector('.panel-title')).toHaveTextContent('incognito tabs');
     });
 });
+
+describe('CollectionDetailPanel interaction with portaled tab menus and modals', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        browser.storage.local.get.mockResolvedValue({});
+        jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+        jest.useRealTimers();
+        document.querySelectorAll('.fp-tab-ctx-menu, .move-modal-overlay, .outside-area').forEach((el) => el.remove());
+    });
+
+    const appendPortaledElement = (className) => {
+        const wrapper = document.createElement('div');
+        wrapper.className = className;
+        const button = document.createElement('button');
+        wrapper.appendChild(button);
+        document.body.appendChild(wrapper);
+        return button;
+    };
+
+    test('closes the panel on a plain outside mousedown', () => {
+        const onClose = jest.fn();
+        renderPanel({ onClose });
+
+        const outsideButton = appendPortaledElement('outside-area');
+        fireEvent.mouseDown(outsideButton);
+        act(() => {
+            jest.advanceTimersByTime(300);
+        });
+
+        expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    test('keeps the panel open when clicking inside the tab context menu', () => {
+        const onClose = jest.fn();
+        renderPanel({ onClose });
+
+        const menuButton = appendPortaledElement('fp-tab-ctx-menu');
+        fireEvent.mouseDown(menuButton);
+        act(() => {
+            jest.advanceTimersByTime(300);
+        });
+
+        expect(onClose).not.toHaveBeenCalled();
+    });
+
+    test('keeps the panel open when interacting with the move-to-collection modal', () => {
+        const onClose = jest.fn();
+        renderPanel({ onClose });
+
+        const modalButton = appendPortaledElement('move-modal-overlay');
+        fireEvent.mouseDown(modalButton);
+        act(() => {
+            jest.advanceTimersByTime(300);
+        });
+
+        expect(onClose).not.toHaveBeenCalled();
+    });
+
+    test('Escape closes only the move modal, not the panel, while the modal is open', () => {
+        const onClose = jest.fn();
+        renderPanel({ onClose });
+
+        appendPortaledElement('move-modal-overlay');
+        fireEvent.keyDown(document, { key: 'Escape' });
+        act(() => {
+            jest.advanceTimersByTime(300);
+        });
+
+        expect(onClose).not.toHaveBeenCalled();
+    });
+});
