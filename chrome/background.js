@@ -7,6 +7,7 @@ try {
   importScripts('sync-apply.js');
   importScripts('sync-throttle.js');
   importScripts('background-utils.js');
+  importScripts('thumbnail-capture.js');
 }
 catch (e) {
   console.error(e);
@@ -30,6 +31,12 @@ catch (e) {
     ? require('./sync-throttle.js')
     : globalThis.TaboxSyncThrottle;
   const throttleSync = syncThrottleApi.createSyncThrottle();
+
+  const thumbnailCaptureApi = typeof require === 'function'
+    ? require('./thumbnail-capture.js')
+    : globalThis.TaboxThumbnails;
+  const thumbnailCapture = thumbnailCaptureApi.createThumbnailCapture(browser);
+  thumbnailCapture.init();
 
   // Auto-update debouncing - wait 2 seconds after last event
   let autoUpdateTimeouts = new Map();
@@ -1406,6 +1413,10 @@ const handleSingleCollectionImportBG = async (collection) => {
 
 try {
   browser.runtime.onMessage.addListener(async (request) => {
+    if (request.type === 'captureAllWindows') {
+      await thumbnailCapture.captureAllWindows();
+      return Promise.resolve(true);
+    }
     if (request.type === 'checkSyncStatus') {
       try {
         const {

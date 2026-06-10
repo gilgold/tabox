@@ -92,6 +92,8 @@ function TabPreviewPane({ entry }) {
         let cancelled = false;
         setThumbnail(null);
         if (!hasPermission || !debouncedEntry) return undefined;
+        // browser.storage.session requires Chrome 102+; treat as no thumbnail below that.
+        if (!browser.storage.session) return undefined;
         const key = `thumb_${debouncedEntry.tabId}`;
         browser.storage.session.get(key)
             .then((data) => {
