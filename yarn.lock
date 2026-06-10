@@ -3740,12 +3740,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"crxbox@file:/Users/gilgo/Projects/crxbox/crxbox-0.2.1.tgz::locator=tabox%40workspace%3A.":
-  version: 0.2.1
-  resolution: "crxbox@file:/Users/gilgo/Projects/crxbox/crxbox-0.2.1.tgz#/Users/gilgo/Projects/crxbox/crxbox-0.2.1.tgz::hash=1f2e43&locator=tabox%40workspace%3A."
+"crxbox@npm:^1.0.0":
+  version: 1.0.0
+  resolution: "crxbox@npm:1.0.0"
   peerDependencies:
     "@playwright/test": ">=1.40.0"
-  checksum: 10/0420b539a469dbbf7b394673693850522ac0f073f1245a9239e24ad6c8df18e28d9ec844d500f4f814910573ec6c8906d3718bf01f07e69b3668f2faa14d3e03
+  checksum: 10/5dbc3bb703ff2f00bcefbf3d46a2be644743088def3abdd73f7e450801fc727cb382617716e376faf67237e64414a3c2627f671eddec8420eabe277dc40b03d5
   languageName: node
   linkType: hard
 
@@ -8531,7 +8531,7 @@ __metadata:
     babel-jest: "npm:^29.7.0"
     babel-loader: "npm:^9.2.1"
     copy-webpack-plugin: "npm:^13.0.0"
-    crxbox: "file:/Users/gilgo/Projects/crxbox/crxbox-0.2.1.tgz"
+    crxbox: "npm:^1.0.0"
     css-loader: "npm:^7.1.2"
     eslint: "npm:^9.18.0"
     eslint-plugin-jest: "npm:^28.10.0"
