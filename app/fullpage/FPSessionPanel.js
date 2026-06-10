@@ -3,7 +3,6 @@ import { MdClose, MdExpandLess, MdExpandMore, MdHistory, MdOpenInNew, MdSearch, 
 import TimeAgo from 'javascript-time-ago';
 import { getColorCode } from '../utils';
 import { highlightText } from '../utils/searchUtils';
-import { browser } from '../../static/globals';
 import { showErrorToast } from '../toastHelpers';
 import { restoreBrowserSession } from '../utils/browserSessions';
 import ClickableTabUrl from './ClickableTabUrl';
@@ -334,7 +333,7 @@ function FPSessionPanel({
                         {tabSearch?.trim() && visibleTabs.length > 0 ? (
                             <div className="search-results-indicator" onClick={(event) => event.stopPropagation()}>
                                 <span className="search-results-text">
-                                    Showing {visibleTabs.length} of {tabCount} tab{tabCount !== 1 ? 's' : ''} matching "{tabSearch}"
+                                    Showing {visibleTabs.length} of {tabCount} tab{tabCount !== 1 ? 's' : ''} matching &quot;{tabSearch}&quot;
                                 </span>
                             </div>
                         ) : null}
@@ -366,7 +365,7 @@ function FPSessionPanel({
                             </div>
                         ) : tabSearch?.trim() ? (
                             <div className="current-window-empty">
-                                <p>No tabs match "{tabSearch}" in this session window.</p>
+                                <p>No tabs match &quot;{tabSearch}&quot; in this session window.</p>
                             </div>
                         ) : (
                             <div className="current-window-empty">

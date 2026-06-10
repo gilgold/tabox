@@ -6,7 +6,6 @@
 import { showUndoToast, showSuccessToast } from '../toastHelpers';
 import { UNDO_TIME } from '../constants';
 import { FaTrash } from 'react-icons/fa';
-import { browser } from '../../static/globals';
 import TaboxFolder from '../model/TaboxFolder';
 import TaboxCollection from '../model/TaboxCollection';
 import { generateCopyName, applyUid } from '../utils';
@@ -163,7 +162,7 @@ export const deleteFolder = async (folderId, force = false, deleteCollections = 
         // Check if folder has collections
         const collectionsIndex = await loadCollectionsIndex();
         const collectionsInFolder = Object.entries(collectionsIndex)
-            .filter(([uid, meta]) => meta.parentId === folderId)
+            .filter(([, meta]) => meta.parentId === folderId)
             .map(([uid, meta]) => ({ uid, ...meta }));
 
         if (collectionsInFolder.length > 0 && !force) {

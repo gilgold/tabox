@@ -178,7 +178,7 @@ export function initializeDeferredLoading({
                 try {
                     const urlObj = new URL(sanitizedUrl);
                     link.href = `https://www.google.com/s2/favicons?domain=${urlObj.hostname}&sz=32`;
-                } catch (error) {
+                } catch {
                     link.href = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">📄</text></svg>';
                 }
             }
@@ -187,7 +187,7 @@ export function initializeDeferredLoading({
         try {
             const urlObj = new URL(sanitizedUrl);
             doc.title = `${urlObj.hostname} (click to load)`;
-        } catch (error) {
+        } catch {
             doc.title = 'Click to load content';
         }
 

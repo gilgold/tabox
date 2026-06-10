@@ -1,5 +1,4 @@
 /** @jest-environment jsdom */
-import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import CollectionDeleteConfirmModal from '../app/CollectionDeleteConfirmModal';

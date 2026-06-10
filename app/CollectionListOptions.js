@@ -178,7 +178,11 @@ export function CollectionListOptions(props) {
         });
         
         // Update UI with reloaded collections (they should already be sorted correctly)
-        const cleanedData = reloadedCollections.map(({ order, ...rest }) => rest);
+        const cleanedData = reloadedCollections.map((collection) => {
+            const rest = { ...collection };
+            delete rest.order;
+            return rest;
+        });
         await props.updateRemoteData(cleanedData);
         
         // Save both sort type AND direction

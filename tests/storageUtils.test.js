@@ -393,9 +393,13 @@ describe('saveSingleCollection', () => {
 
 describe('atomicStorageTransaction', () => {
     let store;
+    let errorSpy;
 
     beforeEach(() => {
         jest.clearAllMocks();
+        // The transaction helper intentionally logs console.error when it
+        // rolls back — the failure tests below exercise exactly that path.
+        errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
         store = {
             collections_index: { a: { name: 'A' } },
@@ -429,6 +433,10 @@ describe('atomicStorageTransaction', () => {
         });
     });
 
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
     test('commits changes when the transaction succeeds', async () => {
         const result = await atomicStorageTransaction(async () => {
             await browser.storage.local.set({ collection_b: { uid: 'b', tabs: [] } });
@@ -456,6 +464,7 @@ describe('atomicStorageTransaction', () => {
         expect(store.collections_index).toEqual({ a: { name: 'A' } });
         // The destructive clear() path must never be taken.
         expect(browser.storage.local.clear).not.toHaveBeenCalled();
+        expect(errorSpy).toHaveBeenCalledWith('Transaction failed, rolling back:', expect.any(Error));
     });
 
     test('never wipes live data when the pre-transaction snapshot is empty', async () => {

@@ -528,7 +528,7 @@ function FPCurrentWindowPanel({
                         {tabSearch?.trim() && visibleTabs.length > 0 ? (
                             <div className="search-results-indicator" onClick={(event) => event.stopPropagation()}>
                                 <span className="search-results-text">
-                                    Showing {visibleTabs.length} of {tabCount} tab{tabCount !== 1 ? 's' : ''} matching "{tabSearch}"
+                                    Showing {visibleTabs.length} of {tabCount} tab{tabCount !== 1 ? 's' : ''} matching &quot;{tabSearch}&quot;
                                 </span>
                             </div>
                         ) : null}
@@ -568,7 +568,7 @@ function FPCurrentWindowPanel({
                             </div>
                         ) : tabSearch?.trim() ? (
                             <div className="current-window-empty">
-                                <p>No tabs match "{tabSearch}" in this window.</p>
+                                <p>No tabs match &quot;{tabSearch}&quot; in this window.</p>
                             </div>
                         ) : (
                             <div className="current-window-empty">

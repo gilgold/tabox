@@ -488,9 +488,6 @@ class MigrationCoordinator {
   async migrateTimestamps(data) {
     try {
       
-      let migratedCollections = 0;
-      let migratedFolders = 0;
-      
       // Migrate collections
       if (data.tabsArray && Array.isArray(data.tabsArray)) {
         
@@ -499,8 +496,7 @@ class MigrationCoordinator {
           if (collection.lastUpdated === null || collection.lastUpdated === undefined) {
             // Use createdOn as fallback, or current time if that's missing too
             const fallbackTime = collection.createdOn || Date.now();
-            migratedCollections++;
-            
+
             return {
               ...collection,
               lastUpdated: fallbackTime,
@@ -529,7 +525,6 @@ class MigrationCoordinator {
               ...folder,
               lastUpdated: fallbackTime
             };
-            migratedFolders++;
           }
         });
       }
@@ -643,30 +638,19 @@ class MigrationCoordinator {
     }
 
     
-    let foundOldColors = false;
-    let checkedCollections = 0;
-    let colorsFound = 0;
-    
     // Check if any collection has old hex colors that need migration
     const needsMigration = data.tabsArray.some(collection => {
-      checkedCollections++;
-      
       // Check main collection color
       if (collection.color) {
-        colorsFound++;
-        
         if (collection.color.startsWith('#')) {
           // If it's a hex code that's not in our new palette values, it needs migration
           const isNewColor = Object.values(COLOR_PALETTE).includes(collection.color);
           if (!isNewColor) {
-            foundOldColors = true;
             return true;
-          } else {
           }
         } else {
           // Check if it's an unknown color name that's not in our palette
           if (!COLOR_PALETTE[collection.color] && !collection.color.startsWith('var(--')) {
-            foundOldColors = true;
             return true;
           }
         }
@@ -680,11 +664,9 @@ class MigrationCoordinator {
             if (group.color.startsWith('#')) {
               const isNewColor = Object.values(COLOR_PALETTE).includes(group.color);
               if (!isNewColor) {
-                foundOldColors = true;
                 return true;
               }
             } else if (!COLOR_PALETTE[group.color] && !group.color.startsWith('var(--')) {
-              foundOldColors = true;
               return true;
             }
           }
@@ -829,8 +811,8 @@ class MigrationCoordinator {
       await cleanupOldBackups(maxBackups, maxAge);
       
       // Check final size
-      const finalStats = await getStorageStats();
-      
+      await getStorageStats();
+
     } catch (error) {
       console.error('Safe backup cleanup failed:', error);
     }

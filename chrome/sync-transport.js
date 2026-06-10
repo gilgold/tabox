@@ -24,7 +24,7 @@ const buildTimestampResult = (status, timestamp = null) => ({
 async function safeReadJson(response) {
     try {
         return await response.json();
-    } catch (error) {
+    } catch {
         return null;
     }
 }
@@ -43,7 +43,7 @@ async function fetchServerFileTimestampState({ token, fileId, fetchImpl = fetch 
     let mediaResponse;
     try {
         mediaResponse = await fetchImpl(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, init);
-    } catch (error) {
+    } catch {
         return buildTimestampResult(SERVER_FILE_TIMESTAMP_STATE.UNAVAILABLE);
     }
 
@@ -62,7 +62,7 @@ async function fetchServerFileTimestampState({ token, fileId, fetchImpl = fetch 
             `https://www.googleapis.com/drive/v3/files/${fileId}?alt=json&fields=modifiedByMeTime`,
             init
         );
-    } catch (error) {
+    } catch {
         return buildTimestampResult(SERVER_FILE_TIMESTAMP_STATE.UNAVAILABLE);
     }
 

@@ -556,7 +556,7 @@ describe('sync apply module', () => {
             folders_index: {}
         });
         let removeCount = 0;
-        storageArea.remove.mockImplementation(async (keys) => {
+        storageArea.remove.mockImplementation(async () => {
             removeCount += 1;
 
             if (removeCount === 1) {

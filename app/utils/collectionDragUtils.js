@@ -19,7 +19,7 @@ const DROP_TARGET_POSITION = Object.freeze({
 const normalizeTabs = (collection) => Array.isArray(collection?.tabs) ? collection.tabs : [];
 const normalizeGroups = (collection) => Array.isArray(collection?.chromeGroups) ? collection.chromeGroups : [];
 
-const escapeRegex = (value) => value.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+const escapeRegex = (value) => value.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
 
 const buildGroupTabsMap = (tabs) => {
     const groupTabsMap = new Map();

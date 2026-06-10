@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState, useEffectEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { useAtom, useAtomValue } from 'jotai';
+import { useAtom } from 'jotai';
 import {
     DndContext,
     DragOverlay,
@@ -741,7 +741,7 @@ function ExpandedCollectionData(props) {
                 {props.search && props.search.trim() && dragModel.visibleTabs.length > 0 ? (
                     <div className="search-results-indicator" onClick={(event) => event.stopPropagation()}>
                         <span className="search-results-text">
-                            Showing {dragModel.visibleTabs.length} of {baseCollection.tabs.length} tab{dragModel.visibleTabs.length !== 1 ? 's' : ''} matching "{props.search}"
+                            Showing {dragModel.visibleTabs.length} of {baseCollection.tabs.length} tab{dragModel.visibleTabs.length !== 1 ? 's' : ''} matching &quot;{props.search}&quot;
                         </span>
                     </div>
                 ) : null}
@@ -822,7 +822,7 @@ function ExpandedCollectionData(props) {
                     }) : (
                         emptySearchState ? (
                             <div className="no-matching-tabs-message" onClick={(event) => event.stopPropagation()}>
-                                <p>No tabs match "{props.search}" in this collection.</p>
+                                <p>No tabs match &quot;{props.search}&quot; in this collection.</p>
                             </div>
                         ) : null
                     )}

@@ -308,7 +308,7 @@ function FPSidebar({
             };
             downloadTextFile(JSON.stringify(exportData, null, 2), `${folder.name || 'folder'}_export`);
             showSuccessToast('Folder exported');
-        } catch (err) {
+        } catch {
             showErrorToast('Export failed');
         }
     }, [ctxMenu, closeCtxMenu]);

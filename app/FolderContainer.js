@@ -590,7 +590,6 @@ function FolderContainer({
             const failedCollections = [];
 
             const displays = await browser.system.display.getInfo();
-            const primaryDisplay = displays.find(d => d.isPrimary) || displays[0];
 
             for (const collection of collectionsToOpen) {
                 try {

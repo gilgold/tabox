@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import { useRef } from 'react';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { renderWithProviders } from './helpers/renderWithProviders';

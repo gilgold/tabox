@@ -6,8 +6,12 @@ import { browser } from '../static/globals';
 import { withDataSafetyGuard } from '../app/utils/migrationSafety';
 
 let store;
+let errorSpy;
 beforeEach(() => {
     jest.clearAllMocks();
+    // The guard intentionally logs console.error when it restores a snapshot;
+    // most tests below exercise exactly those failure paths.
+    errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     store = {
         collections_index: { a: { name: 'A' }, b: { name: 'B' } },
         collection_a: { uid: 'a', name: 'A', tabs: [{ url: 'x' }, { url: 'y' }] },
@@ -26,6 +30,10 @@ beforeEach(() => {
     browser.storage.local.remove.mockImplementation(async (keys) => {
         (Array.isArray(keys) ? keys : [keys]).forEach((k) => delete store[k]);
     });
+});
+
+afterEach(() => {
+    jest.restoreAllMocks();
 });
 
 test('commits and returns fn result when invariant holds', async () => {
@@ -48,6 +56,7 @@ test('restores snapshot and reports failure when a collection is dropped', async
     expect(result.restored).toBe(true);
     expect(store.collection_b).toEqual({ uid: 'b', name: 'B', tabs: [{ url: 'z' }] });
     expect(store.collections_index).toEqual({ a: { name: 'A' }, b: { name: 'B' } });
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('violated data-safety invariant'), expect.anything());
 });
 
 test('restores snapshot and removes keys created during a failed run', async () => {
@@ -69,6 +78,7 @@ test('restores snapshot when fn throws, and returns failure (does not rethrow)',
     expect(result.success).toBe(false);
     expect(result.error).toContain('boom');
     expect(store.collection_a).toBeDefined();
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('threw — restoring snapshot'), expect.any(Error));
 });
 
 test('shrinking tabs of an existing collection triggers restore', async () => {

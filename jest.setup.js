@@ -82,7 +82,7 @@ jest.mock('react-hot-toast', () => ({
 jest.mock('webextension-polyfill', () => mockBrowser);
 
 // Mock ReactDOM.createPortal to render portals inline for testing
-jest.spyOn(ReactDOM, 'createPortal').mockImplementation((element, node) => element);
+jest.spyOn(ReactDOM, 'createPortal').mockImplementation((element) => element);
 
 global.browser = mockBrowser;
 Object.defineProperty(global.browser, "browser", { value: mockBrowser, writable: true });

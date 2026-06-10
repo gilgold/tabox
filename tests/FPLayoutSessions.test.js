@@ -1,5 +1,4 @@
 /* global browser */
-import React from 'react';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { Provider, createStore } from 'jotai';

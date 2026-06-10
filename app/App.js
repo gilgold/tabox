@@ -27,7 +27,7 @@ import {
 } from './atoms/globalAppSettingsState';
 
 import { browser } from '../static/globals';
-import { normalizeColorKey, filterByColors } from './utils/colorMigration';
+import { filterByColors } from './utils/colorMigration';
 import TimeAgo from 'javascript-time-ago';
 import en from 'javascript-time-ago/locale/en';
 import { showSuccessToast, showErrorToast, setToastViewContext } from './toastHelpers';
@@ -38,9 +38,7 @@ import { CollectionListOptions } from './CollectionListOptions';
 import {
     loadAllCollections,
     loadMultipleCollections,
-    loadSingleCollection,
     saveSingleCollection,
-    deleteSingleCollection,
     migrateLegacyStorage,
     getStorageStats as getNewStorageStats,
     batchUpdateCollections,
@@ -234,7 +232,7 @@ if (typeof window !== 'undefined') {
 }
 
 let migrationSystemAvailable = false;
-let assessMigrationNeeds, executeMigration, isDataSafe;
+let assessMigrationNeeds, executeMigration;
 let timeAgoLocaleInitialized = false;
 function App({ mode = 'popup' }) {
   const isFullPage = mode === 'fullpage';
@@ -256,7 +254,7 @@ function App({ mode = 'popup' }) {
   const [filters, setFilters] = useState(DEFAULT_COLLECTION_FILTERS);
   
   // Global tracking state version - incremented when tracking changes
-  const [trackingVersion, setTrackingVersion] = useAtom(trackingStateVersion);
+  const [, setTrackingVersion] = useAtom(trackingStateVersion);
   
   // Mount tracking to prevent memory leaks
   const isMountedRef = useRef(true);
@@ -272,7 +270,7 @@ function App({ mode = 'popup' }) {
   const [lightningEffectFolderUid, setLightningEffectFolderUid] = useState(null);
 
   // Storage performance tracking
-  const [storageStats, setStorageStats] = useState(null);
+  const [, setStorageStats] = useState(null);
   const [trackedCollectionUids, setTrackedCollectionUids] = useState(new Set());
 
   // Folders state management
@@ -484,11 +482,10 @@ function App({ mode = 'popup' }) {
       
       // Load migration functions
       const migrationModule = await import('./utils/migrationCoordinator');
-      const validationModule = await import('./utils/dataValidation');
-      
+      await import('./utils/dataValidation');
+
       assessMigrationNeeds = migrationModule.assessMigrationNeeds;
       executeMigration = migrationModule.executeMigration;
-      isDataSafe = validationModule.isDataSafe;
       
       migrationSystemAvailable = true;
       return true;
@@ -506,13 +503,6 @@ function App({ mode = 'popup' }) {
     const activeWindowIds = (await browser.windows.getAll({ populate: false })).map(c => c.id);
     collectionsToTrack = collectionsToTrack.filter(c => activeWindowIds.includes(c.windowId));
     await browser.storage.local.set({ collectionsToTrack: collectionsToTrack });
-  }
-
-  const applyTheme = async () => {
-    let { theme } = await browser.storage.local.get('theme');
-    theme = theme ? theme : window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    setThemeMode(theme);
-    document.documentElement.setAttribute('data-theme', theme);
   }
 
   // Phase 2: Batch initial storage operations for better performance
@@ -852,7 +842,7 @@ function App({ mode = 'popup' }) {
           let window;
           try {
             window = await browser.windows.getLastFocused({ windowTypes: ['normal'] });
-          } catch (error) {
+          } catch {
             return;
           }
           const index = collectionsToTrack.findIndex(c => c.collectionUid === newCollection.uid);
@@ -1355,7 +1345,7 @@ function App({ mode = 'popup' }) {
       if (!success) {
         throw new Error('Batch update failed');
       }
-    } catch (error) {
+    } catch {
       // Fallback to legacy cleanup
       const { tabsArray } = await browser.storage.local.get('tabsArray');
       if (tabsArray && tabsArray.length > 0) {
@@ -1515,7 +1505,7 @@ function App({ mode = 'popup' }) {
       const metadataTime = performance.now() - startTime;
       
       const fullStartTime = performance.now();
-      const fullCollections = await loadAllCollections({ metadataOnly: false, limit: 10 });
+      await loadAllCollections({ metadataOnly: false, limit: 10 });
       const fullTime = performance.now() - fullStartTime;
       
       const results = {
@@ -1597,16 +1587,6 @@ function App({ mode = 'popup' }) {
 
     setPerformanceSummaryLogged(true);
   }, [performanceDataReady, performanceSummaryLogged]);
-
-  const getSelectedSort = async () => {
-    const { currentSortValue } = await browser.storage.local.get('currentSortValue');
-    setSortValue(currentSortValue);
-  }
-
-  const getSelectedViewMode = async () => {
-    const { collectionViewMode } = await browser.storage.local.get('collectionViewMode');
-    setViewMode(collectionViewMode || 'list');
-  }
 
   useEffect(() => {
     // Only load data if not already loaded and user is logged in

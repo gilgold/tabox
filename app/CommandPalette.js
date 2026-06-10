@@ -84,7 +84,7 @@ function CommandPalette({
     onCollectionAction,
 }) {
     const [isOpen, setIsOpen] = useAtom(commandPaletteOpenState);
-    const [themeMode, setThemeMode] = useAtom(themeState);
+    const [, setThemeMode] = useAtom(themeState);
     const viewContext = useAtomValue(viewContextState);
     const isFullPage = viewContext === 'fullpage';
     const [query, setQuery] = useState('');
@@ -338,7 +338,7 @@ function CommandPalette({
         }
 
         if (settingKey === 'chkShowBadge') {
-            try { await browser.runtime.sendMessage({ type: 'updateBadge' }); } catch (_) { /* noop */ }
+            try { await browser.runtime.sendMessage({ type: 'updateBadge' }); } catch { /* noop */ }
         }
     }, [settingValues, setThemeMode]);
 

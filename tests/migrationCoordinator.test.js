@@ -46,6 +46,7 @@ describe('migrationCoordinator', () => {
     let colorMigration;
     let migrationCoordinator;
     let MIGRATION_CONFIG;
+    let errorSpy;
 
     const loadModule = () => {
         ({ migrationCoordinator, MIGRATION_CONFIG } = require('../app/utils/migrationCoordinator.js'));
@@ -54,6 +55,10 @@ describe('migrationCoordinator', () => {
     beforeEach(() => {
         jest.resetModules();
         jest.clearAllMocks();
+
+        // The coordinator intentionally logs console.error on the rollback and
+        // failed-step paths exercised below; silence and assert where relevant.
+        errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
         storageUtils = require('../app/utils/storageUtils.js');
         dataValidation = require('../app/utils/dataValidation.js');
@@ -292,6 +297,7 @@ describe('migrationCoordinator', () => {
             rollbackSuccess: true,
         }));
         expect(backupUtils.executeRollback).toHaveBeenCalledWith('chain-1');
+        expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Migration failed, executing rollback'));
     });
 
     test('clears stale migration locks older than 30 minutes', async () => {
@@ -340,6 +346,7 @@ describe('migrationCoordinator', () => {
             success: false,
             error: 'Migration step timestamp_migration failed',
         }));
+        expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('atomic transaction returned false'));
     });
 
     test('migrates colors using the shared color migration helper', async () => {

@@ -24,7 +24,7 @@ function CollectionTile(props) {
     const setHighlightedCollectionUid = useSetAtom(highlightedCollectionUidState);
     const deletingCollectionUids = useAtomValue(deletingCollectionUidsState);
     const setDeletingCollectionUids = useSetAtom(deletingCollectionUidsState);
-    const [collectionName, setCollectionName] = useState(props.collection.name);
+    const [collectionName] = useState(props.collection.name);
     const [isAutoUpdate, setIsAutoUpdate] = useState(false);
     const mountedRef = useRef(true);
     const tileRef = useRef(null);
@@ -42,7 +42,6 @@ function CollectionTile(props) {
         _exportCollectionToFile,
         _handleUpdate,
         _handleOpenTabs,
-        _handleFocusWindow,
         _handleStopTracking
     } = useCollectionOperations({
         collection: props.collection,
@@ -67,7 +66,7 @@ function CollectionTile(props) {
             await copyToClipboard(urlList);
             const count = urlList.split('\n').length;
             showSuccessToast(`${count} URL${count === 1 ? '' : 's'} copied`);
-        } catch (error) {
+        } catch {
             showErrorToast('Failed to copy URLs');
         }
     }, [props.collection]);
@@ -154,7 +153,7 @@ function CollectionTile(props) {
     const formatTimeAgo = (timestamp) => {
         try {
             return timeAgo.format(new Date(timestamp));
-        } catch (error) {
+        } catch {
             return 'Recently';
         }
     };
@@ -171,7 +170,7 @@ function CollectionTile(props) {
 
     // Helper function to escape regex special characters
     const escapeRegex = (string) => {
-        return string.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+        return string.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
     };
 
     // Highlight matching text in collection name for search

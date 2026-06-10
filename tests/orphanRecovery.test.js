@@ -114,6 +114,8 @@ describe('recoverOrphanedCollections', () => {
     });
 
     test('rolls back via the data-safety guard if the write throws', async () => {
+        // The data-safety guard intentionally logs console.error when it restores.
+        const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
         store = makeStore({
             collections_index: { live: { name: 'Live', type: 'collection' } },
             collection_live: { uid: 'live', name: 'Live', tabs: [] },
@@ -132,5 +134,7 @@ describe('recoverOrphanedCollections', () => {
 
         expect(result.success).toBe(false);
         expect(store.collections_index).toEqual(indexBefore);          // unchanged after rollback
+        expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('threw — restoring snapshot'), expect.any(Error));
+        errorSpy.mockRestore();
     });
 });

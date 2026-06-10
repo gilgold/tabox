@@ -4,9 +4,13 @@ const { createVersion40LocalSnapshot, createVersion40RemoteDocument } = require(
 describe('sync atomic apply integration', () => {
     let browser;
     let backgroundUtils;
+    let errorSpy;
 
     beforeEach(() => {
         jest.resetModules();
+        // The sync logger intentionally emits console.error when the atomic
+        // apply fails and rolls back — the path under test.
+        errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
         browser = createBrowserHarness();
         global.browser = browser;
         global.chrome = { runtime: browser.runtime };
@@ -14,6 +18,7 @@ describe('sync atomic apply integration', () => {
     });
 
     afterEach(() => {
+        jest.restoreAllMocks();
         delete global.browser;
         delete global.chrome;
     });
@@ -49,5 +54,8 @@ describe('sync atomic apply integration', () => {
                 message: 'Applying normalized 4.0 sync data'
             })
         ]));
+        expect(errorSpy).toHaveBeenCalledWith(
+            expect.stringContaining('Atomic sync apply failed')
+        );
     });
 });

@@ -1,5 +1,4 @@
 /* global browser */
-import React from 'react';
 import fs from 'fs';
 import path from 'path';
 import { act, render, screen } from '@testing-library/react';

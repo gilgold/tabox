@@ -134,6 +134,10 @@ module.exports = [
   {
     files: ["tests/**/*.js", "**/*.test.js", "__mocks__/**/*.js", "jest.setup.js"],
     ...jest.configs["flat/recommended"],
+    plugins: {
+      ...jest.configs["flat/recommended"].plugins,
+      react,
+    },
     languageOptions: {
       ecmaVersion: 2021,
       sourceType: "module",
@@ -154,6 +158,9 @@ module.exports = [
       // Many test files also declare these via legacy `/* global */`
       // comments, which would otherwise collide with the config globals above.
       "no-redeclare": "off",
+      // Without this, no-unused-vars can't see that imports are used as JSX
+      // elements in test render calls.
+      "react/jsx-uses-vars": "error",
       ...relaxedStyleRules,
     },
   },

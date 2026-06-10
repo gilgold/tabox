@@ -1,5 +1,4 @@
 /** @jest-environment jsdom */
-import React from 'react';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import CollectionTile from '../app/CollectionTile';

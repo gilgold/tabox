@@ -1,4 +1,3 @@
-const React = require('react');
 const { render, screen, fireEvent, waitFor, cleanup } = require('@testing-library/react');
 require('@testing-library/jest-dom');
 const { Provider, createStore } = require('jotai');
@@ -25,7 +24,6 @@ jest.mock('../app/CollectionList', () => () => null);
 jest.mock('../app/Footer', () => () => null);
 jest.mock('../app/fullpage/FPLayout', () => () => null);
 jest.mock('../app/CommandPalette', () => {
-    const React = require('react');
 
     return function MockCommandPalette({ onCollectionAction }) {
         return (

@@ -14,6 +14,11 @@ describe('background openTabs marks collection as recently opened', () => {
     beforeEach(() => {
         jest.resetModules();
 
+        // postOpenTasks logs an expected console.error here: the harness does not
+        // define applyChromeGroupSettings (chrome-group handling is out of scope
+        // for these tests), and background.js catches and logs that failure.
+        jest.spyOn(console, 'error').mockImplementation(() => {});
+
         browser = createBrowserHarness();
 
         global.browser = browser;
@@ -31,6 +36,7 @@ describe('background openTabs marks collection as recently opened', () => {
     });
 
     afterEach(() => {
+        jest.restoreAllMocks();
         Object.keys(bgUtils || {}).forEach((key) => {
             if (typeof global[key] === 'function') {
                 delete global[key];

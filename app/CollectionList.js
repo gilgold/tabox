@@ -5,15 +5,12 @@ import { themeState, searchState, detailPanelOpenState, selectedCollectionUidSta
 import { sidebarNavigationState } from './atoms/fullpageState';
 import { dragSessionState } from './atoms/animationsState';
 import { BsSearch } from 'react-icons/bs';
-import { browser } from '../static/globals';
 import CollapsableSection from './CollapsableSection';
 import CollectionDetailPanel from './CollectionDetailPanel';
 import {
     DndContext,
-    closestCenter,
     closestCorners,
     pointerWithin,
-    rectIntersection,
     PointerSensor,
     useSensor,
     useSensors,
@@ -39,8 +36,6 @@ import {
 import useCollectionItemCrossDrag from './useCollectionItemCrossDrag';
 import { persistCollectionLayoutChanges } from './utils/sharedCollectionSync';
 import { dndPointerSensorOptions } from './utils/dndShared';
-
-const LIST_ROW_HEIGHT = 76;
 
 const reindexCollectionSiblings = (collections, parentId) => (
     collections.map((collection, order) => ({
@@ -83,6 +78,7 @@ const areCollectionItemPropsEqual = (prev, next) => {
 const MemoizedSortableCollectionItem = React.memo((props) => (
     <SortableCollectionItem {...props} />
 ), areCollectionItemPropsEqual);
+MemoizedSortableCollectionItem.displayName = 'MemoizedSortableCollectionItem';
 
 const areCollectionTilePropsEqual = (prev, next) => {
     return (
@@ -100,6 +96,7 @@ const areCollectionTilePropsEqual = (prev, next) => {
 const MemoizedSortableCollectionTile = React.memo((props) => (
     <SortableCollectionTile {...props} />
 ), areCollectionTilePropsEqual);
+MemoizedSortableCollectionTile.displayName = 'MemoizedSortableCollectionTile';
 
 function CollectionList({
     collections = [],
@@ -822,7 +819,7 @@ function CollectionList({
             } else if (draggedItem.parentId && targetItem.parentId && draggedItem.parentId !== targetItem.parentId) {
                 // Moving collection from one folder to another folder (dropped on collection in target folder)
                 try {
-                    const success = await moveCollectionToFolder(draggedItem.uid, targetItem.parentId);
+                    await moveCollectionToFolder(draggedItem.uid, targetItem.parentId);
                     
                     if (props.onDataUpdate) {
                         props.onDataUpdate();

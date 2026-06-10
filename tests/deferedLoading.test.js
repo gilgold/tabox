@@ -296,8 +296,16 @@ describe('deferedLoading - sanitizeUrl: valid URLs with special characters', () 
 describe('deferedLoading - sanitizeUrl: rejects dangerous / malformed input', () => {
     let deferedLoading;
     beforeEach(() => {
+        // sanitizeUrl warns ("URL sanitization failed") for inputs that throw in
+        // `new URL` — expected for the malformed inputs below; the assertion is
+        // on the "#" return value, not the log.
+        jest.spyOn(console, 'warn').mockImplementation(() => {});
         window.history.replaceState({}, '', `/deferedLoading.html#${encodeHash({ url: 'https://example.com/', favicon: '' })}`);
         deferedLoading = loadModule();
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
     });
 
     test.each([

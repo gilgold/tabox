@@ -90,7 +90,7 @@ function FolderDeleteConfirmModal({
                 {/* Body */}
                 <div className="delete-confirm-modal-body">
                     <p className="delete-confirm-question">
-                        Are you sure you want to delete the folder <strong>"{folderName}"</strong>?
+                        Are you sure you want to delete the folder <strong>&quot;{folderName}&quot;</strong>?
                     </p>
                     
                     <div className="delete-confirm-warning-box">
@@ -101,7 +101,7 @@ function FolderDeleteConfirmModal({
                             {deleteCollections ? (
                                 <>Deleting this folder will <strong style={{ color: '#DC2626' }}>also delete all collections</strong> inside it.</>
                             ) : (
-                                <>Deleting this folder will <strong>move all collections to the root level</strong> (they won't be deleted).</>
+                                <>Deleting this folder will <strong>move all collections to the root level</strong> (they won&apos;t be deleted).</>
                             )}
                         </p>
                     </div>

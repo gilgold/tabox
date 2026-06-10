@@ -315,7 +315,7 @@ describe('Collection Sync', () => {
 
             // Verify folder 1 collections have correct order
             const f1Cols = Object.entries(index)
-                .filter(([_, meta]) => meta.parentId === 'folder-1')
+                .filter(([, meta]) => meta.parentId === 'folder-1')
                 .sort((a, b) => a[1].order - b[1].order);
             
             expect(f1Cols[0][0]).toBe('f1-c1');
@@ -323,7 +323,7 @@ describe('Collection Sync', () => {
 
             // Verify folder 2 collections have correct order
             const f2Cols = Object.entries(index)
-                .filter(([_, meta]) => meta.parentId === 'folder-2')
+                .filter(([, meta]) => meta.parentId === 'folder-2')
                 .sort((a, b) => a[1].order - b[1].order);
             
             expect(f2Cols[0][0]).toBe('f2-c1');
@@ -713,12 +713,6 @@ describe('Sync Flow Integration', () => {
 
         test('should handle reorder then sync correctly', async () => {
             // Initial order: c1=0, c2=1, c3=2 (all in folder-1)
-            const initialIndex = {
-                'c1': { name: 'C1', order: 0, parentId: 'folder-1' },
-                'c2': { name: 'C2', order: 1, parentId: 'folder-1' },
-                'c3': { name: 'C3', order: 2, parentId: 'folder-1' }
-            };
-
             // User reorders: c3 moves to position 0
             // New order should be: c3=0, c1=1, c2=2
             const reorderedIndex = {
@@ -729,7 +723,7 @@ describe('Sync Flow Integration', () => {
 
             // Verify the reorder is correct
             const sorted = Object.entries(reorderedIndex)
-                .filter(([_, meta]) => meta.parentId === 'folder-1')
+                .filter(([, meta]) => meta.parentId === 'folder-1')
                 .sort((a, b) => a[1].order - b[1].order)
                 .map(([uid]) => uid);
 
@@ -1210,10 +1204,6 @@ describe('UI State Updates After Sync', () => {
 
     describe('collections list updates', () => {
         test('should reflect new collections after sync', () => {
-            const existingCollections = [
-                createMockCollection({ uid: 'c1', name: 'Existing 1' })
-            ];
-
             const serverCollections = [
                 createMockCollection({ uid: 'c1', name: 'Existing 1' }),
                 createMockCollection({ uid: 'c2', name: 'New from sync' })
@@ -1291,10 +1281,6 @@ describe('UI State Updates After Sync', () => {
 
     describe('folders list updates', () => {
         test('should reflect new folders after sync', () => {
-            const existingFolders = [
-                createMockFolder({ uid: 'f1', name: 'Folder 1' })
-            ];
-
             const serverFolders = [
                 createMockFolder({ uid: 'f1', name: 'Folder 1' }),
                 createMockFolder({ uid: 'f2', name: 'New Folder' })
@@ -1323,11 +1309,6 @@ describe('UI State Updates After Sync', () => {
         });
 
         test('should reflect folder order change after sync', () => {
-            const existingFolders = [
-                createMockFolder({ uid: 'f1', name: 'First', order: 0 }),
-                createMockFolder({ uid: 'f2', name: 'Second', order: 1 })
-            ];
-
             // Server has reordered folders
             const serverFolders = [
                 createMockFolder({ uid: 'f2', name: 'Second', order: 0 }),

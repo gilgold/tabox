@@ -16,8 +16,15 @@ const dataValidation = require('../app/utils/dataValidation.js');
 const backupUtils = require('../app/utils/backupUtils.js');
 
 describe('backupUtils', () => {
+    let warnSpy;
+    let errorSpy;
+
     beforeEach(() => {
         jest.clearAllMocks();
+        // backupUtils intentionally logs warnings/errors on the size-limit and
+        // failure paths exercised below; silence them and assert where relevant.
+        warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+        errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
         jest.useFakeTimers();
         jest.setSystemTime(new Date('2026-03-31T12:00:00Z'));
 
@@ -39,6 +46,7 @@ describe('backupUtils', () => {
 
     afterEach(() => {
         jest.useRealTimers();
+        jest.restoreAllMocks();
     });
 
     test('creates a full backup and updates the backup index', async () => {
@@ -89,6 +97,7 @@ describe('backupUtils', () => {
                 }),
             }),
         });
+        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Data is large'));
     });
 
     test('skips backup creation when storage is already too large', async () => {
@@ -103,6 +112,7 @@ describe('backupUtils', () => {
             reason: 'Storage too large',
         }));
         expect(storageUtils.safeStorageSet).not.toHaveBeenCalled();
+        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Storage is already large'));
     });
 
     test('retries with a minimal backup when the full backup hits quota limits', async () => {
@@ -117,6 +127,7 @@ describe('backupUtils', () => {
             minimal: true,
         }));
         expect(storageUtils.safeStorageSet).toHaveBeenCalledTimes(2);
+        expect(errorSpy).toHaveBeenCalledWith('Backup creation failed:', expect.any(Error));
     });
 
     test('restores a backup after creating an emergency backup of the current state', async () => {
@@ -161,6 +172,7 @@ describe('backupUtils', () => {
         expect(storageUtils.safeStorageSet).not.toHaveBeenCalledWith({
             tabsArray: [],
         });
+        expect(errorSpy).toHaveBeenCalledWith('Backup restoration failed:', expect.any(Error));
     });
 
     test('lists backups by type and sorts them newest first', async () => {
