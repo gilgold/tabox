@@ -106,6 +106,19 @@ jobs:
         run: |
           set -euo pipefail
 
+          # The store rejects re-uploads of an already-published version, so
+          # skip the publish entirely when the live version matches. The live
+          # version comes from Chrome's public update service; if the lookup
+          # fails we fall through and let the store API be the judge.
+          MANIFEST_VERSION=$(jq -r .version build/manifest.json)
+          LIVE_VERSION=$(curl -sS "https://clients2.google.com/service/update2/crx?response=updatecheck&acceptformat=crx3&prodversion=140&x=id%3D${EXTENSION_ID}%26uc" \
+            | sed -n 's/.*updatecheck[^>]*version="\([0-9.]*\)".*/\1/p' || true)
+          if [ -n "${LIVE_VERSION}" ] && [ "${LIVE_VERSION}" = "${MANIFEST_VERSION}" ]; then
+            echo "Chrome Web Store already has version ${LIVE_VERSION}; skipping publish."
+            exit 0
+          fi
+          echo "Manifest version ${MANIFEST_VERSION}, live version ${LIVE_VERSION:-unknown} — publishing."
+
           echo "Requesting OAuth access token..."
           ACCESS_TOKEN=$(curl -sS --fail "https://oauth2.googleapis.com/token" \
             -d "client_id=${CLIENT_ID}" \
@@ -153,12 +166,26 @@ jobs:
           EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
           EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID }}
           API_ROOT: https://api.addons.microsoftedge.microsoft.com
+          # Public Edge Add-ons listing id (crx id, not the product GUID).
+          EDGE_STORE_ID: ekkmpemnpkaecapbjcgidkflglondcem
         run: |
           set -euo pipefail
 
           if [ -z "${EDGE_CLIENT_ID}" ] || [ -z "${EDGE_API_KEY}" ] || [ -z "${EDGE_PRODUCT_ID}" ]; then
             echo "EDGE_CLIENT_ID / EDGE_API_KEY / EDGE_PRODUCT_ID secrets are missing or empty"; exit 1
           fi
+
+          # Skip when the listing already carries this version (re-submitting
+          # would be rejected anyway). Note the listing lags while a previous
+          # submission is still in review, so this only catches the
+          # fully-published case; lookup failures fall through to the API.
+          MANIFEST_VERSION=$(jq -r .version build/manifest.json)
+          LIVE_VERSION=$(curl -sS "https://microsoftedge.microsoft.com/addons/getproductdetailsbycrxid/${EDGE_STORE_ID}" | jq -r '.version // empty' || true)
+          if [ -n "${LIVE_VERSION}" ] && [ "${LIVE_VERSION}" = "${MANIFEST_VERSION}" ]; then
+            echo "Edge Add-ons already has version ${LIVE_VERSION}; skipping publish."
+            exit 0
+          fi
+          echo "Manifest version ${MANIFEST_VERSION}, live version ${LIVE_VERSION:-unknown} — publishing."
 
           poll_operation() {
             # $1 = operation status URL; polls until the API reports a
