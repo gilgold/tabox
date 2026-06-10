@@ -56,10 +56,13 @@ extension pages.
 | `app/TabSwitcher.js` + `.css` | The switcher modal. Portal-rendered into `document.body`, mounted once in `App.js` so popup and full page share it. |
 | `app/TabSwitcherButton.js` | Shared header trigger button. |
 | `app/atoms/tabSwitcherState.js` | `tabSwitcherOpenState` atom. |
-| `app/utils/tabSwitcherUtils.js` | Pure functions: flatten windows→tab entries, MRU sort, search/score, match-range computation, window labels. Unit-tested. |
-| `app/HighlightedText.js` | Extracted from `CommandPalette.js`'s inline `ResultRow` highlighting; consumed by both CommandPalette and TabSwitcher. |
-| `app/hooks/useListNavigation.js` | Arrow/Enter/Escape/Home/End + hover-follows-selection list navigation hook; used by TabSwitcher (CommandPalette may adopt it later, not required in this change). |
-| `chrome/thumbnailCapture.js` | Background-side thumbnail capture pipeline (imported by `background.js`). |
+| `app/utils/tabSwitcherUtils.js` | Pure functions: flatten windows→tab entries, MRU sort, search/score, window labels. Unit-tested. |
+| `app/useListNavigation.js` | Arrow/Enter/Escape/Home/End + hover-follows-selection list navigation hook; used by TabSwitcher (CommandPalette may adopt it later, not required in this change). Lives flat in `app/` per codebase convention. |
+| `chrome/thumbnail-capture.js` | Background-side thumbnail capture pipeline (loaded by `background.js` via `importScripts`, like the sync modules). |
+
+(Planning note: match highlighting needs no extraction — `highlightText` in
+`app/utils/searchUtils.js` is already shared and parameterized by class name;
+TabSwitcher reuses it directly.)
 
 ### Shared-code rules
 
@@ -137,9 +140,11 @@ muted badge on the right of each row.
 
 ### Capture pipeline (background)
 
-- `chrome/thumbnailCapture.js`, active only when the `<all_urls>` origin
-  permission has been granted (checked via `browser.permissions.contains`,
-  re-checked on `browser.permissions.onAdded/onRemoved`).
+- `chrome/thumbnail-capture.js`. Listeners are attached synchronously at
+  service-worker startup (MV3 only wakes the worker for synchronously
+  registered listeners); each capture first checks
+  `browser.permissions.contains({ origins: ['<all_urls>'] })` and no-ops
+  cheaply when not granted.
 - Captures the visible tab on `tabs.onActivated`, `tabs.onUpdated`
   (status `complete` on the active tab), and `windows.onFocusChanged`,
   debounced ≥600ms per tab to stay under `captureVisibleTab`'s
@@ -179,8 +184,8 @@ preview below. Full page: ~640px panel + side preview. Subtle open transition
 - **Tab closed externally while open:** action fails gracefully → row removed,
   list refreshed.
 - **Stale thumbnails:** shown as-is; recaptured next time the tab is active.
-- **Permission revoked at runtime:** capture pipeline detaches listeners and
-  the cache is cleared.
+- **Permission revoked at runtime:** the thumbnail cache is cleared; capture
+  listeners stay attached but no-op (per-capture permission check).
 - **chrome:// / Web Store pages:** capture fails silently (no host access even
   with `<all_urls>`); fallback card covers them.
 
@@ -212,6 +217,8 @@ preview below. Full page: ~640px panel + side preview. Subtle open transition
 ### Modified files (summary)
 
 `app/App.js` (mount + shortcut), `app/Header.js`, `app/fullpage/FPTopBar.js`
-(button), `app/CommandPalette.js` (consume `HighlightedText`),
-`app/TabRow.js` (favicon fallback extraction), `chrome/background.js` (import
-capture module), `chrome/manifest.json` (`optional_host_permissions`).
+(button), `chrome/background.js` (load capture module, `captureAllWindows`
+message), `chrome/manifest.json` (`optional_host_permissions`).
+CommandPalette and TabRow stay untouched — highlighting is already shared via
+`searchUtils.highlightText`, and the favicon fallback constant is exported
+from `tabSwitcherUtils`.
