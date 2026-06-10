@@ -235,6 +235,16 @@ jobs:
           fi
 
           echo "Waiting for publish operation ${PUBLISH_OP}..."
-          poll_operation "${API_ROOT}/v1/products/${EDGE_PRODUCT_ID}/submissions/operations/${PUBLISH_OP}" \
-            || { echo "Edge publish failed"; exit 1; }
+          PUBLISH_RESULT=$(poll_operation "${API_ROOT}/v1/products/${EDGE_PRODUCT_ID}/submissions/operations/${PUBLISH_OP}") || {
+            echo "${PUBLISH_RESULT}"
+            # A submission for this version is already in Edge's review queue
+            # (e.g. from a previous merge before certification finished) —
+            # the publish is effectively already done, so don't fail the run.
+            if echo "${PUBLISH_RESULT}" | jq -e '.errorCode == "InProgressSubmission"' > /dev/null 2>&1; then
+              echo "A previous submission is still in review; skipping publish."
+              exit 0
+            fi
+            echo "Edge publish failed"; exit 1
+          }
+          echo "${PUBLISH_RESULT}"
           echo "Edge Add-ons publish submitted successfully"
