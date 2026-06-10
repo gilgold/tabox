@@ -11,6 +11,8 @@ import { showUndoToast, setToastViewContext } from './toastHelpers';
 import { UNDO_TIME } from './constants';
 import { downloadTextFile } from './utils';
 import SyncDebugRecoveryPanel from './SyncDebugRecoveryPanel';
+import { useOrphanRecoveryContext } from './OrphanRecoveryContext';
+import { buildOrphanRecoveryMenuItem } from './orphanRecoveryMenuItem';
 import { RiFolderAddFill, RiEdit2Line, RiSettings5Fill } from 'react-icons/ri';
 import { ImNewTab } from 'react-icons/im';
 import { MdOutlineSyncAlt, MdSettingsBackupRestore, MdClose, MdExpandMore, MdExpandLess, MdBugReport, MdFileDownload } from 'react-icons/md';
@@ -40,6 +42,7 @@ export default function SettingsMenu(props) {
 
     const isLoggedIn = useAtomValue(isLoggedInState);
     const setListKey = useSetAtom(listKeyState);
+    const orphanRecovery = useOrphanRecoveryContext() || {};
 
     const closeMenu = () => setIsDrawerOpen(false);
 
@@ -407,11 +410,13 @@ export default function SettingsMenu(props) {
         },
     ];
 
+    const orphanRecoveryItem = buildOrphanRecoveryMenuItem(orphanRecovery, { onActivate: closeMenu });
     const popupBackupSection = {
         key: 'backup',
         title: 'Backup & Restore',
         icon: MdSettingsBackupRestore,
         items: [
+            ...(orphanRecoveryItem ? [orphanRecoveryItem] : []),
             {
                 type: 'button',
                 key: 'export-all',
@@ -553,6 +558,13 @@ export default function SettingsMenu(props) {
                         color={isDrawerOpen ? 'var(--primary-color)' : 'var(--text-color)'}
                         size="28"
                     />
+                    {orphanRecovery.showEntry && (
+                        <span
+                            className="settings-orphan-dot"
+                            aria-label={`${orphanRecovery.orphanCount} collections can be restored`}
+                            title={`${orphanRecovery.orphanCount} collections can be restored`}
+                        />
+                    )}
                 </div>
             </div>
 
@@ -631,6 +643,9 @@ export default function SettingsMenu(props) {
                                         >
                                             <SectionIcon className="fp-settings-sidebar-item-icon" />
                                             <span>{section.title}</span>
+                                            {section.key === 'recovery' && orphanRecovery.showEntry && (
+                                                <span className="fp-settings-sidebar-badge">{orphanRecovery.orphanCount}</span>
+                                            )}
                                         </button>
                                     );
                                 })}

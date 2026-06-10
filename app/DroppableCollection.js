@@ -8,23 +8,14 @@ function DroppableCollection({ collection, children, disabled = false }) {
         && !disabled
         && dragSession.sourceCollectionUid !== collection.uid
         && dragSession.overCollectionUid === collection.uid;
-
-    const style = {
-        position: 'relative',
-        ...(showDropZone ? {
-            backgroundColor: 'rgba(var(--primary-color-rgb, 52, 152, 219), 0.15)',
-            border: '2px dashed var(--primary-color)',
-            borderRadius: '8px',
-            transition: 'all 0.2s ease',
-            boxShadow: '0 0 0 2px var(--primary-color)',
-        } : {}),
-    };
+    const dropHint = dragSession?.kind === 'group' ? 'Move group here' : 'Move tab here';
 
     return (
         <div
-            style={style}
+            className={`dnd-container-target${showDropZone ? ' is-over' : ''}`}
             data-collection-drop-zone={disabled ? undefined : 'true'}
             data-collection-uid={disabled ? undefined : collection.uid}
+            data-drop-hint={showDropZone ? dropHint : undefined}
         >
             {children}
         </div>

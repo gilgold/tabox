@@ -396,8 +396,6 @@ function FPLayout({
                     onFolderOptimisticUpdate={onFolderOptimisticUpdate}
                     onDataUpdate={onDataUpdate}
                     updateFolders={updateFolders}
-                    triggerSync={triggerSync}
-                    triggerFolderLightningEffect={triggerFolderLightningEffect}
                     onCollectionsRevealed={queueRevealBatch}
                 />
 

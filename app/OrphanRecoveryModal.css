@@ -1,0 +1,101 @@
+.orphan-recovery-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.orphan-recovery-modal {
+    background: var(--settings-bg-color, #fff);
+    color: var(--text-color, #1a1a1a);
+    border: 1px solid var(--divider-color, #d1d1d1);
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 420px;
+    width: calc(100% - 32px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+.orphan-recovery-modal h3 { margin: 0 0 8px; font-size: 18px; color: var(--text-color, #1a1a1a); }
+.orphan-recovery-modal p { margin: 0 0 16px; font-size: 14px; line-height: 1.5; opacity: 0.85; }
+
+.orphan-recovery-list {
+    list-style: none;
+    margin: 0 0 16px;
+    padding: 0;
+    max-height: 260px;
+    overflow-y: auto;
+    border: 1px solid var(--divider-color, #d1d1d1);
+    border-radius: 8px;
+}
+
+.orphan-recovery-list-item + .orphan-recovery-list-item {
+    border-top: 1px solid var(--divider-color, #d1d1d1);
+}
+
+.orphan-recovery-list-item label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.orphan-recovery-list-item input[type="checkbox"] {
+    accent-color: var(--primary-color, #1698e2);
+    flex: none;
+}
+
+.orphan-recovery-list-name {
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.orphan-recovery-list-meta {
+    flex: none;
+    font-size: 12px;
+    opacity: 0.7;
+}
+
+.orphan-recovery-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.orphan-recovery-actions .primary {
+    background: var(--primary-color, #2563eb);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.orphan-recovery-actions .secondary,
+.orphan-recovery-actions .tertiary {
+    background: transparent;
+    border: 1px solid var(--setting-row-border-color, #bebebe);
+    border-radius: 8px;
+    padding: 10px 14px;
+    cursor: pointer;
+    color: var(--text-color, #1a1a1a);
+}
+
+.orphan-recovery-actions .secondary:hover {
+    background: var(--setting-row-hover-bg-color, #efefef);
+}
+
+.orphan-recovery-actions .tertiary {
+    border-color: transparent;
+    opacity: 0.7;
+}
+.orphan-recovery-actions .tertiary:hover { opacity: 1; }
+.orphan-recovery-actions button:disabled { opacity: 0.6; cursor: default; }

@@ -38,6 +38,7 @@ import {
 } from './utils/folderOperations';
 import useCollectionItemCrossDrag from './useCollectionItemCrossDrag';
 import { persistCollectionLayoutChanges } from './utils/sharedCollectionSync';
+import { dndPointerSensorOptions } from './utils/dndShared';
 
 const LIST_ROW_HEIGHT = 76;
 
@@ -317,11 +318,7 @@ function CollectionList({
     }, [effectiveCollections, effectiveFolders]);
 
     const sensors = useSensors(
-        useSensor(PointerSensor, {
-            activationConstraint: {
-                distance: 5, // Reduce distance for easier drag start
-            },
-        }),
+        useSensor(PointerSensor, dndPointerSensorOptions),
     );
 
     // Custom collision detection for better drop indicators between mixed item types

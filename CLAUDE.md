@@ -12,7 +12,7 @@ Tabox is a Chrome/Edge extension (Manifest v3) for saving open tabs and tab grou
 - **Tests**: Jest 29, React Testing Library
 - **Lint**: ESLint 9 (eslint:recommended + react plugin)
 - **Package Manager**: Yarn 3.6.4 (Berry)
-- **CI/CD**: CircleCI — builds, tests, and publishes to Chrome Web Store on main
+- **CI/CD**: GitHub Actions (.github/workflows/release.yml) — lints and tests on every push/PR; builds and publishes to Chrome Web Store on merge to main
 
 ## Common Commands
 
@@ -106,7 +106,7 @@ webpack.js            # Webpack config
 ## Important Notes
 
 - `chrome/api-keys.json` is gitignored — never commit real API keys
-- CI injects API keys via secrets during build
+- CI recreates chrome/api-keys.json from GitHub repository secrets during build
 - The extension targets Chrome 89+ (Manifest v3)
 - Webpack splits vendor chunks (React, UI libs, dnd-kit)
 - Release builds strip `console.log` via Terser

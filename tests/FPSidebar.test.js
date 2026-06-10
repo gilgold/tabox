@@ -7,6 +7,7 @@ import '@testing-library/jest-dom';
 import { Provider, createStore } from 'jotai';
 import FPSidebar from '../app/fullpage/FPSidebar';
 import { sidebarCollapsedState, sidebarNavigationState } from '../app/atoms/fullpageState';
+import { draggingCollectionState } from '../app/atoms/animationsState';
 
 let latestDragEndHandler = null;
 
@@ -22,6 +23,12 @@ jest.mock('@dnd-kit/core', () => ({
 }));
 
 jest.mock('@dnd-kit/sortable', () => ({
+    arrayMove: (array, from, to) => {
+        const next = [...array];
+        const [moved] = next.splice(from, 1);
+        next.splice(to, 0, moved);
+        return next;
+    },
     SortableContext: ({ children }) => <>{children}</>,
     verticalListSortingStrategy: jest.fn(),
     useSortable: jest.fn(() => ({
@@ -61,10 +68,13 @@ jest.mock('../app/utils/folderOperations', () => ({
     updateFolderDetails: jest.fn(),
 }));
 
-const renderWithStore = (ui) => {
+const renderWithStore = (ui, seedStore) => {
     const store = createStore();
     store.set(sidebarCollapsedState, false);
     store.set(sidebarNavigationState, 'all');
+    if (seedStore) {
+        seedStore(store);
+    }
 
     return render(<Provider store={store}>{ui}</Provider>);
 };
@@ -226,6 +236,55 @@ describe('FPSidebar folder reorder', () => {
         expect(screen.getByText('Root Level').closest('button').querySelector('.fp-sidebar-counter')).toHaveTextContent('1');
         expect(screen.getByText('Folder One').closest('button').querySelector('.fp-sidebar-counter')).toHaveTextContent('2');
         expect(screen.getByText('Folder Two').closest('button').querySelector('.fp-sidebar-counter')).toHaveTextContent('0');
+    });
+
+    test('does not mark Root Level as a drop target when the dragged collection is already at root', async () => {
+        const folders = [{ uid: 'folder-1', name: 'Folder One', color: 'blue' }];
+        const rootCollection = { uid: 'collection-1', name: 'Root Collection' };
+
+        renderWithStore(
+            <FPSidebar
+                folders={folders}
+                collections={[rootCollection]}
+                addCollection={jest.fn()}
+                addFolder={jest.fn()}
+                onDataUpdate={jest.fn()}
+                updateFolders={jest.fn()}
+                triggerSync={jest.fn()}
+                triggerFolderLightningEffect={jest.fn()}
+            />,
+            (store) => {
+                store.set(draggingCollectionState, { collection: rootCollection, overSidebarTarget: null });
+            },
+        );
+
+        const rootLevelButton = (await screen.findByText('Root Level')).closest('button');
+        expect(rootLevelButton).not.toHaveClass('fp-sidebar-drop-active');
+        expect(rootLevelButton).not.toHaveClass('fp-sidebar-drop-over');
+    });
+
+    test('marks Root Level as a drop target when the dragged collection lives in a folder', async () => {
+        const folders = [{ uid: 'folder-1', name: 'Folder One', color: 'blue' }];
+        const folderCollection = { uid: 'collection-2', name: 'Folder Collection', parentId: 'folder-1' };
+
+        renderWithStore(
+            <FPSidebar
+                folders={folders}
+                collections={[folderCollection]}
+                addCollection={jest.fn()}
+                addFolder={jest.fn()}
+                onDataUpdate={jest.fn()}
+                updateFolders={jest.fn()}
+                triggerSync={jest.fn()}
+                triggerFolderLightningEffect={jest.fn()}
+            />,
+            (store) => {
+                store.set(draggingCollectionState, { collection: folderCollection, overSidebarTarget: null });
+            },
+        );
+
+        const rootLevelButton = (await screen.findByText('Root Level')).closest('button');
+        expect(rootLevelButton).toHaveClass('fp-sidebar-drop-active');
     });
 
     test('keeps the responsive save action as a visible icon-only button', () => {

@@ -16,6 +16,7 @@ import {
     MdWarning,
 } from 'react-icons/md';
 import MultiSelectCheckbox from './MultiSelectCheckbox';
+import { useOrphanRecoveryContext } from './OrphanRecoveryContext';
 import { browser } from '../static/globals';
 import { buildLegacyImportPayloadFromSelection, buildLegacyImportPreview } from './utils/legacyImportPreview';
 import { loadAllCollections } from './utils/storageUtils';
@@ -406,6 +407,10 @@ function SyncDebugRecoveryPanel({
     onDataUpdate,
     feedbackToasterId,
 }) {
+    const orphanRecovery = useOrphanRecoveryContext() || {};
+    const [orphanPickerOpen, setOrphanPickerOpen] = useState(false);
+    const [orphanSelectedIds, setOrphanSelectedIds] = useState([]);
+
     const [backupGroups, setBackupGroups] = useState([]);
     const [syncLogs, setSyncLogs] = useState([]);
     const [loadingBackups, setLoadingBackups] = useState(false);
@@ -494,6 +499,18 @@ function SyncDebugRecoveryPanel({
         () => syncLogs.filter((log) => matchesLogEntry(log, logSearchQuery.trim())),
         [syncLogs, logSearchQuery],
     );
+
+    const orphanPreviewData = useMemo(() => {
+        const collections = (orphanRecovery.orphans || []).map((o) => ({
+            previewId: o.uid,
+            name: o.name,
+            tabCount: o.tabCount,
+            groupCount: 0,
+            color: o.color,
+            previewTabs: [],
+        }));
+        return { collections, sections: [{ id: 'root', title: 'Recoverable', collections }] };
+    }, [orphanRecovery.orphans]);
 
     const refreshVisibleData = async () => {
         if (typeof onDataUpdate === 'function') {
@@ -679,6 +696,23 @@ function SyncDebugRecoveryPanel({
 
     const renderRecoveryView = () => (
         <>
+            {orphanRecovery.showEntry && (
+                <section className="sync-recovery-orphan-card">
+                    <div className="sync-recovery-orphan-copy">
+                        <strong>Hidden collections found</strong>
+                        <span>{orphanRecovery.orphanCount} recoverable — collections an earlier update hid. They&apos;re safe on your device.</span>
+                    </div>
+                    <button
+                        type="button"
+                        className="sync-recovery-primary-action"
+                        disabled={orphanRecovery.busy}
+                        onClick={() => { setOrphanSelectedIds((orphanRecovery.orphans || []).map((o) => o.uid)); setOrphanPickerOpen(true); }}
+                    >
+                        <MdOutlineRestore size={16} />
+                        <span>Review &amp; Restore</span>
+                    </button>
+                </section>
+            )}
             <div className="sync-recovery-header">
                 <div className="sync-recovery-header-copy">
                     <div className="sync-recovery-eyebrow">
@@ -773,6 +807,24 @@ function SyncDebugRecoveryPanel({
                 selectedCollectionIds={selectedCollectionIds}
                 onSelectionChange={setSelectedCollectionIds}
                 onConfirm={handleRestoreSelected}
+            />
+            <BackupRestorePickerModal
+                isOpen={orphanPickerOpen}
+                onClose={() => setOrphanPickerOpen(false)}
+                backup={{ label: 'Hidden collections' }}
+                previewData={orphanPreviewData}
+                isLoading={false}
+                isRestoring={orphanRecovery.busy}
+                selectedCollectionIds={orphanSelectedIds}
+                onSelectionChange={setOrphanSelectedIds}
+                onConfirm={async () => {
+                    const res = await orphanRecovery.recover(orphanSelectedIds);
+                    if (res?.success) {
+                        setOrphanPickerOpen(false);
+                    } else {
+                        showErrorToast(res?.error || 'Could not restore the selected collections', { toasterId: feedbackToasterId });
+                    }
+                }}
             />
         </>
     );

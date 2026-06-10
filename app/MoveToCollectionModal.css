@@ -7,7 +7,9 @@
     background: rgba(0, 0, 0, 0.5);
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
-    z-index: 20000;
+    /* Must stack above the collection detail panel (z-index 60000) in the
+       popup, matching the tab context menu's 70000. */
+    z-index: 70000;
     display: flex;
     align-items: center;
     justify-content: center;

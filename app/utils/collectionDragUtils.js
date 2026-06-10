@@ -441,23 +441,42 @@ export function resolveCollectionPointerDropTarget(model, session, target, point
         return null;
     }
 
-    let preferredSide = DROP_TARGET_SIDE.AFTER;
-    if (typeof pointerY === 'number' && rowRect && typeof rowRect.top === 'number' && typeof rowRect.height === 'number') {
-        const midpoint = rowRect.top + (rowRect.height / 2);
-        const deadZone = Math.max(4, Math.min(Math.round(rowRect.height * 0.12), 10));
-        const currentSide = activeTargetId === createCollectionDropTargetId(beforeTarget)
-            ? DROP_TARGET_SIDE.BEFORE
-            : activeTargetId === createCollectionDropTargetId(afterTarget)
-                ? DROP_TARGET_SIDE.AFTER
-                : null;
+    let preferredSide = null;
 
-        if (currentSide && Math.abs(pointerY - midpoint) <= deadZone) {
-            preferredSide = currentSide;
-        } else {
-            preferredSide = pointerY < midpoint ? DROP_TARGET_SIDE.BEFORE : DROP_TARGET_SIDE.AFTER;
+    // Tab-over-tab drags follow sortable-swap semantics: dnd-kit's sortable
+    // translation already shows the dragged row taking the hovered row's
+    // place as soon as it becomes the `over` target, so the drop side is the
+    // direction of travel — AFTER when dragging down, BEFORE when dragging
+    // up — independent of which half of the row the pointer is in.  Pointer
+    // halves would contradict what the list is visually previewing.
+    if (session?.kind === 'tab' && session.itemId && session.itemId !== target.tabId) {
+        const draggedIndex = model.tabs.findIndex((tab) => tab.uid === session.itemId);
+        const targetIndex = model.tabs.findIndex((tab) => tab.uid === target.tabId);
+
+        if (draggedIndex !== -1 && targetIndex !== -1) {
+            preferredSide = draggedIndex < targetIndex ? DROP_TARGET_SIDE.AFTER : DROP_TARGET_SIDE.BEFORE;
         }
-    } else if (activeTargetId === createCollectionDropTargetId(beforeTarget)) {
-        preferredSide = DROP_TARGET_SIDE.BEFORE;
+    }
+
+    if (preferredSide === null) {
+        preferredSide = DROP_TARGET_SIDE.AFTER;
+        if (typeof pointerY === 'number' && rowRect && typeof rowRect.top === 'number' && typeof rowRect.height === 'number') {
+            const midpoint = rowRect.top + (rowRect.height / 2);
+            const deadZone = Math.max(4, Math.min(Math.round(rowRect.height * 0.12), 10));
+            const currentSide = activeTargetId === createCollectionDropTargetId(beforeTarget)
+                ? DROP_TARGET_SIDE.BEFORE
+                : activeTargetId === createCollectionDropTargetId(afterTarget)
+                    ? DROP_TARGET_SIDE.AFTER
+                    : null;
+
+            if (currentSide && Math.abs(pointerY - midpoint) <= deadZone) {
+                preferredSide = currentSide;
+            } else {
+                preferredSide = pointerY < midpoint ? DROP_TARGET_SIDE.BEFORE : DROP_TARGET_SIDE.AFTER;
+            }
+        } else if (activeTargetId === createCollectionDropTargetId(beforeTarget)) {
+            preferredSide = DROP_TARGET_SIDE.BEFORE;
+        }
     }
 
     if (preferredSide === DROP_TARGET_SIDE.BEFORE) {

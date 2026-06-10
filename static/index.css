@@ -68,6 +68,98 @@
   --tooltip-border-color: rgba(255, 255, 255, 0.14);
   --tooltip-shadow-color: rgba(0, 0, 0, 0.55);
 }
+
+/* ---- Drag & drop design tokens ----
+   All drop indicators derive from --primary-color, so they adapt to the
+   light/dark theme automatically via color-mix. */
+:root {
+    --dnd-accent: var(--primary-color);
+    --dnd-accent-border: color-mix(in srgb, var(--dnd-accent) 72%, transparent);
+    --dnd-accent-border-soft: color-mix(in srgb, var(--dnd-accent) 50%, transparent);
+    --dnd-accent-border-faint: color-mix(in srgb, var(--dnd-accent) 22%, transparent);
+    --dnd-accent-bg: color-mix(in srgb, var(--dnd-accent) 14%, transparent);
+    --dnd-accent-bg-soft: color-mix(in srgb, var(--dnd-accent) 6%, transparent);
+    --dnd-overlay-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    --dnd-source-opacity: 0.35;
+}
+
+/* Shared pulse for drop-gap indicators (popup DropGap + full-page insert gaps) */
+@keyframes drop-gap-pulse {
+    0%, 100% { opacity: 0.88; }
+    50% { opacity: 1; }
+}
+
+/* Shared drag overlay lift treatment (tab, group, and FP card overlays) */
+.dnd-drag-overlay {
+    box-shadow: var(--dnd-overlay-shadow);
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: grabbing;
+    opacity: 0.92;
+    z-index: var(--dnd-overlay-z, 999999);
+}
+
+.dnd-drag-overlay--group {
+    width: min(400px, 90vw);
+}
+
+/* Cross-collection drop target (DroppableCollection wrapper).
+   The wrapper sits BEHIND an opaque card, so the is-over treatment renders as
+   pseudo-element overlays ON TOP of the card (a tinted veil + a hint pill).
+   Pseudo-elements are never returned by document.elementsFromPoint, so the
+   drop hit-testing in useCollectionItemCrossDrag is unaffected. */
+.dnd-container-target {
+    position: relative;
+    border-radius: var(--dnd-container-radius, 8px);
+    transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dnd-container-target.is-over::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: var(--dnd-container-radius, 8px);
+    background: color-mix(in srgb, var(--dnd-accent) 18%, transparent);
+    box-shadow: inset 0 0 0 2px var(--dnd-accent);
+    pointer-events: none;
+    z-index: 5;
+}
+
+.dnd-container-target.is-over::before {
+    content: attr(data-drop-hint);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: var(--dnd-accent);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 6;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+/* Ambient affordance: valid, non-current container targets during a collection drag */
+.dnd-drop-ambient {
+    outline: 1.5px dashed var(--dnd-accent-border-soft);
+    outline-offset: -1.5px;
+    background: var(--dnd-accent-bg-soft);
+    border-radius: 10px;
+}
+
+.dnd-settled {
+    animation: dnd-settle-flash 0.9s ease-out;
+}
+
+@keyframes dnd-settle-flash {
+    0% { background: var(--dnd-accent-bg); box-shadow: inset 0 0 0 2px var(--dnd-accent-border); }
+    100% { background: transparent; box-shadow: none; }
+}
+
 body, html, * {
   font-family: "Helvetica Neue", Helvetica, Arial, "Lucida Grande", sans-serif;
   transition: background-color .2s ease-in;

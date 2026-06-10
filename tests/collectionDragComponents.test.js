@@ -243,7 +243,7 @@ describe('collection drag components', () => {
         );
 
         const style = container.firstChild.getAttribute('style');
-        expect(style).toContain('opacity: 0.25');
+        expect(style).toContain('opacity: 0.35');
         expect(style).not.toContain('height: 0');
     });
 
@@ -263,6 +263,36 @@ describe('collection drag components', () => {
             id: tab.uid,
             disabled: true,
         }));
+    });
+
+    test('SortableTabRow adds dnd-settled class when isSettled is true', () => {
+        const { container } = render(
+            <SortableTabRow
+                tab={tab}
+                updateCollection={jest.fn()}
+                collection={collection}
+                group={null}
+                disableDrag={false}
+                isSettled={true}
+            />,
+        );
+
+        expect(container.firstChild.className).toContain('dnd-settled');
+    });
+
+    test('SortableTabRow omits dnd-settled class when isSettled is false', () => {
+        const { container } = render(
+            <SortableTabRow
+                tab={tab}
+                updateCollection={jest.fn()}
+                collection={collection}
+                group={null}
+                disableDrag={false}
+                isSettled={false}
+            />,
+        );
+
+        expect(container.firstChild.className).not.toContain('dnd-settled');
     });
 
     test('renders the group header add target affordance when hovered by a tab drag', () => {

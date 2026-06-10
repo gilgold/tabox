@@ -27,6 +27,7 @@ import SortableGroupContainer from './SortableGroupContainer';
 import SortableTabRow from './SortableTabRow';
 import TabRow from './TabRow';
 import { getCurrentTabsAndGroups } from './utils';
+import { dndPointerSensorOptions } from './utils/dndShared';
 import {
     applyCollectionDropIntent,
     buildCollectionDragModel,
@@ -73,10 +74,20 @@ function ExpandedCollectionData(props) {
     const [optimisticCollection, setOptimisticCollection] = useState(null);
     const [activeOverlay, setActiveOverlay] = useState(null);
     const [activeDropTargetId, setActiveDropTargetId] = useState(null);
+    const [settledItemId, setSettledItemId] = useState(null);
+    const settleTimerRef = useRef(null);
     const [dragSession, setDragSession] = useAtom(dragSessionState);
     const dragSessionRef = useRef(dragSession);
     const activeResolvedDropTargetRef = useRef(null);
     const dragPointerRef = useRef(null);
+
+    useEffect(() => () => clearTimeout(settleTimerRef.current), []);
+
+    const flashSettledItem = (itemId) => {
+        clearTimeout(settleTimerRef.current);
+        setSettledItemId(itemId);
+        settleTimerRef.current = setTimeout(() => setSettledItemId(null), 900);
+    };
 
     dragSessionRef.current = dragSession;
 
@@ -88,11 +99,7 @@ function ExpandedCollectionData(props) {
     }, [props.collection]);
 
     const sensors = useSensors(
-        useSensor(PointerSensor, {
-            activationConstraint: {
-                distance: 5,
-            },
-        }),
+        useSensor(PointerSensor, dndPointerSensorOptions),
     );
 
     const measuring = {
@@ -332,31 +339,26 @@ function ExpandedCollectionData(props) {
         }
     };
 
-    const handleDragMove = (event) => {
-        const currentSession = dragSessionRef.current;
-        if (!currentSession?.pointer || !event?.delta) {
-            return;
-        }
-
-        dragPointerRef.current = {
-            x: currentSession.pointer.x + event.delta.x,
-            y: currentSession.pointer.y + event.delta.y,
-        };
-    };
-
-    const handleDragOver = (event) => {
+    // Recompute the resolved drop target (and indicator) from the current
+    // pointer position.  dnd-kit only fires onDragOver when the `over`
+    // droppable CHANGES, so the side (before/after) resolved at over-entry
+    // goes stale as the pointer keeps moving within the same row.  This is
+    // therefore invoked from BOTH onDragOver and onDragMove so the resolved
+    // target tracks the live pointer (the midpoint dead-zone in
+    // resolveCollectionPointerDropTarget provides the hysteresis).
+    const updateActiveDropTarget = (over) => {
         const currentSession = dragSessionRef.current;
 
         if (!currentSession || currentSession.sourceCollectionUid !== props.collection.uid) {
             return;
         }
 
-        let overTarget = event.over?.data?.current?.dropTarget || null;
+        let overTarget = over?.data?.current?.dropTarget || null;
 
-        if (!overTarget && event.over?.data?.current?.itemType === 'tab') {
+        if (!overTarget && over?.data?.current?.itemType === 'tab') {
             overTarget = {
                 type: collectionDropTargetTypes.TAB_ROW,
-                tabId: event.over.data.current.tabId,
+                tabId: over.data.current.tabId,
             };
         }
 
@@ -367,7 +369,7 @@ function ExpandedCollectionData(props) {
         }
 
         const pointerY = dragPointerRef.current?.y;
-        const overRect = event.over?.rect || null;
+        const overRect = over?.rect || null;
         const resolvedTarget = resolveCollectionPointerDropTarget(
             dragModel,
             currentSession,
@@ -394,6 +396,25 @@ function ExpandedCollectionData(props) {
         setActiveDropTargetId((previousTargetId) => (
             previousTargetId === nextTargetId ? previousTargetId : nextTargetId
         ));
+    };
+
+    const handleDragMove = (event) => {
+        const currentSession = dragSessionRef.current;
+        if (currentSession?.pointer && event?.delta) {
+            // session.pointer is the activator (pointerdown) position and
+            // dnd-kit's delta is measured from that same origin, so the sum
+            // is the live pointer position — no atom reads/writes needed.
+            dragPointerRef.current = {
+                x: currentSession.pointer.x + event.delta.x,
+                y: currentSession.pointer.y + event.delta.y,
+            };
+        }
+
+        updateActiveDropTarget(event.over);
+    };
+
+    const handleDragOver = (event) => {
+        updateActiveDropTarget(event.over);
     };
 
     const handleDragEnd = (event) => {
@@ -503,6 +524,7 @@ function ExpandedCollectionData(props) {
         }
 
         setOptimisticCollection(updatedCollection);
+        flashSettledItem(currentSession.itemId);
         props.updateCollection(updatedCollection, false);
     };
 
@@ -758,6 +780,7 @@ function ExpandedCollectionData(props) {
                                         onToggleExpanded={handleToggleGroupExpanded}
                                         disableDrag={false}
                                         dragSession={isLocalDrag ? dragSession : null}
+                                        isSettled={settledItemId === item.groupUid}
                                     >
                                         {item.tabs.map((tab) => (
                                             <SortableTabRow
@@ -768,6 +791,7 @@ function ExpandedCollectionData(props) {
                                                 group={item.group}
                                                 disableDrag={tab.pinned}
                                                 search={props.search}
+                                                isSettled={settledItemId === tab.uid}
                                             />
                                         ))}
                                     </SortableGroupContainer>
@@ -789,6 +813,7 @@ function ExpandedCollectionData(props) {
                                         group={null}
                                         disableDrag={item.tab.pinned}
                                         search={props.search}
+                                        isSettled={settledItemId === item.tab.uid}
                                     />
                                 </div>
                                 {renderTabGap(item.tab.uid, collectionDropTargetSides.AFTER)}
@@ -814,16 +839,7 @@ function ExpandedCollectionData(props) {
                 {createPortal(
                     <DragOverlay adjustScale={false} dropAnimation={null}>
                         {activeOverlay?.kind === 'group' ? (
-                            <div
-                                style={{
-                                    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.3)',
-                                    borderRadius: '8px',
-                                    overflow: 'hidden',
-                                    cursor: 'grabbing',
-                                    zIndex: 999999,
-                                    width: '400px',
-                                }}
-                            >
+                            <div className="dnd-drag-overlay dnd-drag-overlay--group">
                                 <GroupContainer
                                     group={activeOverlay.group}
                                     tabs={activeOverlay.tabs}
@@ -836,15 +852,7 @@ function ExpandedCollectionData(props) {
                                 />
                             </div>
                         ) : activeOverlay?.kind === 'tab' ? (
-                            <div
-                                style={{
-                                    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.3)',
-                                    borderRadius: '8px',
-                                    overflow: 'hidden',
-                                    cursor: 'grabbing',
-                                    zIndex: 999999,
-                                }}
-                            >
+                            <div className="dnd-drag-overlay">
                                 <TabRow
                                     tab={activeOverlay.tab}
                                     updateCollection={props.updateCollection}

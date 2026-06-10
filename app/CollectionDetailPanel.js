@@ -137,6 +137,11 @@ function CollectionDetailPanel({
             }
 
             if (e.key === 'Escape' && isOpen) {
+                // A tab's context menu or move-to-collection modal handles its
+                // own Escape; the panel underneath must stay open.
+                if (document.querySelector('.fp-tab-ctx-menu') || document.querySelector('.move-modal-overlay')) {
+                    return;
+                }
                 handleClose();
             }
         };
@@ -156,7 +161,12 @@ function CollectionDetailPanel({
                                          e.target.closest('.setting_row') ||
                                          e.target.closest('.collection-tile');
                 const isPopoverClick = e.target.closest('.modern-color-popover');
-                if (!isCollectionClick && !isPopoverClick) {
+                // The tab context menu and move-to-collection modal are portaled
+                // to document.body, so they sit outside panelRef even though they
+                // belong to this panel's tabs.
+                const isPortaledTabUiClick = e.target.closest('.fp-tab-ctx-menu') ||
+                                             e.target.closest('.move-modal-overlay');
+                if (!isCollectionClick && !isPopoverClick && !isPortaledTabUiClick) {
                     handleClose();
                 }
             }

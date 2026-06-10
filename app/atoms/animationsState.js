@@ -25,7 +25,7 @@ export const deletingCollectionUidsState = atom(new Set());
 export const dragSessionState = atom(null);
 
 // Track when a collection is being dragged (for cross-context sidebar drops)
-export const draggingCollectionState = atom(null); // { collection } or null
+export const draggingCollectionState = atom(null); // { collection: TaboxCollection, overSidebarTarget: string|null } or null
 
 // Track which context menu is currently open (only one at a time)
 export const activeContextMenuState = atom(null); // menu ID string or null

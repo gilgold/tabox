@@ -25,12 +25,12 @@ function SortableTabRow(props) {
     const style = {
         transform: CSS.Transform.toString(transform),
         transition,
-        opacity: isDragging ? 0.25 : 1,
+        opacity: isDragging ? 0.35 : 1,
         position: 'relative',
     };
 
     return (
-        <div ref={setNodeRef} style={style} className="collection-draggable-tab">
+        <div ref={setNodeRef} style={style} className={'collection-draggable-tab' + (props.isSettled ? ' dnd-settled' : '')}>
             <TabRow
                 tab={props.tab}
                 updateCollection={props.updateCollection}

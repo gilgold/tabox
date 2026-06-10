@@ -19,13 +19,7 @@ import { sidebarNavigationState } from '../atoms/fullpageState';
 import ColorPicker from '../ColorPicker';
 import {
     DndContext,
-    pointerWithin,
-    closestCorners,
-    PointerSensor,
-    useSensor,
-    useSensors,
     DragOverlay,
-    MeasuringStrategy,
     useDroppable,
 } from '@dnd-kit/core';
 import {
@@ -100,16 +94,12 @@ import {
 } from './fpCollectionSections';
 import { filterCurrentWindowsBySearch, getMatchingCurrentWindows } from '../utils/currentWindows';
 import {
-    applyCollectionDropOperation,
     collectionDropKinds,
     collectionDropSides,
-    getAffectedCollectionParentIds,
-    getCollectionTargetSide,
     normalizeCollectionParentId,
-    resolveCollectionDropOperation,
-    resolveCollectionDropTarget,
     sortCollectionsWithinParent,
 } from '../utils/collectionSectionDragEngine';
+import { useFPCollectionDnd } from './useFPCollectionDnd';
 import { persistCollectionLayoutChanges } from '../utils/sharedCollectionSync';
 import { getMatchingSessionWindows } from '../utils/searchUtils';
 import { getBrowserSessionEntryKey, restoreBrowserSession } from '../utils/browserSessions';
@@ -422,256 +412,6 @@ const waitForScrollSettled = ({
     });
 };
 
-const getDragOverlayCenter = () => {
-    if (typeof document === 'undefined') {
-        return null;
-    }
-
-    const overlayElement = document.querySelector('[data-fp-drag-overlay="true"]');
-    if (!overlayElement) {
-        return null;
-    }
-
-    const rect = overlayElement.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) {
-        return null;
-    }
-
-    return {
-        x: rect.left + (rect.width / 2),
-        y: rect.top + (rect.height / 2),
-    };
-};
-
-const getActualPointerCoordinates = (event) => {
-    const clientX = event?.activatorEvent?.clientX;
-    const clientY = event?.activatorEvent?.clientY;
-    const deltaX = event?.delta?.x;
-    const deltaY = event?.delta?.y;
-
-    if (
-        typeof clientX === 'number' &&
-        typeof clientY === 'number' &&
-        typeof deltaX === 'number' &&
-        typeof deltaY === 'number'
-    ) {
-        return {
-            x: clientX + deltaX,
-            y: clientY + deltaY,
-        };
-    }
-
-    const translatedRect = event?.active?.rect?.current?.translated;
-    if (
-        translatedRect &&
-        typeof translatedRect.left === 'number' &&
-        typeof translatedRect.top === 'number' &&
-        typeof translatedRect.width === 'number' &&
-        typeof translatedRect.height === 'number'
-    ) {
-        return {
-            x: translatedRect.left + (translatedRect.width / 2),
-            y: translatedRect.top + (translatedRect.height / 2),
-        };
-    }
-
-    return null;
-};
-
-const getPointerCoordinates = (event) => {
-    const overlayCenter = getDragOverlayCenter();
-    if (overlayCenter) {
-        return overlayCenter;
-    }
-
-    return getActualPointerCoordinates(event);
-};
-
-const findGroupedSectionBodyTargetAtPoint = (point) => {
-    if (!point || typeof document === 'undefined') {
-        return null;
-    }
-
-    const sectionBodies = Array.from(document.querySelectorAll('[data-grouped-section-body-parent-id]'));
-
-    for (const body of sectionBodies) {
-        const rect = body.getBoundingClientRect();
-        const rawParentId = body.getAttribute('data-grouped-section-body-parent-id');
-        const parentId = rawParentId === ROOT_LEVEL_SECTION_ID ? null : rawParentId;
-        const cards = Array.from(body.querySelectorAll('[data-sortable-collection-id]'))
-            .filter((card) => {
-                const cardRect = card.getBoundingClientRect();
-                return cardRect.width > 0 && cardRect.height > 0;
-            });
-
-        if (cards.length === 0) {
-            const emptySectionTopSlack = 32;
-            const emptySectionBottomSlack = 64;
-            if (
-                point.x < rect.left ||
-                point.x > rect.right ||
-                point.y < rect.top - emptySectionTopSlack ||
-                point.y > rect.bottom + emptySectionBottomSlack
-            ) {
-                continue;
-            }
-
-            return {
-                kind: collectionDropKinds.sectionEmpty,
-                parentId,
-            };
-        }
-
-        const firstRect = cards[0].getBoundingClientRect();
-        const lastRect = cards[cards.length - 1].getBoundingClientRect();
-        const sectionLeft = Math.min(rect.left, firstRect.left, lastRect.left);
-        const sectionRight = Math.max(rect.right, firstRect.right, lastRect.right);
-        const topBandSlack = Math.max(24, Math.min(40, firstRect.height / 2));
-        const bottomBandSlack = Math.max(24, Math.min(40, lastRect.height / 2));
-        const extraBottomHit = 64;
-
-        if (point.x < sectionLeft || point.x > sectionRight) {
-            continue;
-        }
-
-        if (
-            point.y >= firstRect.top - topBandSlack &&
-            point.y <= firstRect.top + topBandSlack
-        ) {
-            return {
-                kind: collectionDropKinds.sectionStart,
-                parentId,
-            };
-        }
-
-        if (
-            point.y >= lastRect.bottom - bottomBandSlack &&
-            point.y <= lastRect.bottom + extraBottomHit
-        ) {
-            return {
-                kind: collectionDropKinds.sectionEnd,
-                parentId,
-            };
-        }
-    }
-
-    return null;
-};
-
-const findGroupedEmptySectionTargetAtPoint = (point) => {
-    if (!point || typeof document === 'undefined') {
-        return null;
-    }
-
-    const sectionBodies = Array.from(document.querySelectorAll('[data-grouped-section-body-parent-id]'));
-
-    for (const body of sectionBodies) {
-        const rect = body.getBoundingClientRect();
-        const cards = Array.from(body.querySelectorAll('[data-sortable-collection-id]'))
-            .filter((card) => {
-                const cardRect = card.getBoundingClientRect();
-                return cardRect.width > 0 && cardRect.height > 0;
-            });
-
-        if (cards.length > 0) {
-            continue;
-        }
-
-        const hitSlop = 18;
-        if (
-            point.x < rect.left - hitSlop ||
-            point.x > rect.right + hitSlop ||
-            point.y < rect.top - hitSlop ||
-            point.y > rect.bottom + hitSlop
-        ) {
-            continue;
-        }
-
-        const rawParentId = body.getAttribute('data-grouped-section-body-parent-id');
-        return {
-            kind: collectionDropKinds.sectionEmpty,
-            parentId: rawParentId === ROOT_LEVEL_SECTION_ID ? null : rawParentId,
-        };
-    }
-
-    return null;
-};
-
-const findGroupedGridCollectionTargetAtPoint = (point, activeId, folderUidSet) => {
-    if (!point || typeof document === 'undefined') {
-        return null;
-    }
-
-    const sectionBodies = Array.from(document.querySelectorAll('[data-grouped-section-body-parent-id]'));
-
-    for (const body of sectionBodies) {
-        const rect = body.getBoundingClientRect();
-        if (
-            point.x < rect.left ||
-            point.x > rect.right ||
-            point.y < rect.top ||
-            point.y > rect.bottom
-        ) {
-            continue;
-        }
-
-        const rawParentId = body.getAttribute('data-grouped-section-body-parent-id');
-        const parentId = rawParentId === ROOT_LEVEL_SECTION_ID ? null : rawParentId;
-        const cards = Array.from(body.querySelectorAll('[data-sortable-collection-id]'))
-            .map((card) => {
-                const collectionId = card.getAttribute('data-sortable-collection-id');
-                const cardRect = card.getBoundingClientRect();
-                return { collectionId, rect: cardRect };
-            })
-            .filter(({ collectionId, rect }) => (
-                collectionId &&
-                collectionId !== activeId &&
-                rect.width > 0 &&
-                rect.height > 0
-            ));
-
-        if (cards.length === 0) {
-            return {
-                kind: collectionDropKinds.sectionEmpty,
-                parentId,
-            };
-        }
-
-        const nearestCard = cards.reduce((closest, candidate) => {
-            const candidateCenterX = candidate.rect.left + (candidate.rect.width / 2);
-            const candidateCenterY = candidate.rect.top + (candidate.rect.height / 2);
-            const candidateDistance = Math.hypot(point.x - candidateCenterX, point.y - candidateCenterY);
-
-            if (!closest || candidateDistance < closest.distance) {
-                return {
-                    collectionId: candidate.collectionId,
-                    rect: candidate.rect,
-                    distance: candidateDistance,
-                };
-            }
-
-            return closest;
-        }, null);
-
-        if (!nearestCard) {
-            return null;
-        }
-
-        return {
-            kind: collectionDropKinds.collection,
-            parentId,
-            collectionId: nearestCard.collectionId,
-            side: getCollectionTargetSide({
-                viewMode: 'grid',
-                point,
-                rect: nearestCard.rect,
-            }),
-        };
-    }
-
-    return null;
-};
-
 function FPSectionDropZone({
     className,
     children,
@@ -814,7 +554,7 @@ function SortableFPCard({
     const style = {
         transform: suppressTransforms ? undefined : CSS.Transform.toString(adjustedTransform),
         transition: suppressTransforms ? 'none' : transition,
-        opacity: isDragging && !hideWhileDragging ? 0.5 : undefined,
+        opacity: isDragging && !hideWhileDragging ? 0.35 : undefined,
         ...(isRevealActive ? {
             '--fp-reveal-index': revealIndex,
             '--fp-reveal-color': normalizeColorKey(collection.color) !== 'default'
@@ -912,13 +652,8 @@ function FPContentArea({
     const highlightedCollectionUid = useAtomValue(highlightedCollectionUidState);
     const [disableDrag, setDisableDrag] = useState(false);
     const [showEntranceAnimation, setShowEntranceAnimation] = useState(true);
-    const [activeCollection, setActiveCollection] = useState(null);
-    const [previewTarget, setPreviewTarget] = useState(null);
-    const previewTargetRef = useRef(null);
-    const lastMeaningfulDropTargetRef = useRef(null);
     const [activeSectionReveal, setActiveSectionReveal] = useState(null);
     const [activeCardReveal, setActiveCardReveal] = useState(null);
-    const activeDragRectRef = useRef(null);
     const contentScrollRef = useRef(null);
     const revealTimersRef = useRef([]);
     const revealRunRef = useRef(null);
@@ -2023,16 +1758,6 @@ function FPContentArea({
         }
     }, [deleteModal, onDataUpdate, runTrackedSync]);
 
-    const activeParentId = useMemo(() => (
-        activeCollection ? normalizeCollectionParentId(activeCollection, folderUidSet) : null
-    ), [activeCollection, folderUidSet]);
-
-    const isSameParentCollectionPreview = useMemo(() => (
-        !!previewTarget &&
-        previewTarget.kind === collectionDropKinds.collection &&
-        previewTarget.parentId === activeParentId
-    ), [previewTarget, activeParentId]);
-
     const persistCollectionChanges = useCallback(async (nextCollections, affectedParentIds = []) => {
         await persistCollectionLayoutChanges({
             nextCollections,
@@ -2053,385 +1778,46 @@ function FPContentArea({
         }
     }, [onFolderStateChange]);
 
-    // DnD
-    const sensors = useSensors(
-        useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
-    );
-
-    const customCollisionDetection = useCallback((args) => {
-        if (dragSession) {
-            return [];
-        }
-
-        const activeId = args.active?.id;
-        const pointerCollisions = pointerWithin(args);
-        const getCollisionParentId = (collision) => {
-            const dragType = collision?.data?.droppableContainer?.data?.current?.dragType;
-            const dataParentId = collision?.data?.droppableContainer?.data?.current?.parentId;
-
-            if (
-                dragType === collectionDropKinds.sectionStart ||
-                dragType === collectionDropKinds.sectionEnd ||
-                dragType === collectionDropKinds.sectionEmpty
-            ) {
-                return dataParentId || null;
-            }
-
-            const collisionId = typeof collision?.id === 'string' && collision.id.startsWith('collection-drop-')
-                ? collision.id.slice('collection-drop-'.length)
-                : collision?.id;
-            const collection = displayCollections.find((entry) => entry.uid === collisionId);
-            return collection ? normalizeCollectionParentId(collection, folderUidSet) : undefined;
-        };
-        const pointerCollectionTargets = pointerCollisions.filter((collision) => {
-            const collisionId = typeof collision.id === 'string' && collision.id.startsWith('collection-drop-')
-                ? collision.id.slice('collection-drop-'.length)
-                : collision.id;
-            return collisionId !== activeId && displayCollections.some((collection) => collection.uid === collisionId);
-        });
-        const pointerSectionTargets = pointerCollisions.filter((collision) => {
-            const dragType = collision?.data?.droppableContainer?.data?.current?.dragType;
-            return dragType === collectionDropKinds.sectionStart ||
-                dragType === collectionDropKinds.sectionEnd ||
-                dragType === collectionDropKinds.sectionEmpty;
-        });
-        const cornerCollisions = closestCorners(args);
-        const allCollisions = [...pointerCollisions, ...cornerCollisions];
-        const uniqueCollisions = allCollisions.filter((collision, index, array) => (
-            index === array.findIndex((entry) => entry.id === collision.id)
-        ));
-        const collectionTargets = uniqueCollisions.filter((collision) => {
-            const collisionId = typeof collision.id === 'string' && collision.id.startsWith('collection-drop-')
-                ? collision.id.slice('collection-drop-'.length)
-                : collision.id;
-            return collisionId !== activeId && displayCollections.some((collection) => collection.uid === collisionId);
-        });
-        const sectionTargets = uniqueCollisions.filter((collision) => {
-            const dragType = collision?.data?.droppableContainer?.data?.current?.dragType;
-            return dragType === collectionDropKinds.sectionStart ||
-                dragType === collectionDropKinds.sectionEnd ||
-                dragType === collectionDropKinds.sectionEmpty;
-        });
-
-        if (shouldRenderGroupedAllCollections) {
-            if (pointerCollectionTargets.length > 0) {
-                return pointerCollectionTargets;
-            }
-
-            if (viewMode === 'grid') {
-                if (pointerSectionTargets.length > 0) {
-                    const hoveredParentId = getCollisionParentId(pointerSectionTargets[0]);
-                    const cornerCollectionTargets = closestCorners(args).filter((collision) => {
-                        const collisionId = typeof collision.id === 'string' && collision.id.startsWith('collection-drop-')
-                            ? collision.id.slice('collection-drop-'.length)
-                            : collision.id;
-                        if (collisionId === activeId || !displayCollections.some((collection) => collection.uid === collisionId)) {
-                            return false;
-                        }
-
-                        return getCollisionParentId(collision) === hoveredParentId;
-                    });
-
-                    if (cornerCollectionTargets.length > 0) {
-                        return cornerCollectionTargets;
-                    }
-
-                    return pointerSectionTargets;
-                }
-
-                return [];
-            }
-
-            if (pointerSectionTargets.length > 0) {
-                return pointerSectionTargets;
-            }
-
-            if (collectionTargets.length > 0) {
-                return collectionTargets;
-            }
-
-            if (sectionTargets.length > 0) {
-                return sectionTargets;
-            }
-
-            return [];
-        }
-
-        if (canReorderFlatCollections) {
-            if (collectionTargets.length > 0) {
-                return collectionTargets;
-            }
-
-            return [];
-        }
-
-        return [];
-    }, [
-        canReorderFlatCollections,
-        dragSession,
+    const {
+        sensors,
+        measuring,
+        customCollisionDetection,
+        activeCollection,
+        previewTarget,
+        activeDragRectRef,
+        handleDragStart,
+        handleDragMove,
+        handleDragOver,
+        handleDragEnd,
+        resetDragState,
+    } = useFPCollectionDnd({
+        sourceCollections,
         displayCollections,
+        folders,
         folderUidSet,
-        shouldRenderGroupedAllCollections,
         viewMode,
-    ]);
+        sortByField,
+        sortOrder,
+        dragSession,
+        hasSearchQuery,
+        shouldRenderGroupedAllCollections,
+        canReorderFlatCollections,
+        groupedSectionCollectionsMap,
+        persistCollectionChanges,
+        setHighlightedCollectionUid,
+        setDraggingCollection,
+        triggerFolderLightningEffect,
+    });
 
-    const measuring = {
-        droppable: { strategy: MeasuringStrategy.Always },
-        dragOverlay: { strategy: MeasuringStrategy.Always },
-    };
+    const activeParentId = useMemo(() => (
+        activeCollection ? normalizeCollectionParentId(activeCollection, folderUidSet) : null
+    ), [activeCollection, folderUidSet]);
 
-    const resetDragState = useCallback(() => {
-        setActiveCollection(null);
-        setPreviewTarget(null);
-        previewTargetRef.current = null;
-        lastMeaningfulDropTargetRef.current = null;
-        setDraggingCollection(null);
-        activeDragRectRef.current = null;
-    }, [setDraggingCollection]);
-
-    const handleDragStart = (event) => {
-        if (dragSession || hasSearchQuery) {
-            resetDragState();
-            return;
-        }
-
-        const col = sourceCollections.find(c => c.uid === event.active.id);
-        if (col) {
-            setActiveCollection(col);
-            setDraggingCollection({ collection: col });
-        }
-        activeDragRectRef.current = null;
-        setPreviewTarget(null);
-        previewTargetRef.current = null;
-        lastMeaningfulDropTargetRef.current = null;
-
-        // Measure the original card so the overlay matches its grid size.
-        const activeId = String(event.active.id);
-        const escapedId = window.CSS?.escape ? window.CSS.escape(activeId) : activeId.replace(/"/g, '\\"');
-        const sourceEl = document.querySelector(`[data-sortable-collection-id="${escapedId}"]`);
-        if (sourceEl) {
-            const r = sourceEl.getBoundingClientRect();
-            activeDragRectRef.current = { width: r.width, height: r.height };
-        } else {
-            const initial = event.active?.rect?.current?.initial;
-            if (initial && initial.width > 0) {
-                activeDragRectRef.current = { width: initial.width, height: initial.height };
-            }
-        }
-    };
-
-    const getCollectionTargetRect = (collectionId) => {
-        if (!collectionId || typeof document === 'undefined') {
-            return null;
-        }
-
-        const escapedId = window.CSS?.escape
-            ? window.CSS.escape(collectionId)
-            : collectionId.replace(/"/g, '\\"');
-        const element = document.querySelector(`[data-sortable-collection-id="${escapedId}"]`);
-
-        return element?.getBoundingClientRect() || null;
-    };
-
-    const handleDragOver = (event) => {
-        if (dragSession || hasSearchQuery) {
-            resetDragState();
-            return;
-        }
-
-        const baseTarget = resolveCollectionDropTarget({
-            over: event.over,
-            collections: displayCollections,
-            folderUidSet,
-        });
-        const point = getPointerCoordinates(event);
-        const pointerPoint = getActualPointerCoordinates(event) || point;
-        const groupedEmptySectionTarget = shouldRenderGroupedAllCollections && pointerPoint
-            ? findGroupedEmptySectionTargetAtPoint(pointerPoint)
-            : null;
-        const groupedGridCollectionTarget = (
-            shouldRenderGroupedAllCollections &&
-            viewMode === 'grid' &&
-            pointerPoint &&
-            groupedEmptySectionTarget?.kind !== collectionDropKinds.sectionEmpty &&
-            baseTarget?.kind !== collectionDropKinds.collection
-        )
-            ? findGroupedGridCollectionTargetAtPoint(pointerPoint, activeCollection?.uid, folderUidSet)
-            : null;
-        const sectionBodyTarget = shouldRenderGroupedAllCollections && viewMode === 'list'
-            ? findGroupedSectionBodyTargetAtPoint(pointerPoint)
-            : null;
-        let nextTarget = groupedEmptySectionTarget || groupedGridCollectionTarget || sectionBodyTarget || baseTarget;
-
-        if (
-            shouldRenderGroupedAllCollections &&
-            viewMode === 'grid' &&
-            nextTarget &&
-            (
-                nextTarget.kind === collectionDropKinds.sectionStart ||
-                nextTarget.kind === collectionDropKinds.sectionEnd
-            )
-        ) {
-            const destinationCollections = groupedSectionCollectionsMap.get(nextTarget.parentId) || [];
-            if (destinationCollections.length > 0) {
-                nextTarget = {
-                    kind: collectionDropKinds.collection,
-                    parentId: nextTarget.parentId,
-                    collectionId: nextTarget.kind === collectionDropKinds.sectionStart
-                        ? destinationCollections[0].uid
-                        : destinationCollections[destinationCollections.length - 1].uid,
-                    side: nextTarget.kind === collectionDropKinds.sectionStart
-                        ? collectionDropSides.before
-                        : collectionDropSides.after,
-                };
-            }
-        }
-
-        if (!nextTarget || !activeCollection) {
-            setPreviewTarget(null);
-            previewTargetRef.current = null;
-            return;
-        }
-
-        if (nextTarget.kind === collectionDropKinds.collection) {
-            if (nextTarget.collectionId === activeCollection.uid) {
-                return;
-            }
-
-            const rect = getCollectionTargetRect(nextTarget.collectionId);
-            const side = nextTarget.side || getCollectionTargetSide({
-                viewMode,
-                point: pointerPoint || point,
-                rect,
-            });
-
-            const resolvedTarget = {
-                ...nextTarget,
-                side,
-            };
-
-            setPreviewTarget(resolvedTarget);
-            previewTargetRef.current = resolvedTarget;
-            lastMeaningfulDropTargetRef.current = resolvedTarget;
-            return;
-        }
-
-        setPreviewTarget(nextTarget);
-        previewTargetRef.current = nextTarget;
-        lastMeaningfulDropTargetRef.current = nextTarget;
-    };
-
-    const findSidebarDropTarget = (x, y) => {
-        const folderItems = document.querySelectorAll('[data-sidebar-folder-uid]');
-        for (const item of folderItems) {
-            const rect = item.getBoundingClientRect();
-            if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-                return item.getAttribute('data-sidebar-folder-uid');
-            }
-        }
-        const noFolderItem = document.querySelector('[data-sidebar-no-folder]');
-        if (noFolderItem) {
-            const rect = noFolderItem.getBoundingClientRect();
-            if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-                return 'no-folder';
-            }
-        }
-        return null;
-    };
-
-    const handleDragEnd = async (event) => {
-        if (dragSession || hasSearchQuery) {
-            resetDragState();
-            return;
-        }
-
-        const { active } = event;
-        const draggedCollection = sourceCollections.find(collection => collection.uid === active.id);
-        const draggedParentId = draggedCollection
-            ? normalizeCollectionParentId(draggedCollection, folderUidSet)
-            : null;
-
-        // Check for cross-context sidebar drop using the actual pointer position
-        // at drop time. Computed from dnd-kit's activatorEvent + accumulated delta.
-        const finalX = event.activatorEvent.clientX + event.delta.x;
-        const finalY = event.activatorEvent.clientY + event.delta.y;
-        const sidebarTarget = findSidebarDropTarget(finalX, finalY);
-
-        if (sidebarTarget && draggedCollection) {
-            const targetParentId = sidebarTarget === 'no-folder' ? null : sidebarTarget;
-
-            if (targetParentId !== draggedParentId) {
-                const sidebarOperation = resolveCollectionDropOperation({
-                    collections: sourceCollections,
-                    folders,
-                    activeId: active.id,
-                    target: {
-                        kind: collectionDropKinds.sectionEnd,
-                        parentId: targetParentId,
-                    },
-                    viewMode,
-                    sortBy: sortByField,
-                    sortOrder,
-                });
-                const nextCollections = applyCollectionDropOperation({
-                    collections: sourceCollections,
-                    folders,
-                    operation: sidebarOperation,
-                    sortBy: sortByField,
-                    sortOrder,
-                });
-
-                if (nextCollections) {
-                    await persistCollectionChanges(nextCollections, getAffectedCollectionParentIds(sidebarOperation));
-                    setHighlightedCollectionUid(draggedCollection.uid);
-                    if (targetParentId && triggerFolderLightningEffect) {
-                        triggerFolderLightningEffect(targetParentId);
-                    }
-                }
-            }
-
-            resetDragState();
-            return;
-        }
-
-        const finalPreviewTarget = previewTargetRef.current || lastMeaningfulDropTargetRef.current;
-
-        if (!finalPreviewTarget || !draggedCollection) {
-            resetDragState();
-            return;
-        }
-
-        const operation = resolveCollectionDropOperation({
-            collections: sourceCollections,
-            folders,
-            activeId: active.id,
-            target: finalPreviewTarget,
-            viewMode,
-            sortBy: sortByField,
-            sortOrder,
-        });
-        const nextCollections = applyCollectionDropOperation({
-            collections: sourceCollections,
-            folders,
-            operation,
-            sortBy: sortByField,
-            sortOrder,
-        });
-
-        if (nextCollections) {
-            await persistCollectionChanges(nextCollections, getAffectedCollectionParentIds(operation));
-            setHighlightedCollectionUid(draggedCollection.uid);
-            if (
-                finalPreviewTarget.parentId &&
-                finalPreviewTarget.parentId !== draggedParentId &&
-                triggerFolderLightningEffect
-            ) {
-                triggerFolderLightningEffect(finalPreviewTarget.parentId);
-            }
-        }
-
-        resetDragState();
-    };
+    const isSameParentCollectionPreview = useMemo(() => (
+        !!previewTarget &&
+        previewTarget.kind === collectionDropKinds.collection &&
+        previewTarget.parentId === activeParentId
+    ), [previewTarget, activeParentId]);
 
     // Sort handler — uses flatSort so all collections sort globally regardless of folder
     const handleSort = async (sortBy, ascending) => {
@@ -3617,6 +3003,7 @@ function FPContentArea({
                 : null;
             const normalizedSectionParentId = isRootSection ? null : section.id;
             const previewBelongsToSection = previewTarget?.parentId === normalizedSectionParentId;
+            const isAmbientSectionTarget = !!activeCollection && normalizedSectionParentId !== activeParentId;
             const isCollapsedSectionTarget = isCollapsed &&
                 previewBelongsToSection &&
                 (
@@ -3630,7 +3017,7 @@ function FPContentArea({
                     className={`fp-grouped-section fp-grouped-section-${section.kind}${isCollapsed ? ' collapsed' : ''}`}
                 >
                     <FPSectionDropZone
-                        className={`fp-grouped-section-header-dropzone${isCollapsed ? ' collapsed' : ''}`}
+                        className={`fp-grouped-section-header-dropzone${isCollapsed ? ' collapsed' : ''}${isAmbientSectionTarget ? ' dnd-drop-ambient' : ''}`}
                         parentId={normalizedSectionParentId}
                         canHighlight={isCollapsedSectionTarget}
                     >
@@ -3713,7 +3100,7 @@ function FPContentArea({
                             ) : (
                                 <FPSectionContentDropZone
                                     id={`empty-${section.id}`}
-                                    className={`fp-grouped-empty-dropzone-wrapper${viewMode === 'list' ? ' fp-content-list-mode' : ''}`}
+                                    className={`fp-grouped-empty-dropzone-wrapper${viewMode === 'list' ? ' fp-content-list-mode' : ''}${isAmbientSectionTarget ? ' dnd-drop-ambient' : ''}`}
                                     parentId={normalizedSectionParentId}
                                     canHighlight={previewBelongsToSection && previewTarget?.kind === collectionDropKinds.sectionEmpty}
                                 >
@@ -3829,6 +3216,7 @@ function FPContentArea({
                             sensors={sensors}
                             collisionDetection={customCollisionDetection}
                             onDragStart={handleDragStart}
+                            onDragMove={handleDragMove}
                             onDragOver={handleDragOver}
                             onDragEnd={handleDragEnd}
                             onDragCancel={resetDragState}
@@ -3845,7 +3233,7 @@ function FPContentArea({
                             >
                                 {activeCollection ? (
                                     <div
-                                        className="fp-card-drag-overlay"
+                                        className="fp-card-drag-overlay dnd-drag-overlay"
                                         data-fp-drag-overlay="true"
                                         style={activeDragRectRef.current ? { width: activeDragRectRef.current.width, height: activeDragRectRef.current.height } : undefined}
                                     >

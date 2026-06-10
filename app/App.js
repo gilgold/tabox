@@ -59,6 +59,10 @@ import { openCollectionTabs } from './useCollectionOperations';
 // Folder operations
 import { createFolder } from './utils/folderOperations';
 
+import useOrphanRecovery from './useOrphanRecovery';
+import OrphanRecoveryModal from './OrphanRecoveryModal';
+import { OrphanRecoveryContext } from './OrphanRecoveryContext';
+
 // Migration system imports - wrapped in try/catch for compatibility
 const PERF_NAMESPACE = 'tabox:popup';
 const PERF_MEASURE_PREFIX = `${PERF_NAMESPACE}:measure:`;
@@ -262,6 +266,7 @@ function App({ mode = 'popup' }) {
   const [migrationChecked, setMigrationChecked] = useState(false);
   const [dataLoading, setDataLoading] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [orphanScanReady, setOrphanScanReady] = useState(false);
 
   // Lightning effect state for folders when collections are dropped into them
   const [lightningEffectFolderUid, setLightningEffectFolderUid] = useState(null);
@@ -932,6 +937,26 @@ function App({ mode = 'popup' }) {
   const refreshDataAfterFolderOperation = async () => {
     await reloadCollectionsAndFoldersFromStorage({ updateSyncTime: true });
   };
+
+  // Enable orphan detection once migration has been checked — NOT on dataLoaded,
+  // which never flips on some paths (e.g. the full-page view hydrated via sync).
+  // A fallback timer guarantees detection still runs if no signal arrives, so it
+  // can never be permanently blocked by a single data-load code path.
+  useEffect(() => {
+    if (migrationChecked || dataLoaded) {
+      setOrphanScanReady(true);
+      return undefined;
+    }
+    const fallback = setTimeout(() => setOrphanScanReady(true), 2000);
+    return () => clearTimeout(fallback);
+  }, [migrationChecked, dataLoaded]);
+
+  const orphanRecovery = useOrphanRecovery(orphanScanReady, {
+    onRecovered: async (count) => {
+      await refreshDataAfterFolderOperation();
+      showSuccessToast(`Restored ${count} hidden collection${count === 1 ? '' : 's'}`);
+    },
+  });
 
   const applyOptimisticFolderUpdate = useCallback((folderUid, updates = {}) => {
     if (!folderUid || !updates || typeof updates !== 'object') {
@@ -1988,80 +2013,100 @@ function App({ mode = 'popup' }) {
 
   if (isFullPage) {
     return <>
-      {tooltipPortal}
-      {commandPaletteEl}
-      <FPLayout
-        folders={displayFolders}
-        collections={collectionsToShow}
-        allCollections={settingsData}
-        logout={logout}
-        applyDataFromServer={applyDataFromServer}
-        updateRemoteData={updateRemoteData}
-        addCollection={addCollection}
-        removeCollection={removeCollection}
-        updateCollection={updateCollection}
-        addFolder={addFolder}
-        onFolderOptimisticUpdate={applyOptimisticFolderUpdate}
-        onDataUpdate={refreshDataAfterFolderOperation}
-        onFolderStateChange={updateFolderCollapsedPreference}
-        updateFolders={updateFolders}
-        triggerSync={triggerSync}
-        viewMode={viewMode}
-        sortValue={sortValue}
-        onViewModeChange={setViewMode}
-        onFiltersChange={handleFiltersChange}
-        filters={filters}
-        hasActiveFilters={hasActiveFilters}
-        lightningEffectFolderUid={lightningEffectFolderUid}
-        triggerFolderLightningEffect={triggerFolderLightningEffect}
-        trackedCollectionUids={trackedCollectionUids}
-        listKey={listKey}
-      />
+      <OrphanRecoveryContext.Provider value={orphanRecovery}>
+        <OrphanRecoveryModal
+          isOpen={orphanRecovery.showModal}
+          orphans={orphanRecovery.orphans}
+          busy={orphanRecovery.busy}
+          onRestoreAll={() => orphanRecovery.recover()}
+          onRestoreSelected={(uids) => orphanRecovery.recover(uids)}
+          onDismiss={() => orphanRecovery.dismiss()}
+        />
+        {tooltipPortal}
+        {commandPaletteEl}
+        <FPLayout
+          folders={displayFolders}
+          collections={collectionsToShow}
+          allCollections={settingsData}
+          logout={logout}
+          applyDataFromServer={applyDataFromServer}
+          updateRemoteData={updateRemoteData}
+          addCollection={addCollection}
+          removeCollection={removeCollection}
+          updateCollection={updateCollection}
+          addFolder={addFolder}
+          onFolderOptimisticUpdate={applyOptimisticFolderUpdate}
+          onDataUpdate={refreshDataAfterFolderOperation}
+          onFolderStateChange={updateFolderCollapsedPreference}
+          updateFolders={updateFolders}
+          triggerSync={triggerSync}
+          viewMode={viewMode}
+          sortValue={sortValue}
+          onViewModeChange={setViewMode}
+          onFiltersChange={handleFiltersChange}
+          filters={filters}
+          hasActiveFilters={hasActiveFilters}
+          lightningEffectFolderUid={lightningEffectFolderUid}
+          triggerFolderLightningEffect={triggerFolderLightningEffect}
+          trackedCollectionUids={trackedCollectionUids}
+          listKey={listKey}
+        />
+      </OrphanRecoveryContext.Provider>
     </>;
   }
 
   return <>
-    {tooltipPortal}
-    {commandPaletteEl}
-    <div className={`App${isFullPage ? ' fullpage' : ''}`}>
-    <Header
-      isFullPage={isFullPage}
-      applyDataFromServer={applyDataFromServer}
-      updateRemoteData={updateRemoteData}
-      logout={logout} />
-    <div className={`main-content-wrapper${isFullPage && isPanelOpen ? ' panel-open' : ''}`}>
-              <AddNewTextbox addCollection={addCollection} addFolder={addFolder} updateRemoteData={updateRemoteData} onDataUpdate={refreshDataAfterFolderOperation} />
-      <CollectionListOptions
-        key={`${sortValue}-select`}
-        updateRemoteData={updateRemoteData}
-        selected={sortValue}
-        addCollection={addCollection}
-        addFolder={addFolder}
-        onViewModeChange={setViewMode}
-        onFiltersChange={handleFiltersChange}
-        onDataUpdate={refreshDataAfterFolderOperation}
+    <OrphanRecoveryContext.Provider value={orphanRecovery}>
+      <OrphanRecoveryModal
+        isOpen={orphanRecovery.showModal}
+        orphans={orphanRecovery.orphans}
+        busy={orphanRecovery.busy}
+        onRestoreAll={() => orphanRecovery.recover()}
+        onRestoreSelected={(uids) => orphanRecovery.recover(uids)}
+        onDismiss={() => orphanRecovery.dismiss()}
       />
-      <CollectionList
-        key={`collection-list-${listKey}`}
+      {tooltipPortal}
+      {commandPaletteEl}
+      <div className={`App${isFullPage ? ' fullpage' : ''}`}>
+      <Header
         isFullPage={isFullPage}
+        applyDataFromServer={applyDataFromServer}
         updateRemoteData={updateRemoteData}
-        collections={collectionsToShow}
-        folders={displayFolders}
-        updateCollection={updateCollection}
-        removeCollection={removeCollection}
-        addCollection={addCollection}
-        onDataUpdate={refreshDataAfterFolderOperation}
-        onFolderStateChange={updateFolderCollapsedPreference}
-        updateFolders={updateFolders}
-        triggerSync={triggerSync}
-        viewMode={viewMode}
-        hasActiveFilters={hasActiveFilters}
-        lightningEffectFolderUid={lightningEffectFolderUid}
-        triggerFolderLightningEffect={triggerFolderLightningEffect} />
-      <div className="bottom-fade-overlay"></div>
+        logout={logout} />
+      <div className={`main-content-wrapper${isFullPage && isPanelOpen ? ' panel-open' : ''}`}>
+                <AddNewTextbox addCollection={addCollection} addFolder={addFolder} updateRemoteData={updateRemoteData} onDataUpdate={refreshDataAfterFolderOperation} />
+        <CollectionListOptions
+          key={`${sortValue}-select`}
+          updateRemoteData={updateRemoteData}
+          selected={sortValue}
+          addCollection={addCollection}
+          addFolder={addFolder}
+          onViewModeChange={setViewMode}
+          onFiltersChange={handleFiltersChange}
+          onDataUpdate={refreshDataAfterFolderOperation}
+        />
+        <CollectionList
+          key={`collection-list-${listKey}`}
+          isFullPage={isFullPage}
+          updateRemoteData={updateRemoteData}
+          collections={collectionsToShow}
+          folders={displayFolders}
+          updateCollection={updateCollection}
+          removeCollection={removeCollection}
+          addCollection={addCollection}
+          onDataUpdate={refreshDataAfterFolderOperation}
+          onFolderStateChange={updateFolderCollapsedPreference}
+          updateFolders={updateFolders}
+          triggerSync={triggerSync}
+          viewMode={viewMode}
+          hasActiveFilters={hasActiveFilters}
+          lightningEffectFolderUid={lightningEffectFolderUid}
+          triggerFolderLightningEffect={triggerFolderLightningEffect} />
+        <div className="bottom-fade-overlay"></div>
+      </div>
+      <Footer />
     </div>
-    <Footer />
-  </div>
+    </OrphanRecoveryContext.Provider>
   </>;
 }
 

@@ -1628,8 +1628,12 @@ try {
         }
         
         if (backupData && backupData.tabsArray) {
-          await browser.storage.local.set({ 
-            tabsArray: backupData.tabsArray,
+          // Write through the indexed storage system so the restored collections are
+          // actually visible. Writing only the legacy tabsArray is inert for existing
+          // users, since loadAllCollections() reads the index and only falls back to
+          // tabsArray when the index is empty.
+          await updateAllCollectionsBG(backupData.tabsArray);
+          await browser.storage.local.set({
             localTimestamp: Date.now() // Mark as newly updated
           });
           return Promise.resolve(true);

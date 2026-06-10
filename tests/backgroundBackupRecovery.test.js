@@ -75,6 +75,17 @@ describe('background backup recovery handlers', () => {
             return true;
         });
         global.forceLegacyStorageSync = jest.fn(async () => {});
+        global.updateAllCollectionsBG = jest.fn(async (collections) => {
+            for (const collection of collections) {
+                const index = collectionsState.findIndex((entry) => entry.uid === collection.uid);
+                if (index > -1) {
+                    collectionsState[index] = { ...collectionsState[index], ...collection };
+                } else {
+                    collectionsState.push({ ...collection });
+                }
+            }
+            return true;
+        });
         global.generateUid = jest.fn(() => `generated-${Math.random().toString(36).slice(2, 8)}`);
         global.applyUid = jest.fn((value) => value);
     });
@@ -91,6 +102,7 @@ describe('background backup recovery handlers', () => {
         delete global.saveSingleCollectionBG;
         delete global.saveSingleFolderBG;
         delete global.forceLegacyStorageSync;
+        delete global.updateAllCollectionsBG;
         delete global.generateUid;
         delete global.applyUid;
     });
@@ -203,6 +215,28 @@ describe('background backup recovery handlers', () => {
             collectionsImported: 1,
             foldersImported: 1,
         }));
+    });
+
+    test('recoverFromBackup writes restored collections into indexed storage, not just legacy tabsArray', async () => {
+        // Existing user already has a populated indexed store (non-empty index).
+        collectionsState = [
+            { uid: 'current-1', name: 'Current Collection', parentId: null, tabs: [], chromeGroups: [] },
+        ];
+
+        require('../chrome/background.js');
+
+        const result = await browser.runtime.sendMessage({
+            type: 'recoverFromBackup',
+            backupType: 'auto',
+            backupIndex: 0,
+        });
+
+        expect(result).toBe(true);
+        // The backup's collection must land in the indexed storage that loadAllCollections() reads,
+        // otherwise the popup reload returns stale data and nothing visibly restores.
+        expect(collectionsState).toEqual(expect.arrayContaining([
+            expect.objectContaining({ uid: 'collection-1', name: 'Alpha' }),
+        ]));
     });
 
     test('overwrites only the selected items, creates an emergency auto backup, and normalizes missing folder references', async () => {

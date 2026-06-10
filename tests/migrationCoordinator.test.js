@@ -422,6 +422,26 @@ describe('migrationCoordinator', () => {
         })).toBe(true);
     });
 
+    test('color/timestamp/deferred-url steps preserve every collection and its tab count', async () => {
+        const data = {
+            collection_a: { uid: 'a', tabs: [{ url: 'http://x' }, { url: 'http://y' }], color: '#1D76DB' },
+            collection_b: { uid: 'b', tabs: [{ url: 'http://z' }], color: '#D93F0B' },
+            tabsArray: [
+                { uid: 'a', tabs: [{ url: 'http://x' }, { url: 'http://y' }], color: '#1D76DB' },
+                { uid: 'b', tabs: [{ url: 'http://z' }], color: '#D93F0B' },
+            ],
+        };
+
+        const afterColor = await migrationCoordinator.migrateColorsOnly(data);
+        const afterTs = await migrationCoordinator.migrateTimestamps(afterColor);
+        const afterUrls = await migrationCoordinator.repairDeferredUrls(afterTs);
+
+        expect(afterUrls.collection_a.tabs).toHaveLength(2);
+        expect(afterUrls.collection_b.tabs).toHaveLength(1);
+        expect(afterUrls.collection_a.uid).toBe('a');
+        expect(afterUrls.collection_b.uid).toBe('b');
+    });
+
     test('tracks migration history using major.minor versions only', async () => {
         storageUtils.safeStorageGet.mockResolvedValue({
             migration_history: {

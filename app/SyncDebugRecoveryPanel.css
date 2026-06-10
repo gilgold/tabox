@@ -476,6 +476,20 @@
     color: #93c5fd;
 }
 
+.sync-recovery-orphan-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    margin-bottom: 16px;
+    border: 1px solid var(--primary-color, #2563eb);
+    border-radius: 10px;
+    background: var(--primary-color-faded, rgba(37, 99, 235, 0.08));
+}
+.sync-recovery-orphan-copy { display: flex; flex-direction: column; gap: 2px; }
+.sync-recovery-orphan-copy span { font-size: 13px; opacity: 0.85; }
+
 .sync-recovery-picker-overlay {
     position: fixed;
     inset: 0;

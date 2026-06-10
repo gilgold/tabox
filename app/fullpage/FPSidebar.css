@@ -426,9 +426,9 @@
 
 /* ---- Drop Zone States ---- */
 .fp-sidebar-drop-active {
-    outline: 1.5px dashed color-mix(in srgb, var(--primary-color) 50%, transparent);
+    outline: 1.5px dashed var(--dnd-accent-border-soft);
     outline-offset: -1.5px;
-    background: color-mix(in srgb, var(--primary-color) 5%, transparent);
+    background: var(--dnd-accent-bg-soft);
     transition:
         background 0.15s ease,
         outline-color 0.15s ease,
@@ -436,24 +436,14 @@
 }
 
 .fp-sidebar-drop-over {
-    outline: 2px solid var(--primary-color);
+    outline: 2px solid var(--dnd-accent);
     outline-offset: -2px;
-    background: color-mix(in srgb, var(--primary-color) 14%, transparent);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary-color) 20%, transparent);
+    background: var(--dnd-accent-bg);
+    box-shadow: inset 0 0 0 1px var(--dnd-accent-bg);
     transition:
         background 0.12s ease,
         outline-color 0.12s ease,
         box-shadow 0.12s ease;
-}
-
-[data-theme="dark"] .fp-sidebar-drop-active {
-    outline-color: color-mix(in srgb, var(--primary-color) 60%, transparent);
-    background: color-mix(in srgb, var(--primary-color) 8%, transparent);
-}
-
-[data-theme="dark"] .fp-sidebar-drop-over {
-    background: color-mix(in srgb, var(--primary-color) 20%, transparent);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary-color) 30%, transparent);
 }
 
 /* ---- Stats ---- */
