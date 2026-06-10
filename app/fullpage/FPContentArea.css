@@ -1190,7 +1190,9 @@ html.fullpage-mode .fp-content .folder-stats-text {
 
 .fp-content-list-mode .fp-card-title-row {
     flex: 1;
-    min-width: 0;
+    /* The name must keep readable space when the detail panel squeezes the row;
+       favicons and chips give way first (see the container queries below). */
+    min-width: 140px;
 }
 
 .fp-content-list-mode .fp-card-title-row.fp-card-title-row-list {
@@ -1302,6 +1304,38 @@ html.fullpage-mode .fp-content .folder-stats-text {
 
 .fp-content-list-mode .fp-card.fp-card-has-matches .fp-card-body {
     width: 100%;
+}
+
+/* Responsive list rows: when the detail panel (45vw) opens on smaller screens the
+   content area narrows; drop row elements progressively so the name stays visible.
+   Older engines without container queries keep the min-width guard above. */
+.fp-content-grid.fp-content-list-mode,
+.fp-grouped-section-items.fp-content-list-mode {
+    container: fp-list-rows / inline-size;
+}
+
+@container fp-list-rows (max-width: 560px) {
+    .fp-card-favicons {
+        display: none;
+    }
+}
+
+@container fp-list-rows (max-width: 470px) {
+    .fp-card-meta-chip.folder {
+        display: none;
+    }
+}
+
+@container fp-list-rows (max-width: 420px) {
+    .fp-card-time {
+        display: none;
+    }
+}
+
+@container fp-list-rows (max-width: 360px) {
+    .fp-card-count-chip.groups {
+        display: none;
+    }
 }
 
 .fp-content-list-mode .fp-card.fp-card-has-matches .fp-card-actions {
