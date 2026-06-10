@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-10
 **Branch:** feature/v4.1.3
-**Status:** Approved design, pending implementation plan
+**Status:** Implemented (see docs/superpowers/plans/2026-06-10-quick-tab-switcher.md)
 
 ## Overview
 
