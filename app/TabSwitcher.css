@@ -21,8 +21,12 @@
 
 /* ContextMenu portals mount as <body> children after the overlay; without this
    they lose the stacking battle to the overlay (and to static/index.css's
-   global 999999 !important rule) and paint underneath it. */
-.tab-switcher-overlay ~ .context-menu {
+   global 999999 !important rules) and paint underneath it. The class is
+   doubled because the cursor-positioned menu carries an inline
+   "position: fixed; top; left" style, which static/index.css's drawer
+   catch-alls match at specificity (0,2,1) with !important — this selector
+   must reach (0,3,0) to win. */
+.tab-switcher-overlay ~ .context-menu.context-menu {
     z-index: 2147483647 !important;
 }
 
