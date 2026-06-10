@@ -59,6 +59,9 @@ export function initialSelectionIndex(entries) {
 }
 
 export async function loadTabEntries() {
+    // Bare getCurrent() (unlike currentWindows.js's focused-window resolution):
+    // "This window" must mean the window hosting this popup/fullpage UI, even
+    // when another window currently has OS focus.
     const [windows, current] = await Promise.all([
         browser.windows.getAll({ populate: true, windowTypes: ['normal'] }),
         browser.windows.getCurrent().catch(() => null),
