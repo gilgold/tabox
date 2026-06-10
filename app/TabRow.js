@@ -67,7 +67,7 @@ const TabRow = memo(({
 
     // Helper function to escape regex special characters
     const escapeRegex = (string) => {
-        return string.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+        return string.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
     };
 
     // Helper function to format and truncate URL
@@ -363,5 +363,7 @@ const TabRow = memo(({
         </div>
     );
 });
+
+TabRow.displayName = 'TabRow';
 
 export default TabRow;

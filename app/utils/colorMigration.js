@@ -138,6 +138,7 @@ const migrateCollectionColors = (collection) => {
     }
     
     if (colorsMigrated) {
+        // Colors were migrated; debug logging removed.
     }
     
     return migratedCollection;
@@ -164,6 +165,7 @@ export const migrateAllCollectionColors = (collections) => {
     });
     
     if (totalMigrations > 0) {
+        // Some collections were migrated; debug logging removed.
     }
     
     return migratedCollections;

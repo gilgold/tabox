@@ -4,9 +4,13 @@ const { createVersion40LocalSnapshot, createVersion40RemoteDocument } = require(
 describe('4.0 upgrade compatibility - regressions', () => {
     let browser;
     let backgroundUtils;
+    let errorSpy;
 
     beforeEach(() => {
         jest.resetModules();
+        // The sync logger intentionally emits console.error on the safety-block
+        // and credential-failure paths exercised below.
+        errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
         browser = createBrowserHarness();
         global.browser = browser;
         global.chrome = { runtime: browser.runtime };
@@ -34,6 +38,7 @@ describe('4.0 upgrade compatibility - regressions', () => {
     });
 
     afterEach(() => {
+        jest.restoreAllMocks();
         delete global.browser;
         delete global.chrome;
         delete global.fetch;
@@ -55,6 +60,9 @@ describe('4.0 upgrade compatibility - regressions', () => {
         expect(global.fetch).not.toHaveBeenCalledWith(
             expect.stringContaining('/upload/drive/v3/files/remote-file-id'),
             expect.objectContaining({ method: 'PATCH' })
+        );
+        expect(errorSpy).toHaveBeenCalledWith(
+            expect.stringContaining('SAFETY BLOCK: Refusing to push empty data to server')
         );
     });
 
@@ -212,7 +220,7 @@ describe('4.0 upgrade compatibility - regressions', () => {
         browser.storage.local._data = createVersion40LocalSnapshot();
         browser.storage.sync._data = {};
 
-        global.fetch.mockImplementation(async (url, options = {}) => {
+        global.fetch.mockImplementation(async (url) => {
             if (url.includes('/drive/v3/files/?corpora=user')) {
                 return {
                     ok: true,
@@ -303,5 +311,8 @@ describe('4.0 upgrade compatibility - regressions', () => {
         expect(token).toBe(false);
         expect(browser.storage.local._data['collection_collection-root-a']).toBeDefined();
         expect(browser.storage.local._data['folder_folder-alpha']).toBeDefined();
+        expect(errorSpy).toHaveBeenCalledWith(
+            expect.stringContaining('sync credentials not configured')
+        );
     });
 });

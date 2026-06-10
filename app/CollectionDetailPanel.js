@@ -7,7 +7,7 @@ import { BsIncognito } from 'react-icons/bs';
 import { CiExport } from 'react-icons/ci';
 import TimeAgo from 'javascript-time-ago';
 import { useSetAtom, useAtomValue } from 'jotai';
-import { deletingCollectionUidsState, highlightedCollectionUidState } from './atoms/animationsState';
+import { deletingCollectionUidsState } from './atoms/animationsState';
 import { trackingStateVersion } from './atoms/globalAppSettingsState';
 import { showSuccessToast, showErrorToast } from './toastHelpers';
 import { useCollectionOperations } from './useCollectionOperations';
@@ -43,9 +43,7 @@ function CollectionDetailPanel({
     const titleInputRef = useRef(null);
     const skipTitleBlurRef = useRef(false);
 
-    const deletingCollectionUids = useAtomValue(deletingCollectionUidsState);
     const setDeletingCollectionUids = useSetAtom(deletingCollectionUidsState);
-    const setHighlightedCollectionUid = useSetAtom(highlightedCollectionUidState);
 
     // Use shared collection operations
     const {
@@ -246,7 +244,7 @@ function CollectionDetailPanel({
     const formatTimeAgo = (timestamp) => {
         try {
             return timeAgo.format(new Date(timestamp));
-        } catch (error) {
+        } catch {
             return 'Recently';
         }
     };

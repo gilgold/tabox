@@ -454,7 +454,7 @@ async function handleBadge() {
     
   browser.action.setBadgeBackgroundColor({ color: badgeColor });
   browser.action.setBadgeText({ text: tabCount.toString() });
-  } catch (error) {
+  } catch {
     // Silently handle errors (e.g., no current window)
     browser.action.setBadgeText({ text: '' });
   }
@@ -508,7 +508,7 @@ async function handleAutoUpdate(windowId, timeDelay = 1, rebuildContextMenus = f
     // Verify window still exists
     try {
       await browser.windows.get(windowId);
-    } catch (e) {
+    } catch {
       const updatedTracking = collectionsToTrack.filter(c => c.windowId !== windowId);
       await browser.storage.local.set({ collectionsToTrack: updatedTracking });
       return;
@@ -767,19 +767,6 @@ function shouldDiscardTab(tab) {
 
 const isNewWindow = window => window?.tabs?.length === 1 && (!window?.tabs[0].url || window?.tabs[0].url.indexOf('://newtab') > 0);
 
-// Helper function to check if extension can access incognito
-async function canAccessIncognito() {
-  try {
-    // Try to query incognito windows - if this works, we have permission
-    const incognitoWindows = await browser.windows.getAll({ windowTypes: ['normal'] });
-    // Check if any incognito windows exist and we can see them
-    // If the extension can't access incognito, incognito windows won't appear
-    return true; // Extension is at least allowed in spanning mode
-  } catch (error) {
-    return false;
-  }
-}
-
 // Helper function to check if user has enabled incognito access
 async function isIncognitoEnabled() {
   try {
@@ -795,7 +782,6 @@ async function isIncognitoEnabled() {
 // Optimized openTabs function for better performance with large collections
 // Now with incognito-aware restoration
 async function openTabs(collection, window, newWindow = null, trackOpenedWindow = true) {
-  const startTime = Date.now();
   const totalTabs = collection.tabs.length;
   
   // Early return for empty collections
@@ -924,7 +910,8 @@ async function openTabs(collection, window, newWindow = null, trackOpenedWindow 
         
         if (tabData.isFirstTab) {
           // Update existing tab in new window (exclude windowId - not valid for update)
-          const { windowId, ...updateProps } = tabData.properties;
+          const updateProps = { ...tabData.properties };
+          delete updateProps.windowId;
           tab = await browser.tabs.update(window.tabs[0].id, {
             ...updateProps,
             ...tabData.updateProperties
@@ -1919,7 +1906,7 @@ try {
       try {
         await browser.windows.update(request.windowId, { focused: true });
         return Promise.resolve(true);
-      } catch (error) {
+      } catch {
         // Clean up tracking for this window
         const { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack');
         if (collectionsToTrack && collectionsToTrack.length > 0) {
@@ -2112,7 +2099,6 @@ try {
           previousVersion: previousVersion,
           currentVersion: currentVersion
         });
-      } else {
       }
     } else if (reason === "install") {
       // Mark as fresh install - no migration needed

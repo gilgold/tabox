@@ -51,7 +51,7 @@ function CollectionDeleteConfirmModal({
 
                     <div className="delete-confirm-modal-body">
                         <p className="delete-confirm-question">
-                            Are you sure you want to delete <strong>"{collectionName}"</strong>?
+                            Are you sure you want to delete <strong>&quot;{collectionName}&quot;</strong>?
                         </p>
 
                         <div className="delete-confirm-warning-box">

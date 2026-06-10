@@ -1,5 +1,4 @@
 /* global browser */
-import React from 'react';
 import { render, act, waitFor, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { CollectionListOptions } from '../app/CollectionListOptions';
@@ -25,11 +24,14 @@ describe('Collection List Options tests', () => {
   });
 
   test('uses the full-page toolbar button styles with a working sort dropdown in popup view', async () => {
-    const { container } = render(
-      <Provider>
-        <CollectionListOptions addCollection={jest.fn()} />
-      </Provider>,
-    );
+    let container;
+    await act(async () => {
+      ({ container } = render(
+        <Provider>
+          <CollectionListOptions addCollection={jest.fn()} />
+        </Provider>,
+      ));
+    });
 
     await waitFor(() => {
       expect(container.querySelector('.collections-toolbar.fp-toolbar')).toBeInTheDocument();
@@ -67,11 +69,14 @@ describe('Collection List Options tests', () => {
       },
     ]);
 
-    const { container } = render(
-      <Provider>
-        <CollectionListOptions addCollection={jest.fn()} />
-      </Provider>,
-    );
+    let container;
+    await act(async () => {
+      ({ container } = render(
+        <Provider>
+          <CollectionListOptions addCollection={jest.fn()} />
+        </Provider>,
+      ));
+    });
 
     await waitFor(() => {
       expect(browser.sessions.getRecentlyClosed).toHaveBeenCalled();
@@ -80,11 +85,14 @@ describe('Collection List Options tests', () => {
   });
 
   test('keeps popup import limited to legacy txt files', async () => {
-    const { container } = render(
-      <Provider>
-        <CollectionListOptions addCollection={jest.fn()} />
-      </Provider>,
-    );
+    let container;
+    await act(async () => {
+      ({ container } = render(
+        <Provider>
+          <CollectionListOptions addCollection={jest.fn()} />
+        </Provider>,
+      ));
+    });
 
     expect(container.querySelector('input[type="file"]')).toHaveAttribute('accept', '.txt');
   });

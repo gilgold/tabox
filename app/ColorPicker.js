@@ -50,7 +50,7 @@ function ColorPicker(props) {
             // Safely close picker only if component is still mounted
             try {
                 setShowPicker(false);
-            } catch (error) {
+            } catch {
                 // Component was unmounted, ignore error
                 console.debug('ColorPicker cleanup: component already unmounted');
             }

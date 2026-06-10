@@ -9,7 +9,7 @@ import {
 import { useAtom, useAtomValue } from 'jotai';
 import { browser } from '../static/globals';
 import { openOrFocusFullPageInCurrentWindow } from './utils/openFullPage';
-import { showSuccessToast, showErrorToast } from './toastHelpers';
+import { showSuccessToast } from './toastHelpers';
 import { MdOpenInNew, MdLogout, MdSync } from 'react-icons/md';
 import ReactTimeAgo from 'react-time-ago';
 

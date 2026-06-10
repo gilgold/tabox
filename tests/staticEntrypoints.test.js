@@ -10,7 +10,7 @@ describe('static entrypoints', () => {
         document.body.innerHTML = '<div id="root"></div>';
 
         let renderedElement = null;
-        const mockCreateRoot = jest.fn((node) => ({
+        const mockCreateRoot = jest.fn(() => ({
             render: (element) => {
                 renderedElement = element;
             },

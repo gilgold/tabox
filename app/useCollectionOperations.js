@@ -1,7 +1,7 @@
 import React from 'react';
 import { FaTrash, FaRegCheckCircle } from 'react-icons/fa';
 import { downloadTextFile, getCurrentTabsAndGroups, generateCopyName, applyUid } from './utils';
-import { showUndoToast, showSuccessToast, showInfoToast } from './toastHelpers';
+import { showUndoToast, showInfoToast } from './toastHelpers';
 import { UNDO_TIME } from './constants';
 import { browser } from '../static/globals';
 import TaboxCollection from './model/TaboxCollection';
@@ -139,12 +139,10 @@ export const openCollectionTabs = async ({
 
 export function useCollectionOperations({
     collection,
-    removeCollection,
     updateCollection,
     updateRemoteData,
     setIsAutoUpdate,
     setExpanded,
-    index,
     isExpanded,
     setDeletingCollectionUids,
     addCollection,
@@ -283,7 +281,7 @@ export function useCollectionOperations({
                 let currentWindowId;
                 try {
                     currentWindowId = (await browser.windows.get(browser.windows.WINDOW_ID_CURRENT)).id;
-                } catch (error) {
+                } catch {
                     return; // Exit early if we can't get the current window
                 }
 

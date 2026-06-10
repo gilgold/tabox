@@ -1,4 +1,3 @@
-import React from 'react';
 import { render, fireEvent, act } from '@testing-library/react';
 import DeleteWithConfirmationButton from '../app/DeleteWithConfirmationButton';
 
@@ -120,6 +119,8 @@ describe('DeleteWithConfirmationButton', () => {
         // Don't wait for the timeout - button is still disabled
         const confirmButton = container.querySelector('.del-confirm-btn');
         fireEvent.click(confirmButton);
+
+        expect(mockAction).not.toHaveBeenCalled();
     });
 
     test('stops event propagation on clicks', () => {

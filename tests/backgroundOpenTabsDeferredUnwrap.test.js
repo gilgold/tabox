@@ -19,6 +19,11 @@ describe('background openTabs unwraps stored deferred-loading URLs', () => {
     beforeEach(() => {
         jest.resetModules();
 
+        // postOpenTasks logs an expected console.error here: the harness does not
+        // define applyChromeGroupSettings (chrome-group handling is out of scope
+        // for this test), and background.js catches and logs that failure.
+        jest.spyOn(console, 'error').mockImplementation(() => {});
+
         // Smart tab loading is OFF: nothing should be (re-)deferred.
         browser = createBrowserHarness({ localData: { chkEnableTabDiscard: false } });
 
@@ -35,6 +40,7 @@ describe('background openTabs unwraps stored deferred-loading URLs', () => {
     });
 
     afterEach(() => {
+        jest.restoreAllMocks();
         Object.keys(bgUtils || {}).forEach((key) => {
             if (typeof global[key] === 'function') {
                 delete global[key];

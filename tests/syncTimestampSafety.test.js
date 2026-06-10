@@ -4,9 +4,13 @@ const { createVersion40LocalSnapshot } = require('./helpers/upgradeFixtures');
 describe('sync timestamp safety', () => {
     let browser;
     let backgroundUtils;
+    let errorSpy;
 
     beforeEach(() => {
         jest.resetModules();
+        // The sync logger intentionally emits console.error when the remote
+        // timestamp lookup fails and the sync aborts — the path under test.
+        errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
         jest.useFakeTimers();
         browser = createBrowserHarness();
         global.browser = browser;
@@ -15,6 +19,7 @@ describe('sync timestamp safety', () => {
     });
 
     afterEach(() => {
+        jest.restoreAllMocks();
         jest.useRealTimers();
         delete global.browser;
         delete global.chrome;
@@ -80,6 +85,9 @@ describe('sync timestamp safety', () => {
         expect(global.fetch).not.toHaveBeenCalledWith(
             expect.stringContaining('/upload/drive/v3/files/new-sync-file-id?uploadType=media'),
             expect.anything()
+        );
+        expect(errorSpy).toHaveBeenCalledWith(
+            expect.stringContaining('Server timestamp is temporarily unavailable, aborting sync safely')
         );
     });
 });

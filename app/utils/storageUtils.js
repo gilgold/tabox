@@ -4,7 +4,7 @@
  */
 
 import { browser } from '../../static/globals';
-import { STORAGE_KEYS, CURRENT_STORAGE_VERSION, generateUid } from './sharedConstants';
+import { STORAGE_KEYS, CURRENT_STORAGE_VERSION } from './sharedConstants';
 import { assessMigrationSupport40 } from './migrationSupport40';
 import { withDataSafetyGuard } from './migrationSafety';
 
@@ -976,7 +976,8 @@ export const loadAllCollections = async (options = {}) => {
                     };
                 } else {
                     // Index doesn't have order - remove it from collection data to ensure user sorting takes precedence
-                    const { order, ...collectionWithoutOrder } = normalizedCollection;
+                    const collectionWithoutOrder = { ...normalizedCollection };
+                    delete collectionWithoutOrder.order;
                     return collectionWithoutOrder;
                 }
             }).filter(Boolean);
@@ -1008,11 +1009,7 @@ export const getNewStorageStats = async () => {
             legacySize: legacyData ? JSON.stringify(legacyData).length : 0,
             storageVersion: versionResult[STORAGE_KEYS.STORAGE_VERSION] || 1
         };
-        
-        // Only debug log if values are unexpected
-        if (stats.collections === 0 && globalThis.DEBUG_STORAGE) {
-        }
-        
+
         return stats;
     } catch (error) {
         console.error('Failed to get storage stats:', error);
@@ -1205,7 +1202,7 @@ export const loadFoldersIndex = async () => {
 /**
  * Save a single folder with index update
  */
-export const saveSingleFolder = async (folder, forceUpdateTimestamp = false, suppressLogging = false) => {
+export const saveSingleFolder = async (folder, forceUpdateTimestamp = false) => {
     try {
         if (!folder.uid) {
             throw new Error('Folder must have a UID');

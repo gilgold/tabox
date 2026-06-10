@@ -1,4 +1,3 @@
-import React from 'react';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { renderWithProviders } from './helpers/renderWithProviders';
@@ -146,6 +145,8 @@ describe('MoveToCollectionModal', () => {
     });
 
     test('shows an error toast when the move fails', async () => {
+        // The component intentionally logs the failure before showing the toast.
+        const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
         const updateCollection = jest.fn(async () => {
             throw new Error('move failed');
         });
@@ -172,5 +173,7 @@ describe('MoveToCollectionModal', () => {
         await waitFor(() => {
             expect(toastHelpers.showErrorToast).toHaveBeenCalledWith('Failed to move tab');
         });
+        expect(errorSpy).toHaveBeenCalledWith('Error moving tab:', expect.any(Error));
+        errorSpy.mockRestore();
     });
 });

@@ -1,4 +1,3 @@
-import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { Provider } from 'jotai';
@@ -40,22 +39,28 @@ const baseCollection = {
 
 const flushPromises = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-const renderPanel = (props = {}) => render(
-    <Provider>
-        <CollectionDetailPanel
-            collection={baseCollection}
-            isOpen={true}
-            onClose={jest.fn()}
-            updateCollection={jest.fn()}
-            removeCollection={jest.fn()}
-            updateRemoteData={jest.fn()}
-            addCollection={jest.fn()}
-            onDataUpdate={jest.fn()}
-            renderInline={true}
-            {...props}
-        />
-    </Provider>,
-);
+const renderPanel = async (props = {}) => {
+    let result;
+    await act(async () => {
+        result = render(
+            <Provider>
+                <CollectionDetailPanel
+                    collection={baseCollection}
+                    isOpen={true}
+                    onClose={jest.fn()}
+                    updateCollection={jest.fn()}
+                    removeCollection={jest.fn()}
+                    updateRemoteData={jest.fn()}
+                    addCollection={jest.fn()}
+                    onDataUpdate={jest.fn()}
+                    renderInline={true}
+                    {...props}
+                />
+            </Provider>,
+        );
+    });
+    return result;
+};
 
 describe('CollectionDetailPanel title editing', () => {
     beforeEach(() => {
@@ -75,7 +80,7 @@ describe('CollectionDetailPanel title editing', () => {
             _handleStopTracking: jest.fn(),
         });
 
-        renderPanel();
+        await renderPanel();
 
         const deleteButton = document.querySelector('.panel-action-btn.danger');
         fireEvent.click(deleteButton);
@@ -107,7 +112,7 @@ describe('CollectionDetailPanel title editing', () => {
             _handleStopTracking: jest.fn(),
         });
 
-        renderPanel({ onClose });
+        await renderPanel({ onClose });
 
         fireEvent.click(document.querySelector('.panel-action-btn.danger'));
         fireEvent.click(screen.getByRole('button', { name: 'Delete Collection' }));
@@ -129,7 +134,7 @@ describe('CollectionDetailPanel title editing', () => {
     });
 
     test('renders the edit button before the collection title and lets the edit button toggle edit mode', async () => {
-        const { container } = renderPanel();
+        const { container } = await renderPanel();
 
         const titleRow = container.querySelector('.panel-title-row');
         const titleSlot = container.querySelector('.panel-title-slot');
@@ -160,7 +165,7 @@ describe('CollectionDetailPanel title editing', () => {
 
     test('keeps edit mode open while typing and saves on blur', async () => {
         const updateCollection = jest.fn();
-        const { container } = renderPanel({ updateCollection });
+        const { container } = await renderPanel({ updateCollection });
 
         const editButton = container.querySelector('.panel-edit-btn');
         fireEvent.click(editButton);
@@ -172,7 +177,9 @@ describe('CollectionDetailPanel title editing', () => {
         expect(updateCollection).not.toHaveBeenCalled();
 
         fireEvent.blur(input);
-        await flushPromises();
+        await act(async () => {
+            await flushPromises();
+        });
 
         expect(updateCollection).toHaveBeenCalledWith(
             expect.objectContaining({ name: 'incognito tabs' }),
@@ -186,7 +193,7 @@ describe('CollectionDetailPanel title editing', () => {
 
     test('clicking the edit button while focused exits edit mode instead of reopening it', async () => {
         const updateCollection = jest.fn();
-        const { container } = renderPanel({ updateCollection });
+        const { container } = await renderPanel({ updateCollection });
 
         const editButton = container.querySelector('.panel-edit-btn');
         fireEvent.click(editButton);
@@ -196,7 +203,9 @@ describe('CollectionDetailPanel title editing', () => {
 
         fireEvent.mouseDown(editButton);
         fireEvent.click(editButton);
-        await flushPromises();
+        await act(async () => {
+            await flushPromises();
+        });
 
         expect(updateCollection).toHaveBeenCalledWith(
             expect.objectContaining({ name: 'incognito tabs' }),
@@ -230,9 +239,9 @@ describe('CollectionDetailPanel interaction with portaled tab menus and modals',
         return button;
     };
 
-    test('closes the panel on a plain outside mousedown', () => {
+    test('closes the panel on a plain outside mousedown', async () => {
         const onClose = jest.fn();
-        renderPanel({ onClose });
+        await renderPanel({ onClose });
 
         const outsideButton = appendPortaledElement('outside-area');
         fireEvent.mouseDown(outsideButton);
@@ -243,9 +252,9 @@ describe('CollectionDetailPanel interaction with portaled tab menus and modals',
         expect(onClose).toHaveBeenCalledTimes(1);
     });
 
-    test('keeps the panel open when clicking inside the tab context menu', () => {
+    test('keeps the panel open when clicking inside the tab context menu', async () => {
         const onClose = jest.fn();
-        renderPanel({ onClose });
+        await renderPanel({ onClose });
 
         const menuButton = appendPortaledElement('fp-tab-ctx-menu');
         fireEvent.mouseDown(menuButton);
@@ -256,9 +265,9 @@ describe('CollectionDetailPanel interaction with portaled tab menus and modals',
         expect(onClose).not.toHaveBeenCalled();
     });
 
-    test('keeps the panel open when interacting with the move-to-collection modal', () => {
+    test('keeps the panel open when interacting with the move-to-collection modal', async () => {
         const onClose = jest.fn();
-        renderPanel({ onClose });
+        await renderPanel({ onClose });
 
         const modalButton = appendPortaledElement('move-modal-overlay');
         fireEvent.mouseDown(modalButton);
@@ -269,9 +278,9 @@ describe('CollectionDetailPanel interaction with portaled tab menus and modals',
         expect(onClose).not.toHaveBeenCalled();
     });
 
-    test('Escape closes only the move modal, not the panel, while the modal is open', () => {
+    test('Escape closes only the move modal, not the panel, while the modal is open', async () => {
         const onClose = jest.fn();
-        renderPanel({ onClose });
+        await renderPanel({ onClose });
 
         appendPortaledElement('move-modal-overlay');
         fireEvent.keyDown(document, { key: 'Escape' });

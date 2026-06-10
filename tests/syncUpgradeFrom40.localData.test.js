@@ -4,9 +4,13 @@ const { createVersion40LocalSnapshot } = require('./helpers/upgradeFixtures');
 describe('4.0 upgrade compatibility - local data', () => {
     let browser;
     let storageUtils;
+    let warnSpy;
 
     beforeEach(() => {
         jest.resetModules();
+        // repairOrphanCollections intentionally warns when it finds orphans or
+        // ghost index entries — both paths are exercised below.
+        warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
         browser = createBrowserHarness();
         global.browser = browser;
         global.chrome = { runtime: browser.runtime };
@@ -15,6 +19,7 @@ describe('4.0 upgrade compatibility - local data', () => {
     });
 
     afterEach(() => {
+        jest.restoreAllMocks();
         jest.dontMock('../static/globals');
         delete global.browser;
         delete global.chrome;
@@ -182,6 +187,10 @@ describe('4.0 upgrade compatibility - local data', () => {
                 parentId: null
             })
         );
+        expect(warnSpy).toHaveBeenCalledWith(
+            expect.stringContaining('orphan collection(s) with invalid parentId references'),
+            ['collection-root-a']
+        );
     });
 
     test('prunes ghost index entries whose backing storage was removed', async () => {
@@ -222,6 +231,11 @@ describe('4.0 upgrade compatibility - local data', () => {
         // ...and the live collection still loads cleanly.
         const collections = await storageUtils.loadAllCollections({ metadataOnly: false });
         expect(collections.map((collection) => collection.uid)).toEqual(['collection-live']);
+
+        expect(warnSpy).toHaveBeenCalledWith(
+            expect.stringContaining('ghost index entr'),
+            ['collection-ghost']
+        );
     });
 
     test('backfills missing optional 4.0 local fields without losing upgraded data', async () => {

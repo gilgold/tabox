@@ -32,11 +32,11 @@ describe('COLOR_PALETTE', () => {
     });
 
     test('colors are valid hex codes or CSS variables', () => {
-        Object.entries(COLOR_PALETTE).forEach(([name, value]) => {
-            if (name !== 'default') {
+        Object.entries(COLOR_PALETTE)
+            .filter(([name]) => name !== 'default')
+            .forEach(([, value]) => {
                 expect(value).toMatch(/^#[0-9A-Fa-f]{6}$/);
-            }
-        });
+            });
     });
 });
 

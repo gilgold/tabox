@@ -13,7 +13,6 @@ function FPTopBar({ logout, applyDataFromServer, updateRemoteData, onDataUpdate,
     const [search, setSearch] = useAtom(searchState);
     const sidebarNavigation = useAtomValue(sidebarNavigationState);
     const inputRef = useRef(null);
-    const isMac = useMemo(() => navigator.platform?.toUpperCase().includes('MAC'), []);
     const searchPlaceholder = useMemo(() => {
         switch (sidebarNavigation) {
             case 'current-windows':

@@ -598,10 +598,6 @@ describe('Opening Collections', () => {
         });
 
         test('should restore collapsed group state', async () => {
-            const groups = [
-                createMockTabGroup({ id: 1, title: 'Collapsed', collapsed: true })
-            ];
-
             await mockBrowser.tabGroups.update(1, { collapsed: true });
 
             expect(mockBrowser.tabGroups.update).toHaveBeenCalledWith(
@@ -616,7 +612,6 @@ describe('Opening Collections', () => {
             const tabs = [
                 createMockTab({ url: 'https://pinned.com', pinned: true })
             ];
-            const collection = createMockCollection({ tabs });
 
             // Simulate creating tab then pinning
             const createdTab = await mockBrowser.tabs.create({ url: tabs[0].url });

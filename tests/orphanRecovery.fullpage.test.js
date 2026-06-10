@@ -1,5 +1,4 @@
 /** @jest-environment jsdom */
-import React from 'react';
 import { render, screen, waitFor, cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { Provider, createStore } from 'jotai';

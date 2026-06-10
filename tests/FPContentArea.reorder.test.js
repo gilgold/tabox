@@ -1,4 +1,3 @@
-import React from 'react';
 import { act, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { Provider, createStore } from 'jotai';
@@ -152,12 +151,16 @@ const baseProps = {
     onSelectSession: jest.fn(),
 };
 
-const renderWithNavigation = (ui, navigation, search = '') => {
+const renderWithNavigation = async (ui, navigation, search = '') => {
     const store = createStore();
     store.set(sidebarNavigationState, navigation);
     store.set(searchState, search);
 
-    return render(<Provider store={store}>{ui}</Provider>);
+    let result;
+    await act(async () => {
+        result = render(<Provider store={store}>{ui}</Provider>);
+    });
+    return result;
 };
 
 const buildDragEvent = ({ activeId, overId, parentId, clientX = 20, clientY = 20, deltaX = 80, deltaY = 40 }) => ({
@@ -258,12 +261,12 @@ mockUseSortable.mockImplementation(() => ({
                 { uid: 'collection-1', name: 'Collection One', parentId: null, order: 0, lastUpdated: 10, tabs: [], chromeGroups: [] },
             ],
         },
-    ])('renders collections by sibling order in full-page $label', ({
+    ])('renders collections by sibling order in full-page $label', async ({
         navigation,
         folders,
         collections,
     }) => {
-        renderWithNavigation(
+        await renderWithNavigation(
             <FPContentArea
                 {...baseProps}
                 folders={folders}
@@ -278,8 +281,8 @@ mockUseSortable.mockImplementation(() => ({
         expect(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 
-    test('disables sortable collection dragging while search results are shown', () => {
-        renderWithNavigation(
+    test('disables sortable collection dragging while search results are shown', async () => {
+        await renderWithNavigation(
             <FPContentArea
                 {...baseProps}
                 collections={[
@@ -328,7 +331,7 @@ mockUseSortable.mockImplementation(() => ({
         collections,
         targetParentId,
     }) => {
-        renderWithNavigation(
+        await renderWithNavigation(
             <FPContentArea
                 {...baseProps}
                 folders={folders}
@@ -405,7 +408,7 @@ mockUseSortable.mockImplementation(() => ({
         collections,
         targetParentId,
     }) => {
-        renderWithNavigation(
+        await renderWithNavigation(
             <FPContentArea
                 {...baseProps}
                 folders={folders}

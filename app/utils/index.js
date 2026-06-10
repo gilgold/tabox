@@ -92,11 +92,7 @@ export const emergencyDataRecovery = async () => {
     }
     
     const success = await restoreFromBackup(recentBackup.key);
-    
-    if (success) {
-    } else {
-    }
-    
+
     return success;
     
   } catch (error) {

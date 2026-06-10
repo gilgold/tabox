@@ -1,4 +1,3 @@
-import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import DropGap from '../app/DropGap';
 import SortableGroupContainer from '../app/SortableGroupContainer';

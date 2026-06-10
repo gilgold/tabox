@@ -20,7 +20,6 @@ function CollectionListItem(props) {
     const highlightedCollectionUid = useAtomValue(highlightedCollectionUidState);
     const setHighlightedCollectionUid = useSetAtom(highlightedCollectionUidState);
     const dragSession = useAtomValue(dragSessionState);
-    const [collectionName, setCollectionName] = useState(props.collection.name);
     const [isAutoUpdate, setIsAutoUpdate] = useState(false);
     const [showAllMatchingTabs, setShowAllMatchingTabs] = useState(false);
     const [isInteractionActive, setIsInteractionActive] = useState(false);
@@ -152,15 +151,8 @@ function CollectionListItem(props) {
 
     // Helper function to escape regex special characters
     const escapeRegex = (string) => {
-        return string.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+        return string.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
     };
-
-    // Check if collection name matches search (but not tabs)
-    const hasMatchingName = useMemo(() => {
-        if (!props.search || !props.search.trim()) return false;
-        const searchRegex = new RegExp(escapeRegex(props.search), 'i');
-        return props.collection.name?.match(searchRegex) || false;
-    }, [props.search, props.collection.name]);
 
     // Check if collection has matching tabs when search is active
     const hasMatchingTabs = useMemo(() => {

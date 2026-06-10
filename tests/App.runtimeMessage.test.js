@@ -1,4 +1,3 @@
-const React = require('react');
 const { render, waitFor, cleanup } = require('@testing-library/react');
 require('@testing-library/jest-dom');
 const { Provider, createStore } = require('jotai');

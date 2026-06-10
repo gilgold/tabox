@@ -1,4 +1,3 @@
-import React from 'react';
 import { act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { renderWithProviders } from './helpers/renderWithProviders';
@@ -126,6 +125,8 @@ describe('useCollectionOperations', () => {
     });
 
     test('falls back from incognito window creation and shows informational toasts', async () => {
+        // The fallback path intentionally warns when the incognito window fails.
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
         browser.storage.local.get.mockResolvedValue({ chkOpenNewWindow: true });
         browser.runtime.sendMessage
             .mockResolvedValueOnce({ allowed: true })
@@ -154,6 +155,11 @@ describe('useCollectionOperations', () => {
             4000,
         );
         expect(toastHelpers.showInfoToast).toHaveBeenCalledWith('2 tab(s) skipped - not allowed in incognito', 4000);
+        expect(warnSpy).toHaveBeenCalledWith(
+            expect.stringContaining('Failed to create incognito window'),
+            expect.any(Error),
+        );
+        warnSpy.mockRestore();
     });
 
     test('deletes a collection, updates folder counts, and wires undo data', async () => {

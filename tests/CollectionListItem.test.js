@@ -1,6 +1,5 @@
 /** @jest-environment jsdom */
-import React from 'react';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import CollectionListItem from '../app/CollectionListItem';
 import { dragSessionState } from '../app/atoms/animationsState';
@@ -111,23 +110,29 @@ describe('CollectionListItem', () => {
         chromeGroups: [{ id: 'group-1' }],
     };
 
-    const renderItem = (overrideProps = {}, atomValues = []) => renderWithProviders(
-        <CollectionListItem
-            collection={baseCollection}
-            index={0}
-            removeCollection={jest.fn()}
-            updateCollection={jest.fn()}
-            updateRemoteData={jest.fn()}
-            addCollection={jest.fn()}
-            onDataUpdate={jest.fn()}
-            dragHandleProps={{ attributes: {}, listeners: {} }}
-            {...overrideProps}
-        />,
-        {
-            withSuspense: false,
-            atomValues,
-        },
-    );
+    const renderItem = async (overrideProps = {}, atomValues = []) => {
+        let result;
+        await act(async () => {
+            result = renderWithProviders(
+                <CollectionListItem
+                    collection={baseCollection}
+                    index={0}
+                    removeCollection={jest.fn()}
+                    updateCollection={jest.fn()}
+                    updateRemoteData={jest.fn()}
+                    addCollection={jest.fn()}
+                    onDataUpdate={jest.fn()}
+                    dragHandleProps={{ attributes: {}, listeners: {} }}
+                    {...overrideProps}
+                />,
+                {
+                    withSuspense: false,
+                    atomValues,
+                },
+            );
+        });
+        return result;
+    };
 
     beforeEach(() => {
         mockCollectionHandlers = {
@@ -155,10 +160,10 @@ describe('CollectionListItem', () => {
         mockTabsCreate.mockReset();
     });
 
-    test('wires the row as a right-click trigger for the collection context menu', () => {
+    test('wires the row as a right-click trigger for the collection context menu', async () => {
         contextMenuProps.last = null;
 
-        const { container } = renderItem();
+        const { container } = await renderItem();
 
         const row = container.querySelector('.collection-list-item');
         expect(row).toBeInTheDocument();
@@ -169,7 +174,7 @@ describe('CollectionListItem', () => {
         const onSelect = jest.fn();
         const updateCollection = jest.fn();
 
-        const { container } = renderItem({
+        const { container } = await renderItem({
             onSelect,
             updateCollection,
             search: 'OpenAI',
@@ -192,8 +197,8 @@ describe('CollectionListItem', () => {
         }), true);
     });
 
-    test('keeps the row active while the inline context menu is open', () => {
-        const { container } = renderItem();
+    test('keeps the row active while the inline context menu is open', async () => {
+        const { container } = await renderItem();
         const row = container.querySelector('.collection-list-item');
 
         expect(row).not.toHaveClass('collection-item-interaction-active');
@@ -205,8 +210,8 @@ describe('CollectionListItem', () => {
         expect(row).not.toHaveClass('collection-item-interaction-active');
     });
 
-    test('keeps the row active while the color picker is open', () => {
-        const { container } = renderItem();
+    test('keeps the row active while the color picker is open', async () => {
+        const { container } = await renderItem();
         const row = container.querySelector('.collection-list-item');
 
         expect(row).not.toHaveClass('collection-item-interaction-active');
@@ -231,7 +236,7 @@ describe('CollectionListItem', () => {
             return {};
         });
 
-        renderItem();
+        await renderItem();
 
         const focusButton = await screen.findByRole('button', { name: 'Focus' });
         fireEvent.click(focusButton);
@@ -241,7 +246,7 @@ describe('CollectionListItem', () => {
 
     test('suppresses row selection during cross-collection drags and expands matching tabs inline', async () => {
         const onSelect = jest.fn();
-        const { container } = renderItem(
+        const { container } = await renderItem(
             {
                 onSelect,
                 search: 'OpenAI',

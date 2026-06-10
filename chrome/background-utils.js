@@ -219,8 +219,6 @@ const saveSingleCollectionBG = async (collection, forceUpdateTimestamp = false) 
             [STORAGE_KEYS.COLLECTIONS_INDEX]: index
         });
         
-        if (globalThis.DEBUG_STORAGE) {
-        }
         return true;
         
     } catch (error) {
@@ -279,15 +277,11 @@ const loadAllCollectionsBG = async (useNewStorageFirst = true) => {
                 });
                 
                 // Only log if debug mode is explicitly enabled
-                if (globalThis.DEBUG_STORAGE) {
-                }
                 return collections;
             }
         }
         
         // Fallback to legacy storage
-        if (globalThis.DEBUG_STORAGE) {
-        }
         const { [STORAGE_KEYS.LEGACY_TABS_ARRAY]: tabsArray } = await browser.storage.local.get(STORAGE_KEYS.LEGACY_TABS_ARRAY);
         return (tabsArray || []).map((collection) => normalizeCollectionRecordBG(collection));
         
@@ -312,8 +306,6 @@ const syncLegacyStorageThrottled = async () => {
                 [STORAGE_KEYS.LEGACY_TABS_ARRAY]: collections,
                 localTimestamp: Date.now() 
             });
-            if (globalThis.DEBUG_STORAGE) {
-            }
         } catch (error) {
             console.error('Background: Failed to sync legacy storage:', error);
         } finally {
@@ -340,8 +332,6 @@ const forceLegacyStorageSync = async () => {
             [STORAGE_KEYS.LEGACY_TABS_ARRAY]: collections,
             localTimestamp: Date.now() 
         });
-        if (globalThis.DEBUG_STORAGE) {
-        }
         return true;
     } catch (error) {
         console.error('Background: Failed to force sync legacy storage:', error);
@@ -453,8 +443,6 @@ const updateAllCollectionsBG = async (collections) => {
                 [STORAGE_KEYS.COLLECTIONS_INDEX]: newIndex
             });
             
-            if (globalThis.DEBUG_STORAGE) {
-            }
             
             // Schedule throttled legacy storage sync (non-blocking)
             syncLegacyStorageThrottled();
@@ -906,8 +894,6 @@ async function createPreSyncBackup(label = 'pre-sync') {
         
         await browser.storage.local.set({ preSyncBackups });
         
-        if (globalThis.DEBUG_STORAGE) {
-        }
         
         return true;
     } catch (error) {
@@ -1257,8 +1243,6 @@ async function getAuthToken() {
         return googleToken;
     }
     
-    if (globalThis.DEBUG_STORAGE) {
-    }
     const isValid = await validateToken(googleToken);
     lastValidated = Date.now();
     
@@ -2308,8 +2292,6 @@ const prepareSyncDataForUpload = async (collections, useIncrementalSync = false)
                     changedFolderCount: foldersArray.length
                 };
                 
-                if (globalThis.DEBUG_STORAGE) {
-                }
                 
                 return syncData;
             } else {

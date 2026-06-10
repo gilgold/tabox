@@ -1,4 +1,3 @@
-const React = require('react');
 const { render, screen, waitFor, cleanup, act } = require('@testing-library/react');
 require('@testing-library/jest-dom');
 const { Provider, createStore } = require('jotai');
@@ -16,7 +15,6 @@ jest.mock('../static/globals', () => ({
 }));
 
 jest.mock('../app/Header', () => {
-    const React = require('react');
     const { useAtomValue } = require('jotai');
     const { lastSyncTimeState } = require('../app/atoms/globalAppSettingsState');
 

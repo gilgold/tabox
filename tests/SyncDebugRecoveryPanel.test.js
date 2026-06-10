@@ -1,10 +1,9 @@
 /** @jest-environment jsdom */
-import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import SyncDebugRecoveryPanel from '../app/SyncDebugRecoveryPanel';
 import { browser } from '../static/globals';
-import { showErrorToast, showSuccessToast } from '../app/toastHelpers';
+import { showSuccessToast } from '../app/toastHelpers';
 
 jest.mock('../static/globals', () => ({
     browser: {

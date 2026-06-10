@@ -1486,9 +1486,6 @@ function FPContentArea({
         sourceCollections,
     ]);
 
-    // Sortable items
-    const sortableItems = useMemo(() => displayCollections.map(c => c.uid), [displayCollections]);
-
     const collectionIndexMap = useMemo(() => {
         const map = new Map();
         displayCollections.forEach((collection, index) => {
@@ -1568,7 +1565,7 @@ function FPContentArea({
             await copyToClipboard(urlList);
             const count = urlList.split('\n').length;
             showSuccessToast(`${count} URL${count === 1 ? '' : 's'} copied`);
-        } catch (e) {
+        } catch {
             showErrorToast('Failed to copy URLs');
         }
     }, []);
@@ -1716,7 +1713,7 @@ function FPContentArea({
             if (totalUrls === 0) { showInfoToast('No URLs to copy'); return; }
             await copyToClipboard(buildFolderUrlList(folder, collections));
             showSuccessToast(`${totalUrls} URL${totalUrls === 1 ? '' : 's'} copied`);
-        } catch (e) {
+        } catch {
             showErrorToast('Failed to copy URLs');
         }
     }, [folderCtxMenu, closeFolderCtxMenu]);
@@ -1813,12 +1810,6 @@ function FPContentArea({
         activeCollection ? normalizeCollectionParentId(activeCollection, folderUidSet) : null
     ), [activeCollection, folderUidSet]);
 
-    const isSameParentCollectionPreview = useMemo(() => (
-        !!previewTarget &&
-        previewTarget.kind === collectionDropKinds.collection &&
-        previewTarget.parentId === activeParentId
-    ), [previewTarget, activeParentId]);
-
     // Sort handler — uses flatSort so all collections sort globally regardless of folder
     const handleSort = async (sortBy, ascending) => {
         const { loadAllCollections, batchUpdateCollections } = await import('../utils/storageUtils');
@@ -1829,7 +1820,11 @@ function FPContentArea({
         const cleared = allCols.map(c => ({ ...c, order: null }));
         await batchUpdateCollections(cleared);
         const reloaded = await loadAllCollections({ metadataOnly: false, sortBy: sortByField, sortOrder, flatSort: true });
-        const cleaned = reloaded.map(({ order, ...rest }) => rest);
+        const cleaned = reloaded.map((c) => {
+            const copy = { ...c };
+            delete copy.order;
+            return copy;
+        });
         await updateRemoteData(cleaned);
         await browser.storage.local.set({ currentSortValue: sortBy, currentSortAscending: ascending });
     };

@@ -26,10 +26,15 @@ describe('migrationHealthCheck', () => {
     let dataValidation;
     let backupUtils;
     let migrationCoordinatorApi;
+    let errorSpy;
 
     beforeEach(() => {
         jest.resetModules();
         jest.clearAllMocks();
+
+        // The health check intentionally logs console.error when a component
+        // fails — several tests below exercise those failure paths.
+        errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
         storageUtils = require('../app/utils/storageUtils.js');
         dataValidation = require('../app/utils/dataValidation.js');
@@ -56,6 +61,10 @@ describe('migrationHealthCheck', () => {
 
         delete global.browser;
         delete global.chrome;
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
     });
 
     test('reports warning when browser APIs are unavailable but validation still works', async () => {
@@ -107,6 +116,7 @@ describe('migrationHealthCheck', () => {
         expect(result.recommendations).toEqual(expect.arrayContaining([
             'Some migration components have issues - check console for details',
         ]));
+        expect(errorSpy).toHaveBeenCalledWith('Storage utils test failed:', expect.any(Error));
     });
 
     test('returns false from isMigrationSystemHealthy when the health check fails', async () => {
@@ -123,5 +133,6 @@ describe('migrationHealthCheck', () => {
         const result = await isMigrationSystemHealthy();
 
         expect(result).toBe(false);
+        expect(errorSpy).toHaveBeenCalledWith('Data validation test failed:', expect.any(Error));
     });
 });
