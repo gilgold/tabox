@@ -2,7 +2,7 @@ import { test, expect } from 'crxbox';
 import { buildSeed, openFullPage, tab } from './support/fixtures.mjs';
 import { startDrag, dragOver, drop } from './support/dnd.mjs';
 
-// Coverage for the UNIFIED full-page drag-and-drop UX (v4.1.3):
+// Coverage for the UNIFIED full-page drag-and-drop UX (v4.1.2):
 //   - shared accent tokens (--dnd-accent*, derived from --primary-color, theme-adaptive)
 //   - shared .dnd-drag-overlay lift treatment on card / tab / group overlays
 //   - .dnd-settled settle flash on dropped detail-panel items

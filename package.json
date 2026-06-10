@@ -1,6 +1,6 @@
 {
   "name": "tabox",
-  "version": "4.1.3",
+  "version": "4.1.2",
   "description": "Tabox - Save and share your tabs!",
   "main": "index.js",
   "scripts": {
