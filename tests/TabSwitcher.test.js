@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { Provider, useSetAtom } from 'jotai';
 import TabSwitcher from '../app/TabSwitcher';
@@ -38,6 +38,11 @@ const twoWindowSeed = () => seedWindows([
 ]);
 
 describe('TabSwitcher', () => {
+    beforeAll(() => {
+        // jsdom doesn't implement scrollIntoView (used after arrow-key navigation).
+        Element.prototype.scrollIntoView = jest.fn();
+    });
+
     beforeEach(() => {
         jest.clearAllMocks();
         // jsdom's real window.close() tears down the environment's timers,
@@ -140,6 +145,32 @@ describe('TabSwitcher', () => {
         fireEvent.click(await screen.findByText('Close tab'));
         await waitFor(() => expect(browser.tabs.remove).toHaveBeenCalledWith(21));
         expect(browser.windows.getAll.mock.calls.length).toBeGreaterThanOrEqual(2); // initial load + refresh
+    });
+
+    test('a list refresh from a context-menu action keeps the user\'s arrowed-to selection', async () => {
+        twoWindowSeed();
+        renderOpenSwitcher();
+        let rows = await screen.findAllByTestId('tab-switcher-row');
+        await waitFor(() => expect(rows[1]).toHaveClass('selected'));
+        const input = screen.getByPlaceholderText('Jump to an open tab...');
+        fireEvent.keyDown(input, { key: 'ArrowDown' });
+        rows = await screen.findAllByTestId('tab-switcher-row');
+        expect(rows[2]).toHaveClass('selected');
+        // Trigger a refresh via the context menu: Pin tab on row 0.
+        fireEvent.contextMenu(rows[0]);
+        fireEvent.click(await screen.findByText('Pin tab'));
+        await waitFor(() => expect(browser.tabs.update).toHaveBeenCalledWith(11, { pinned: true }));
+        // refreshEntries re-runs with the same seeded windows.
+        await waitFor(() => expect(browser.windows.getAll.mock.calls.length).toBeGreaterThanOrEqual(2));
+        // Flush the refresh promise chain and follow-up effects so a buggy
+        // preselect re-run would have landed by now.
+        await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+        // Selection must NOT snap back to the initial preselect (row 1).
+        await waitFor(() => {
+            const refreshed = screen.getAllByTestId('tab-switcher-row');
+            expect(refreshed[2]).toHaveClass('selected');
+            expect(refreshed[1]).not.toHaveClass('selected');
+        });
     });
 
     test('preview pane shows the fallback card and Enable tab previews without permission', async () => {

@@ -19,6 +19,13 @@
     background: rgba(0, 0, 0, 0.55);
 }
 
+/* ContextMenu portals mount as <body> children after the overlay; without this
+   they lose the stacking battle to the overlay (and to static/index.css's
+   global 999999 !important rule) and paint underneath it. */
+.tab-switcher-overlay ~ .context-menu {
+    z-index: 2147483647 !important;
+}
+
 @keyframes tabSwitcherOverlayIn {
     from { opacity: 0; }
     to { opacity: 1; }

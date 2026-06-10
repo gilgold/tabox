@@ -148,6 +148,7 @@ function TabSwitcher() {
     const [entries, setEntries] = useState([]);
     const inputRef = useRef(null);
     const itemRefs = useRef({});
+    const didInitialSelectRef = useRef(false);
 
     const results = useMemo(() => filterTabEntries(entries, query), [entries, query]);
     const visibleResults = useMemo(() => results.slice(0, RESULT_CAP), [results]);
@@ -196,16 +197,21 @@ function TabSwitcher() {
     useEffect(() => {
         if (!isOpen) return;
         setQuery('');
+        didInitialSelectRef.current = false;
         refreshEntries();
         requestAnimationFrame(() => {
             requestAnimationFrame(() => inputRef.current?.focus());
         });
     }, [isOpen, refreshEntries]);
 
-    // Once entries land for an empty query, preselect the "previous" tab.
+    // Once entries first land for an empty query, preselect the "previous" tab.
+    // Runs only once per open — later refreshEntries() calls (pin/mute/close
+    // actions) must not yank the user's arrowed-to selection back to the top.
     useEffect(() => {
-        if (!isOpen || query !== '') return;
+        if (!isOpen || query !== '' || didInitialSelectRef.current) return;
+        if (entries.length === 0) return;
         setSelectedIndex(initialSelectionIndex(entries));
+        didInitialSelectRef.current = true;
     }, [isOpen, entries, query, setSelectedIndex]);
 
     const buildMenuItems = useCallback((entry) => [
