@@ -9,8 +9,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           # The repo pins Yarn 4.x via .yarnrc.yml (yarnPath), which requires
           # Node >= 18.
@@ -24,7 +24,7 @@ jobs:
         run: yarn test
       - name: Store test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: jest-results
           path: test-results/jest/
@@ -39,8 +39,8 @@ jobs:
       # Public Chrome Web Store item id for Tabox.
       EXTENSION_ID: bdbliblipiempfdkkkjohnecmeknnpoa
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: yarn
@@ -84,8 +84,16 @@ jobs:
         run: |
           cd build
           zip -r ../tabox.zip .
+          # Edge Add-ons rejects packages whose manifest contains the "key"
+          # field (it's only needed to pin the Chrome extension id), so the
+          # Edge zip gets a manifest without it.
+          cd ..
+          rm -rf edge-build && cp -R build edge-build
+          jq 'del(.key)' build/manifest.json > edge-build/manifest.json
+          cd edge-build
+          zip -r ../tabox-edge.zip .
       - name: Store packaged extension
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tabox-chrome
           path: tabox.zip
@@ -176,7 +184,7 @@ jobs:
             -H "Authorization: ApiKey ${EDGE_API_KEY}" \
             -H "X-ClientID: ${EDGE_CLIENT_ID}" \
             -H "Content-Type: application/zip" \
-            -X POST -T tabox.zip \
+            -X POST -T tabox-edge.zip \
             "${API_ROOT}/v1/products/${EDGE_PRODUCT_ID}/submissions/draft/package" \
             | tr -d '\r' | sed -n 's/^Location: *//ip')
           if [ -z "${UPLOAD_OP}" ]; then
