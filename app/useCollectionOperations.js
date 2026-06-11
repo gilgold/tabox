@@ -6,6 +6,7 @@ import { UNDO_TIME } from './constants';
 import { browser } from '../static/globals';
 import TaboxCollection from './model/TaboxCollection';
 import { loadAllCollections, deleteSingleCollection, updateFolderCollectionCount } from './utils/storageUtils';
+import { getNextFavoriteOrder } from './utils/favoritesUtils';
 
 export const openCollectionTabs = async ({
     collectionToOpen,
@@ -263,6 +264,15 @@ export function useCollectionOperations({
         }
     };
 
+    const _handleToggleFavorite = async () => {
+        if (collection.isFavorite === true) {
+            await updateCollection({ ...collection, isFavorite: false, favoriteOrder: null });
+        } else {
+            const favoriteOrder = await getNextFavoriteOrder();
+            await updateCollection({ ...collection, isFavorite: true, favoriteOrder });
+        }
+    };
+
     const _exportCollectionToFile = () => {
         downloadTextFile(JSON.stringify(collection), collection.name);
     };
@@ -377,6 +387,7 @@ export function useCollectionOperations({
     return {
         _handleDelete,
         _handleDuplicate,
+        _handleToggleFavorite,
         _exportCollectionToFile,
         _handleUpdate,
         _handleOpenTabs,

@@ -1,6 +1,7 @@
 import { MdDelete, MdOutlineRefresh } from 'react-icons/md';
 import { CiExport } from 'react-icons/ci';
 import { FaStop } from 'react-icons/fa6';
+import { FaStar, FaRegStar } from 'react-icons/fa';
 import { MdContentCopy } from 'react-icons/md';
 
 const ICON_SIZE = 16;
@@ -13,7 +14,9 @@ export const createCollectionMenuItems = ({
     onStopTracking,
     onDelete,
     onDuplicate,
-    onCopyUrls
+    onCopyUrls,
+    isFavorite = false,
+    onToggleFavorite
 }) => [
     {
         id: 'update',
@@ -46,6 +49,14 @@ export const createCollectionMenuItems = ({
         action: onDuplicate,
         className: '',
         condition: true
+    },
+    {
+        id: 'favorite',
+        text: isFavorite ? 'Remove from Favorites' : 'Add to Favorites',
+        icon: isFavorite ? <FaStar size={ICON_SIZE} /> : <FaRegStar size={ICON_SIZE} />,
+        action: onToggleFavorite,
+        className: '',
+        condition: typeof onToggleFavorite === 'function'
     },
     {
         id: 'copy-urls',
