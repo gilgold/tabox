@@ -74,8 +74,9 @@ behaves identically:
   `fav:<uid>`) to avoid dnd-kit/react key collisions with the main list.
 - **Empty state:** section always visible; when no favorites exist, show hint text
   "Star a collection to pin it here".
-- **Search:** favorites matching the query show in the section, following existing
-  per-section search behavior.
+- **Search:** the Favorites section is hidden while a search query is active —
+  search results already include favorited collections, matching the existing
+  behavior where the Folders section is also replaced by flat search results.
 - A favorited collection inside a collapsed folder still shows in Favorites.
 
 ## Drag-and-Drop
