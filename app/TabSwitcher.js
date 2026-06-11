@@ -9,8 +9,8 @@ import {
     filterTabEntries,
     initialSelectionIndex,
     RESULT_CAP,
-    FALLBACK_FAVICON,
 } from './utils/tabSwitcherUtils';
+import { FALLBACK_FAVICON } from './utils/sharedConstants';
 import useListNavigation from './useListNavigation';
 import ContextMenu from './ContextMenu';
 import { copyToClipboard } from './utils/index';
@@ -226,6 +226,10 @@ function TabSwitcher() {
         setQuery('');
         didInitialSelectRef.current = false;
         refreshEntries();
+        // Refresh each window's active-tab capture so previews are current (and
+        // self-heal a granted-but-never-primed cache). No-op without the
+        // optional permission — the background gates per capture.
+        browser.runtime.sendMessage({ type: 'captureAllWindows' }).catch(() => { /* noop */ });
         requestAnimationFrame(() => {
             requestAnimationFrame(() => inputRef.current?.focus());
         });

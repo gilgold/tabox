@@ -127,6 +127,13 @@
       browser.tabs.onUpdated.addListener(onUpdated);
       browser.windows.onFocusChanged.addListener(onFocusChanged);
       browser.tabs.onRemoved.addListener(onTabRemoved);
+      // The grant itself must prime the cache. The popup can't be trusted to do
+      // it: the native permission dialog steals focus and (on macOS) closes the
+      // popup before its permissions.request() await resumes — and grants made
+      // from chrome://extensions never go through the popup at all.
+      browser.permissions.onAdded.addListener(() => {
+        captureAllWindows();
+      });
       browser.permissions.onRemoved.addListener(async () => {
         if (!(await hasPermission())) await clearCache();
       });

@@ -127,6 +127,18 @@ describe('createThumbnailCapture', () => {
         expect(browser._sessionStore.thumb_index).toBeUndefined();
     });
 
+    test('a permission grant primes captures for every open window (background-owned — the popup may not survive the native permission dialog)', async () => {
+        const browser = makeBrowser();
+        const capture = createThumbnailCapture(browser, { downscale: identityDownscale });
+        capture.init();
+        expect(browser.permissions.onAdded.addListener).toHaveBeenCalled();
+        const onPermAdded = browser.permissions.onAdded.addListener.mock.calls[0][0];
+        await onPermAdded({ origins: ['<all_urls>'] });
+        await jest.advanceTimersByTimeAsync(2700);
+        expect(browser.tabs.captureVisibleTab).toHaveBeenCalledWith(1, expect.anything());
+        expect(browser.tabs.captureVisibleTab).toHaveBeenCalledWith(2, expect.anything());
+    });
+
     test('captureAllWindows schedules a capture for every open window', async () => {
         const browser = makeBrowser();
         const capture = createThumbnailCapture(browser, { downscale: identityDownscale });

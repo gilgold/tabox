@@ -185,6 +185,13 @@ describe('TabSwitcher', () => {
         });
     });
 
+    test('opening the switcher asks the background to refresh window captures (no-op without permission)', async () => {
+        twoWindowSeed();
+        renderOpenSwitcher();
+        await screen.findAllByTestId('tab-switcher-row');
+        await waitFor(() => expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'captureAllWindows' }));
+    });
+
     test('preview pane shows the fallback card and Enable tab previews without permission', async () => {
         twoWindowSeed();
         renderOpenSwitcher();
