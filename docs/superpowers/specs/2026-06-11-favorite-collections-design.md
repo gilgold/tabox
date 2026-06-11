@@ -110,6 +110,26 @@ behaves identically:
 - **Verification:** `yarn test`, `yarn lint`, and `yarn prod` must pass before the
   work is considered complete.
 
+## Revision 2 (2026-06-11, after v1 shipped)
+
+User direction changed how favorites are surfaced (the data model, star toggles, and
+ordering machinery from v1 are unchanged):
+
+- **Full page:** the Favorites section is REMOVED from the "All Collections" view.
+  Instead, a "Favorites" item is added to the sidebar navigation (after "All
+  Collections", star icon, live count). Selecting it shows a dedicated Favorites
+  view rendered by the repurposed `FPFavoritesSection` (now standalone — no
+  collapsible header; the view's content heading serves as the title). Drag-and-drop
+  reordering in this view persists `favoriteOrder` via one batch write, exactly as
+  before. Empty state keeps the "Star a collection to pin it here" hint.
+- **Popup:** the Favorites section is REMOVED (component deleted). Instead, a star
+  toggle is added to the filter toolbar (next to the "Opened" pill). When active it
+  filters the list to `isFavorite === true` collections (flowing through the
+  existing `filters` → `collectionsToShow` → `hasActiveFilters` pipeline in App.js,
+  including the Clear-all button). Gold star when active.
+- `favoriteOrder` ordering is now only user-visible in the full-page Favorites view;
+  the popup filter shows favorites in their normal list order.
+
 ## Out of Scope (v1)
 
 - Dragging collections into/out of the Favorites section to toggle favorite status.
