@@ -1,0 +1,7 @@
+.favorites-empty-hint {
+    padding: 10px 14px;
+    font-size: 12px;
+    font-style: italic;
+    color: var(--text-color);
+    opacity: 0.55;
+}
