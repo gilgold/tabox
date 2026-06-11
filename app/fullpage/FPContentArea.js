@@ -30,6 +30,7 @@ import {
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import FPCollectionCard from './FPCollectionCard';
+import FPFavoritesSection from './FPFavoritesSection';
 import FPCurrentWindowCard from './FPCurrentWindowCard';
 import FPSessionCard from './FPSessionCard';
 import FPSingleTabSessionRow from './FPSingleTabSessionRow';
@@ -3206,6 +3207,20 @@ function FPContentArea({
                     ref={contentScrollRef}
                     className={`fp-content-grid ${showEntranceAnimation ? 'fp-content-animate-entrance' : ''} ${search ? 'fp-content-search-mode' : viewMode === 'list' ? 'fp-content-list-mode' : ''} ${shouldRenderGroupedAllCollections ? 'fp-content-grouped-mode' : ''}`}
                 >
+                    {shouldRenderGroupedAllCollections && (
+                        <FPFavoritesSection
+                            collections={collections}
+                            viewMode={viewMode}
+                            updateCollection={updateCollection}
+                            removeCollection={removeCollection}
+                            updateRemoteData={updateRemoteData}
+                            addCollection={addCollection}
+                            onDataUpdate={onDataUpdate}
+                            onSelect={handleSelectCollection}
+                            onCardContextMenu={hasSelectedCollections ? undefined : handleCardContextMenu}
+                            trackedCollectionUids={trackedCollectionUids}
+                        />
+                    )}
                     {hasRenderableCollections ? (
                         <DndContext
                             sensors={sensors}
