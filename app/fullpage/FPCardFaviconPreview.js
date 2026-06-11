@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { FALLBACK_FAVICON } from '../utils/sharedConstants';
 
 const FAVICON_SIZE = 18;
 const FAVICON_GAP = 4;
@@ -14,7 +15,7 @@ function FPCardFaviconPreview({
     const faviconEntries = useMemo(() => {
         return tabs.slice(0, maxPreviewCount).map((tab, index) => ({
             key: tab.uid || tab.id || tab.url || `favicon-${index}`,
-            src: tab.favIconUrl || './images/favicon-fallback.png',
+            src: tab.favIconUrl || FALLBACK_FAVICON,
         }));
     }, [maxPreviewCount, tabs]);
 
@@ -96,7 +97,7 @@ function FPCardFaviconPreview({
                             }
 
                             event.target.dataset.fallbackApplied = 'true';
-                            event.target.src = './images/favicon-fallback.png';
+                            event.target.src = FALLBACK_FAVICON;
                         }}
                     />
                 ))}

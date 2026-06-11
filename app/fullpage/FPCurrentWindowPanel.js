@@ -5,6 +5,7 @@ import { getColorCode } from '../utils';
 import { highlightText } from '../utils/searchUtils';
 import { browser } from '../../static/globals';
 import { showErrorToast } from '../toastHelpers';
+import { FALLBACK_FAVICON } from '../utils/sharedConstants';
 import ClickableTabUrl from './ClickableTabUrl';
 import FPBadge from './FPBadge';
 import '../CollectionDetailPanel.css';
@@ -100,10 +101,10 @@ function CurrentWindowTabRow({
                 <div className="column favicon-col">
                     <img
                         className="tab-favicon"
-                        src={tab.favIconUrl || './images/favicon-fallback.png'}
+                        src={tab.favIconUrl || FALLBACK_FAVICON}
                         alt=""
                         onError={(event) => {
-                            event.target.src = './images/favicon-fallback.png';
+                            event.target.src = FALLBACK_FAVICON;
                         }}
                     />
                 </div>

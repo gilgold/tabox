@@ -1,7 +1,6 @@
 import { browser } from '../../static/globals';
 
 export const RESULT_CAP = 50;
-export const FALLBACK_FAVICON = './images/favicon-fallback.png';
 
 // Chrome never exposes user-assigned window names to extensions, so derive a
 // label: ordinal in windows.getAll() order, "This window" for the window the
