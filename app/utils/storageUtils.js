@@ -564,7 +564,11 @@ export const saveSingleCollection = async (collection, forceUpdateTimestamp = fa
             color: collectionToSave.color || 'default',
             size: collectionSize,
             parentId: collectionToSave.parentId || null,
-            order: resolvedOrder
+            order: resolvedOrder,
+            isFavorite: collectionToSave.isFavorite === true,
+            ...(collectionToSave.isFavorite === true && typeof collectionToSave.favoriteOrder === 'number'
+                ? { favoriteOrder: collectionToSave.favoriteOrder }
+                : {})
         };
         
         await browser.storage.local.set({
@@ -1115,7 +1119,23 @@ export const batchUpdateCollections = async (collections) => {
                 // No order in index and none in collection - leave undefined
             }
             // If collection has order but index doesn't, keep collection's order
-            
+
+            // Favorite fields: prefer incoming values, fall back to the existing
+            // index entry so stale in-memory objects can't silently un-favorite
+            const resolvedIsFavorite = collection.isFavorite !== undefined
+                ? collection.isFavorite === true
+                : existingIndexEntry.isFavorite === true;
+            const resolvedFavoriteOrder = collection.favoriteOrder !== undefined
+                ? collection.favoriteOrder
+                : existingIndexEntry.favoriteOrder;
+
+            collectionForStorage.isFavorite = resolvedIsFavorite;
+            if (resolvedIsFavorite && typeof resolvedFavoriteOrder === 'number') {
+                collectionForStorage.favoriteOrder = resolvedFavoriteOrder;
+            } else {
+                delete collectionForStorage.favoriteOrder;
+            }
+
             const collectionSize = JSON.stringify(collectionForStorage).length;
             
             // Add to batch update - preserve existing lastUpdated and lastOpened timestamps
@@ -1135,7 +1155,11 @@ export const batchUpdateCollections = async (collections) => {
                 createdOn: collectionForStorage.createdOn || now,
                 color: collectionForStorage.color || 'default',
                 size: collectionSize,
-                parentId: collectionForStorage.parentId || null
+                parentId: collectionForStorage.parentId || null,
+                isFavorite: resolvedIsFavorite,
+                ...(resolvedIsFavorite && typeof resolvedFavoriteOrder === 'number'
+                    ? { favoriteOrder: resolvedFavoriteOrder }
+                    : {})
             };
             
             // Handle order field:
