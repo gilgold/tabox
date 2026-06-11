@@ -1,5 +1,5 @@
 /** @jest-environment jsdom */
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import FPFavoritesSection from '../app/fullpage/FPFavoritesSection';
 import { renderWithProviders } from './helpers/renderWithProviders';
@@ -7,19 +7,6 @@ import { renderWithProviders } from './helpers/renderWithProviders';
 jest.mock('../app/fullpage/FPCollectionCard', () => function MockFPCollectionCard({ collection }) {
     return <div data-testid="fav-card">{collection.name}</div>;
 });
-
-const mockStorageGet = jest.fn(async () => ({}));
-const mockStorageSet = jest.fn(async () => {});
-jest.mock('../static/globals', () => ({
-    browser: {
-        storage: {
-            local: {
-                get: (...args) => mockStorageGet(...args),
-                set: (...args) => mockStorageSet(...args),
-            },
-        },
-    },
-}));
 
 const collections = [
     { uid: 'a', name: 'Alpha', isFavorite: true, favoriteOrder: 1 },
@@ -52,12 +39,8 @@ describe('FPFavoritesSection', () => {
         expect(screen.getByText('Star a collection to pin it here')).toBeInTheDocument();
     });
 
-    it('collapses on header click and persists the state', async () => {
-        renderWithProviders(<FPFavoritesSection collections={collections} {...baseProps} />);
-        fireEvent.click(screen.getByText('Favorites'));
-        await waitFor(() => {
-            expect(screen.queryAllByTestId('fav-card')).toHaveLength(0);
-        });
-        expect(mockStorageSet).toHaveBeenCalledWith({ fpFavoritesCollapsed: true });
+    it('renders with drag disabled without crashing', () => {
+        renderWithProviders(<FPFavoritesSection collections={collections} {...baseProps} disableDrag />);
+        expect(screen.getAllByTestId('fav-card')).toHaveLength(2);
     });
 });

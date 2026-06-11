@@ -286,6 +286,44 @@ describe('FPSidebar folder reorder', () => {
         expect(rootLevelButton).toHaveClass('fp-sidebar-drop-active');
     });
 
+    test('renders a Favorites nav item with correct count and navigates on click', async () => {
+        const store = createStore();
+        store.set(sidebarCollapsedState, false);
+        store.set(sidebarNavigationState, 'all');
+
+        render(
+            <Provider store={store}>
+                <FPSidebar
+                    folders={[]}
+                    collections={[
+                        { uid: 'col-1', name: 'Alpha', isFavorite: true },
+                        { uid: 'col-2', name: 'Beta', isFavorite: true },
+                        { uid: 'col-3', name: 'Gamma' },
+                    ]}
+                    addCollection={jest.fn()}
+                    addFolder={jest.fn()}
+                    onDataUpdate={jest.fn()}
+                    updateFolders={jest.fn()}
+                    triggerSync={jest.fn()}
+                    triggerFolderLightningEffect={jest.fn()}
+                />
+            </Provider>,
+        );
+
+        // Favorites nav item renders
+        const favButton = await screen.findByRole('button', { name: /Favorites/i });
+        expect(favButton).toBeInTheDocument();
+
+        // Counter shows 2 (collections with isFavorite: true)
+        expect(favButton.querySelector('.fp-sidebar-counter')).toHaveTextContent('2');
+
+        // Clicking sets the navigation atom to 'favorites'
+        await act(async () => {
+            favButton.click();
+        });
+        expect(store.get(sidebarNavigationState)).toBe('favorites');
+    });
+
     test('keeps the responsive save action as a visible icon-only button', () => {
         const cssPath = path.join(__dirname, '../app/fullpage/FPSidebar.css');
         const css = fs.readFileSync(cssPath, 'utf8');

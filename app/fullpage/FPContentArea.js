@@ -112,6 +112,7 @@ import {
 import FolderDeleteConfirmModal from '../FolderDeleteConfirmModal';
 import CreateFolderModalBase from '../CreateFolderModal';
 import { CURRENT_WINDOWS_ACCENT_COLOR } from './fpAccentColors';
+import { getFavoriteCollections } from '../utils/favoritesUtils';
 
 const SessionsModal = lazy(() => import('../SessionsModal').then(m => ({ default: m.SessionsModal })));
 const SaveCollectionModal = lazy(() => import('./SaveCollectionModal'));
@@ -873,6 +874,7 @@ function FPContentArea({
     const sortByField = sortFieldMap[sortType] || 'lastUpdated';
     const sortOrder = sortAscending ? 'asc' : 'desc';
     const shouldRenderGroupedAllCollections = sidebarNavigation === 'all' && !hasActiveFilters && !hasSearchQuery;
+    const isFavoritesView = sidebarNavigation === 'favorites';
     const isMixedParentFlatView = !shouldRenderGroupedAllCollections && (
         hasSearchQuery ||
         hasActiveFilters
@@ -881,7 +883,8 @@ function FPContentArea({
         sidebarNavigation === 'unorganized' ||
         (
             sidebarNavigation !== 'all' &&
-            sidebarNavigation !== 'sessions'
+            sidebarNavigation !== 'sessions' &&
+            sidebarNavigation !== 'favorites'
         )
     );
 
@@ -900,6 +903,8 @@ function FPContentArea({
                     sortOrder,
                 });
             }
+            case 'favorites':
+                return getFavoriteCollections(sourceCollections);
             case 'current-windows':
             case 'sessions':
                 return [];
@@ -1043,6 +1048,14 @@ function FPContentArea({
                     subtitle: 'Everything you have saved in Tabox',
                     countLabel: collectionCountLabel,
                     accentColor: 'var(--primary-color)',
+                };
+            case 'favorites':
+                return {
+                    badge: 'Library area',
+                    title: 'Favorites',
+                    subtitle: 'Collections you starred',
+                    countLabel: collectionCountLabel,
+                    accentColor: 'var(--favorite-star-color)',
                 };
             case 'unorganized':
                 return {
@@ -3207,10 +3220,12 @@ function FPContentArea({
                     ref={contentScrollRef}
                     className={`fp-content-grid ${showEntranceAnimation ? 'fp-content-animate-entrance' : ''} ${search ? 'fp-content-search-mode' : viewMode === 'list' ? 'fp-content-list-mode' : ''} ${shouldRenderGroupedAllCollections ? 'fp-content-grouped-mode' : ''}`}
                 >
-                    {shouldRenderGroupedAllCollections && (
+                    {isFavoritesView ? (
                         <FPFavoritesSection
                             collections={collections}
                             viewMode={viewMode}
+                            search={search}
+                            disableDrag={hasSearchQuery || hasSelectedCollections}
                             updateCollection={updateCollection}
                             removeCollection={removeCollection}
                             updateRemoteData={updateRemoteData}
@@ -3220,8 +3235,7 @@ function FPContentArea({
                             onCardContextMenu={hasSelectedCollections ? undefined : handleCardContextMenu}
                             trackedCollectionUids={trackedCollectionUids}
                         />
-                    )}
-                    {hasRenderableCollections ? (
+                    ) : hasRenderableCollections ? (
                         <DndContext
                             sensors={sensors}
                             collisionDetection={customCollisionDetection}

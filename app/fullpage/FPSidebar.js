@@ -35,6 +35,7 @@ import {
     MdHistory,
     MdSearch,
     MdOpenInBrowser,
+    MdStar,
 } from 'react-icons/md';
 import { CiExport } from 'react-icons/ci';
 import { HiCollection } from 'react-icons/hi';
@@ -173,6 +174,10 @@ function FPSidebar({
         const folderUids = new Set(folders.map(f => f.uid));
         return collections.filter(c => !c.parentId || !folderUids.has(c.parentId)).length;
     }, [collections, folders]);
+
+    const favoritesCount = useMemo(() => (
+        collections.filter(c => c.isFavorite === true).length
+    ), [collections]);
 
     // Count collections per folder
     const folderCounts = useMemo(() => {
@@ -468,6 +473,7 @@ function FPSidebar({
 
     const navItems = [
         { key: 'all', label: 'All Collections', count: allCount, icon: HiCollection },
+        { key: 'favorites', label: 'Favorites', count: favoritesCount, icon: MdStar },
         { key: 'current-windows', label: 'Current Windows', count: currentWindowCount, icon: MdOpenInBrowser },
         { key: 'sessions', label: 'Recently Closed', count: sessionCount, icon: MdHistory },
     ];
