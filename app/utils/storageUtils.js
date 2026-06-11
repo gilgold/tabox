@@ -565,6 +565,8 @@ export const saveSingleCollection = async (collection, forceUpdateTimestamp = fa
             size: collectionSize,
             parentId: collectionToSave.parentId || null,
             order: resolvedOrder,
+            // collectionToSave is merged from the existing stored record, so a partial
+            // update that omits isFavorite/favoriteOrder inherits them from storage
             isFavorite: collectionToSave.isFavorite === true,
             ...(collectionToSave.isFavorite === true && typeof collectionToSave.favoriteOrder === 'number'
                 ? { favoriteOrder: collectionToSave.favoriteOrder }
@@ -1121,7 +1123,8 @@ export const batchUpdateCollections = async (collections) => {
             // If collection has order but index doesn't, keep collection's order
 
             // Favorite fields: prefer incoming values, fall back to the existing
-            // index entry so stale in-memory objects can't silently un-favorite
+            // index entry so stale in-memory objects can't silently un-favorite.
+            // resolvedFavoriteOrder is only persisted when resolvedIsFavorite is true.
             const resolvedIsFavorite = collection.isFavorite !== undefined
                 ? collection.isFavorite === true
                 : existingIndexEntry.isFavorite === true;

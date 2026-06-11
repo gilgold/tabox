@@ -69,6 +69,20 @@ describe('saveSingleCollection favorite fields', () => {
         expect(indexEntry.isFavorite).toBe(false);
         expect(indexEntry).not.toHaveProperty('favoriteOrder');
     });
+
+    it('preserves favorite fields when a partial update omits them', async () => {
+        await saveSingleCollection(baseCollection({ isFavorite: true, favoriteOrder: 3 }));
+        const partial = baseCollection();
+        delete partial.isFavorite;
+        delete partial.favoriteOrder;
+        await saveSingleCollection(partial);
+        const record = store[`${STORAGE_KEYS.COLLECTION_PREFIX}col-1`];
+        const indexEntry = store[STORAGE_KEYS.COLLECTIONS_INDEX]['col-1'];
+        expect(record.isFavorite).toBe(true);
+        expect(record.favoriteOrder).toBe(3);
+        expect(indexEntry.isFavorite).toBe(true);
+        expect(indexEntry.favoriteOrder).toBe(3);
+    });
 });
 
 describe('batchUpdateCollections favorite fields', () => {
