@@ -31,8 +31,12 @@ import './TabSwitcher.css';
 
 const ALL_URLS = { origins: ['<all_urls>'] };
 
-function TabSwitcherRow({ entry, index, isSelected, onHover, onActivate, menuItems, itemRefs, query }) {
+// Memoized with stable callback props so an arrow press re-renders only the
+// two rows whose selection changed, not all 50 (each row also mounts a
+// ContextMenu, which makes full-list re-renders measurably sluggish).
+const TabSwitcherRow = React.memo(function TabSwitcherRow({ entry, index, isSelected, onHoverIndex, onActivateEntry, buildMenuItems, itemRefs, query }) {
     const rowRef = useRef(null);
+    const menuItems = buildMenuItems(entry);
 
     return (
         <div
@@ -40,8 +44,8 @@ function TabSwitcherRow({ entry, index, isSelected, onHover, onActivate, menuIte
             className={`tab-switcher-row${isSelected ? ' selected' : ''}`}
             data-testid="tab-switcher-row"
             data-tab-id={entry.tabId}
-            onClick={onActivate}
-            onMouseEnter={onHover}
+            onClick={() => onActivateEntry(entry)}
+            onMouseEnter={() => onHoverIndex(index)}
         >
             <img
                 className="tab-switcher-favicon"
@@ -69,7 +73,7 @@ function TabSwitcherRow({ entry, index, isSelected, onHover, onActivate, menuIte
             {isSelected && <MdKeyboardReturn size={14} className="tab-switcher-enter-hint" />}
         </div>
     );
-}
+});
 
 function TabPreviewPane({ entry }) {
     const [hasPermission, setHasPermission] = useState(false);
@@ -185,10 +189,10 @@ function TabSwitcher() {
         inputRef.current?.focus();
     }, []);
 
+    // Synchronous on purpose: every row is already mounted (refs populated), so
+    // deferring to rAF only added a frame of lag to keyboard movement.
     const scrollSelectedIntoView = useCallback((index) => {
-        requestAnimationFrame(() => {
-            itemRefs.current[index]?.scrollIntoView({ block: 'nearest' });
-        });
+        itemRefs.current[index]?.scrollIntoView({ block: 'nearest' });
     }, []);
 
     const activateTab = useCallback(async (entry) => {
@@ -317,9 +321,9 @@ function TabSwitcher() {
                                     entry={entry}
                                     index={i}
                                     isSelected={i === selectedIndex}
-                                    onHover={() => setSelectedIndex(i)}
-                                    onActivate={() => activateTab(entry)}
-                                    menuItems={buildMenuItems(entry)}
+                                    onHoverIndex={setSelectedIndex}
+                                    onActivateEntry={activateTab}
+                                    buildMenuItems={buildMenuItems}
                                     itemRefs={itemRefs}
                                     query={query}
                                 />

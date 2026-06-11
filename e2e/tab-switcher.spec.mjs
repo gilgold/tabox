@@ -133,4 +133,31 @@ test.describe('quick tab switcher', () => {
     await popup.keyboard.press('ArrowDown');
     await expect(selectedTitle).not.toHaveText('Nav Two');
   });
+
+  test('search row stays fixed in the popup while arrowing through a long list', async ({ ext }) => {
+    // Regression: in the popup's column layout the results list — not the
+    // card — must be the scroll container, or scrollIntoView drags the
+    // search input out of view (the fullpage row layout never had the bug).
+    const manyTabs = Array.from({ length: 25 }, (_, i) => pageUrl(`Bulk Tab ${i + 1}`));
+    await ext.windows.create({ tabs: manyTabs });
+    const popup = await ext.popup.open();
+    await openSwitcher(popup);
+    await expect(popup.locator('.tab-switcher-row').first()).toBeVisible();
+
+    const inputBefore = await popup.locator('.tab-switcher-input').boundingBox();
+    for (let i = 0; i < 18; i++) {
+      await popup.keyboard.press('ArrowDown');
+    }
+    // The selected row scrolled into view inside the results container...
+    await expect(popup.locator('.tab-switcher-row.selected')).toBeInViewport();
+    const scrollTop = await popup.locator('.tab-switcher-results').evaluate((el) => el.scrollTop);
+    expect(scrollTop).toBeGreaterThan(0);
+    // ...while the search input did not move (small tolerance: favicon loads
+    // settle row heights by ~1px; the bug this guards against scrolls the
+    // input dozens of pixels up and out of the card) and stays usable.
+    const inputAfter = await popup.locator('.tab-switcher-input').boundingBox();
+    expect(Math.abs(inputAfter.y - inputBefore.y)).toBeLessThan(5);
+    await expect(popup.locator('.tab-switcher-input')).toBeInViewport();
+    await expect(popup.locator('.tab-switcher-input')).toBeFocused();
+  });
 });

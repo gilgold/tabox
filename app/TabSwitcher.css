@@ -82,6 +82,20 @@
     flex-direction: column;
     flex: 1;
     min-width: 0;
+    /* min-height matters in the popup's COLUMN layout the way min-width does in
+       the fullpage ROW layout: without it, flexbox's default min-height:auto
+       lets the list blow past the card, .tab-switcher-results never becomes
+       the scroll container, and scrollIntoView scrolls the overflow:hidden
+       card itself — carrying the search row out of view. */
+    min-height: 0;
+}
+
+/* static/index.css applies a global 200ms background-color transition to every
+   element; on a keyboard-driven palette that fade makes moving the selection
+   feel laggy. Keep the switcher instant. */
+.tab-switcher-card,
+.tab-switcher-card * {
+    transition: none;
 }
 
 /* ─── Input ─── */
