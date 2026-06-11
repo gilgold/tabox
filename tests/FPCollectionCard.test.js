@@ -17,16 +17,11 @@ jest.mock('javascript-time-ago', () => {
     }));
 });
 
+let mockCollectionHandlers;
+const mockUseCollectionOperations = jest.fn(() => mockCollectionHandlers);
+
 jest.mock('../app/useCollectionOperations', () => ({
-    useCollectionOperations: jest.fn(() => ({
-        _handleDelete: jest.fn(),
-        _handleDuplicate: jest.fn(),
-        _exportCollectionToFile: jest.fn(),
-        _handleUpdate: jest.fn(),
-        _handleOpenTabs: jest.fn(),
-        _handleFocusWindow: jest.fn(),
-        _handleStopTracking: jest.fn(),
-    })),
+    useCollectionOperations: (...args) => mockUseCollectionOperations(...args),
 }));
 
 jest.mock('../app/DroppableCollection', () => function MockDroppableCollection({ children, disabled = false }) {
@@ -71,6 +66,36 @@ describe('FPCollectionCard keyboard navigation', () => {
         createdOn: Date.now(),
         lastUpdated: Date.now(),
     };
+
+    const renderCard = (overrideProps = {}) => render(
+        <Provider>
+            <FPCollectionCard
+                collection={baseCollection}
+                index={0}
+                onSelect={jest.fn()}
+                updateCollection={jest.fn()}
+                removeCollection={jest.fn()}
+                updateRemoteData={jest.fn()}
+                addCollection={jest.fn()}
+                onDataUpdate={jest.fn()}
+                {...overrideProps}
+            />
+        </Provider>,
+    );
+
+    beforeEach(() => {
+        mockCollectionHandlers = {
+            _handleDelete: jest.fn(),
+            _handleDuplicate: jest.fn(),
+            _exportCollectionToFile: jest.fn(),
+            _handleUpdate: jest.fn(),
+            _handleOpenTabs: jest.fn(),
+            _handleFocusWindow: jest.fn(),
+            _handleStopTracking: jest.fn(),
+            _handleToggleFavorite: jest.fn(),
+        };
+        mockUseCollectionOperations.mockClear();
+    });
 
     test('uses the card as the tab stop instead of nested controls', () => {
         const onSelect = jest.fn();
@@ -483,5 +508,19 @@ describe('FPCollectionCard keyboard navigation', () => {
         expect(screen.getByText('+5')).toBeInTheDocument();
 
         clientWidthSpy.mockRestore();
+    });
+
+    describe('favorite toggle', () => {
+        it('renders an outline star and calls toggle on click', () => {
+            renderCard();
+            const starButton = screen.getByRole('button', { name: 'Add to favorites' });
+            fireEvent.click(starButton);
+            expect(mockCollectionHandlers._handleToggleFavorite).toHaveBeenCalledTimes(1);
+        });
+
+        it('renders a filled star for a favorited collection', () => {
+            renderCard({ collection: { ...baseCollection, isFavorite: true } });
+            expect(screen.getByRole('button', { name: 'Remove from favorites' })).toBeInTheDocument();
+        });
     });
 });

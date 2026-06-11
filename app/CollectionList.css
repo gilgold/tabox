@@ -2534,3 +2534,24 @@ html.fullpage-mode .group-tab-count-badge {
 	visibility: visible !important;
 	z-index: 1000 !important;
 }
+
+/* Favorite star toggle (list rows + shared) */
+.favorite-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    padding: 2px;
+    color: var(--text-color);
+    opacity: 0.45;
+}
+
+.favorite-toggle:hover {
+    opacity: 1;
+}
+
+.favorite-toggle.is-favorite {
+    color: #f4b400;
+    opacity: 1;
+}

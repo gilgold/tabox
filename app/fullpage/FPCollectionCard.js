@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { MdCenterFocusWeak, MdOutlineLaunch, MdOutlineRefresh } from 'react-icons/md';
-import { FaTrash } from 'react-icons/fa';
+import { FaTrash, FaStar, FaRegStar } from 'react-icons/fa';
 import { BsIncognito } from 'react-icons/bs';
 import ContextMenu from '../ContextMenu';
 import { createCollectionMenuItems } from '../utils/contextMenuItems';
@@ -65,6 +65,7 @@ function FPCollectionCard({
         _handleOpenTabs,
         _handleFocusWindow,
         _handleStopTracking,
+        _handleToggleFavorite,
     } = useCollectionOperations({
         collection,
         removeCollection,
@@ -104,6 +105,7 @@ function FPCollectionCard({
                 _handleDuplicate,
                 _exportCollectionToFile,
                 _handleStopTracking,
+                _handleToggleFavorite,
             });
         }
     };
@@ -187,6 +189,8 @@ function FPCollectionCard({
                 onUpdate: _handleUpdate,
                 onStopTracking: _handleStopTracking,
                 onDuplicate: _handleDuplicate,
+                isFavorite: collection.isFavorite === true,
+                onToggleFavorite: _handleToggleFavorite,
             })}
             tooltip="More options"
             tooltipPlace="right"
@@ -213,6 +217,15 @@ function FPCollectionCard({
                     tooltip: 'Update with current tabs',
                     icon: <MdOutlineRefresh size={13} />,
                     onClick: _handleUpdate,
+                },
+                {
+                    key: 'favorite',
+                    className: `fp-card-rail-favorite${collection.isFavorite ? ' is-favorite' : ''}`,
+                    label: collection.isFavorite ? 'Unfavorite' : 'Favorite',
+                    tooltip: collection.isFavorite ? 'Remove from favorites' : 'Add to favorites',
+                    ariaLabel: collection.isFavorite ? 'Remove from favorites' : 'Add to favorites',
+                    icon: collection.isFavorite ? <FaStar size={12} /> : <FaRegStar size={12} />,
+                    onClick: _handleToggleFavorite,
                 },
                 {
                     key: 'more',

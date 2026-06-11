@@ -99,6 +99,7 @@ describe('CollectionTile', () => {
             _handleOpenTabs: jest.fn(),
             _handleFocusWindow: jest.fn(),
             _handleStopTracking: jest.fn(),
+            _handleToggleFavorite: jest.fn(),
         };
 
         mockUseCollectionOperations.mockClear();
@@ -183,5 +184,19 @@ describe('CollectionTile', () => {
             uid: 'collection-1',
             color: 'green',
         }), true);
+    });
+
+    describe('favorite toggle', () => {
+        it('renders an outline star and calls toggle on click', () => {
+            renderTile();
+            const starButton = screen.getByRole('button', { name: 'Add to favorites' });
+            fireEvent.click(starButton);
+            expect(mockCollectionHandlers._handleToggleFavorite).toHaveBeenCalledTimes(1);
+        });
+
+        it('renders a filled star for a favorited collection', () => {
+            renderTile({ collection: { ...baseCollection, isFavorite: true } });
+            expect(screen.getByRole('button', { name: 'Remove from favorites' })).toBeInTheDocument();
+        });
     });
 });

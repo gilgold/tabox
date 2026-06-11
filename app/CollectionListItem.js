@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo, useEffectEvent } from 'react';
 import { MdDragIndicator, MdCenterFocusWeak, MdChevronRight } from 'react-icons/md';
-import { FaPlay } from 'react-icons/fa';
+import { FaPlay, FaStar, FaRegStar } from 'react-icons/fa';
 import { BsIncognito } from 'react-icons/bs';
 import ContextMenu from './ContextMenu';
 import { createCollectionMenuItems } from './utils/contextMenuItems';
@@ -46,7 +46,8 @@ function CollectionListItem(props) {
         _handleUpdate,
         _handleOpenTabs,
         _handleFocusWindow,
-        _handleStopTracking
+        _handleStopTracking,
+        _handleToggleFavorite
     } = useCollectionOperations({
         collection: props.collection,
         removeCollection: props.removeCollection,
@@ -341,6 +342,18 @@ function CollectionListItem(props) {
             
             <div className="column right_items">
                 <button
+                    className={`favorite-toggle ${props.collection.isFavorite ? 'is-favorite' : ''}`}
+                    aria-label={props.collection.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                    data-tooltip-id="main-tooltip"
+                    data-tooltip-content={props.collection.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                    onClick={async (e) => {
+                        e.stopPropagation();
+                        await _handleToggleFavorite();
+                    }}
+                >
+                    {props.collection.isFavorite ? <FaStar size={12} /> : <FaRegStar size={12} />}
+                </button>
+                <button
                     className={`open-tabs-icon ${isAutoUpdate ? 'focus-mode' : ''}`}
                     data-tooltip-id="main-tooltip" data-tooltip-content={isAutoUpdate ? "Focus collection window" : "Open collection tabs"}
                     onClick={async (e) => {
@@ -363,7 +376,9 @@ function CollectionListItem(props) {
                         onDelete: _handleDelete,
                         onUpdate: _handleUpdate,
                         onStopTracking: _handleStopTracking,
-                        onDuplicate: _handleDuplicate
+                        onDuplicate: _handleDuplicate,
+                        isFavorite: props.collection.isFavorite === true,
+                        onToggleFavorite: _handleToggleFavorite,
                     })}
                     tooltip="Collection options"
                     onOpenChange={setIsInteractionActive}

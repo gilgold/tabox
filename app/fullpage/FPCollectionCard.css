@@ -1196,3 +1196,7 @@ html.fullpage-mode .fp-card-actions.fp-card-hover-menu .fp-card-rail-delete:focu
         transition: none !important;
     }
 }
+
+.fp-card-rail-favorite.is-favorite {
+    color: #f4b400;
+}

@@ -63,7 +63,7 @@ import {
     MdOutlineHome,
     MdSortByAlpha,
 } from 'react-icons/md';
-import { FaPlay } from 'react-icons/fa';
+import { FaPlay, FaStar, FaRegStar } from 'react-icons/fa';
 import { FaStop } from 'react-icons/fa6';
 import { CiExport } from 'react-icons/ci';
 import { PiGridNineFill } from 'react-icons/pi';
@@ -3420,6 +3420,13 @@ function FPContentArea({
                     >
                         <MdContentCopy size={16} />
                         <span>Duplicate Collection</span>
+                    </button>
+                    <button
+                        className="fp-card-ctx-item"
+                        onClick={() => handleCtxMenuAction(cardCtxMenu.operations._handleToggleFavorite)}
+                    >
+                        {cardCtxMenu.collection.isFavorite ? <FaStar size={14} /> : <FaRegStar size={14} />}
+                        <span>{cardCtxMenu.collection.isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}</span>
                     </button>
                     <button
                         className="fp-card-ctx-item"

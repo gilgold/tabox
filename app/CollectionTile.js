@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef, useEffectEvent, useCallback } from 'react';
 import { MdCenterFocusWeak, MdOutlineLaunch } from 'react-icons/md';
-import { FaTrash } from 'react-icons/fa';
+import { FaTrash, FaStar, FaRegStar } from 'react-icons/fa';
 import { BsIncognito } from 'react-icons/bs';
 
 import ContextMenu from './ContextMenu';
@@ -42,7 +42,8 @@ function CollectionTile(props) {
         _exportCollectionToFile,
         _handleUpdate,
         _handleOpenTabs,
-        _handleStopTracking
+        _handleStopTracking,
+        _handleToggleFavorite
     } = useCollectionOperations({
         collection: props.collection,
         removeCollection: props.removeCollection,
@@ -217,6 +218,20 @@ function CollectionTile(props) {
                     <h3 className="tile-title" title={collectionName}>
                         {highlightMatchInName !== null ? highlightMatchInName : collectionName}
                     </h3>
+                    <button
+                        className={`favorite-toggle tile-favorite-toggle ${props.collection.isFavorite ? 'is-favorite' : ''}`}
+                        aria-label={props.collection.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                        data-tooltip-id="main-tooltip"
+                        data-tooltip-content={props.collection.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                        onClick={async (e) => {
+                            e.stopPropagation();
+                            await _handleToggleFavorite();
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => e.stopPropagation()}
+                    >
+                        {props.collection.isFavorite ? <FaStar size={12} /> : <FaRegStar size={12} />}
+                    </button>
                     {wasFromIncognito && (
                         <span 
                             className="incognito-indicator" 
@@ -304,7 +319,9 @@ function CollectionTile(props) {
                             onUpdate: _handleUpdate,
                             onStopTracking: _handleStopTracking,
                             onDuplicate: _handleDuplicate,
-                            onCopyUrls: _handleCopyUrls
+                            onCopyUrls: _handleCopyUrls,
+                            isFavorite: props.collection.isFavorite === true,
+                            onToggleFavorite: _handleToggleFavorite,
                         })}
                         tooltip="Collection options"
                         tooltipPlace="right"
