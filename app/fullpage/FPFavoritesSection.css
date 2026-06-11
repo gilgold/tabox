@@ -1,21 +1,8 @@
-.fp-favorites-section {
-    margin-bottom: 18px;
-}
-
-.fp-favorites-items {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--fp-card-min-width, 320px)), var(--fp-card-min-width, 320px)));
-    gap: 12px;
-    padding: 6px 0 2px;
-}
-
-.fp-favorites-items.fp-content-list-mode {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
+/* The favorites view renders its cards as direct children of .fp-content-grid,
+   so all card/grid layout comes from the shared grid styles. Only the empty
+   hint needs its own rule (spanning the full grid width). */
 .fp-favorites-empty-hint {
+    grid-column: 1 / -1;
     padding: 8px 4px 12px;
     font-size: 12px;
     font-style: italic;

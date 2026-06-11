@@ -92,36 +92,35 @@ function FPFavoritesSection({
         onCardContextMenu,
     };
 
+    if (favorites.length === 0) {
+        return <div className="fp-favorites-empty-hint">Star a collection to pin it here</div>;
+    }
+
+    // No wrapper element: this renders inside .fp-content-grid, and the cards
+    // must be direct grid children so they get the exact same layout as the
+    // main collection views (DndContext/SortableContext render no DOM).
     return (
-        <section className="fp-favorites-section">
-            {favorites.length === 0 ? (
-                <div className="fp-favorites-empty-hint">Star a collection to pin it here</div>
-            ) : (
-                <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-                    <SortableContext
-                        items={sortableIds}
-                        strategy={viewMode === 'list' ? verticalListSortingStrategy : rectSortingStrategy}
-                    >
-                        <div className={`fp-favorites-items${viewMode === 'list' ? ' fp-content-list-mode' : ''}`}>
-                            {favorites.map((collection) => (
-                                <SortableFavoriteCard
-                                    key={`fav-${collection.uid}`}
-                                    id={`${FP_FAVORITE_SORTABLE_PREFIX}${collection.uid}`}
-                                    collection={collection}
-                                    viewMode={viewMode}
-                                    disableDrag={disableDrag}
-                                    cardProps={{
-                                        ...cardProps,
-                                        search,
-                                        isAutoUpdate: trackedCollectionUids?.has(collection.uid) === true,
-                                    }}
-                                />
-                            ))}
-                        </div>
-                    </SortableContext>
-                </DndContext>
-            )}
-        </section>
+        <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+            <SortableContext
+                items={sortableIds}
+                strategy={viewMode === 'list' ? verticalListSortingStrategy : rectSortingStrategy}
+            >
+                {favorites.map((collection) => (
+                    <SortableFavoriteCard
+                        key={`fav-${collection.uid}`}
+                        id={`${FP_FAVORITE_SORTABLE_PREFIX}${collection.uid}`}
+                        collection={collection}
+                        viewMode={viewMode}
+                        disableDrag={disableDrag}
+                        cardProps={{
+                            ...cardProps,
+                            search,
+                            isAutoUpdate: trackedCollectionUids?.has(collection.uid) === true,
+                        }}
+                    />
+                ))}
+            </SortableContext>
+        </DndContext>
     );
 }
 
