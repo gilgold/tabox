@@ -1847,23 +1847,25 @@ html.fullpage-mode .fp-content .folder-stats-text {
     .fp-toolbar-wrapper {
         padding: 0 16px;
     }
-    .fp-toolbar {
+    /* Scoped to the full page: the popup (always <900px wide) shares these
+       class names and must keep its own single-row toolbar layout. */
+    html.fullpage-mode .fp-toolbar {
         max-width: calc(100% - 16px);
         flex-wrap: wrap;
         justify-content: center;
         row-gap: 4px;
     }
-    .fp-toolbar-leading {
+    html.fullpage-mode .fp-toolbar-leading {
         flex: 0 0 auto;
         width: auto;
     }
-    .fp-toolbar-leading:not(.is-visible) {
+    html.fullpage-mode .fp-toolbar-leading:not(.is-visible) {
         display: none;
     }
-    .fp-toolbar-pill span {
+    html.fullpage-mode .fp-toolbar-pill span {
         display: none;
     }
-    .fp-toolbar-divider {
+    html.fullpage-mode .fp-toolbar-divider {
         margin: 0 2px;
     }
     .fp-toolbar-segment-btn {
