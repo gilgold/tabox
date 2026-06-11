@@ -66,7 +66,7 @@ import { OrphanRecoveryContext } from './OrphanRecoveryContext';
 // Migration system imports - wrapped in try/catch for compatibility
 const PERF_NAMESPACE = 'tabox:popup';
 const PERF_MEASURE_PREFIX = `${PERF_NAMESPACE}:measure:`;
-const DEFAULT_COLLECTION_FILTERS = { recentlyOpenedActual: false, colors: [] };
+const DEFAULT_COLLECTION_FILTERS = { recentlyOpenedActual: false, colors: [], favoritesOnly: false };
 
 const makeMarkName = (label) => `${PERF_NAMESPACE}:${label}`;
 
@@ -1761,8 +1761,9 @@ function App({ mode = 'popup' }) {
     const hasSearch = search && search.trim() !== '';
     const hasRecentlyOpenedFilter = filters.recentlyOpenedActual;
     const hasColorFilter = filters.colors && filters.colors.length > 0;
+    const hasFavoritesFilter = filters.favoritesOnly === true;
 
-    return hasSearch || hasRecentlyOpenedFilter || hasColorFilter;
+    return hasSearch || hasRecentlyOpenedFilter || hasColorFilter || hasFavoritesFilter;
   }, [search, filters]);
 
   const collectionsToShow = useMemo(() => {
@@ -1785,6 +1786,11 @@ function App({ mode = 'popup' }) {
     
     // Apply color filter (multi-select, OR semantics)
     filteredCollections = filterByColors(filteredCollections, filters.colors);
+
+    // Apply favorites filter
+    if (filters.favoritesOnly) {
+      filteredCollections = filteredCollections.filter(collection => collection.isFavorite === true);
+    }
 
     return filteredCollections;
   }, [

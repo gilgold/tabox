@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
-import { MdClear, MdPalette, MdOpenInBrowser } from 'react-icons/md';
+import { MdClear, MdPalette, MdOpenInBrowser, MdStar, MdStarBorder } from 'react-icons/md';
 import ColorPicker from './ColorPicker';
 import './CollectionFilter.css';
 
@@ -85,6 +85,23 @@ function FilterTooltip({ content, place = 'top', children, disabled = false }) {
     );
 }
 
+function FavoritesFilter({ isActive, onToggle }) {
+    return (
+        <FilterTooltip content="Show only favorite collections" place="top">
+            <button
+                id="filter-favorites"
+                type="button"
+                className={`fp-toolbar-pill collection-filter-favorites ${isActive ? 'active' : ''}`}
+                onClick={onToggle}
+                aria-pressed={isActive}
+                aria-label="Show only favorite collections"
+            >
+                {isActive ? <MdStar size={18} /> : <MdStarBorder size={18} />}
+            </button>
+        </FilterTooltip>
+    );
+}
+
 function RecentlyOpenedFilter({ isActive, onToggle }) {
     return (
         <FilterTooltip content="Show collections opened in the last 3 hours" place="top">
@@ -147,6 +164,7 @@ function ClearFiltersButton({ hasActiveFilters, onClear }) {
 export function CollectionFilter({ onFiltersChange }) {
     const [recentlyOpenedActive, setRecentlyOpenedActive] = useState(false);
     const [selectedColors, setSelectedColors] = useState([]);
+    const [favoritesActive, setFavoritesActive] = useState(false);
     const isMountedRef = useRef(true);
     const isInitialRenderRef = useRef(true);
 
@@ -167,13 +185,20 @@ export function CollectionFilter({ onFiltersChange }) {
             onFiltersChange({
                 recentlyOpenedActual: recentlyOpenedActive,
                 colors: selectedColors,
+                favoritesOnly: favoritesActive,
             });
         }
-    }, [recentlyOpenedActive, selectedColors]);
+    }, [recentlyOpenedActive, selectedColors, favoritesActive]);
 
     const handleRecentlyOpenedToggle = () => {
         if (isMountedRef.current) {
             setRecentlyOpenedActive(!recentlyOpenedActive);
+        }
+    };
+
+    const handleFavoritesToggle = () => {
+        if (isMountedRef.current) {
+            setFavoritesActive(!favoritesActive);
         }
     };
 
@@ -192,10 +217,11 @@ export function CollectionFilter({ onFiltersChange }) {
         if (isMountedRef.current) {
             setRecentlyOpenedActive(false);
             setSelectedColors([]);
+            setFavoritesActive(false);
         }
     };
 
-    const hasActiveFilters = recentlyOpenedActive || selectedColors.length > 0;
+    const hasActiveFilters = recentlyOpenedActive || selectedColors.length > 0 || favoritesActive;
 
     return (
         <>
@@ -208,6 +234,10 @@ export function CollectionFilter({ onFiltersChange }) {
             </div>
 
             <div className="fp-toolbar-group collection-filter-group">
+                <FavoritesFilter
+                    isActive={favoritesActive}
+                    onToggle={handleFavoritesToggle}
+                />
                 <RecentlyOpenedFilter
                     isActive={recentlyOpenedActive}
                     onToggle={handleRecentlyOpenedToggle}

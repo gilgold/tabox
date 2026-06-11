@@ -36,7 +36,6 @@ import {
 import useCollectionItemCrossDrag from './useCollectionItemCrossDrag';
 import { persistCollectionLayoutChanges } from './utils/sharedCollectionSync';
 import { dndPointerSensorOptions } from './utils/dndShared';
-import FavoritesSection from './FavoritesSection';
 
 const reindexCollectionSiblings = (collections, parentId) => (
     collections.map((collection, order) => ({
@@ -893,21 +892,7 @@ function CollectionList({
     return (<>
         <section ref={listContainerRef} className={`collection-list-container settings_body ${props.viewMode === 'grid' ? 'grid-view' : 'list-view'} collection-list-wrapper`} key={props.key}>
             {search ? <SearchTitle searchTerm={search} /> : null}
-            {/* Favorites: topmost section; hidden during search (search results
-                already include favorited collections, matching how the Folders
-                section is hidden in search mode) */}
-            {!search?.trim() && (
-                <FavoritesSection
-                    collections={collections}
-                    viewMode={props.viewMode}
-                    updateCollection={props.updateCollection}
-                    removeCollection={props.removeCollection}
-                    updateRemoteData={props.updateRemoteData}
-                    addCollection={addCollection}
-                    onDataUpdate={props.onDataUpdate}
-                    onSelect={handleSelectCollection}
-                />
-            )}
+
             {hasAnyContent ? (
                 <DndContext
                     key={`dnd-context-${dndKey}`}
