@@ -29,8 +29,6 @@ import {
 } from 'react-icons/md';
 import './TabSwitcher.css';
 
-const ALL_URLS = { origins: ['<all_urls>'] };
-
 // Memoized with stable callback props so an arrow press re-renders only the
 // two rows whose selection changed, not all 50 (each row also mounts a
 // ContextMenu, which makes full-list re-renders measurably sluggish).
@@ -75,89 +73,28 @@ const TabSwitcherRow = React.memo(function TabSwitcherRow({ entry, index, isSele
     );
 });
 
+// Details card for the selected tab. Pure render from the already-loaded
+// entry — screenshot thumbnails were removed (captureVisibleTab can't see
+// background tabs, so coverage was too sparse to be worth the optional
+// <all_urls> permission).
 function TabPreviewPane({ entry }) {
-    const [hasPermission, setHasPermission] = useState(false);
-    const [thumbnail, setThumbnail] = useState(null);
-    const [debouncedEntry, setDebouncedEntry] = useState(entry);
-
-    // Debounce selection changes so rapid arrowing never stutters the pane.
-    useEffect(() => {
-        const t = setTimeout(() => setDebouncedEntry(entry), 150);
-        return () => clearTimeout(t);
-    }, [entry]);
-
-    useEffect(() => {
-        browser.permissions?.contains(ALL_URLS)
-            .then((granted) => setHasPermission(!!granted))
-            .catch(() => setHasPermission(false));
-    }, []);
-
-    useEffect(() => {
-        let cancelled = false;
-        setThumbnail(null);
-        if (!hasPermission || !debouncedEntry) return undefined;
-        // browser.storage.session requires Chrome 102+; treat as no thumbnail below that.
-        if (!browser.storage.session) return undefined;
-        const key = `thumb_${debouncedEntry.tabId}`;
-        browser.storage.session.get(key)
-            .then((data) => {
-                if (!cancelled) setThumbnail(data?.[key]?.dataUrl || null);
-            })
-            .catch(() => { /* previews are best-effort */ });
-        return () => { cancelled = true; };
-    }, [debouncedEntry, hasPermission]);
-
-    // After the permission is granted the background capture is debounced, so
-    // the one-shot storage read above lands before the thumbnail exists. Watch
-    // storage.session for the selected tab's thumbnail so it appears right away.
-    useEffect(() => {
-        if (!hasPermission || !debouncedEntry || !browser.storage.onChanged) return undefined;
-        const key = `thumb_${debouncedEntry.tabId}`;
-        const handler = (changes, area) => {
-            if (area === 'session' && changes[key]?.newValue) {
-                setThumbnail(changes[key].newValue.dataUrl);
-            }
-        };
-        browser.storage.onChanged.addListener(handler);
-        return () => browser.storage.onChanged.removeListener(handler);
-    }, [hasPermission, debouncedEntry]);
-
-    const requestPermission = useCallback(async () => {
-        try {
-            const granted = await browser.permissions.request(ALL_URLS);
-            if (granted) {
-                setHasPermission(true);
-                browser.runtime.sendMessage({ type: 'captureAllWindows' }).catch(() => { /* noop */ });
-            }
-        } catch { /* dialog dismissed or no user gesture */ }
-    }, []);
-
     if (!entry) return <div className="tab-switcher-preview empty" />;
 
     return (
         <div className="tab-switcher-preview">
-            {thumbnail ? (
-                <img className="tab-switcher-preview-shot" src={thumbnail} alt="Tab preview" />
-            ) : (
-                <div className="tab-switcher-preview-card">
-                    <img
-                        className="tab-switcher-preview-favicon"
-                        src={entry.favIconUrl || FALLBACK_FAVICON}
-                        onError={(e) => { e.currentTarget.src = FALLBACK_FAVICON; }}
-                        alt=""
-                    />
-                    <div className="tab-switcher-preview-title">{entry.title}</div>
-                    <div className="tab-switcher-preview-url">{entry.url}</div>
-                </div>
-            )}
+            <div className="tab-switcher-preview-card">
+                <img
+                    className="tab-switcher-preview-favicon"
+                    src={entry.favIconUrl || FALLBACK_FAVICON}
+                    onError={(e) => { e.currentTarget.src = FALLBACK_FAVICON; }}
+                    alt=""
+                />
+                <div className="tab-switcher-preview-title">{entry.title}</div>
+                <div className="tab-switcher-preview-url">{entry.url}</div>
+            </div>
             <div className="tab-switcher-preview-meta">
                 {entry.windowLabel}{entry.incognito ? ' · Incognito' : ''}
             </div>
-            {!hasPermission && (
-                <button className="tab-switcher-enable-previews" onClick={requestPermission}>
-                    Enable tab previews
-                </button>
-            )}
         </div>
     );
 }
@@ -226,10 +163,6 @@ function TabSwitcher() {
         setQuery('');
         didInitialSelectRef.current = false;
         refreshEntries();
-        // Refresh each window's active-tab capture so previews are current (and
-        // self-heal a granted-but-never-primed cache). No-op without the
-        // optional permission — the background gates per capture.
-        browser.runtime.sendMessage({ type: 'captureAllWindows' }).catch(() => { /* noop */ });
         requestAnimationFrame(() => {
             requestAnimationFrame(() => inputRef.current?.focus());
         });

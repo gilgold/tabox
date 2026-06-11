@@ -48,15 +48,6 @@ describe('TabSwitcher', () => {
         // jsdom's real window.close() tears down the environment's timers,
         // which hangs waitFor and jest's own test timeout — stub it.
         jest.spyOn(window, 'close').mockImplementation(() => {});
-        browser.permissions = {
-            contains: jest.fn().mockResolvedValue(false),
-            request: jest.fn().mockResolvedValue(true),
-        };
-        browser.storage.session = {
-            get: jest.fn().mockResolvedValue({}),
-            set: jest.fn().mockResolvedValue(undefined),
-            remove: jest.fn().mockResolvedValue(undefined),
-        };
         browser.tabs.update.mockResolvedValue({});
         browser.tabs.remove.mockResolvedValue();
         // windows.update isn't in the jest.setup.js browser mock — assign it here.
@@ -185,42 +176,17 @@ describe('TabSwitcher', () => {
         });
     });
 
-    test('opening the switcher asks the background to refresh window captures (no-op without permission)', async () => {
+    test('preview pane shows the selected tab\'s details card with window meta', async () => {
         twoWindowSeed();
         renderOpenSwitcher();
-        await screen.findAllByTestId('tab-switcher-row');
-        await waitFor(() => expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'captureAllWindows' }));
-    });
-
-    test('preview pane shows the fallback card and Enable tab previews without permission', async () => {
-        twoWindowSeed();
-        renderOpenSwitcher();
-        await screen.findAllByTestId('tab-switcher-row');
-        expect(await screen.findByText('Enable tab previews')).toBeInTheDocument();
+        const rows = await screen.findAllByTestId('tab-switcher-row');
         expect(document.querySelector('.tab-switcher-preview-card')).toBeInTheDocument();
-    });
-
-    test('Enable tab previews requests <all_urls> and asks background to prime the cache', async () => {
-        twoWindowSeed();
-        renderOpenSwitcher();
-        fireEvent.click(await screen.findByText('Enable tab previews'));
-        await waitFor(() => expect(browser.permissions.request).toHaveBeenCalledWith({ origins: ['<all_urls>'] }));
-        await waitFor(() => expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'captureAllWindows' }));
-    });
-
-    test('shows the cached thumbnail for the selected tab when permission is granted', async () => {
-        twoWindowSeed();
-        browser.permissions.contains.mockResolvedValue(true);
-        browser.storage.session.get.mockImplementation(async (key) => (
-            key === 'thumb_12' ? { thumb_12: { dataUrl: 'data:image/jpeg;base64,xyz', capturedAt: 1 } } : {}
-        ));
-        renderOpenSwitcher();
-        await screen.findAllByTestId('tab-switcher-row');
-        // row 1 (tab 12) is preselected; preview is debounced 150ms
-        await waitFor(() => {
-            const img = document.querySelector('.tab-switcher-preview-shot');
-            expect(img).toBeInTheDocument();
-            expect(img).toHaveAttribute('src', 'data:image/jpeg;base64,xyz');
-        }, { timeout: 2000 });
+        // row 1 (GitHub repo) is preselected (async) — the card reflects it
+        await waitFor(() =>
+            expect(document.querySelector('.tab-switcher-preview-title')).toHaveTextContent('GitHub repo'));
+        // moving the selection updates the card synchronously
+        fireEvent.mouseEnter(rows[2]);
+        expect(document.querySelector('.tab-switcher-preview-title')).toHaveTextContent('Secret docs');
+        expect(document.querySelector('.tab-switcher-preview-meta')).toHaveTextContent('Window 2 · Incognito');
     });
 });

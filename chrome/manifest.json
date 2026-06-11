@@ -65,9 +65,6 @@
     "https://www.googleapis.com/",
     "https://oauth2.googleapis.com/"
   ],
-  "optional_host_permissions": [
-    "<all_urls>"
-  ],
   "web_accessible_resources": [{
     "resources": ["api-keys.json"],
     "matches": [],

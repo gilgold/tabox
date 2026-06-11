@@ -18,6 +18,9 @@ export const STORAGE_KEYS = {
 
 export const CURRENT_STORAGE_VERSION = 3;
 
+// Favicon shown when a tab has no favIconUrl or its favicon fails to load
+export const FALLBACK_FAVICON = './images/favicon-fallback.png';
+
 // Simple UID generator (same logic throughout the app)
 export const generateUid = () => {
     return (crypto && crypto.randomUUID) ? 

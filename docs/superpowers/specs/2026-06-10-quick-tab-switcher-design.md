@@ -128,6 +128,14 @@ muted badge on the right of each row.
 
 ## Thumbnail previews
 
+> **Update (2026-06-11): screenshot thumbnails were removed after shipping.**
+> `captureVisibleTab` can only photograph visible tabs, so coverage was too
+> sparse to justify the optional `<all_urls>` permission — most rows showed
+> the fallback anyway. The capture pipeline (`chrome/thumbnail-capture.js`),
+> the `optional_host_permissions` manifest entry, and the permission-request
+> flow were all removed; the preview pane now always renders the details card
+> (favicon, title, URL, window label). The section below is kept for history.
+
 ### UX
 
 - The list stays compact — no inline thumbnails.

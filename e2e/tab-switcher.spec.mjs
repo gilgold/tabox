@@ -112,13 +112,15 @@ test.describe('quick tab switcher', () => {
     await expect(popup.locator('.tab-switcher-row', { hasText: 'Close Me' })).toHaveCount(0);
   });
 
-  test('without the optional permission the preview pane shows the fallback card and enable button', async ({ ext }) => {
+  test('preview pane shows the selected tab\'s details card', async ({ ext }) => {
     await ext.windows.create({ tabs: [pageUrl('Preview Target')] });
     const popup = await ext.popup.open();
     await openSwitcher(popup);
-    await expect(popup.locator('.tab-switcher-preview')).toBeVisible();
+    await popup.locator('.tab-switcher-input').fill('preview target');
+    await expect(popup.locator('.tab-switcher-row')).toHaveCount(1);
     await expect(popup.locator('.tab-switcher-preview-card')).toBeVisible();
-    await expect(popup.locator('.tab-switcher-enable-previews')).toHaveText('Enable tab previews');
+    await expect(popup.locator('.tab-switcher-preview-title')).toHaveText('Preview Target');
+    await expect(popup.locator('.tab-switcher-preview-meta')).toContainText(/window/i);
   });
 
   test('arrow keys move the selection', async ({ ext }) => {
