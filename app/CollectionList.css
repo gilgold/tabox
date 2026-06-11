@@ -2552,6 +2552,6 @@ html.fullpage-mode .group-tab-count-badge {
 }
 
 .favorite-toggle.is-favorite {
-    color: #f4b400;
+    color: var(--favorite-star-color);
     opacity: 1;
 }

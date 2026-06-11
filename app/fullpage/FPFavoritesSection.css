@@ -13,7 +13,7 @@
 }
 
 .fp-favorites-header-star {
-    color: #f4b400;
+    color: var(--favorite-star-color);
 }
 
 .fp-favorites-title {

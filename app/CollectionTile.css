@@ -597,6 +597,6 @@
 }
 
 .tile-favorite-toggle.is-favorite {
-    color: #f4b400;
+    color: var(--favorite-star-color);
     opacity: 1 !important;
 }
