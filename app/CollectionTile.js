@@ -218,8 +218,6 @@ function CollectionTile(props) {
                     isHighlighted ? 'new-tile-highlight' : '',
                     isDeleting ? 'new-tile-deleting' : '',
                     props.lightningEffect ? 'lightning-effect' : '',
-                    isAiProcessing ? 'ai-processing' : '',
-                    isAiCurrent ? 'ai-processing-current' : '',
                 ].filter(Boolean).join(' ')}
                 style={{
                     ...(props.collection.color && props.collection.color !== 'default' && props.collection.color !== 'var(--setting-row-border-color)' && props.collection.color !== 'var(--collection-default-color)' && { borderColor: getColorValue(props.collection.color) })
@@ -377,6 +375,9 @@ function CollectionTile(props) {
                     <span className="tile-menu-label">Delete</span>
                 </button>
             </div>
+            {isAiProcessing && (
+                <div className={`ai-processing-overlay${isAiCurrent ? ' ai-processing-overlay--current' : ''}`} aria-hidden="true" />
+            )}
         </div>
         </DroppableCollection>
     );

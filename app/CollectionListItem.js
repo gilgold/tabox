@@ -259,8 +259,6 @@ function CollectionListItem(props) {
                     props.lightningEffect ? 'lightning-effect' : '',
                     matchingTabs.length > 0 ? 'has-matching-tabs' : '',
                     isInteractionActive ? 'collection-item-interaction-active' : '',
-                    isAiProcessing ? 'ai-processing' : '',
-                    isAiCurrent ? 'ai-processing-current' : '',
                 ].filter(Boolean).join(' ')}
                 style={{
                     ...style,
@@ -448,6 +446,9 @@ function CollectionListItem(props) {
                         </div>
                     )}
                 </div>
+            )}
+            {isAiProcessing && (
+                <div className={`ai-processing-overlay${isAiCurrent ? ' ai-processing-overlay--current' : ''}`} aria-hidden="true" />
             )}
         </div>
         </DroppableCollection>);

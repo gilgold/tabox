@@ -187,33 +187,32 @@ describe('CollectionTile', () => {
         }), true);
     });
 
-    describe('AI processing classes', () => {
-        it('adds ai-processing class when uid is in aiProcessingUidsState', () => {
+    describe('AI processing overlay', () => {
+        it('renders overlay when uid is in aiProcessingUidsState', () => {
             const { container } = renderTile({}, [
                 [aiProcessingUidsState, ['collection-1']],
             ]);
-            expect(container.querySelector('.collection-tile')).toHaveClass('ai-processing');
-            expect(container.querySelector('.collection-tile')).not.toHaveClass('ai-processing-current');
+            const overlay = container.querySelector('.ai-processing-overlay');
+            expect(overlay).toBeInTheDocument();
+            expect(overlay).not.toHaveClass('ai-processing-overlay--current');
         });
 
-        it('adds ai-processing-current class when uid matches aiProcessingCurrentUidState', () => {
+        it('renders overlay with --current modifier when uid matches aiProcessingCurrentUidState', () => {
             const { container } = renderTile({}, [
                 [aiProcessingUidsState, ['collection-1']],
                 [aiProcessingCurrentUidState, 'collection-1'],
             ]);
-            const tile = container.querySelector('.collection-tile');
-            expect(tile).toHaveClass('ai-processing');
-            expect(tile).toHaveClass('ai-processing-current');
+            const overlay = container.querySelector('.ai-processing-overlay');
+            expect(overlay).toBeInTheDocument();
+            expect(overlay).toHaveClass('ai-processing-overlay--current');
         });
 
-        it('adds no AI classes when uid is not in the processing state', () => {
+        it('renders no overlay when uid is not in the processing state', () => {
             const { container } = renderTile({}, [
                 [aiProcessingUidsState, ['other-uid']],
                 [aiProcessingCurrentUidState, 'other-uid'],
             ]);
-            const tile = container.querySelector('.collection-tile');
-            expect(tile).not.toHaveClass('ai-processing');
-            expect(tile).not.toHaveClass('ai-processing-current');
+            expect(container.querySelector('.ai-processing-overlay')).not.toBeInTheDocument();
         });
     });
 

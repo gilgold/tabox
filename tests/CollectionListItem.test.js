@@ -270,33 +270,32 @@ describe('CollectionListItem', () => {
         });
     });
 
-    describe('AI processing classes', () => {
-        it('adds ai-processing class when uid is in aiProcessingUidsState', async () => {
+    describe('AI processing overlay', () => {
+        it('renders overlay when uid is in aiProcessingUidsState', async () => {
             const { container } = await renderItem({}, [
                 [aiProcessingUidsState, ['collection-1']],
             ]);
-            expect(container.querySelector('.collection-list-item')).toHaveClass('ai-processing');
-            expect(container.querySelector('.collection-list-item')).not.toHaveClass('ai-processing-current');
+            const overlay = container.querySelector('.ai-processing-overlay');
+            expect(overlay).toBeInTheDocument();
+            expect(overlay).not.toHaveClass('ai-processing-overlay--current');
         });
 
-        it('adds ai-processing-current class when uid matches aiProcessingCurrentUidState', async () => {
+        it('renders overlay with --current modifier when uid matches aiProcessingCurrentUidState', async () => {
             const { container } = await renderItem({}, [
                 [aiProcessingUidsState, ['collection-1']],
                 [aiProcessingCurrentUidState, 'collection-1'],
             ]);
-            const row = container.querySelector('.collection-list-item');
-            expect(row).toHaveClass('ai-processing');
-            expect(row).toHaveClass('ai-processing-current');
+            const overlay = container.querySelector('.ai-processing-overlay');
+            expect(overlay).toBeInTheDocument();
+            expect(overlay).toHaveClass('ai-processing-overlay--current');
         });
 
-        it('adds no AI classes when uid is not in the processing state', async () => {
+        it('renders no overlay when uid is not in the processing state', async () => {
             const { container } = await renderItem({}, [
                 [aiProcessingUidsState, ['other-uid']],
                 [aiProcessingCurrentUidState, 'other-uid'],
             ]);
-            const row = container.querySelector('.collection-list-item');
-            expect(row).not.toHaveClass('ai-processing');
-            expect(row).not.toHaveClass('ai-processing-current');
+            expect(container.querySelector('.ai-processing-overlay')).not.toBeInTheDocument();
         });
     });
 

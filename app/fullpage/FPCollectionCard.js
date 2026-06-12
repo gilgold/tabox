@@ -282,8 +282,6 @@ function FPCollectionCard({
                     bulkSelectionActive ? 'fp-card-bulk-mode' : '',
                     isBulkSelected ? 'fp-card-bulk-selected' : '',
                     shouldShowInteractionState ? 'fp-card-interaction-active' : '',
-                    isAiProcessing ? 'ai-processing' : '',
-                    isAiCurrent ? 'ai-processing-current' : '',
                 ].filter(Boolean).join(' ')}
                 style={{
                     '--card-color': colorValue,
@@ -336,6 +334,9 @@ function FPCollectionCard({
                 actionsClassName={FP_CARD_HOVER_MENU_CLASS}
                 dragAttributes={dragAttributes}
                 dragListeners={dragListeners}
+                extraContent={isAiProcessing ? (
+                    <div className={`ai-processing-overlay${isAiCurrent ? ' ai-processing-overlay--current' : ''}`} aria-hidden="true" />
+                ) : null}
             />
         </DroppableCollection>
     );

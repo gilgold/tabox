@@ -511,7 +511,7 @@ describe('FPCollectionCard keyboard navigation', () => {
         clientWidthSpy.mockRestore();
     });
 
-    describe('AI processing classes', () => {
+    describe('AI processing overlay', () => {
         const renderCardWithStore = (storeSetup) => {
             const store = createStore();
             storeSetup(store);
@@ -531,32 +531,31 @@ describe('FPCollectionCard keyboard navigation', () => {
             );
         };
 
-        it('adds ai-processing class when uid is in aiProcessingUidsState', () => {
+        it('renders overlay when uid is in aiProcessingUidsState', () => {
             const { container } = renderCardWithStore((store) => {
                 store.set(aiProcessingUidsState, ['collection-1']);
             });
-            expect(container.querySelector('.fp-collection-card')).toHaveClass('ai-processing');
-            expect(container.querySelector('.fp-collection-card')).not.toHaveClass('ai-processing-current');
+            const overlay = container.querySelector('.ai-processing-overlay');
+            expect(overlay).toBeInTheDocument();
+            expect(overlay).not.toHaveClass('ai-processing-overlay--current');
         });
 
-        it('adds ai-processing-current class when uid matches aiProcessingCurrentUidState', () => {
+        it('renders overlay with --current modifier when uid matches aiProcessingCurrentUidState', () => {
             const { container } = renderCardWithStore((store) => {
                 store.set(aiProcessingUidsState, ['collection-1']);
                 store.set(aiProcessingCurrentUidState, 'collection-1');
             });
-            const card = container.querySelector('.fp-collection-card');
-            expect(card).toHaveClass('ai-processing');
-            expect(card).toHaveClass('ai-processing-current');
+            const overlay = container.querySelector('.ai-processing-overlay');
+            expect(overlay).toBeInTheDocument();
+            expect(overlay).toHaveClass('ai-processing-overlay--current');
         });
 
-        it('adds no AI classes when uid is not in the processing state', () => {
+        it('renders no overlay when uid is not in the processing state', () => {
             const { container } = renderCardWithStore((store) => {
                 store.set(aiProcessingUidsState, ['other-uid']);
                 store.set(aiProcessingCurrentUidState, 'other-uid');
             });
-            const card = container.querySelector('.fp-collection-card');
-            expect(card).not.toHaveClass('ai-processing');
-            expect(card).not.toHaveClass('ai-processing-current');
+            expect(container.querySelector('.ai-processing-overlay')).not.toBeInTheDocument();
         });
     });
 
