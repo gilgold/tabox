@@ -62,6 +62,7 @@ import { createFolder } from './utils/folderOperations';
 import useOrphanRecovery from './useOrphanRecovery';
 import OrphanRecoveryModal from './OrphanRecoveryModal';
 import { OrphanRecoveryContext } from './OrphanRecoveryContext';
+import AIToolsModal from './AIToolsModal';
 
 // Migration system imports - wrapped in try/catch for compatibility
 const PERF_NAMESPACE = 'tabox:popup';
@@ -2007,6 +2008,7 @@ function App({ mode = 'popup' }) {
   );
 
   const tabSwitcherEl = <TabSwitcher />;
+  const aiToolsModalEl = <AIToolsModal updateCollection={updateCollection} />;
 
   if (isFullPage) {
     return <>
@@ -2022,6 +2024,7 @@ function App({ mode = 'popup' }) {
         {tooltipPortal}
         {commandPaletteEl}
         {tabSwitcherEl}
+        {aiToolsModalEl}
         <FPLayout
           folders={displayFolders}
           collections={collectionsToShow}
@@ -2066,6 +2069,7 @@ function App({ mode = 'popup' }) {
       {tooltipPortal}
       {commandPaletteEl}
       {tabSwitcherEl}
+      {aiToolsModalEl}
       <div className={`App${isFullPage ? ' fullpage' : ''}`}>
       <Header
         isFullPage={isFullPage}
