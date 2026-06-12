@@ -74,33 +74,42 @@ function CollectionDetailPanel({
 
     const isAIEnabled = useTaboxAIEnabled();
     const showAiRenameBtn = isAIEnabled && isAISupported();
+    // The panel instance persists across collection switches; track what's
+    // displayed so an in-flight AI rename never retitles the wrong collection.
+    const displayedUidRef = useRef(collection?.uid);
+    displayedUidRef.current = collection?.uid;
 
     const handleAiRename = async () => {
         if (isAiRenaming) return;
         setIsAiRenaming(true);
+        const renamedUid = collection.uid;
         try {
             const newName = await suggestCollectionName(collection);
             if (!newName || newName === collection.name) {
                 showSuccessToast('The current name already fits!');
                 return;
             }
-            const fresh = await loadSingleCollection(collection.uid);
+            const fresh = await loadSingleCollection(renamedUid);
             if (!fresh) {
                 showErrorToast('This collection no longer exists.');
                 return;
             }
             const oldName = fresh.name;
             await updateCollection({ ...fresh, name: newName, lastUpdated: Date.now() }, true);
-            setCollectionName(newName);
+            if (displayedUidRef.current === renamedUid) {
+                setCollectionName(newName);
+            }
             showUndoToast(
                 <BsStars />,
                 `Renamed to '${newName}'`,
                 oldName,
                 async () => {
-                    const current = await loadSingleCollection(collection.uid);
+                    const current = await loadSingleCollection(renamedUid);
                     if (!current || current.name !== newName) return;
                     await updateCollection({ ...current, name: oldName, lastUpdated: Date.now() }, true);
-                    setCollectionName(oldName);
+                    if (displayedUidRef.current === renamedUid) {
+                        setCollectionName(oldName);
+                    }
                 },
                 UNDO_TIME,
             );
