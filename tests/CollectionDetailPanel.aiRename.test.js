@@ -1,7 +1,8 @@
 import { act, fireEvent, render } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { Provider } from 'jotai';
+import { Provider, createStore } from 'jotai';
 import CollectionDetailPanel from '../app/CollectionDetailPanel';
+import { aiProcessingUidsState, aiProcessingCurrentUidState } from '../app/atoms/aiState';
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
@@ -76,11 +77,11 @@ const baseCollection = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const renderPanel = async (props = {}) => {
+const renderPanel = async (props = {}, store = undefined) => {
     let result;
     await act(async () => {
         result = render(
-            <Provider>
+            <Provider store={store}>
                 <CollectionDetailPanel
                     collection={baseCollection}
                     isOpen={true}
@@ -309,5 +310,77 @@ describe('CollectionDetailPanel – AI rename error cases', () => {
             expect.stringContaining('no longer exists'),
         );
         expect(updateCollection).not.toHaveBeenCalled();
+    });
+});
+
+describe('CollectionDetailPanel – AI rename processing effect', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        mockAIEnabled = true;
+        mockAISupported = true;
+        browser.storage.local.get.mockResolvedValue({});
+    });
+
+    test('while suggest is pending, .panel-title-slot has ai-name-processing class', async () => {
+        let resolveSuggest;
+        mockSuggestCollectionName.mockReturnValue(
+            new Promise((resolve) => { resolveSuggest = resolve; }),
+        );
+        const store = createStore();
+        const { container } = await renderPanel({}, store);
+
+        // Start the rename (don't await — it's still pending)
+        act(() => { fireEvent.click(getAiBtn(container)); });
+
+        // The class should be present while the promise is unresolved
+        expect(container.querySelector('.panel-title-slot')).toHaveClass('ai-name-processing');
+
+        // Atom should reflect the processing uid
+        expect(store.get(aiProcessingUidsState)).toContain(baseCollection.uid);
+        expect(store.get(aiProcessingCurrentUidState)).toBe(baseCollection.uid);
+
+        // Clean up: resolve so the test doesn't leak
+        await act(async () => { resolveSuggest(null); });
+    });
+
+    test('after suggest resolves, ai-name-processing class is removed', async () => {
+        let resolveSuggest;
+        mockSuggestCollectionName.mockReturnValue(
+            new Promise((resolve) => { resolveSuggest = resolve; }),
+        );
+        const store = createStore();
+        const { container } = await renderPanel({}, store);
+
+        act(() => { fireEvent.click(getAiBtn(container)); });
+
+        // Confirm class is present before resolving
+        expect(container.querySelector('.panel-title-slot')).toHaveClass('ai-name-processing');
+
+        // Resolve with a new name and let the rename complete
+        mockLoadSingleCollection.mockResolvedValue({ ...baseCollection });
+        await act(async () => { resolveSuggest('Resolved Name'); });
+
+        expect(container.querySelector('.panel-title-slot')).not.toHaveClass('ai-name-processing');
+        expect(store.get(aiProcessingUidsState)).toEqual([]);
+        expect(store.get(aiProcessingCurrentUidState)).toBeNull();
+    });
+
+    test('after suggest rejects, ai-name-processing class is removed', async () => {
+        let rejectSuggest;
+        mockSuggestCollectionName.mockReturnValue(
+            new Promise((_, reject) => { rejectSuggest = reject; }),
+        );
+        const store = createStore();
+        const { container } = await renderPanel({}, store);
+
+        act(() => { fireEvent.click(getAiBtn(container)); });
+
+        expect(container.querySelector('.panel-title-slot')).toHaveClass('ai-name-processing');
+
+        await act(async () => { rejectSuggest(new Error('ai failed')); });
+
+        expect(container.querySelector('.panel-title-slot')).not.toHaveClass('ai-name-processing');
+        expect(store.get(aiProcessingUidsState)).toEqual([]);
+        expect(store.get(aiProcessingCurrentUidState)).toBeNull();
     });
 });

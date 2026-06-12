@@ -8,6 +8,7 @@ import { CiExport } from 'react-icons/ci';
 import TimeAgo from 'javascript-time-ago';
 import { useSetAtom, useAtomValue } from 'jotai';
 import { deletingCollectionUidsState } from './atoms/animationsState';
+import { aiProcessingUidsState, aiProcessingCurrentUidState } from './atoms/aiState';
 import { trackingStateVersion } from './atoms/globalAppSettingsState';
 import { showSuccessToast, showErrorToast, showUndoToast } from './toastHelpers';
 import { UNDO_TIME } from './constants';
@@ -22,6 +23,7 @@ import { isAISupported } from './ai/aiClient';
 import { suggestCollectionName } from './ai/tasks/suggestCollectionName';
 import { loadSingleCollection } from './utils/storageUtils';
 import './CollectionDetailPanel.css';
+import './AIEffects.css';
 
 function CollectionDetailPanel({
     collection,
@@ -50,6 +52,8 @@ function CollectionDetailPanel({
     const skipTitleBlurRef = useRef(false);
 
     const setDeletingCollectionUids = useSetAtom(deletingCollectionUidsState);
+    const setAiProcessingUids = useSetAtom(aiProcessingUidsState);
+    const setAiProcessingCurrentUid = useSetAtom(aiProcessingCurrentUidState);
 
     // Use shared collection operations
     const {
@@ -83,6 +87,9 @@ function CollectionDetailPanel({
         if (isAiRenaming) return;
         setIsAiRenaming(true);
         const renamedUid = collection.uid;
+        // Signal AI processing to consumers (cards, etc.)
+        setAiProcessingUids([renamedUid]);
+        setAiProcessingCurrentUid(renamedUid);
         try {
             const newName = await suggestCollectionName(collection);
             if (!newName || newName === collection.name) {
@@ -95,6 +102,10 @@ function CollectionDetailPanel({
                 return;
             }
             const oldName = fresh.name;
+            // Clear processing state before applying the rename so the
+            // completion lightning flash doesn't overlap the looping effect.
+            setAiProcessingUids([]);
+            setAiProcessingCurrentUid(null);
             await updateCollection({ ...fresh, name: newName, lastUpdated: Date.now() }, true);
             if (displayedUidRef.current === renamedUid) {
                 setCollectionName(newName);
@@ -117,6 +128,10 @@ function CollectionDetailPanel({
             console.error('AI rename failed:', err);
             showErrorToast('Could not generate a name. Please try again.');
         } finally {
+            // Idempotent safety: ensure atoms are cleared regardless of which
+            // branch was taken (early returns above don't reach the pre-apply clear).
+            setAiProcessingUids([]);
+            setAiProcessingCurrentUid(null);
             setIsAiRenaming(false);
         }
     };
@@ -371,7 +386,7 @@ function CollectionDetailPanel({
                                     <BsStars size={16} />
                                 </button>
                             )}
-                            <div className="panel-title-slot">
+                            <div className={`panel-title-slot${isAiRenaming ? ' ai-name-processing' : ''}`}>
                                 {isEditingName ? (
                                     <div className="panel-title-edit panel-title-edit-active">
                                         <div className="panel-title-autosave">

@@ -1,0 +1,123 @@
+/* ── AI Processing Effects ──────────────────────────────────────────────────
+ * Shared keyframes and utility classes for animated gradient border + lightning
+ * sweep shown on elements while an AI rename is in flight.
+ *
+ * Classes:
+ *   .ai-processing          — gradient ring + looping lightning streak
+ *   .ai-processing-current  — same but faster / brighter (the active card in
+ *                             a bulk run, or the single panel-title target)
+ *   .ai-name-processing     — title-slot variant (tuned radius + padding)
+ *
+ * Performance fallback: html.performance-mode strips all animation and keeps
+ * only a static purple ring.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+@keyframes ai-gradient-shift {
+    0%   { background-position: 0%   0%; }
+    100% { background-position: 300% 0%; }
+}
+
+@keyframes ai-lightning-sweep {
+    0%   { transform: translateX(-130%) skewX(-20deg); }
+    100% { transform: translateX(230%)  skewX(-20deg); }
+}
+
+/* ── Base processing class ──────────────────────────────────────────────── */
+
+.ai-processing,
+.ai-processing-current,
+.ai-name-processing {
+    position: relative;
+    isolation: isolate;
+}
+
+/* Gradient ring via mask-composite ---------------------------------------- */
+
+.ai-processing::before,
+.ai-processing-current::before,
+.ai-name-processing::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 2px;
+    background: linear-gradient(
+        120deg,
+        #7c3aed,
+        #2563eb,
+        #38bdf8,
+        #ec4899,
+        #7c3aed
+    ) 0 0 / 300% 100%;
+    /* mask-composite ring: show only the padding area */
+    -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+    mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+    -webkit-mask-composite: destination-out;
+    mask-composite: exclude;
+    animation: ai-gradient-shift 2.2s linear infinite;
+    pointer-events: none;
+    z-index: 2;
+}
+
+/* Lightning streak -------------------------------------------------------- */
+
+.ai-processing::after,
+.ai-processing-current::after,
+.ai-name-processing::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 45%;
+    background: linear-gradient(
+        100deg,
+        transparent,
+        rgba(255, 255, 255, 0.35) 50%,
+        transparent
+    );
+    animation: ai-lightning-sweep 1.4s ease-in-out infinite;
+    pointer-events: none;
+    z-index: 3;
+}
+
+/* ── Current-item variant (stronger) ──────────────────────────────────────── */
+
+.ai-processing-current::before {
+    animation-duration: 1.1s;
+    filter: brightness(1.2);
+}
+
+/* ── Title-slot variant ───────────────────────────────────────────────────── */
+
+.ai-name-processing::before {
+    border-radius: 8px;
+    padding: 2px;
+}
+
+/* ── Performance-mode static fallback ────────────────────────────────────── */
+
+html.performance-mode .ai-processing::before,
+html.performance-mode .ai-processing-current::before,
+html.performance-mode .ai-name-processing::before {
+    animation: none !important;
+    background: #7c3aed;
+    /* Reset mask so the whole inset area shows as a solid ring */
+    -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+    mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+    -webkit-mask-composite: destination-out;
+    mask-composite: exclude;
+}
+
+html.performance-mode .ai-processing::after,
+html.performance-mode .ai-processing-current::after,
+html.performance-mode .ai-name-processing::after {
+    display: none;
+}
