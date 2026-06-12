@@ -2008,7 +2008,7 @@ function App({ mode = 'popup' }) {
   );
 
   const tabSwitcherEl = <TabSwitcher />;
-  const aiToolsModalEl = <AIToolsModal updateCollection={updateCollection} />;
+  const aiToolsModalEl = <AIToolsModal updateRemoteData={updateRemoteData} />;
 
   if (isFullPage) {
     return <>

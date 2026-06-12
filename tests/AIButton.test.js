@@ -1,9 +1,10 @@
 /** @jest-environment jsdom */
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { Provider } from 'jotai';
+import { Provider, createStore } from 'jotai';
 import { browser } from '../static/globals';
 import AIButton from '../app/AIButton';
+import { aiToolsModalOpenState, aiToolsScopeState } from '../app/atoms/aiState';
 
 describe('AIButton', () => {
     beforeEach(() => {
@@ -34,5 +35,24 @@ describe('AIButton', () => {
         const { container } = render(<Provider><AIButton /></Provider>);
         await waitFor(() => expect(browser.storage.local.get).toHaveBeenCalled());
         expect(container.querySelector('.ai-button')).toBeNull();
+    });
+
+    test('clicking sets scope to {type:all} and opens the modal', async () => {
+        browser.storage.local.get.mockResolvedValue({ chkTaboxAI: true });
+        const store = createStore();
+        // pre-set a stale 'selected' scope to verify it gets reset
+        store.set(aiToolsScopeState, { type: 'selected', uids: ['c1'] });
+
+        render(
+            <Provider store={store}>
+                <AIButton />
+            </Provider>
+        );
+        await waitFor(() => expect(screen.getByRole('button', { name: /tabox ai/i })).toBeInTheDocument());
+
+        fireEvent.click(screen.getByRole('button', { name: /tabox ai/i }));
+
+        expect(store.get(aiToolsModalOpenState)).toBe(true);
+        expect(store.get(aiToolsScopeState)).toEqual({ type: 'all' });
     });
 });

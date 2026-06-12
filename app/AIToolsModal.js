@@ -3,121 +3,204 @@ import Modal from 'react-modal';
 import { useAtom, useAtomValue } from 'jotai';
 import { MdClose, MdArrowBack } from 'react-icons/md';
 import { BsStars } from 'react-icons/bs';
-import { aiToolsModalOpenState } from './atoms/aiState';
+import { aiToolsModalOpenState, aiToolsScopeState } from './atoms/aiState';
 import { viewContextState } from './atoms/globalAppSettingsState';
 import { AI_TOOLS } from './ai/aiTasks';
-import { suggestCollectionName } from './ai/tasks/suggestCollectionName';
-import { loadAllCollections, loadSingleCollection } from './utils/storageUtils';
-import { showSuccessToast } from './toastHelpers';
+import { autoRenameCollections } from './ai/tasks/autoRenameCollections';
+import { getAIAvailability } from './ai/aiClient';
+import { loadAllCollections } from './utils/storageUtils';
+import { showUndoToast } from './toastHelpers';
+import { UNDO_TIME } from './constants';
 import './Modal.css';
 import './AIToolsModal.css';
 
-function AIToolsModal({ updateCollection }) {
+function AIToolsModal({ updateRemoteData }) {
     const [isOpen, setIsOpen] = useAtom(aiToolsModalOpenState);
+    const scope = useAtomValue(aiToolsScopeState);
     const viewContext = useAtomValue(viewContextState);
     const [activeToolId, setActiveToolId] = useState(null);
     const [collections, setCollections] = useState([]);
-    const [selectedUid, setSelectedUid] = useState('');
-    const [suggestion, setSuggestion] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [isApplying, setIsApplying] = useState(false);
+    // Panel state machine: idle | running | done
+    const [panelStatus, setPanelStatus] = useState('idle');
+    const [renameResults, setRenameResults] = useState([]); // live list of {uid, oldName, newName} | {uid, reason}
+    const [skipped, setSkipped] = useState([]);
+    const [wasCancelled, setWasCancelled] = useState(false);
     const [error, setError] = useState(null);
-    // Request token for suggest-race guard (fix 2)
-    const suggestTokenRef = useRef(0);
+    const [isCancelling, setIsCancelling] = useState(false);
+
+    // Abort controller for the running engine
+    const abortControllerRef = useRef(null);
+    // Run token to invalidate stale async state updates
+    const runTokenRef = useRef(0);
 
     useEffect(() => {
         if (!isOpen) return;
-        // Invalidate any suggest still in flight from the previous session.
-        suggestTokenRef.current += 1;
+        // Abort any in-flight run from a previous session
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+        }
+        runTokenRef.current += 1;
+        // Reset all panel state
         setCollections([]);
         setActiveToolId(null);
-        setSelectedUid('');
-        setSuggestion('');
+        setPanelStatus('idle');
+        setRenameResults([]);
+        setSkipped([]);
+        setWasCancelled(false);
         setError(null);
-        setLoading(false);
-        setIsApplying(false);
+        setIsCancelling(false);
         loadAllCollections().then(setCollections).catch((loadError) => {
             console.error('Tabox AI: failed to load collections', loadError);
             setCollections([]);
         });
     }, [isOpen]);
 
-    const close = () => setIsOpen(false);
-    // Empty collections produce a degenerate prompt — keep them out of the picker.
-    const nameableCollections = collections.filter((collection) => (collection.tabs || []).length > 0);
+    // Abort on unmount
+    useEffect(() => {
+        return () => {
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+            }
+        };
+    }, []);
 
-    const handleSuggest = async () => {
-        if (!selectedUid || loading) return;
-        const token = ++suggestTokenRef.current;
-        const uidAtStart = selectedUid;
-        setLoading(true);
-        setError(null);
-        const collection = nameableCollections.find((c) => c.uid === uidAtStart);
-        if (!collection) {
-            setLoading(false);
+    const busy = panelStatus === 'running';
+    const close = () => setIsOpen(false);
+
+    // Collections that have tabs (can be renamed by AI)
+    const nameableCollections = collections.filter((c) => (c.tabs || []).length > 0);
+
+    // Apply scope filter
+    const targets = scope.type === 'selected'
+        ? nameableCollections.filter((c) => scope.uids.includes(c.uid))
+        : nameableCollections;
+
+    const handleRun = async () => {
+        if (panelStatus !== 'idle' || targets.length === 0) return;
+
+        // Pre-flight check
+        const availability = await getAIAvailability();
+        if (availability !== 'available') {
+            setError('Tabox AI is not ready on this device. Check the Tabox AI setting.');
             return;
         }
+
+        const token = ++runTokenRef.current;
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
+        setPanelStatus('running');
+        setRenameResults([]);
+        setSkipped([]);
+        setWasCancelled(false);
+        setError(null);
+        setIsCancelling(false);
+
+        let engineResult;
         try {
-            const result = await suggestCollectionName(collection);
-            // Discard result if selection changed while in flight
-            if (token === suggestTokenRef.current) {
-                setSuggestion(result);
+            engineResult = await autoRenameCollections({
+                collections: targets,
+                signal: controller.signal,
+                onProgress: undefined,
+                onResult: (entry) => {
+                    if (token !== runTokenRef.current) return;
+                    if (entry.newName) {
+                        setRenameResults((prev) => [...prev, entry]);
+                    } else {
+                        setSkipped((prev) => [...prev, entry]);
+                    }
+                },
+            });
+        } catch (runError) {
+            // Unexpected engine throw (shouldn't normally happen — AbortError is caught inside)
+            console.error('Tabox AI: autoRenameCollections threw unexpectedly:', runError);
+            if (token !== runTokenRef.current) return;
+            setError('An unexpected error occurred. Please try again.');
+            setPanelStatus('done');
+            return;
+        }
+
+        if (token !== runTokenRef.current) return;
+
+        const { results, cancelled } = engineResult;
+        setWasCancelled(cancelled);
+
+        if (results.length > 0) {
+            try {
+                const fresh = await loadAllCollections();
+                const byUid = Object.fromEntries(results.map((r) => [r.uid, r]));
+                const patched = fresh.map((c) =>
+                    byUid[c.uid] ? { ...c, name: byUid[c.uid].newName, lastUpdated: Date.now() } : c
+                );
+                await updateRemoteData(patched);
+
+                const renamed = results;
+                showUndoToast(
+                    <BsStars />,
+                    `Renamed ${renamed.length} collection${renamed.length === 1 ? '' : 's'} with AI`,
+                    'Tabox AI',
+                    async () => {
+                        const current = await loadAllCollections();
+                        const oldByUid = Object.fromEntries(renamed.map((r) => [r.uid, r.oldName]));
+                        const reverted = current.map((c) =>
+                            oldByUid[c.uid] ? { ...c, name: oldByUid[c.uid], lastUpdated: Date.now() } : c
+                        );
+                        await updateRemoteData(reverted);
+                    },
+                    UNDO_TIME,
+                );
+            } catch (applyError) {
+                console.error('Tabox AI: failed to save renamed collections:', applyError);
+                if (token !== runTokenRef.current) return;
+                setError('Could not save the new names. Please try again.');
             }
-        } catch (suggestError) {
-            console.error('Tabox AI name suggestion failed:', suggestError);
-            if (token === suggestTokenRef.current) {
-                setError('Could not generate a suggestion. Please try again.');
-            }
-        } finally {
-            if (token === suggestTokenRef.current) {
-                setLoading(false);
-            }
+        }
+
+        if (token !== runTokenRef.current) return;
+        setPanelStatus('done');
+    };
+
+    const handleCancel = () => {
+        if (!busy || isCancelling) return;
+        setIsCancelling(true);
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
         }
     };
 
-    const handleApply = async () => {
-        const trimmed = suggestion.trim();
-        if (!selectedUid || !trimmed || isApplying) return;
-        setIsApplying(true);
-        try {
-            // Re-fetch at apply time: the open-time snapshot may be stale, and
-            // saving it could revert concurrent edits or resurrect a deletion.
-            const fresh = await loadSingleCollection(selectedUid);
-            if (!fresh) {
-                setError('This collection no longer exists.');
-                return;
-            }
-            await updateCollection({
-                ...fresh,
-                name: trimmed.substring(0, 50),
-                lastUpdated: Date.now(),
-            }, true);
-            showSuccessToast('Collection renamed!');
-            close();
-        } catch (applyError) {
-            console.error('Tabox AI: apply rename failed:', applyError);
-            setError('Could not rename the collection. Please try again.');
-        } finally {
-            setIsApplying(false);
-        }
-    };
+    const n = targets.length;
+    const idleDescription = n === 1
+        ? 'Automatically rename 1 collection using on-device AI. You can review and undo afterwards.'
+        : `Automatically rename ${n} collections using on-device AI. You can review and undo afterwards.`;
+
+    const idleDisabledHint = n === 0
+        ? (scope.type === 'selected'
+            ? 'None of the selected collections can be renamed.'
+            : 'No collections with tabs to rename.')
+        : null;
 
     return (
         <Modal
             isOpen={isOpen}
-            onRequestClose={close}
+            onRequestClose={busy ? undefined : close}
             contentLabel="Tabox AI Tools"
             className={`modal-content ai-tools-modal${viewContext === 'fullpage' ? ' ai-tools-modal--fullpage' : ''}`}
             overlayClassName="modal-overlay"
             ariaHideApp={false}
-            shouldCloseOnOverlayClick={true}
-            shouldCloseOnEsc={true}
+            shouldCloseOnOverlayClick={!busy}
+            shouldCloseOnEsc={!busy}
         >
             <div className="ai-tools-modal-content">
                 <div className="ai-tools-modal-header">
                     <div className="ai-tools-modal-title">
                         {activeToolId ? (
-                            <button type="button" className="ai-tools-back" onClick={() => setActiveToolId(null)} aria-label="Back to tools">
+                            <button
+                                type="button"
+                                className="ai-tools-back"
+                                onClick={() => !busy && setActiveToolId(null)}
+                                aria-label="Back to tools"
+                                disabled={busy}
+                            >
                                 <MdArrowBack size={18} />
                             </button>
                         ) : (
@@ -125,7 +208,7 @@ function AIToolsModal({ updateCollection }) {
                         )}
                         <span>{activeToolId ? AI_TOOLS.find((tool) => tool.id === activeToolId)?.title : 'Tabox AI'}</span>
                     </div>
-                    <button className="ai-tools-modal-close" onClick={close} type="button" aria-label="Close">
+                    <button className="ai-tools-modal-close" onClick={close} type="button" disabled={busy} aria-label="Close">
                         <MdClose />
                     </button>
                 </div>
@@ -147,61 +230,93 @@ function AIToolsModal({ updateCollection }) {
 
                 {activeToolId === 'auto-rename' && (
                     <div className="ai-tool-panel">
-                        <label className="ai-tool-label" htmlFor="ai-rename-collection">Collection</label>
-                        <select
-                            id="ai-rename-collection"
-                            className="ai-tool-select"
-                            value={selectedUid}
-                            disabled={loading}
-                            onChange={(e) => {
-                                setSelectedUid(e.target.value);
-                                setSuggestion('');
-                                setError(null);
-                                // Discard any suggest still in flight for the old selection.
-                                suggestTokenRef.current += 1;
-                            }}
-                        >
-                            <option value="">Choose a collection…</option>
-                            {nameableCollections.map((collection) => (
-                                <option key={collection.uid} value={collection.uid}>
-                                    {collection.name} ({(collection.tabs || []).length} tabs)
-                                </option>
-                            ))}
-                        </select>
-
-                        <button
-                            type="button"
-                            className="ai-tool-action-btn"
-                            onClick={handleSuggest}
-                            disabled={!selectedUid || loading}
-                        >
-                            <BsStars size={14} style={{ marginRight: '6px' }} />
-                            {loading ? 'Thinking…' : suggestion ? 'Suggest again' : 'Suggest name'}
-                        </button>
-
-                        {suggestion && (
-                            <div className="ai-tool-suggestion">
-                                <label className="ai-tool-label" htmlFor="ai-rename-suggestion">Suggested name (editable)</label>
-                                <input
-                                    id="ai-rename-suggestion"
-                                    type="text"
-                                    className="ai-tool-suggestion-input"
-                                    maxLength={50}
-                                    value={suggestion}
-                                    onChange={(e) => setSuggestion(e.target.value)}
-                                />
+                        {/* Idle state */}
+                        {panelStatus === 'idle' && (
+                            <>
+                                <p className="ai-rename-description">{idleDescription}</p>
+                                {idleDisabledHint && (
+                                    <p className="ai-rename-hint">{idleDisabledHint}</p>
+                                )}
+                                {error && <div className="ai-tool-error">{error}</div>}
                                 <button
                                     type="button"
-                                    className="ai-tool-apply-btn"
-                                    onClick={handleApply}
-                                    disabled={!suggestion.trim() || isApplying}
+                                    className="ai-tool-action-btn"
+                                    onClick={handleRun}
+                                    disabled={n === 0}
+                                    aria-label={`Auto-rename ${n} collection${n === 1 ? '' : 's'}`}
                                 >
-                                    Apply
+                                    <BsStars size={14} style={{ marginRight: '6px' }} />
+                                    {`Auto-rename ${n} collection${n === 1 ? '' : 's'}`}
                                 </button>
-                            </div>
+                            </>
                         )}
 
-                        {error && <div className="ai-tool-error">{error}</div>}
+                        {/* Running state */}
+                        {panelStatus === 'running' && (
+                            <>
+                                <div className="ai-enable-progress">
+                                    <div className="ai-enable-progress-track">
+                                        <div className="ai-enable-progress-fill ai-rename-progress-fill--animated" />
+                                    </div>
+                                    <span className="ai-enable-progress-label">
+                                        {isCancelling ? 'Finishing up…' : `Renaming collections with AI…`}
+                                    </span>
+                                </div>
+                                {renameResults.length > 0 && (
+                                    <ul className="ai-rename-results">
+                                        {renameResults.map((r) => (
+                                            <li key={r.uid} className="ai-rename-result-row">
+                                                <span className="ai-rename-old">{r.oldName}</span>
+                                                <span className="ai-rename-arrow">→</span>
+                                                <span className="ai-rename-new">{r.newName}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                                <button
+                                    type="button"
+                                    className="ai-tool-action-btn ai-tool-action-btn--cancel"
+                                    onClick={handleCancel}
+                                    disabled={isCancelling}
+                                >
+                                    {isCancelling ? 'Cancelling…' : 'Cancel'}
+                                </button>
+                            </>
+                        )}
+
+                        {/* Done state */}
+                        {panelStatus === 'done' && (
+                            <>
+                                {error && <div className="ai-tool-error">{error}</div>}
+                                {renameResults.length > 0 && (
+                                    <ul className="ai-rename-results">
+                                        {renameResults.map((r) => (
+                                            <li key={r.uid} className="ai-rename-result-row">
+                                                <span className="ai-rename-old">{r.oldName}</span>
+                                                <span className="ai-rename-arrow">→</span>
+                                                <span className="ai-rename-new">{r.newName}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                                {skipped.length > 0 && (
+                                    <p className="ai-rename-skipped">{skipped.length} skipped</p>
+                                )}
+                                {wasCancelled && renameResults.length === 0 && (
+                                    <p className="ai-rename-hint">Cancelled — no changes made.</p>
+                                )}
+                                {wasCancelled && renameResults.length > 0 && (
+                                    <p className="ai-rename-hint">Cancelled — partial results applied above.</p>
+                                )}
+                                <button
+                                    type="button"
+                                    className="ai-tool-action-btn"
+                                    onClick={close}
+                                >
+                                    Done
+                                </button>
+                            </>
+                        )}
                     </div>
                 )}
             </div>

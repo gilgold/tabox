@@ -185,3 +185,125 @@
     font-size: 13px;
     font-weight: 600;
 }
+
+/* ── Bulk rename panel ───────────────────────────────────────────────────── */
+
+.ai-rename-description {
+    font-size: 13px;
+    color: var(--text-color);
+    margin: 0;
+    line-height: 1.5;
+}
+
+.ai-rename-hint {
+    font-size: 12px;
+    opacity: 0.75;
+    margin: 0;
+    color: var(--text-color);
+}
+
+.ai-rename-skipped {
+    font-size: 12px;
+    opacity: 0.7;
+    margin: 0;
+    color: var(--text-color);
+}
+
+/* Progress block — reuse ai-enable-progress visual language */
+.ai-enable-progress {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ai-enable-progress-track {
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(124, 58, 237, 0.15);
+    overflow: hidden;
+}
+
+.ai-enable-progress-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(135deg, #7c3aed 0%, #2563eb 100%);
+    transition: width 0.2s ease;
+}
+
+.ai-rename-progress-fill--animated {
+    width: 100%;
+    animation: ai-rename-shimmer 1.8s ease-in-out infinite;
+    background-size: 200% 100%;
+    background-image: linear-gradient(90deg, #7c3aed 0%, #2563eb 50%, #7c3aed 100%);
+}
+
+@keyframes ai-rename-shimmer {
+    0% { background-position: 200% center; }
+    100% { background-position: -200% center; }
+}
+
+.ai-enable-progress-label {
+    font-size: 12px;
+    opacity: 0.8;
+    color: var(--text-color);
+}
+
+/* Live results list */
+.ai-rename-results {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 180px;
+    overflow-y: auto;
+    border: 1px solid rgba(124, 58, 237, 0.2);
+    border-radius: 8px;
+    padding: 8px 10px;
+    background: rgba(124, 58, 237, 0.04);
+}
+
+.ai-rename-result-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-color);
+    flex-wrap: wrap;
+}
+
+.ai-rename-old {
+    opacity: 0.6;
+    text-decoration: line-through;
+    flex-shrink: 0;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ai-rename-arrow {
+    color: #7c3aed;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.ai-rename-new {
+    font-weight: 600;
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ai-tool-action-btn--cancel {
+    background: transparent;
+    color: var(--text-color);
+    border: 1px solid rgba(128, 128, 128, 0.4);
+}
+
+.ai-tool-action-btn--cancel:hover:not(:disabled) {
+    filter: none;
+    background: rgba(128, 128, 128, 0.1);
+}
