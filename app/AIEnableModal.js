@@ -13,7 +13,7 @@ function AIEnableModal({ isOpen, onClose }) {
     const [progress, setProgress] = useState(0);
     const [error, setError] = useState(null);
 
-    // Fix 5: reset state when modal opens
+    // Reopening must not show a previous attempt's error or progress.
     useEffect(() => {
         if (isOpen) {
             setStatus('idle');
@@ -41,7 +41,7 @@ function AIEnableModal({ isOpen, onClose }) {
         }
         if (availability !== 'available') {
             setStatus('downloading');
-            setProgress(0); // Fix 4: reset stale progress on retry
+            setProgress(0);
             try {
                 await downloadModel(setProgress);
             } catch (downloadError) {
@@ -52,7 +52,7 @@ function AIEnableModal({ isOpen, onClose }) {
             }
         }
 
-        // Fix 2: wrap storage set + toast + close in try/catch
+        // A failed write must not leave the modal stuck in a busy state.
         try {
             await browser.storage.local.set({ chkTaboxAI: true });
             showSuccessToast('Tabox AI is enabled!');
