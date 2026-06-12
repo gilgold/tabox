@@ -198,17 +198,15 @@ export default function SettingsMenu(props) {
         }, 100);
     };
 
-    const handleTaboxAIToggle = async () => {
-        setTimeout(async () => {
-            const { chkTaboxAI } = await browser.storage.local.get('chkTaboxAI');
-            if (chkTaboxAI === true) {
-                // The switch persisted "on" — revert and require acknowledgment first.
-                // Only AIEnableModal's Enable button sets the flag for real.
-                await browser.storage.local.set({ chkTaboxAI: false });
-                setIsAIEnableModalOpen(true);
-                closeMenu();
-            }
-        }, 100);
+    const handleTaboxAIBeforeChange = (nextChecked) => {
+        if (nextChecked) {
+            // Enabling requires acknowledgment — only AIEnableModal's Enable
+            // button writes chkTaboxAI: true. Veto the switch flip and open it.
+            setIsAIEnableModalOpen(true);
+            closeMenu();
+            return false;
+        }
+        return true; // turning off needs no gate
     };
 
     const toggleDrawer = () => {
@@ -303,7 +301,7 @@ export default function SettingsMenu(props) {
                     description: 'Enable on-device AI tools like auto-naming collections. Requires a one-time model download.',
                     switchProps: {
                         id: 'chkTaboxAI',
-                        onMouseUp: handleTaboxAIToggle,
+                        onBeforeChange: handleTaboxAIBeforeChange,
                         'data-tooltip-id': 'main-tooltip',
                         'data-tooltip-content': 'AI runs locally in Chrome — your data never leaves your device',
                         textOn: <span><BsStars size="14" style={{ marginRight: '8px' }} />Tabox AI: <strong>Enabled</strong></span>,

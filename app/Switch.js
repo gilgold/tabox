@@ -5,7 +5,7 @@ import { browser } from '../static/globals';
 const USER_TOGGLE_ANIMATION_MS = 500;
 
 const Switch = props => {
-  const { id: _id, textOn, textOff, disabled, className, animateOnUserToggleOnly = false, ...otherProps } = props;
+  const { id: _id, textOn, textOff, disabled, className, animateOnUserToggleOnly = false, onBeforeChange, ...otherProps } = props;
   const [isChecked, setIsChecked] = useState(false);
   const [toggleAnimation, setToggleAnimation] = useState(null);
   const loaded = useRef(false);
@@ -71,12 +71,17 @@ const Switch = props => {
 
   const toggle = useCallback((event) => {
     const target = event.target;
+    if (onBeforeChange && onBeforeChange(target.checked) === false) {
+      // Veto: keep the input in sync with the unchanged state.
+      target.checked = !target.checked;
+      return;
+    }
     setIsChecked(target.checked);
     queueToggleAnimation(target.checked ? 'on' : 'off');
     const localStorageObj = {};
     localStorageObj[_id] = target.checked;
     browser.storage.local.set(localStorageObj);
-  }, [_id, queueToggleAnimation]);
+  }, [_id, queueToggleAnimation, onBeforeChange]);
 
   const wrapperClassName = [
     className,
