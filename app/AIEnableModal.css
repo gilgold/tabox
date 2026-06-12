@@ -1,0 +1,127 @@
+.ai-enable-modal {
+    max-width: 440px;
+}
+
+.ai-enable-modal-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+}
+
+.ai-enable-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.ai-enable-modal-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-color);
+}
+
+.ai-enable-title-icon {
+    color: #7c3aed;
+}
+
+.ai-enable-modal-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-color);
+    font-size: 18px;
+}
+
+.ai-enable-modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    font-size: 13px;
+    color: var(--text-color);
+}
+
+.ai-enable-requirements {
+    border: 1px solid rgba(124, 58, 237, 0.35);
+    background: rgba(124, 58, 237, 0.08);
+    border-radius: 8px;
+    padding: 10px 12px;
+}
+
+.ai-enable-requirements h4 {
+    margin: 0 0 6px;
+    font-size: 13px;
+}
+
+.ai-enable-requirements ul {
+    margin: 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ai-enable-progress {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ai-enable-progress-track {
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(124, 58, 237, 0.15);
+    overflow: hidden;
+}
+
+.ai-enable-progress-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(135deg, #7c3aed 0%, #2563eb 100%);
+    transition: width 0.2s ease;
+}
+
+.ai-enable-progress-label {
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+.ai-enable-error {
+    color: #dc2626;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.ai-enable-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.ai-enable-btn {
+    border: none;
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ai-enable-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.ai-enable-btn-cancel {
+    background: transparent;
+    color: var(--text-color);
+    border: 1px solid var(--border-color, rgba(128, 128, 128, 0.4));
+}
+
+.ai-enable-btn-primary {
+    background: linear-gradient(135deg, #7c3aed 0%, #2563eb 100%);
+    color: #fff;
+}
