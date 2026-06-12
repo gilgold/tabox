@@ -27,3 +27,24 @@
 .ai-button-label {
     letter-spacing: 0.4px;
 }
+
+/* ── Toolbar integration ───────────────────────────────────────────────────
+   When the AI button lives inside an fp-toolbar row it must align with the
+   38px-tall fp-toolbar-btn siblings. Radius is kept at 14px (pill shape) to
+   visually distinguish it from square icon buttons.
+   ─────────────────────────────────────────────────────────────────────────── */
+.fp-toolbar .ai-button {
+    height: 38px;
+    flex-shrink: 0;
+}
+
+/* Popup-only: the collections-toolbar row is tight (~400px viewport).
+   Slightly narrow the sort-type dropdown shell so the AI pill fits without
+   overflow. :has() requires Chrome 105+; Tabox targets Chrome 89+, so we
+   apply a constant 20px reduction instead. The reduction is small enough to
+   be imperceptible when AI is disabled (button renders null, space is unused).
+   This rule lives in AIButton.css because CollectionListOptions.css has
+   pre-existing uncommitted changes that must not be touched. */
+.collections-toolbar .toolbar-select-shell {
+    min-width: 122px;
+}

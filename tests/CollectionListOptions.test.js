@@ -96,4 +96,25 @@ describe('Collection List Options tests', () => {
 
     expect(container.querySelector('input[type="file"]')).toHaveAttribute('accept', '.txt');
   });
+
+  test('renders the AI button in the toolbar when Tabox AI is enabled', async () => {
+    browser.storage.local.get.mockResolvedValue({ chkTaboxAI: true });
+    // Simulate Prompt API availability so AIButton does not render null
+    globalThis.LanguageModel = { availability: jest.fn() };
+
+    let container;
+    await act(async () => {
+      ({ container } = render(
+        <Provider>
+          <CollectionListOptions addCollection={jest.fn()} />
+        </Provider>,
+      ));
+    });
+
+    await waitFor(() => {
+      expect(container.querySelector('.collections-toolbar .ai-button')).toBeInTheDocument();
+    });
+
+    delete globalThis.LanguageModel;
+  });
 });

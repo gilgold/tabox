@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { settingsDataState } from './atoms/globalAppSettingsState';
 import { highlightedCollectionUidState } from './atoms/animationsState';
+import AIButton from './AIButton';
 import './CollectionListOptions.css';
 import { PiGridNineFill } from "react-icons/pi";
 import { browser } from '../static/globals';
@@ -438,6 +439,10 @@ export function CollectionListOptions(props) {
                             <TbFileImport size={ICON_SIZE} />
                         </button>
                     </div>
+
+                    <div className="fp-toolbar-divider" />
+
+                    <AIButton />
                 </div>
             </div>
 
