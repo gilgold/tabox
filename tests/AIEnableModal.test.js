@@ -53,4 +53,14 @@ describe('AIEnableModal', () => {
         await waitFor(() => expect(screen.getByText(/does not meet the requirements/i)).toBeInTheDocument());
         expect(browser.storage.local.set).not.toHaveBeenCalled();
     });
+
+    test('shows download-failed error and re-enables the button when download rejects', async () => {
+        getAIAvailability.mockResolvedValue('downloadable');
+        downloadModel.mockRejectedValue(new Error('network'));
+        render(<AIEnableModal isOpen={true} onClose={jest.fn()} />);
+        fireEvent.click(screen.getByRole('button', { name: /enable tabox ai/i }));
+        await waitFor(() => expect(screen.getByText(/download failed/i)).toBeInTheDocument());
+        expect(browser.storage.local.set).not.toHaveBeenCalled();
+        expect(screen.getByRole('button', { name: /enable tabox ai/i })).not.toBeDisabled();
+    });
 });

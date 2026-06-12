@@ -1,16 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Modal from 'react-modal';
 import { MdClose } from 'react-icons/md';
 import { BsStars } from 'react-icons/bs';
 import { browser } from '../static/globals';
 import { getAIAvailability, downloadModel } from './ai/aiClient';
 import { showSuccessToast } from './toastHelpers';
+import './Modal.css';
 import './AIEnableModal.css';
 
 function AIEnableModal({ isOpen, onClose }) {
     const [status, setStatus] = useState('idle'); // idle | checking | downloading | error
     const [progress, setProgress] = useState(0);
     const [error, setError] = useState(null);
+
+    // Fix 5: reset state when modal opens
+    useEffect(() => {
+        if (isOpen) {
+            setStatus('idle');
+            setError(null);
+            setProgress(0);
+        }
+    }, [isOpen]);
 
     const busy = status === 'checking' || status === 'downloading';
 
@@ -31,6 +41,7 @@ function AIEnableModal({ isOpen, onClose }) {
         }
         if (availability !== 'available') {
             setStatus('downloading');
+            setProgress(0); // Fix 4: reset stale progress on retry
             try {
                 await downloadModel(setProgress);
             } catch (downloadError) {
@@ -41,10 +52,17 @@ function AIEnableModal({ isOpen, onClose }) {
             }
         }
 
-        await browser.storage.local.set({ chkTaboxAI: true });
-        showSuccessToast('Tabox AI is enabled!');
-        setStatus('idle');
-        onClose();
+        // Fix 2: wrap storage set + toast + close in try/catch
+        try {
+            await browser.storage.local.set({ chkTaboxAI: true });
+            showSuccessToast('Tabox AI is enabled!');
+            setStatus('idle');
+            onClose();
+        } catch (saveError) {
+            console.error('Tabox AI: could not save setting:', saveError);
+            setError('Could not save the setting. Please try again.');
+            setStatus('error');
+        }
     };
 
     return (
