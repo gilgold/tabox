@@ -27,7 +27,7 @@ function AIToolsModal({ updateRemoteData }) {
     const [wasCancelled, setWasCancelled] = useState(false);
     const [error, setError] = useState(null);
     const [isCancelling, setIsCancelling] = useState(false);
-    // Fix 4: progress tracking
+    // Bulk-run progress (i/N label + determinate bar)
     const [progressLabel, setProgressLabel] = useState('');
     const [progressFill, setProgressFill] = useState(0); // 0–100
 
@@ -35,7 +35,8 @@ function AIToolsModal({ updateRemoteData }) {
     const abortControllerRef = useRef(null);
     // Run token to invalidate stale async state updates
     const runTokenRef = useRef(0);
-    // Fix 1: synchronous re-entry guard — set before any await in handleRun
+    // Synchronous re-entry guard — set before any await in handleRun so a
+    // double-click cannot start two engine runs.
     const runStartedRef = useRef(false);
 
     useEffect(() => {
@@ -85,7 +86,6 @@ function AIToolsModal({ updateRemoteData }) {
 
     const handleRun = async () => {
         if (panelStatus !== 'idle' || targets.length === 0) return;
-        // Fix 1: synchronous re-entry guard — prevent double-click from starting two runs
         if (runStartedRef.current) return;
         runStartedRef.current = true;
 
@@ -118,7 +118,6 @@ function AIToolsModal({ updateRemoteData }) {
             engineResult = await autoRenameCollections({
                 collections: targets,
                 signal: controller.signal,
-                // Fix 4: wire onProgress for i/N label and determinate bar
                 onProgress: (index, _total, collection) => {
                     if (token !== runTokenRef.current) return;
                     setProgressLabel(`Renaming ${index + 1} of ${total}: ${collection.name}`);
@@ -151,7 +150,6 @@ function AIToolsModal({ updateRemoteData }) {
         if (results.length > 0) {
             try {
                 const fresh = await loadAllCollections();
-                // Fix 3: build map from full result entries (uid → {oldName, newName})
                 const byUid = Object.fromEntries(results.map((r) => [r.uid, r]));
                 const patched = fresh.map((c) =>
                     c.uid in byUid ? { ...c, name: byUid[c.uid].newName, lastUpdated: Date.now() } : c
@@ -165,7 +163,7 @@ function AIToolsModal({ updateRemoteData }) {
                     'Tabox AI',
                     async () => {
                         const current = await loadAllCollections();
-                        // Fix 3: use 'in' operator and only revert if name still matches AI's newName
+                        // Only revert names the user has not changed since the run.
                         const reverted = current.map((c) => {
                             if (c.uid in byUid && c.name === byUid[c.uid].newName) {
                                 return { ...c, name: byUid[c.uid].oldName, lastUpdated: Date.now() };
@@ -282,7 +280,6 @@ function AIToolsModal({ updateRemoteData }) {
                         {/* Running state */}
                         {panelStatus === 'running' && (
                             <>
-                                {/* Fix 4: determinate progress bar + i/N label */}
                                 <div className="ai-rename-progress">
                                     <div className="ai-rename-progress-track">
                                         {progressFill > 0 ? (
@@ -325,7 +322,6 @@ function AIToolsModal({ updateRemoteData }) {
                         {/* Done state */}
                         {panelStatus === 'done' && (
                             <>
-                                {/* Fix 2: honest error state — separate error path from success path */}
                                 {error ? (
                                     <>
                                         <div className="ai-tool-error">{error}</div>

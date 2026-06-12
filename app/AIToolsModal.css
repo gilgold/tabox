@@ -102,8 +102,7 @@
 }
 
 .ai-tool-card:focus-visible,
-.ai-tool-action-btn:focus-visible,
-.ai-tool-apply-btn:focus-visible {
+.ai-tool-action-btn:focus-visible {
     outline: 2px solid rgba(124, 58, 237, 0.6);
     outline-offset: 2px;
 }
@@ -128,27 +127,7 @@
     gap: 10px;
 }
 
-.ai-tool-label {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-color);
-    opacity: 0.8;
-}
-
-.ai-tool-select,
-.ai-tool-suggestion-input {
-    width: 100%;
-    padding: 8px 10px;
-    border-radius: 6px;
-    border: 1px solid rgba(128, 128, 128, 0.4);
-    background: transparent;
-    color: var(--text-color);
-    font-size: 13px;
-    box-sizing: border-box;
-}
-
-.ai-tool-action-btn,
-.ai-tool-apply-btn {
+.ai-tool-action-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -163,21 +142,13 @@
     transition: filter 0.2s ease, box-shadow 0.2s ease;
 }
 
-.ai-tool-action-btn:hover:not(:disabled),
-.ai-tool-apply-btn:hover:not(:disabled) {
+.ai-tool-action-btn:hover:not(:disabled) {
     filter: brightness(1.15);
 }
 
-.ai-tool-action-btn:disabled,
-.ai-tool-apply-btn:disabled {
+.ai-tool-action-btn:disabled {
     opacity: 0.5;
     cursor: default;
-}
-
-.ai-tool-suggestion {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
 }
 
 .ai-tool-error {
@@ -209,7 +180,7 @@
     color: var(--text-color);
 }
 
-/* Fix 5: Progress block — own namespace (.ai-rename-progress*) to avoid
+/* Progress block — own namespace (.ai-rename-progress*) to avoid
    collision with AIEnableModal's .ai-enable-progress* rules. */
 .ai-rename-progress {
     display: flex;
