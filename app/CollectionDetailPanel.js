@@ -3,19 +3,24 @@ import { createPortal } from 'react-dom';
 import { MdClose, MdCenterFocusWeak, MdEdit, MdOutlineRefresh, MdContentCopy, MdDelete, MdSearch } from 'react-icons/md';
 import { FaPlay } from 'react-icons/fa';
 import { FaStop } from 'react-icons/fa6';
-import { BsIncognito } from 'react-icons/bs';
+import { BsIncognito, BsStars } from 'react-icons/bs';
 import { CiExport } from 'react-icons/ci';
 import TimeAgo from 'javascript-time-ago';
 import { useSetAtom, useAtomValue } from 'jotai';
 import { deletingCollectionUidsState } from './atoms/animationsState';
 import { trackingStateVersion } from './atoms/globalAppSettingsState';
-import { showSuccessToast, showErrorToast } from './toastHelpers';
+import { showSuccessToast, showErrorToast, showUndoToast } from './toastHelpers';
+import { UNDO_TIME } from './constants';
 import { useCollectionOperations } from './useCollectionOperations';
 import { browser } from '../static/globals';
 import ColorPicker from './ColorPicker';
 import CollectionDeleteConfirmModal from './CollectionDeleteConfirmModal';
 import ExpandedCollectionData from './ExpandedCollectionData';
 import { getColorValue } from './utils/colorMigration';
+import { useTaboxAIEnabled } from './ai/useTaboxAIEnabled';
+import { isAISupported } from './ai/aiClient';
+import { suggestCollectionName } from './ai/tasks/suggestCollectionName';
+import { loadSingleCollection } from './utils/storageUtils';
 import './CollectionDetailPanel.css';
 
 function CollectionDetailPanel({
@@ -37,6 +42,7 @@ function CollectionDetailPanel({
     const [localColor, setLocalColor] = useState(collection?.color || 'default');
     const [tabSearch, setTabSearch] = useState('');
     const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+    const [isAiRenaming, setIsAiRenaming] = useState(false);
     const mountedRef = useRef(true);
     const panelRef = useRef(null);
     const searchInputRef = useRef(null);
@@ -65,6 +71,46 @@ function CollectionDetailPanel({
         addCollection,
         onDataUpdate
     });
+
+    const isAIEnabled = useTaboxAIEnabled();
+    const showAiRenameBtn = isAIEnabled && isAISupported();
+
+    const handleAiRename = async () => {
+        if (isAiRenaming) return;
+        setIsAiRenaming(true);
+        try {
+            const newName = await suggestCollectionName(collection);
+            if (!newName || newName === collection.name) {
+                showSuccessToast('The current name already fits!');
+                return;
+            }
+            const fresh = await loadSingleCollection(collection.uid);
+            if (!fresh) {
+                showErrorToast('This collection no longer exists.');
+                return;
+            }
+            const oldName = fresh.name;
+            await updateCollection({ ...fresh, name: newName, lastUpdated: Date.now() }, true);
+            setCollectionName(newName);
+            showUndoToast(
+                <BsStars />,
+                `Renamed to '${newName}'`,
+                oldName,
+                async () => {
+                    const current = await loadSingleCollection(collection.uid);
+                    if (!current || current.name !== newName) return;
+                    await updateCollection({ ...current, name: oldName, lastUpdated: Date.now() }, true);
+                    setCollectionName(oldName);
+                },
+                UNDO_TIME,
+            );
+        } catch (err) {
+            console.error('AI rename failed:', err);
+            showErrorToast('Could not generate a name. Please try again.');
+        } finally {
+            setIsAiRenaming(false);
+        }
+    };
 
     // Sync local state when collection changes
     useEffect(() => {
@@ -303,6 +349,19 @@ function CollectionDetailPanel({
                             >
                                 <MdEdit size={16} />
                             </button>
+                            {showAiRenameBtn && !isEditingName && (
+                                <button
+                                    type="button"
+                                    className={`panel-edit-btn panel-ai-rename-btn${isAiRenaming ? ' panel-ai-rename-btn--busy' : ''}`}
+                                    onClick={handleAiRename}
+                                    disabled={isAiRenaming}
+                                    aria-label="Auto-name with AI"
+                                    data-tooltip-id="main-tooltip"
+                                    data-tooltip-content="Auto-name with AI"
+                                >
+                                    <BsStars size={16} />
+                                </button>
+                            )}
                             <div className="panel-title-slot">
                                 {isEditingName ? (
                                     <div className="panel-title-edit panel-title-edit-active">
