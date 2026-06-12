@@ -371,9 +371,6 @@ exports[`Collection List Options tests CollectionListOptions renders correctly 1
           </svg>
         </button>
       </div>
-      <div
-        class="fp-toolbar-divider"
-      />
     </div>
   </div>
   <input

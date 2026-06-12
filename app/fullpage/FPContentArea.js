@@ -2568,11 +2568,9 @@ function FPContentArea({
                 >
                     <TbFileImport size={18} />
                 </button>
-
-                <div className="fp-toolbar-divider" />
-
-                <AIButton />
             </div>
+
+            <AIButton withDivider />
         </>
     );
 

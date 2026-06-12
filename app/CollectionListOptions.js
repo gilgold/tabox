@@ -440,9 +440,7 @@ export function CollectionListOptions(props) {
                         </button>
                     </div>
 
-                    <div className="fp-toolbar-divider" />
-
-                    <AIButton />
+                    <AIButton withDivider />
                 </div>
             </div>
 
