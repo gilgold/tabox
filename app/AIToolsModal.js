@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Modal from 'react-modal';
 import { useAtom, useAtomValue } from 'jotai';
 import { MdClose, MdArrowBack } from 'react-icons/md';
@@ -7,7 +7,7 @@ import { aiToolsModalOpenState } from './atoms/aiState';
 import { viewContextState } from './atoms/globalAppSettingsState';
 import { AI_TOOLS } from './ai/aiTasks';
 import { suggestCollectionName } from './ai/tasks/suggestCollectionName';
-import { loadAllCollections } from './utils/storageUtils';
+import { loadAllCollections, loadSingleCollection } from './utils/storageUtils';
 import { showSuccessToast } from './toastHelpers';
 import './Modal.css';
 import './AIToolsModal.css';
@@ -20,14 +20,21 @@ function AIToolsModal({ updateCollection }) {
     const [selectedUid, setSelectedUid] = useState('');
     const [suggestion, setSuggestion] = useState('');
     const [loading, setLoading] = useState(false);
+    const [isApplying, setIsApplying] = useState(false);
     const [error, setError] = useState(null);
+    // Request token for suggest-race guard (fix 2)
+    const suggestTokenRef = useRef(0);
 
     useEffect(() => {
         if (!isOpen) return;
+        // Fix 6: clear stale list on reopen; fix 4: reset in-flight flags
+        setCollections([]);
         setActiveToolId(null);
         setSelectedUid('');
         setSuggestion('');
         setError(null);
+        setLoading(false);
+        setIsApplying(false);
         loadAllCollections().then(setCollections).catch((loadError) => {
             console.error('Tabox AI: failed to load collections', loadError);
             setCollections([]);
@@ -37,32 +44,64 @@ function AIToolsModal({ updateCollection }) {
     const close = () => setIsOpen(false);
     // Empty collections produce a degenerate prompt — keep them out of the picker.
     const nameableCollections = collections.filter((collection) => (collection.tabs || []).length > 0);
-    const selectedCollection = nameableCollections.find((collection) => collection.uid === selectedUid);
 
     const handleSuggest = async () => {
-        if (!selectedCollection) return;
+        if (!selectedUid || loading) return;
+        // Fix 2: capture current uid as a token; disable select while loading
+        const token = ++suggestTokenRef.current;
+        const uidAtStart = selectedUid;
         setLoading(true);
         setError(null);
+        const collection = nameableCollections.find((c) => c.uid === uidAtStart);
+        if (!collection) {
+            setLoading(false);
+            return;
+        }
         try {
-            setSuggestion(await suggestCollectionName(selectedCollection));
+            const result = await suggestCollectionName(collection);
+            // Discard result if selection changed while in flight
+            if (token === suggestTokenRef.current) {
+                setSuggestion(result);
+            }
         } catch (suggestError) {
             console.error('Tabox AI name suggestion failed:', suggestError);
-            setError('Could not generate a suggestion. Please try again.');
+            if (token === suggestTokenRef.current) {
+                setError('Could not generate a suggestion. Please try again.');
+            }
         } finally {
-            setLoading(false);
+            if (token === suggestTokenRef.current) {
+                setLoading(false);
+            }
         }
     };
 
     const handleApply = async () => {
         const trimmed = suggestion.trim();
-        if (!selectedCollection || !trimmed) return;
-        await updateCollection({
-            ...selectedCollection,
-            name: trimmed.substring(0, 50),
-            lastUpdated: Date.now(),
-        }, true);
-        showSuccessToast('Collection renamed!');
-        close();
+        if (!selectedUid || !trimmed) return;
+        // Fix 3: guard against double-click
+        if (isApplying) return;
+        setIsApplying(true);
+        try {
+            // Fix 1: re-fetch fresh data at apply time
+            const fresh = await loadSingleCollection(selectedUid);
+            if (!fresh) {
+                setError('This collection no longer exists.');
+                return;
+            }
+            await updateCollection({
+                ...fresh,
+                name: trimmed.substring(0, 50),
+                lastUpdated: Date.now(),
+            }, true);
+            showSuccessToast('Collection renamed!');
+            close();
+        } catch (applyError) {
+            // Fix 5: wrap in try/catch, keep modal open on error
+            console.error('Tabox AI: apply rename failed:', applyError);
+            setError('Could not rename the collection. Please try again.');
+        } finally {
+            setIsApplying(false);
+        }
     };
 
     return (
@@ -115,7 +154,14 @@ function AIToolsModal({ updateCollection }) {
                             id="ai-rename-collection"
                             className="ai-tool-select"
                             value={selectedUid}
-                            onChange={(e) => { setSelectedUid(e.target.value); setSuggestion(''); setError(null); }}
+                            disabled={loading}
+                            onChange={(e) => {
+                                setSelectedUid(e.target.value);
+                                setSuggestion('');
+                                setError(null);
+                                // Fix 2: bump token so any in-flight suggest is discarded
+                                suggestTokenRef.current += 1;
+                            }}
                         >
                             <option value="">Choose a collection…</option>
                             {nameableCollections.map((collection) => (
@@ -146,7 +192,12 @@ function AIToolsModal({ updateCollection }) {
                                     value={suggestion}
                                     onChange={(e) => setSuggestion(e.target.value)}
                                 />
-                                <button type="button" className="ai-tool-apply-btn" onClick={handleApply} disabled={!suggestion.trim()}>
+                                <button
+                                    type="button"
+                                    className="ai-tool-apply-btn"
+                                    onClick={handleApply}
+                                    disabled={!suggestion.trim() || isApplying}
+                                >
                                     Apply
                                 </button>
                             </div>
