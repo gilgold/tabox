@@ -209,21 +209,22 @@
     color: var(--text-color);
 }
 
-/* Progress block — reuse ai-enable-progress visual language */
-.ai-enable-progress {
+/* Fix 5: Progress block — own namespace (.ai-rename-progress*) to avoid
+   collision with AIEnableModal's .ai-enable-progress* rules. */
+.ai-rename-progress {
     display: flex;
     flex-direction: column;
     gap: 4px;
 }
 
-.ai-enable-progress-track {
+.ai-rename-progress-track {
     height: 6px;
     border-radius: 3px;
     background: rgba(124, 58, 237, 0.15);
     overflow: hidden;
 }
 
-.ai-enable-progress-fill {
+.ai-rename-progress-fill {
     height: 100%;
     border-radius: 3px;
     background: linear-gradient(135deg, #7c3aed 0%, #2563eb 100%);
@@ -242,7 +243,7 @@
     100% { background-position: -200% center; }
 }
 
-.ai-enable-progress-label {
+.ai-rename-progress-label {
     font-size: 12px;
     opacity: 0.8;
     color: var(--text-color);

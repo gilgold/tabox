@@ -27,11 +27,16 @@ function AIToolsModal({ updateRemoteData }) {
     const [wasCancelled, setWasCancelled] = useState(false);
     const [error, setError] = useState(null);
     const [isCancelling, setIsCancelling] = useState(false);
+    // Fix 4: progress tracking
+    const [progressLabel, setProgressLabel] = useState('');
+    const [progressFill, setProgressFill] = useState(0); // 0–100
 
     // Abort controller for the running engine
     const abortControllerRef = useRef(null);
     // Run token to invalidate stale async state updates
     const runTokenRef = useRef(0);
+    // Fix 1: synchronous re-entry guard — set before any await in handleRun
+    const runStartedRef = useRef(false);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -40,6 +45,7 @@ function AIToolsModal({ updateRemoteData }) {
             abortControllerRef.current.abort();
         }
         runTokenRef.current += 1;
+        runStartedRef.current = false;
         // Reset all panel state
         setCollections([]);
         setActiveToolId(null);
@@ -49,6 +55,8 @@ function AIToolsModal({ updateRemoteData }) {
         setWasCancelled(false);
         setError(null);
         setIsCancelling(false);
+        setProgressLabel('');
+        setProgressFill(0);
         loadAllCollections().then(setCollections).catch((loadError) => {
             console.error('Tabox AI: failed to load collections', loadError);
             setCollections([]);
@@ -77,10 +85,15 @@ function AIToolsModal({ updateRemoteData }) {
 
     const handleRun = async () => {
         if (panelStatus !== 'idle' || targets.length === 0) return;
+        // Fix 1: synchronous re-entry guard — prevent double-click from starting two runs
+        if (runStartedRef.current) return;
+        runStartedRef.current = true;
 
         // Pre-flight check
         const availability = await getAIAvailability();
         if (availability !== 'available') {
+            // Pre-flight failed — allow retry
+            runStartedRef.current = false;
             setError('Tabox AI is not ready on this device. Check the Tabox AI setting.');
             return;
         }
@@ -95,13 +108,22 @@ function AIToolsModal({ updateRemoteData }) {
         setWasCancelled(false);
         setError(null);
         setIsCancelling(false);
+        setProgressLabel('');
+        setProgressFill(0);
+
+        const total = targets.length;
 
         let engineResult;
         try {
             engineResult = await autoRenameCollections({
                 collections: targets,
                 signal: controller.signal,
-                onProgress: undefined,
+                // Fix 4: wire onProgress for i/N label and determinate bar
+                onProgress: (index, _total, collection) => {
+                    if (token !== runTokenRef.current) return;
+                    setProgressLabel(`Renaming ${index + 1} of ${total}: ${collection.name}`);
+                    setProgressFill(Math.round((index / total) * 100));
+                },
                 onResult: (entry) => {
                     if (token !== runTokenRef.current) return;
                     if (entry.newName) {
@@ -117,6 +139,7 @@ function AIToolsModal({ updateRemoteData }) {
             if (token !== runTokenRef.current) return;
             setError('An unexpected error occurred. Please try again.');
             setPanelStatus('done');
+            runStartedRef.current = false;
             return;
         }
 
@@ -128,9 +151,10 @@ function AIToolsModal({ updateRemoteData }) {
         if (results.length > 0) {
             try {
                 const fresh = await loadAllCollections();
+                // Fix 3: build map from full result entries (uid → {oldName, newName})
                 const byUid = Object.fromEntries(results.map((r) => [r.uid, r]));
                 const patched = fresh.map((c) =>
-                    byUid[c.uid] ? { ...c, name: byUid[c.uid].newName, lastUpdated: Date.now() } : c
+                    c.uid in byUid ? { ...c, name: byUid[c.uid].newName, lastUpdated: Date.now() } : c
                 );
                 await updateRemoteData(patched);
 
@@ -141,10 +165,13 @@ function AIToolsModal({ updateRemoteData }) {
                     'Tabox AI',
                     async () => {
                         const current = await loadAllCollections();
-                        const oldByUid = Object.fromEntries(renamed.map((r) => [r.uid, r.oldName]));
-                        const reverted = current.map((c) =>
-                            oldByUid[c.uid] ? { ...c, name: oldByUid[c.uid], lastUpdated: Date.now() } : c
-                        );
+                        // Fix 3: use 'in' operator and only revert if name still matches AI's newName
+                        const reverted = current.map((c) => {
+                            if (c.uid in byUid && c.name === byUid[c.uid].newName) {
+                                return { ...c, name: byUid[c.uid].oldName, lastUpdated: Date.now() };
+                            }
+                            return c;
+                        });
                         await updateRemoteData(reverted);
                     },
                     UNDO_TIME,
@@ -158,6 +185,7 @@ function AIToolsModal({ updateRemoteData }) {
 
         if (token !== runTokenRef.current) return;
         setPanelStatus('done');
+        runStartedRef.current = false;
     };
 
     const handleCancel = () => {
@@ -254,12 +282,22 @@ function AIToolsModal({ updateRemoteData }) {
                         {/* Running state */}
                         {panelStatus === 'running' && (
                             <>
-                                <div className="ai-enable-progress">
-                                    <div className="ai-enable-progress-track">
-                                        <div className="ai-enable-progress-fill ai-rename-progress-fill--animated" />
+                                {/* Fix 4: determinate progress bar + i/N label */}
+                                <div className="ai-rename-progress">
+                                    <div className="ai-rename-progress-track">
+                                        {progressFill > 0 ? (
+                                            <div
+                                                className="ai-rename-progress-fill"
+                                                style={{ width: `${progressFill}%` }}
+                                            />
+                                        ) : (
+                                            <div className="ai-rename-progress-fill ai-rename-progress-fill--animated" />
+                                        )}
                                     </div>
-                                    <span className="ai-enable-progress-label">
-                                        {isCancelling ? 'Finishing up…' : `Renaming collections with AI…`}
+                                    <span className="ai-rename-progress-label">
+                                        {isCancelling
+                                            ? 'Finishing up…'
+                                            : progressLabel || 'Renaming collections with AI…'}
                                     </span>
                                 </div>
                                 {renameResults.length > 0 && (
@@ -287,26 +325,51 @@ function AIToolsModal({ updateRemoteData }) {
                         {/* Done state */}
                         {panelStatus === 'done' && (
                             <>
-                                {error && <div className="ai-tool-error">{error}</div>}
-                                {renameResults.length > 0 && (
-                                    <ul className="ai-rename-results">
-                                        {renameResults.map((r) => (
-                                            <li key={r.uid} className="ai-rename-result-row">
-                                                <span className="ai-rename-old">{r.oldName}</span>
-                                                <span className="ai-rename-arrow">→</span>
-                                                <span className="ai-rename-new">{r.newName}</span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
-                                {skipped.length > 0 && (
-                                    <p className="ai-rename-skipped">{skipped.length} skipped</p>
-                                )}
-                                {wasCancelled && renameResults.length === 0 && (
-                                    <p className="ai-rename-hint">Cancelled — no changes made.</p>
-                                )}
-                                {wasCancelled && renameResults.length > 0 && (
-                                    <p className="ai-rename-hint">Cancelled — partial results applied above.</p>
+                                {/* Fix 2: honest error state — separate error path from success path */}
+                                {error ? (
+                                    <>
+                                        <div className="ai-tool-error">{error}</div>
+                                        {renameResults.length > 0 && (
+                                            <>
+                                                <p className="ai-rename-hint">Suggested names (not saved):</p>
+                                                <ul className="ai-rename-results">
+                                                    {renameResults.map((r) => (
+                                                        <li key={r.uid} className="ai-rename-result-row">
+                                                            <span className="ai-rename-old">{r.oldName}</span>
+                                                            <span className="ai-rename-arrow">→</span>
+                                                            <span className="ai-rename-new">{r.newName}</span>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </>
+                                        )}
+                                        {wasCancelled && (
+                                            <p className="ai-rename-hint">Cancelled — no changes were saved.</p>
+                                        )}
+                                    </>
+                                ) : (
+                                    <>
+                                        {renameResults.length > 0 && (
+                                            <ul className="ai-rename-results">
+                                                {renameResults.map((r) => (
+                                                    <li key={r.uid} className="ai-rename-result-row">
+                                                        <span className="ai-rename-old">{r.oldName}</span>
+                                                        <span className="ai-rename-arrow">→</span>
+                                                        <span className="ai-rename-new">{r.newName}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )}
+                                        {skipped.length > 0 && (
+                                            <p className="ai-rename-skipped">{skipped.length} skipped</p>
+                                        )}
+                                        {wasCancelled && renameResults.length === 0 && (
+                                            <p className="ai-rename-hint">Cancelled — no changes made.</p>
+                                        )}
+                                        {wasCancelled && renameResults.length > 0 && (
+                                            <p className="ai-rename-hint">Cancelled — partial results applied above.</p>
+                                        )}
+                                    </>
                                 )}
                                 <button
                                     type="button"

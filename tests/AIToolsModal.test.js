@@ -233,4 +233,96 @@ describe('AIToolsModal', () => {
         await waitFor(() => expect(screen.getByText(/could not save/i)).toBeInTheDocument());
         expect(showUndoToast).not.toHaveBeenCalled();
     });
+
+    // Fix 2: apply-error done state — rows shown as "not saved", cancel note honest
+    test('done with apply-error shows "not saved" heading, no "applied" phrasing', async () => {
+        autoRenameCollections.mockImplementation(async ({ onResult }) => {
+            onResult({ uid: 'c1', oldName: 'Untitled', newName: 'React Learning' });
+            return { results: [{ uid: 'c1', oldName: 'Untitled', newName: 'React Learning' }], skipped: [], cancelled: true };
+        });
+
+        loadAllCollections
+            .mockResolvedValueOnce([{ ...C1 }])
+            .mockResolvedValueOnce([{ ...C1 }]);
+
+        const updateRemoteData = jest.fn().mockRejectedValue(new Error('save failed'));
+        await renderOpenModal({ updateRemoteData });
+        fireEvent.click(screen.getByText('Auto-name collection'));
+        await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /auto-rename/i }));
+        });
+
+        await waitFor(() => expect(screen.getByText(/could not save/i)).toBeInTheDocument());
+
+        // Must say "not saved" and NOT say "applied above"
+        expect(screen.getByText(/not saved/i)).toBeInTheDocument();
+        expect(screen.queryByText(/applied above/i)).not.toBeInTheDocument();
+        // The cancel note must NOT claim application
+        expect(screen.queryByText(/partial results applied above/i)).not.toBeInTheDocument();
+    });
+
+    // Fix 6: cancel-applies-partial-results — cancelled=true with one result → single save + undo toast + cancel note
+    test('cancel with partial results: saves partial, fires undo toast, shows cancel note', async () => {
+        autoRenameCollections.mockImplementation(async ({ onResult }) => {
+            onResult({ uid: 'c1', oldName: 'Untitled', newName: 'React Learning' });
+            return {
+                results: [{ uid: 'c1', oldName: 'Untitled', newName: 'React Learning' }],
+                skipped: [],
+                cancelled: true,
+            };
+        });
+
+        loadAllCollections
+            .mockResolvedValueOnce([{ ...C1 }, { ...C2 }]) // open-time
+            .mockResolvedValueOnce([{ ...C1 }, { ...C2 }]); // apply-time
+
+        const updateRemoteData = jest.fn().mockResolvedValue(undefined);
+        await renderOpenModal({ updateRemoteData });
+        fireEvent.click(screen.getByText('Auto-name collection'));
+        await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /auto-rename/i }));
+        });
+
+        // updateRemoteData called once with the patched name
+        await waitFor(() => expect(updateRemoteData).toHaveBeenCalledTimes(1));
+        const patched = updateRemoteData.mock.calls[0][0];
+        expect(patched.find((c) => c.uid === 'c1').name).toBe('React Learning');
+
+        // undo toast fired
+        expect(showUndoToast).toHaveBeenCalledTimes(1);
+
+        // cancel note shown
+        await waitFor(() =>
+            expect(screen.getByText(/cancelled — partial results applied above/i)).toBeInTheDocument()
+        );
+    });
+
+    // Fix 1: double-click Run — engine called exactly once
+    test('double-click Run only starts engine once', async () => {
+        let resolveAvailability;
+        const availabilityPromise = new Promise((res) => { resolveAvailability = res; });
+        getAIAvailability.mockReturnValue(availabilityPromise);
+
+        autoRenameCollections.mockResolvedValue({ results: [], skipped: [], cancelled: false });
+
+        await renderOpenModal();
+        fireEvent.click(screen.getByText('Auto-name collection'));
+        await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
+
+        // Click Run twice synchronously before availability resolves
+        const runBtn = screen.getByRole('button', { name: /auto-rename/i });
+        fireEvent.click(runBtn);
+        fireEvent.click(runBtn);
+
+        // Now resolve the availability check
+        await act(async () => {
+            resolveAvailability('available');
+        });
+
+        await waitFor(() => expect(autoRenameCollections).toHaveBeenCalledTimes(1));
+    });
 });
