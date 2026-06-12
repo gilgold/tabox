@@ -2,7 +2,7 @@
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { Provider, createStore } from 'jotai';
-import { aiToolsModalOpenState, aiToolsScopeState } from '../app/atoms/aiState';
+import { aiToolsModalOpenState, aiToolsScopeState, aiProcessingUidsState, aiProcessingCurrentUidState } from '../app/atoms/aiState';
 
 jest.mock('../app/ai/tasks/autoRenameCollections', () => ({
     autoRenameCollections: jest.fn(),
@@ -299,6 +299,63 @@ describe('AIToolsModal', () => {
         await waitFor(() =>
             expect(screen.getByText(/cancelled — partial results applied above/i)).toBeInTheDocument()
         );
+    });
+
+    // ── 8. AI processing atoms ────────────────────────────────────────────────
+
+    test('sets aiProcessingUids while engine runs and clears both atoms after resolve', async () => {
+        let resolveEngine;
+        autoRenameCollections.mockImplementation(() => new Promise((res) => {
+            resolveEngine = () => res({ results: [], skipped: [], cancelled: false });
+        }));
+
+        const store = await renderOpenModal();
+        fireEvent.click(screen.getByText('Auto-name collection'));
+        await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /auto-rename/i }));
+        });
+
+        // Engine is pending — processing uids should be set to target uids (c1, c2)
+        await waitFor(() => {
+            const uids = store.get(aiProcessingUidsState);
+            expect(uids).toContain('c1');
+            expect(uids).toContain('c2');
+        });
+
+        // Resolve the engine
+        await act(async () => { resolveEngine(); });
+
+        // After resolve, both atoms must be cleared
+        await waitFor(() => {
+            expect(store.get(aiProcessingUidsState)).toEqual([]);
+            expect(store.get(aiProcessingCurrentUidState)).toBeNull();
+        });
+    });
+
+    test('clears aiProcessing atoms when modal is reopened (reset effect)', async () => {
+        // Set atoms to a dirty state
+        const store = createStore();
+        store.set(aiToolsModalOpenState, false);
+        store.set(aiProcessingUidsState, ['c1']);
+        store.set(aiProcessingCurrentUidState, 'c1');
+
+        await act(async () => {
+            render(
+                <Provider store={store}>
+                    <AIToolsModal updateRemoteData={jest.fn()} />
+                </Provider>
+            );
+        });
+
+        // Open the modal — reset effect should clear atoms
+        await act(async () => { store.set(aiToolsModalOpenState, true); });
+
+        await waitFor(() => {
+            expect(store.get(aiProcessingUidsState)).toEqual([]);
+            expect(store.get(aiProcessingCurrentUidState)).toBeNull();
+        });
     });
 
     // Fix 1: double-click Run — engine called exactly once

@@ -2,6 +2,7 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import CollectionTile from '../app/CollectionTile';
+import { aiProcessingUidsState, aiProcessingCurrentUidState } from '../app/atoms/aiState';
 import { renderWithProviders } from './helpers/renderWithProviders';
 
 let mockCollectionHandlers;
@@ -74,7 +75,7 @@ describe('CollectionTile', () => {
         chromeGroups: [{ id: 'group-1' }],
     };
 
-    const renderTile = (overrideProps = {}) => renderWithProviders(
+    const renderTile = (overrideProps = {}, atomValues = []) => renderWithProviders(
         <CollectionTile
             collection={baseCollection}
             index={0}
@@ -87,7 +88,7 @@ describe('CollectionTile', () => {
             dragListeners={{}}
             {...overrideProps}
         />,
-        { withSuspense: false },
+        { withSuspense: false, atomValues },
     );
 
     beforeEach(() => {
@@ -184,6 +185,36 @@ describe('CollectionTile', () => {
             uid: 'collection-1',
             color: 'green',
         }), true);
+    });
+
+    describe('AI processing classes', () => {
+        it('adds ai-processing class when uid is in aiProcessingUidsState', () => {
+            const { container } = renderTile({}, [
+                [aiProcessingUidsState, ['collection-1']],
+            ]);
+            expect(container.querySelector('.collection-tile')).toHaveClass('ai-processing');
+            expect(container.querySelector('.collection-tile')).not.toHaveClass('ai-processing-current');
+        });
+
+        it('adds ai-processing-current class when uid matches aiProcessingCurrentUidState', () => {
+            const { container } = renderTile({}, [
+                [aiProcessingUidsState, ['collection-1']],
+                [aiProcessingCurrentUidState, 'collection-1'],
+            ]);
+            const tile = container.querySelector('.collection-tile');
+            expect(tile).toHaveClass('ai-processing');
+            expect(tile).toHaveClass('ai-processing-current');
+        });
+
+        it('adds no AI classes when uid is not in the processing state', () => {
+            const { container } = renderTile({}, [
+                [aiProcessingUidsState, ['other-uid']],
+                [aiProcessingCurrentUidState, 'other-uid'],
+            ]);
+            const tile = container.querySelector('.collection-tile');
+            expect(tile).not.toHaveClass('ai-processing');
+            expect(tile).not.toHaveClass('ai-processing-current');
+        });
     });
 
     describe('favorite toggle', () => {

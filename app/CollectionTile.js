@@ -9,6 +9,8 @@ import TimeAgo from 'javascript-time-ago';
 import { useSetAtom, useAtomValue } from 'jotai';
 import { highlightedCollectionUidState, deletingCollectionUidsState } from './atoms/animationsState';
 import { trackingStateVersion } from './atoms/globalAppSettingsState';
+import { aiProcessingUidsState, aiProcessingCurrentUidState } from './atoms/aiState';
+import './AIEffects.css';
 
 import { getColorValue } from './utils/colorMigration';
 import { buildCollectionUrlList, copyToClipboard } from './utils/index';
@@ -24,6 +26,8 @@ function CollectionTile(props) {
     const setHighlightedCollectionUid = useSetAtom(highlightedCollectionUidState);
     const deletingCollectionUids = useAtomValue(deletingCollectionUidsState);
     const setDeletingCollectionUids = useSetAtom(deletingCollectionUidsState);
+    const aiProcessingUids = useAtomValue(aiProcessingUidsState);
+    const aiProcessingCurrentUid = useAtomValue(aiProcessingCurrentUidState);
     const [collectionName] = useState(props.collection.name);
     const [isAutoUpdate, setIsAutoUpdate] = useState(false);
     const mountedRef = useRef(true);
@@ -31,9 +35,13 @@ function CollectionTile(props) {
 
     // Check if this tile should be highlighted
     const isHighlighted = highlightedCollectionUid === props.collection.uid;
-    
+
     // Check if this tile is being deleted
     const isDeleting = deletingCollectionUids.has(props.collection.uid);
+
+    // AI processing state
+    const isAiProcessing = aiProcessingUids.includes(props.collection.uid);
+    const isAiCurrent = aiProcessingCurrentUid === props.collection.uid;
 
     // Use shared collection operations
     const {
@@ -203,7 +211,16 @@ function CollectionTile(props) {
         <DroppableCollection collection={props.collection}>
             <div
                 ref={tileRef}
-                className={`collection-tile ${props.activeId === props.collection.uid ? 'dragging' : ''} ${isAutoUpdate ? 'active-auto-tracking' : ''} ${isHighlighted ? 'new-tile-highlight' : ''} ${isDeleting ? 'new-tile-deleting' : ''} ${props.lightningEffect ? 'lightning-effect' : ''}`}
+                className={[
+                    'collection-tile',
+                    props.activeId === props.collection.uid ? 'dragging' : '',
+                    isAutoUpdate ? 'active-auto-tracking' : '',
+                    isHighlighted ? 'new-tile-highlight' : '',
+                    isDeleting ? 'new-tile-deleting' : '',
+                    props.lightningEffect ? 'lightning-effect' : '',
+                    isAiProcessing ? 'ai-processing' : '',
+                    isAiCurrent ? 'ai-processing-current' : '',
+                ].filter(Boolean).join(' ')}
                 style={{
                     ...(props.collection.color && props.collection.color !== 'default' && props.collection.color !== 'var(--setting-row-border-color)' && props.collection.color !== 'var(--collection-default-color)' && { borderColor: getColorValue(props.collection.color) })
                 }}

@@ -8,6 +8,8 @@ import TimeAgo from 'javascript-time-ago';
 import { useSetAtom, useAtomValue } from 'jotai';
 import { highlightedCollectionUidState, deletingCollectionUidsState } from '../atoms/animationsState';
 import { selectedCollectionUidState } from '../atoms/globalAppSettingsState';
+import { aiProcessingUidsState, aiProcessingCurrentUidState } from '../atoms/aiState';
+import '../AIEffects.css';
 import { getColorValue, normalizeColorKey } from '../utils/colorMigration';
 import ColorPicker from '../ColorPicker';
 import { useCollectionOperations } from '../useCollectionOperations';
@@ -49,10 +51,14 @@ function FPCollectionCard({
     const deletingCollectionUids = useAtomValue(deletingCollectionUidsState);
     const setDeletingCollectionUids = useSetAtom(deletingCollectionUidsState);
     const selectedCollectionUid = useAtomValue(selectedCollectionUidState);
+    const aiProcessingUids = useAtomValue(aiProcessingUidsState);
+    const aiProcessingCurrentUid = useAtomValue(aiProcessingCurrentUidState);
 
     const isHighlighted = highlightedCollectionUid === collection.uid;
     const isDeleting = deletingCollectionUids.has(collection.uid);
     const isSelected = selectedCollectionUid === collection.uid;
+    const isAiProcessing = aiProcessingUids.includes(collection.uid);
+    const isAiCurrent = aiProcessingCurrentUid === collection.uid;
     const showBulkSelection = typeof onToggleBulkSelected === 'function';
     const [isLocalInteractionActive, setIsLocalInteractionActive] = useState(false);
     const shouldShowInteractionState = isInteractionActive || isLocalInteractionActive;
@@ -276,6 +282,8 @@ function FPCollectionCard({
                     bulkSelectionActive ? 'fp-card-bulk-mode' : '',
                     isBulkSelected ? 'fp-card-bulk-selected' : '',
                     shouldShowInteractionState ? 'fp-card-interaction-active' : '',
+                    isAiProcessing ? 'ai-processing' : '',
+                    isAiCurrent ? 'ai-processing-current' : '',
                 ].filter(Boolean).join(' ')}
                 style={{
                     '--card-color': colorValue,

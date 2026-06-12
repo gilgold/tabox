@@ -3,6 +3,7 @@ import { act, fireEvent, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import CollectionListItem from '../app/CollectionListItem';
 import { dragSessionState } from '../app/atoms/animationsState';
+import { aiProcessingUidsState, aiProcessingCurrentUidState } from '../app/atoms/aiState';
 import { renderWithProviders } from './helpers/renderWithProviders';
 
 let mockCollectionHandlers;
@@ -266,6 +267,36 @@ describe('CollectionListItem', () => {
         expect(mockTabsCreate).toHaveBeenCalledWith({
             url: 'https://openai.com/search',
             active: true,
+        });
+    });
+
+    describe('AI processing classes', () => {
+        it('adds ai-processing class when uid is in aiProcessingUidsState', async () => {
+            const { container } = await renderItem({}, [
+                [aiProcessingUidsState, ['collection-1']],
+            ]);
+            expect(container.querySelector('.collection-list-item')).toHaveClass('ai-processing');
+            expect(container.querySelector('.collection-list-item')).not.toHaveClass('ai-processing-current');
+        });
+
+        it('adds ai-processing-current class when uid matches aiProcessingCurrentUidState', async () => {
+            const { container } = await renderItem({}, [
+                [aiProcessingUidsState, ['collection-1']],
+                [aiProcessingCurrentUidState, 'collection-1'],
+            ]);
+            const row = container.querySelector('.collection-list-item');
+            expect(row).toHaveClass('ai-processing');
+            expect(row).toHaveClass('ai-processing-current');
+        });
+
+        it('adds no AI classes when uid is not in the processing state', async () => {
+            const { container } = await renderItem({}, [
+                [aiProcessingUidsState, ['other-uid']],
+                [aiProcessingCurrentUidState, 'other-uid'],
+            ]);
+            const row = container.querySelector('.collection-list-item');
+            expect(row).not.toHaveClass('ai-processing');
+            expect(row).not.toHaveClass('ai-processing-current');
         });
     });
 

@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Modal from 'react-modal';
-import { useAtom, useAtomValue } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { MdClose, MdArrowBack } from 'react-icons/md';
 import { BsStars } from 'react-icons/bs';
-import { aiToolsModalOpenState, aiToolsScopeState } from './atoms/aiState';
+import { aiToolsModalOpenState, aiToolsScopeState, aiProcessingUidsState, aiProcessingCurrentUidState } from './atoms/aiState';
 import { viewContextState } from './atoms/globalAppSettingsState';
 import { AI_TOOLS } from './ai/aiTasks';
 import { autoRenameCollections } from './ai/tasks/autoRenameCollections';
@@ -18,6 +18,8 @@ function AIToolsModal({ updateRemoteData }) {
     const [isOpen, setIsOpen] = useAtom(aiToolsModalOpenState);
     const scope = useAtomValue(aiToolsScopeState);
     const viewContext = useAtomValue(viewContextState);
+    const setAiProcessingUids = useSetAtom(aiProcessingUidsState);
+    const setAiProcessingCurrentUid = useSetAtom(aiProcessingCurrentUidState);
     const [activeToolId, setActiveToolId] = useState(null);
     const [collections, setCollections] = useState([]);
     // Panel state machine: idle | running | done
@@ -47,6 +49,9 @@ function AIToolsModal({ updateRemoteData }) {
         }
         runTokenRef.current += 1;
         runStartedRef.current = false;
+        // Clear AI processing atoms from any previous run
+        setAiProcessingUids([]);
+        setAiProcessingCurrentUid(null);
         // Reset all panel state
         setCollections([]);
         setActiveToolId(null);
@@ -62,16 +67,18 @@ function AIToolsModal({ updateRemoteData }) {
             console.error('Tabox AI: failed to load collections', loadError);
             setCollections([]);
         });
-    }, [isOpen]);
+    }, [isOpen, setAiProcessingUids, setAiProcessingCurrentUid]);
 
-    // Abort on unmount
+    // Abort on unmount and clear AI processing atoms
     useEffect(() => {
         return () => {
             if (abortControllerRef.current) {
                 abortControllerRef.current.abort();
             }
+            setAiProcessingUids([]);
+            setAiProcessingCurrentUid(null);
         };
-    }, []);
+    }, [setAiProcessingUids, setAiProcessingCurrentUid]);
 
     const busy = panelStatus === 'running';
     const close = () => setIsOpen(false);
@@ -110,6 +117,7 @@ function AIToolsModal({ updateRemoteData }) {
         setIsCancelling(false);
         setProgressLabel('');
         setProgressFill(0);
+        setAiProcessingUids(targets.map((t) => t.uid));
 
         const total = targets.length;
 
@@ -122,6 +130,7 @@ function AIToolsModal({ updateRemoteData }) {
                     if (token !== runTokenRef.current) return;
                     setProgressLabel(`Renaming ${index + 1} of ${total}: ${collection.name}`);
                     setProgressFill(Math.round((index / total) * 100));
+                    setAiProcessingCurrentUid(collection.uid);
                 },
                 onResult: (entry) => {
                     if (token !== runTokenRef.current) return;
@@ -136,6 +145,8 @@ function AIToolsModal({ updateRemoteData }) {
             // Unexpected engine throw (shouldn't normally happen — AbortError is caught inside)
             console.error('Tabox AI: autoRenameCollections threw unexpectedly:', runError);
             if (token !== runTokenRef.current) return;
+            setAiProcessingUids([]);
+            setAiProcessingCurrentUid(null);
             setError('An unexpected error occurred. Please try again.');
             setPanelStatus('done');
             runStartedRef.current = false;
@@ -143,6 +154,10 @@ function AIToolsModal({ updateRemoteData }) {
         }
 
         if (token !== runTokenRef.current) return;
+
+        // Clear AI processing effects before applying results
+        setAiProcessingUids([]);
+        setAiProcessingCurrentUid(null);
 
         const { results, cancelled } = engineResult;
         setWasCancelled(cancelled);

@@ -8,6 +8,8 @@ import TimeAgo from 'javascript-time-ago';
 import { useSetAtom, useAtomValue } from 'jotai';
 import { deletingCollectionUidsState, highlightedCollectionUidState, dragSessionState } from './atoms/animationsState';
 import { trackingStateVersion } from './atoms/globalAppSettingsState';
+import { aiProcessingUidsState, aiProcessingCurrentUidState } from './atoms/aiState';
+import './AIEffects.css';
 
 import ColorPicker from './ColorPicker';
 import { useCollectionOperations } from './useCollectionOperations';
@@ -20,6 +22,8 @@ function CollectionListItem(props) {
     const highlightedCollectionUid = useAtomValue(highlightedCollectionUidState);
     const setHighlightedCollectionUid = useSetAtom(highlightedCollectionUidState);
     const dragSession = useAtomValue(dragSessionState);
+    const aiProcessingUids = useAtomValue(aiProcessingUidsState);
+    const aiProcessingCurrentUid = useAtomValue(aiProcessingCurrentUidState);
     const [isAutoUpdate, setIsAutoUpdate] = useState(false);
     const [showAllMatchingTabs, setShowAllMatchingTabs] = useState(false);
     const [isInteractionActive, setIsInteractionActive] = useState(false);
@@ -34,9 +38,13 @@ function CollectionListItem(props) {
 
     // Check if this item should be highlighted (new UID-based system)
     const isHighlighted = highlightedCollectionUid === props.collection.uid;
-    
+
     // Check if this item is being deleted
     const isDeleting = deletingCollectionUids.has(props.collection.uid);
+
+    // AI processing state
+    const isAiProcessing = aiProcessingUids.includes(props.collection.uid);
+    const isAiCurrent = aiProcessingCurrentUid === props.collection.uid;
 
     // Use shared collection operations
     const {
@@ -251,6 +259,8 @@ function CollectionListItem(props) {
                     props.lightningEffect ? 'lightning-effect' : '',
                     matchingTabs.length > 0 ? 'has-matching-tabs' : '',
                     isInteractionActive ? 'collection-item-interaction-active' : '',
+                    isAiProcessing ? 'ai-processing' : '',
+                    isAiCurrent ? 'ai-processing-current' : '',
                 ].filter(Boolean).join(' ')}
                 style={{
                     ...style,
