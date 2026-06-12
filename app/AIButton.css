@@ -11,11 +11,17 @@
     font-size: 12px;
     font-weight: 700;
     line-height: 1;
+    transition: filter 0.2s ease, box-shadow 0.2s ease;
 }
 
 .ai-button:hover {
     filter: brightness(1.15);
     box-shadow: 0 0 10px rgba(124, 58, 237, 0.45);
+}
+
+.ai-button:focus-visible {
+    outline: 2px solid rgba(124, 58, 237, 0.6);
+    outline-offset: 2px;
 }
 
 .ai-button-label {
