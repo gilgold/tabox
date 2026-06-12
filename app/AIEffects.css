@@ -72,6 +72,7 @@
     position: absolute;
     top: 0;
     bottom: 0;
+    left: 0;
     width: 45%;
     background: linear-gradient(
         100deg,
@@ -93,9 +94,15 @@
 
 /* ── Title-slot variant ───────────────────────────────────────────────────── */
 
+.ai-name-processing {
+    /* Confine the streak and round its corners; breathing room for the ring. */
+    overflow: hidden;
+    border-radius: 8px;
+    padding: 4px 6px;
+}
+
 .ai-name-processing::before {
     border-radius: 8px;
-    padding: 2px;
 }
 
 /* ── Performance-mode static fallback ────────────────────────────────────── */
