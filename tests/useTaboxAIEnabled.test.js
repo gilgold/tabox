@@ -7,21 +7,26 @@ describe('useTaboxAIEnabled', () => {
         browser.storage.local.get.mockReset();
     });
 
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
     test('reflects the stored chkTaboxAI flag', async () => {
         browser.storage.local.get.mockResolvedValue({ chkTaboxAI: true });
         const { result } = renderHook(() => useTaboxAIEnabled());
         await waitFor(() => expect(result.current).toBe(true));
     });
 
-    test('defaults to false and reacts to storage changes', async () => {
+    test('defaults to false, reacts to storage changes, and cleans up on unmount', async () => {
         browser.storage.local.get.mockResolvedValue({});
-        let listener;
-        const originalAdd = browser.storage.onChanged.addListener;
-        browser.storage.onChanged.addListener = jest.fn((cb) => { listener = cb; });
-        const { result } = renderHook(() => useTaboxAIEnabled());
+        const addSpy = jest.spyOn(browser.storage.onChanged, 'addListener');
+        const removeSpy = jest.spyOn(browser.storage.onChanged, 'removeListener');
+        const { result, unmount } = renderHook(() => useTaboxAIEnabled());
         await waitFor(() => expect(result.current).toBe(false));
+        const listener = addSpy.mock.calls[addSpy.mock.calls.length - 1][0];
         act(() => listener({ chkTaboxAI: { newValue: true } }));
         expect(result.current).toBe(true);
-        browser.storage.onChanged.addListener = originalAdd;
+        unmount();
+        expect(removeSpy).toHaveBeenCalledWith(listener);
     });
 });
