@@ -5,4 +5,7 @@ export const aiToolsModalOpenState = atom(false);
 
 // What the AI Tools modal operates on. The header button resets this to
 // 'all'; the full-page selection toolbar sets the checked collection uids.
+// Variants:
+//   { type: 'all' }                    — operate on every collection
+//   { type: 'selected', uids: string[] } — operate only on the listed uids
 export const aiToolsScopeState = atom({ type: 'all' });

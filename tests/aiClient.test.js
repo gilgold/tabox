@@ -66,4 +66,12 @@ describe('aiClient', () => {
         expect(session.prompt).toHaveBeenCalledWith('prompt text', { responseConstraint: schema });
         expect(result).toEqual({ name: 'Research' });
     });
+
+    test('promptForJSON includes signal in options when provided', async () => {
+        const session = { prompt: jest.fn().mockResolvedValue('{"name":"Research"}') };
+        const schema = { type: 'object' };
+        const signal = new AbortController().signal;
+        await promptForJSON(session, 'prompt text', schema, signal);
+        expect(session.prompt).toHaveBeenCalledWith('prompt text', { responseConstraint: schema, signal });
+    });
 });

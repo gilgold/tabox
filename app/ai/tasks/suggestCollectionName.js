@@ -27,15 +27,16 @@ export function buildNamePrompt(collection) {
     return `Suggest a short, descriptive name for a group of browser tabs.\n\nTabs:\n${lines.join('\n')}\n\nRespond with JSON: {"name": "..."}`;
 }
 
-export async function suggestCollectionName(collection) {
+export async function suggestCollectionName(collection, { signal } = {}) {
     // Note: the Prompt API requires temperature and topK to be set together.
     const session = await createAISession({
         systemPrompt: 'You name groups of browser tabs. Names are short (2-4 words), specific, and in Title Case. Never include quotes or emojis.',
         temperature: 0.7,
         topK: 3,
+        ...(signal ? { signal } : {}),
     });
     try {
-        const { name } = await promptForJSON(session, buildNamePrompt(collection), NAME_SCHEMA);
+        const { name } = await promptForJSON(session, buildNamePrompt(collection), NAME_SCHEMA, signal);
         return String(name).trim().substring(0, MAX_NAME_LENGTH);
     } finally {
         session.destroy();

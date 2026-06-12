@@ -42,7 +42,7 @@ describe('autoRenameCollections', () => {
         expect(results).toEqual([{ uid: 'c', oldName: 'Old C', newName: 'Fresh C' }]);
         expect(skipped).toEqual([
             { uid: 'a', reason: 'unchanged' },
-            { uid: 'b', reason: 'error' },
+            { uid: 'b', reason: 'error', message: 'boom' },
         ]);
     });
 
@@ -54,6 +54,45 @@ describe('autoRenameCollections', () => {
         expect(results).toHaveLength(1);
         expect(results[0].uid).toBe('a');
         expect(cancelled).toBe(true);
+        expect(suggestCollectionName).toHaveBeenCalledTimes(1);
+    });
+
+    test('AbortError mid-run sets cancelled true and does not record an error skip', async () => {
+        const abortError = Object.assign(new Error('aborted'), { name: 'AbortError' });
+        suggestCollectionName
+            .mockResolvedValueOnce('New A')
+            .mockRejectedValueOnce(abortError);
+        const { results, skipped, cancelled } = await autoRenameCollections({ collections });
+        expect(cancelled).toBe(true);
+        expect(results).toEqual([{ uid: 'a', oldName: 'Old A', newName: 'New A' }]);
+        expect(skipped).toEqual([]);
+        expect(suggestCollectionName).toHaveBeenCalledTimes(2);
+    });
+
+    test('error skip entries carry the error message', async () => {
+        suggestCollectionName.mockRejectedValue(new Error('network fail'));
+        const { skipped } = await autoRenameCollections({ collections: [collections[0]] });
+        expect(skipped).toEqual([{ uid: 'a', reason: 'error', message: 'network fail' }]);
+    });
+
+    test('onResult is called per completed item with the right payload', async () => {
+        suggestCollectionName
+            .mockResolvedValueOnce('New A')
+            .mockResolvedValueOnce('Old B')  // unchanged
+            .mockRejectedValueOnce(new Error('boom'));
+        const onResult = jest.fn();
+        await autoRenameCollections({ collections, onResult });
+        expect(onResult).toHaveBeenCalledTimes(3);
+        expect(onResult).toHaveBeenNthCalledWith(1, { uid: 'a', oldName: 'Old A', newName: 'New A' });
+        expect(onResult).toHaveBeenNthCalledWith(2, { uid: 'b', reason: 'unchanged' });
+        expect(onResult).toHaveBeenNthCalledWith(3, { uid: 'c', reason: 'error', message: 'boom' });
+    });
+
+    test('empty collections array returns empty results immediately', async () => {
+        const { results, skipped, cancelled } = await autoRenameCollections({ collections: [] });
+        expect(results).toEqual([]);
+        expect(skipped).toEqual([]);
+        expect(cancelled).toBe(false);
     });
 
     test('reports progress with index, total, and collection', async () => {

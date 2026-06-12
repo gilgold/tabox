@@ -50,4 +50,14 @@ describe('suggestCollectionName', () => {
         const name = await suggestCollectionName({ tabs: [] });
         expect(name).toHaveLength(50);
     });
+
+    test('forwards signal to createAISession and promptForJSON', async () => {
+        const destroy = jest.fn();
+        createAISession.mockResolvedValue({ destroy });
+        promptForJSON.mockResolvedValue({ name: 'Work Tabs' });
+        const signal = new AbortController().signal;
+        await suggestCollectionName({ tabs: [] }, { signal });
+        expect(createAISession).toHaveBeenCalledWith(expect.objectContaining({ signal }));
+        expect(promptForJSON).toHaveBeenCalledWith(expect.anything(), expect.any(String), expect.anything(), signal);
+    });
 });

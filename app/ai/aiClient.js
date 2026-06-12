@@ -39,15 +39,18 @@ export async function downloadModel(onProgress) {
     session.destroy();
 }
 
-export async function createAISession({ systemPrompt, temperature, topK } = {}) {
+export async function createAISession({ systemPrompt, temperature, topK, signal } = {}) {
     const options = { ...LANGUAGE_OPTIONS };
     if (systemPrompt) options.initialPrompts = [{ role: 'system', content: systemPrompt }];
     if (temperature !== undefined) options.temperature = temperature;
     if (topK !== undefined) options.topK = topK;
+    if (signal) options.signal = signal;
     return globalThis.LanguageModel.create(options);
 }
 
-export async function promptForJSON(session, prompt, schema) {
-    const raw = await session.prompt(prompt, { responseConstraint: schema });
+export async function promptForJSON(session, prompt, schema, signal) {
+    const options = { responseConstraint: schema };
+    if (signal) options.signal = signal;
+    const raw = await session.prompt(prompt, options);
     return JSON.parse(raw);
 }
