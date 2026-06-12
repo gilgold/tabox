@@ -10,6 +10,7 @@ import { useAtom, useAtomValue } from 'jotai';
 import { browser } from '../static/globals';
 import { openOrFocusFullPageInCurrentWindow } from './utils/openFullPage';
 import TabSwitcherButton from './TabSwitcherButton';
+import AIButton from './AIButton';
 import { showSuccessToast } from './toastHelpers';
 import { MdOpenInNew, MdLogout, MdSync } from 'react-icons/md';
 import ReactTimeAgo from 'react-time-ago';
@@ -231,6 +232,7 @@ function Header(props) {
                 <LoginSection logout={props.logout} />
             </div>
             <div className="header-right">
+                <AIButton />
                 <TabSwitcherButton />
                 <button
                     className="header-action-btn"
