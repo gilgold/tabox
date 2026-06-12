@@ -11,10 +11,10 @@ export const aiToolsModalOpenState = atom(false);
 export const aiToolsScopeState = atom({ type: 'all' });
 
 // All collection uids currently being processed by an AI rename run (bulk or
-// single). Card components read this to show the animated gradient ring.
+// single). Card components render the .ai-processing-overlay for these uids.
 export const aiProcessingUidsState = atom([]);
 
 // The uid of the collection being renamed right now (the "active" card in a
 // bulk run, or the single target for a panel rename). Drives the stronger
-// ai-processing-current variant of the ring effect.
+// .ai-processing-overlay--current variant of the effect.
 export const aiProcessingCurrentUidState = atom(null);

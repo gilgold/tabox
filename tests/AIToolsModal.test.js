@@ -324,6 +324,11 @@ describe('AIToolsModal', () => {
             expect(uids).toContain('c2');
         });
 
+        // The engine's onProgress callback drives the current-uid atom
+        const { onProgress } = autoRenameCollections.mock.calls[0][0];
+        await act(async () => { onProgress(0, 2, { uid: 'c1', name: 'Untitled' }); });
+        expect(store.get(aiProcessingCurrentUidState)).toBe('c1');
+
         // Resolve the engine
         await act(async () => { resolveEngine(); });
 
