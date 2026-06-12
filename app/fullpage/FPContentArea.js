@@ -114,6 +114,8 @@ import CreateFolderModalBase from '../CreateFolderModal';
 import { CURRENT_WINDOWS_ACCENT_COLOR } from './fpAccentColors';
 import { getFavoriteCollections } from '../utils/favoritesUtils';
 
+import FPSelectionAIButton from './FPSelectionAIButton';
+
 const SessionsModal = lazy(() => import('../SessionsModal').then(m => ({ default: m.SessionsModal })));
 const SaveCollectionModal = lazy(() => import('./SaveCollectionModal'));
 const BulkMoveCollectionsModal = lazy(() => import('./BulkMoveCollectionsModal'));
@@ -2658,6 +2660,7 @@ function FPContentArea({
                 >
                     <MdDelete size={16} />
                 </button>
+                <FPSelectionAIButton selectedUids={[...selectedCollectionUids]} />
                 <button
                     type="button"
                     className="fp-toolbar-btn fp-toolbar-session-clear-btn"
