@@ -27,7 +27,8 @@ function AIToolsModal({ updateCollection }) {
 
     useEffect(() => {
         if (!isOpen) return;
-        // Fix 6: clear stale list on reopen; fix 4: reset in-flight flags
+        // Invalidate any suggest still in flight from the previous session.
+        suggestTokenRef.current += 1;
         setCollections([]);
         setActiveToolId(null);
         setSelectedUid('');
@@ -47,7 +48,6 @@ function AIToolsModal({ updateCollection }) {
 
     const handleSuggest = async () => {
         if (!selectedUid || loading) return;
-        // Fix 2: capture current uid as a token; disable select while loading
         const token = ++suggestTokenRef.current;
         const uidAtStart = selectedUid;
         setLoading(true);
@@ -77,12 +77,11 @@ function AIToolsModal({ updateCollection }) {
 
     const handleApply = async () => {
         const trimmed = suggestion.trim();
-        if (!selectedUid || !trimmed) return;
-        // Fix 3: guard against double-click
-        if (isApplying) return;
+        if (!selectedUid || !trimmed || isApplying) return;
         setIsApplying(true);
         try {
-            // Fix 1: re-fetch fresh data at apply time
+            // Re-fetch at apply time: the open-time snapshot may be stale, and
+            // saving it could revert concurrent edits or resurrect a deletion.
             const fresh = await loadSingleCollection(selectedUid);
             if (!fresh) {
                 setError('This collection no longer exists.');
@@ -96,7 +95,6 @@ function AIToolsModal({ updateCollection }) {
             showSuccessToast('Collection renamed!');
             close();
         } catch (applyError) {
-            // Fix 5: wrap in try/catch, keep modal open on error
             console.error('Tabox AI: apply rename failed:', applyError);
             setError('Could not rename the collection. Please try again.');
         } finally {
@@ -159,7 +157,7 @@ function AIToolsModal({ updateCollection }) {
                                 setSelectedUid(e.target.value);
                                 setSuggestion('');
                                 setError(null);
-                                // Fix 2: bump token so any in-flight suggest is discarded
+                                // Discard any suggest still in flight for the old selection.
                                 suggestTokenRef.current += 1;
                             }}
                         >
