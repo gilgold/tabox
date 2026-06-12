@@ -18,8 +18,10 @@ import { ImNewTab } from 'react-icons/im';
 import { MdOutlineSyncAlt, MdSettingsBackupRestore, MdClose, MdExpandMore, MdExpandLess, MdBugReport, MdFileDownload } from 'react-icons/md';
 import { FaRegCheckCircle } from 'react-icons/fa';
 import { IoMoon, IoSunny } from 'react-icons/io5';
+import { BsStars } from 'react-icons/bs';
 
 const SyncDebugModal = lazy(() => import('./SyncDebugModal').then((module) => ({ default: module.SyncDebugModal })));
+const AIEnableModal = lazy(() => import('./AIEnableModal'));
 
 export default function SettingsMenu(props) {
     const { variant = 'popup' } = props;
@@ -29,10 +31,12 @@ export default function SettingsMenu(props) {
     const [badgeEnabled, setBadgeEnabled] = useState(false);
     const [, setPerformanceModeEnabled] = useState(false);
     const [isSyncDebugModalOpen, setIsSyncDebugModalOpen] = useState(false);
+    const [isAIEnableModalOpen, setIsAIEnableModalOpen] = useState(false);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [activeCategory, setActiveCategory] = useState('general');
     const [expandedSections, setExpandedSections] = useState({
         general: true,
+        ai: true,
         adding: true,
         opening: true,
         editing: true,
@@ -194,6 +198,19 @@ export default function SettingsMenu(props) {
         }, 100);
     };
 
+    const handleTaboxAIToggle = async () => {
+        setTimeout(async () => {
+            const { chkTaboxAI } = await browser.storage.local.get('chkTaboxAI');
+            if (chkTaboxAI === true) {
+                // The switch persisted "on" — revert and require acknowledgment first.
+                // Only AIEnableModal's Enable button sets the flag for real.
+                await browser.storage.local.set({ chkTaboxAI: false });
+                setIsAIEnableModalOpen(true);
+                closeMenu();
+            }
+        }, 100);
+    };
+
     const toggleDrawer = () => {
         if (isDrawerOpen) {
             closeMenu();
@@ -269,6 +286,28 @@ export default function SettingsMenu(props) {
                         'data-tooltip-content': 'Choose what happens when you click the Tabox icon in the browser toolbar',
                         textOn: <span>When opening Tabox launch in: <strong>new tab</strong></span>,
                         textOff: <span>When opening Tabox launch in: <strong>popup</strong></span>,
+                    },
+                },
+            ],
+        },
+        {
+            key: 'ai',
+            title: 'Tabox AI',
+            icon: BsStars,
+            description: 'On-device AI features powered by Chrome’s built-in model. Nothing leaves your computer.',
+            items: [
+                {
+                    type: 'switch',
+                    key: 'chkTaboxAI',
+                    title: 'Tabox AI',
+                    description: 'Enable on-device AI tools like auto-naming collections. Requires a one-time model download.',
+                    switchProps: {
+                        id: 'chkTaboxAI',
+                        onMouseUp: handleTaboxAIToggle,
+                        'data-tooltip-id': 'main-tooltip',
+                        'data-tooltip-content': 'AI runs locally in Chrome — your data never leaves your device',
+                        textOn: <span><BsStars size="14" style={{ marginRight: '8px' }} />Tabox AI: <strong>Enabled</strong></span>,
+                        textOff: <span><BsStars size="14" style={{ marginRight: '8px' }} />Tabox AI: <strong>Disabled</strong></span>,
                     },
                 },
             ],
@@ -693,6 +732,15 @@ export default function SettingsMenu(props) {
                         />
                     </Suspense>
                 </Modal>
+            )}
+
+            {isAIEnableModalOpen && (
+                <Suspense fallback={null}>
+                    <AIEnableModal
+                        isOpen={isAIEnableModalOpen}
+                        onClose={() => setIsAIEnableModalOpen(false)}
+                    />
+                </Suspense>
             )}
         </>
     );
