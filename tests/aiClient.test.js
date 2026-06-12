@@ -1,5 +1,10 @@
 import { isAISupported, getAIAvailability, downloadModel, createAISession, promptForJSON } from '../app/ai/aiClient';
 
+const LANGUAGE_OPTIONS = {
+    expectedInputs: [{ type: 'text', languages: ['en'] }],
+    expectedOutputs: [{ type: 'text', languages: ['en'] }],
+};
+
 describe('aiClient', () => {
     afterEach(() => {
         delete globalThis.LanguageModel;
@@ -13,9 +18,10 @@ describe('aiClient', () => {
         expect(await getAIAvailability()).toBe('unsupported');
     });
 
-    test('getAIAvailability proxies LanguageModel.availability()', async () => {
+    test('getAIAvailability proxies LanguageModel.availability() with language options', async () => {
         globalThis.LanguageModel = { availability: jest.fn().mockResolvedValue('downloadable') };
         expect(await getAIAvailability()).toBe('downloadable');
+        expect(globalThis.LanguageModel.availability).toHaveBeenCalledWith(LANGUAGE_OPTIONS);
     });
 
     test('getAIAvailability returns "unavailable" when availability() throws', async () => {
@@ -37,12 +43,16 @@ describe('aiClient', () => {
         await downloadModel(onProgress);
         expect(onProgress).toHaveBeenCalledWith(50);
         expect(destroy).toHaveBeenCalled();
+        expect(globalThis.LanguageModel.create).toHaveBeenCalledWith(
+            expect.objectContaining(LANGUAGE_OPTIONS),
+        );
     });
 
     test('createAISession passes system prompt and sampling params', async () => {
         globalThis.LanguageModel = { create: jest.fn().mockResolvedValue({}) };
         await createAISession({ systemPrompt: 'sys', temperature: 0.7, topK: 3 });
         expect(globalThis.LanguageModel.create).toHaveBeenCalledWith({
+            ...LANGUAGE_OPTIONS,
             initialPrompts: [{ role: 'system', content: 'sys' }],
             temperature: 0.7,
             topK: 3,
