@@ -1057,6 +1057,102 @@ function applyChromeGroupSettings(windowId, collection) {
     });
 }
 
+// ─── Smart Organize: apply + undo ────────────────────────────────────────────
+
+const SMART_ORGANIZE_UNDO_KEY = 'smartOrganizeUndo';
+
+// Apply a Smart Organize plan to a live window. Snapshots the window's current
+// tab order + the set of tabs being grouped BEFORE mutating, so undo can fully
+// restore. Tabs that no longer exist are skipped by Chrome.
+async function applySmartOrganizePlan({ windowId, plan, createdAt }) {
+    const beforeTabs = await browser.tabs.query({ windowId });
+    const orderedTabIds = beforeTabs.map((t) => t.id);
+    const affectedTabIds = [
+        ...plan.newGroups.flatMap((g) => g.tabIds),
+        ...plan.additions.flatMap((a) => a.tabIds),
+    ];
+
+    await browser.storage.local.set({
+        [SMART_ORGANIZE_UNDO_KEY]: {
+            windowId,
+            createdAt: createdAt || Date.now(),
+            orderedTabIds,
+            affectedTabIds,
+            summary: { groupsCreated: plan.newGroups.length, tabsAdded: affectedTabIds.length },
+        },
+    });
+
+    let groupsCreated = 0;
+    let tabsAdded = 0;
+
+    for (const add of plan.additions) {
+        if (!add.tabIds.length) continue;
+        try {
+            await browser.tabs.group({ groupId: add.groupId, tabIds: add.tabIds });
+            tabsAdded += add.tabIds.length;
+        } catch (e) {
+            console.error('Smart Organize: addition failed for group', add.groupId, e);
+        }
+    }
+
+    for (const g of plan.newGroups) {
+        if (!g.tabIds.length) continue;
+        try {
+            const groupId = await browser.tabs.group({ createProperties: { windowId }, tabIds: g.tabIds });
+            await browser.tabGroups.update(groupId, { title: g.name, color: g.color });
+            groupsCreated += 1;
+        } catch (e) {
+            console.error('Smart Organize: new group failed', g.name, e);
+        }
+    }
+
+    return { success: true, groupsCreated, tabsAdded, skipped: plan.skippedTabIds?.length || 0 };
+}
+
+// Undo the last Smart Organize run: ungroup the tabs we grouped (empty new
+// groups auto-remove; existing groups just lose the added tabs), then restore
+// the original tab order best-effort. Clears the snapshot.
+async function undoSmartOrganize({ windowId } = {}) {
+    const stored = await browser.storage.local.get(SMART_ORGANIZE_UNDO_KEY);
+    const snap = stored[SMART_ORGANIZE_UNDO_KEY];
+    if (!snap) return { success: false, reason: 'missing' };
+
+    const targetWindowId = windowId ?? snap.windowId;
+    try {
+        await browser.windows.get(targetWindowId);
+    } catch {
+        await browser.storage.local.remove(SMART_ORGANIZE_UNDO_KEY);
+        return { success: false, reason: 'expired' };
+    }
+
+    const affected = (snap.affectedTabIds || []).filter(Boolean);
+    if (affected.length) {
+        try {
+            await browser.tabs.ungroup(affected);
+        } catch (e) {
+            console.error('Smart Organize undo: ungroup failed', e);
+        }
+    }
+
+    // Restore original order best-effort: move surviving tabs back in sequence.
+    const liveIds = new Set((await browser.tabs.query({ windowId: targetWindowId })).map((t) => t.id));
+    let index = 0;
+    for (const tabId of snap.orderedTabIds || []) {
+        if (!liveIds.has(tabId)) continue;
+        try {
+            await browser.tabs.move(tabId, { index });
+        } catch {
+            // tab may be pinned or gone; skip
+        }
+        index += 1;
+    }
+
+    await browser.storage.local.remove(SMART_ORGANIZE_UNDO_KEY);
+    return { success: true };
+}
+
+// ─── end Smart Organize ──────────────────────────────────────────────────────
+
 async function getNewAccessToken() {
     try {
         const { oauth2 } = browser.runtime.getManifest();
@@ -2460,7 +2556,10 @@ const backgroundUtilsApi = {
     recoverFromBackup,
     updateCollection,
     updateCollectionsUids,
-    createNewSyncFileAndBackup
+    createNewSyncFileAndBackup,
+    SMART_ORGANIZE_UNDO_KEY,
+    applySmartOrganizePlan,
+    undoSmartOrganize,
 };
 
 if (typeof globalThis !== 'undefined') {

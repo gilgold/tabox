@@ -1946,11 +1946,25 @@ try {
         return Promise.resolve(result);
       } catch (error) {
         console.error('[Import] Error in importData message handler:', error);
-        return Promise.resolve({ 
-          success: false, 
-          error: error?.message || String(error) || 'Unknown error in import message handler' 
+        return Promise.resolve({
+          success: false,
+          error: error?.message || String(error) || 'Unknown error in import message handler'
         });
       }
+    }
+
+    if (request.type === 'smartOrganizeApply') {
+      const result = await applySmartOrganizePlan({
+        windowId: request.windowId,
+        plan: request.plan,
+        createdAt: request.createdAt,
+      });
+      return Promise.resolve(result);
+    }
+
+    if (request.type === 'smartOrganizeUndo') {
+      const result = await undoSmartOrganize({ windowId: request.windowId });
+      return Promise.resolve(result);
     }
 
   });
