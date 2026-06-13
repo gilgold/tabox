@@ -36,6 +36,7 @@
 .fp-toolbar .ai-button {
     height: 38px;
     flex-shrink: 0;
+    margin-left: 4px;
 }
 
 /* Popup-only: the collections-toolbar row is tight (~400px viewport).

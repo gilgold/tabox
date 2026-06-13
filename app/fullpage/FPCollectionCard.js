@@ -2,8 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { MdCenterFocusWeak, MdOutlineLaunch, MdOutlineRefresh } from 'react-icons/md';
 import { FaTrash, FaStar, FaRegStar } from 'react-icons/fa';
 import { BsIncognito } from 'react-icons/bs';
-import ContextMenu from '../ContextMenu';
-import { createCollectionMenuItems } from '../utils/contextMenuItems';
 import TimeAgo from 'javascript-time-ago';
 import { useSetAtom, useAtomValue } from 'jotai';
 import { highlightedCollectionUidState, deletingCollectionUidsState } from '../atoms/animationsState';
@@ -186,24 +184,6 @@ function FPCollectionCard({
         </>
     );
 
-    const actionMenu = bulkSelectionActive ? null : (
-        <ContextMenu
-            menuItems={createCollectionMenuItems({
-                isAutoUpdate,
-                onExport: _exportCollectionToFile,
-                onDelete: _handleDelete,
-                onUpdate: _handleUpdate,
-                onStopTracking: _handleStopTracking,
-                onDuplicate: _handleDuplicate,
-                isFavorite: collection.isFavorite === true,
-                onToggleFavorite: _handleToggleFavorite,
-            })}
-            tooltip="More options"
-            tooltipPlace="right"
-            onOpenChange={setIsLocalInteractionActive}
-        />
-    );
-
     const actions = bulkSelectionActive ? null : (
         <FPCardHoverActions
             items={[
@@ -230,14 +210,13 @@ function FPCollectionCard({
                     label: collection.isFavorite ? 'Unfavorite' : 'Favorite',
                     tooltip: collection.isFavorite ? 'Remove from favorites' : 'Add to favorites',
                     ariaLabel: collection.isFavorite ? 'Remove from favorites' : 'Add to favorites',
-                    icon: collection.isFavorite ? <FaStar size={12} /> : <FaRegStar size={12} />,
+                    icon: collection.isFavorite ? <FaStar size={12} /> : (
+                        <>
+                            <FaRegStar size={12} className="fp-star-outline" />
+                            <FaStar size={12} className="fp-star-filled" />
+                        </>
+                    ),
                     onClick: _handleToggleFavorite,
-                },
-                {
-                    key: 'more',
-                    className: 'fp-card-menu-option',
-                    label: 'More',
-                    render: () => actionMenu,
                 },
                 {
                     key: 'color',

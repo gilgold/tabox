@@ -243,7 +243,8 @@ function Header(props) {
                 <Suspense fallback={<div className="settings-loading">&#9881;</div>}>
                     <SettingsMenu
                         updateRemoteData={props.updateRemoteData}
-                        applyDataFromServer={props.applyDataFromServer} />
+                        applyDataFromServer={props.applyDataFromServer}
+                        addCollection={props.addCollection} />
                 </Suspense>
             </div>
         </header>

@@ -2075,6 +2075,7 @@ function App({ mode = 'popup' }) {
         isFullPage={isFullPage}
         applyDataFromServer={applyDataFromServer}
         updateRemoteData={updateRemoteData}
+        addCollection={addCollection}
         logout={logout} />
       <div className={`main-content-wrapper${isFullPage && isPanelOpen ? ' panel-open' : ''}`}>
                 <AddNewTextbox addCollection={addCollection} addFolder={addFolder} updateRemoteData={updateRemoteData} onDataUpdate={refreshDataAfterFolderOperation} />

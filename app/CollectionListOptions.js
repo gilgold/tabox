@@ -7,13 +7,12 @@ import './CollectionListOptions.css';
 import { PiGridNineFill } from "react-icons/pi";
 import { browser } from '../static/globals';
 import Select, { components } from 'react-select';
-import { 
+import {
     MdAccessTime,
     MdArrowUpward,
     MdArrowDownward,
     MdPalette,
     MdOpenInNew,
-    MdHistory,
     MdSortByAlpha,
     MdViewList,
     MdCreateNewFolder,
@@ -23,11 +22,7 @@ import Modal from 'react-modal';
 import { CollectionFilter } from './CollectionFilter';
 import { showSuccessToast, showErrorToast } from './toastHelpers';
 import { Tooltip } from 'react-tooltip';
-import { loadBrowserSessions, subscribeToBrowserSessions } from './utils/browserSessions';
-
-
 // Lazy load rarely-used modals for better performance
-const SessionsModal = lazy(() => import('./SessionsModal').then(module => ({ default: module.SessionsModal })));
 const CreateFolderModal = lazy(() => import('./CreateFolderModal'));
 
 
@@ -69,8 +64,6 @@ export function CollectionListOptions(props) {
     const [sortType, setSortType] = useState('DATE');
     const [sortAscending, setSortAscending] = useState(true);
     const [openInNewWindow, setOpenInNewWindow] = useState(false);
-    const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
-    const [sessionList, setSessionList] = useState([]);
     const [viewMode, setViewMode] = useState('list'); // 'list' or 'grid'
     const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
     const isMountedRef = useRef(true);
@@ -109,13 +102,6 @@ export function CollectionListOptions(props) {
                         props.onViewModeChange(loadedViewMode);
                     }
                 }
-
-                const sessions = await loadBrowserSessions();
-                
-                // Only update state if component is still mounted
-                if (isMountedRef.current) {
-                    setSessionList(sessions);
-                }
             } catch (error) {
                 console.error('Error loading CollectionListOptions data:', error);
             }
@@ -123,16 +109,8 @@ export function CollectionListOptions(props) {
 
         loadData();
 
-        const unsubscribe = subscribeToBrowserSessions(async () => {
-            const sessions = await loadBrowserSessions();
-            if (isMountedRef.current) {
-                setSessionList(sessions);
-            }
-        });
-
         return () => {
             isMountedRef.current = false;
-            unsubscribe();
         };
     }, []);
 
@@ -222,16 +200,6 @@ export function CollectionListOptions(props) {
         }
     };
 
-    const handleRestoreSession = () => {
-        if (!isMountedRef.current) return;
-        setIsSessionModalOpen(true);
-    };
-
-    const closeSessionModal = () => {
-        if (!isMountedRef.current) return;
-        setIsSessionModalOpen(false);
-    };
-
     const handleFiltersChange = (filters) => {
         if (!isMountedRef.current) return;
         // Pass filters to parent component
@@ -243,16 +211,13 @@ export function CollectionListOptions(props) {
     useEffect(() => {
         const openFolder = () => setIsFolderModalOpen(true);
         const openImport = () => fileInputRef.current?.click();
-        const openSession = () => { if (sessionList.length > 0) setIsSessionModalOpen(true); };
         window.addEventListener('tabox:open-create-folder', openFolder);
         window.addEventListener('tabox:open-import', openImport);
-        window.addEventListener('tabox:open-restore-session', openSession);
         return () => {
             window.removeEventListener('tabox:open-create-folder', openFolder);
             window.removeEventListener('tabox:open-import', openImport);
-            window.removeEventListener('tabox:open-restore-session', openSession);
         };
-    }, [sessionList]);
+    }, []);
 
     const handleCreateFolder = () => {
         setIsFolderModalOpen(true);
@@ -418,17 +383,6 @@ export function CollectionListOptions(props) {
                         >
                             {viewMode === 'list' ? <PiGridNineFill size={ICON_SIZE} /> : <MdViewList size={ICON_SIZE} />}
                         </button>
-                        <span id="toolbar-restore-session">
-                            <button
-                                type="button"
-                                className="fp-toolbar-btn"
-                                onClick={handleRestoreSession}
-                                disabled={sessionList.length === 0}
-                                style={{ pointerEvents: sessionList.length === 0 ? 'none' : 'auto' }}
-                            >
-                                <MdHistory size={ICON_SIZE} />
-                            </button>
-                        </span>
                         <button
                             type="button"
                             id="toolbar-import"
@@ -452,24 +406,6 @@ export function CollectionListOptions(props) {
                 onChange={handleFileSelection}
                 style={{ display: 'none' }}
             />
-
-            <Modal
-                isOpen={isSessionModalOpen}
-                onRequestClose={closeSessionModal}
-                contentLabel="Sessions Modal"
-                className="modal-content"
-                overlayClassName="modal-overlay"
-                ariaHideApp={false}
-            >
-                <Suspense fallback={<div style={{padding: '20px', textAlign: 'center'}}>Loading...</div>}>
-                    <SessionsModal
-                        isOpen={isSessionModalOpen}
-                        sessions={sessionList}
-                        addCollection={props.addCollection}
-                        onClose={closeSessionModal}
-                    />
-                </Suspense>
-            </Modal>
 
             <Suspense fallback={null}>
                 <CreateFolderModal
@@ -505,12 +441,6 @@ export function CollectionListOptions(props) {
             <Tooltip
                 anchorSelect="#toolbar-view-mode"
                 content={viewMode === 'list' ? "Switch to grid view" : "Switch to list view"}
-                className="small-tooltip"
-                place="bottom"
-            />
-            <Tooltip
-                anchorSelect="#toolbar-restore-session, #toolbar-restore-session button"
-                content={sessionList.length === 0 ? "No recently closed items available" : "Restore recently closed item"}
                 className="small-tooltip"
                 place="bottom"
             />

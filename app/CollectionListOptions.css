@@ -63,8 +63,9 @@
 /* The popup toolbar shares .fp-toolbar class names with the full page. The
    full-page responsive rules are scoped to html.fullpage-mode, so the popup's
    compact behavior is defined here: one row that never wraps (the fixed
-   wrapper would overlap the list), labels hidden, leading area collapsed
-   until a filter is active. */
+   wrapper would overlap the list) and labels hidden. The leading (clear
+   filters) slot always reserves its space — only its contents toggle
+   visibility — so the other buttons don't shift when a filter activates. */
 .collections-toolbar.fp-toolbar {
     flex-wrap: nowrap;
     justify-content: flex-start;
@@ -80,15 +81,6 @@
 }
 
 .collections-toolbar .fp-toolbar-pill span {
-    display: none;
-}
-
-.collections-toolbar .fp-toolbar-leading {
-    flex: 0 0 auto;
-    width: auto;
-}
-
-.collections-toolbar .fp-toolbar-leading:not(.is-visible) {
     display: none;
 }
 

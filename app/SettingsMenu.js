@@ -1,4 +1,4 @@
-import React, { useEffect, useState, lazy, Suspense, useEffectEvent } from 'react';
+import React, { useEffect, useState, useRef, lazy, Suspense, useEffectEvent } from 'react';
 import ReactDOM from 'react-dom';
 import Modal from 'react-modal';
 import './SettingsMenu.css';
@@ -13,15 +13,17 @@ import { downloadTextFile } from './utils';
 import SyncDebugRecoveryPanel from './SyncDebugRecoveryPanel';
 import { useOrphanRecoveryContext } from './OrphanRecoveryContext';
 import { buildOrphanRecoveryMenuItem } from './orphanRecoveryMenuItem';
+import { loadBrowserSessions, subscribeToBrowserSessions } from './utils/browserSessions';
 import { RiFolderAddFill, RiEdit2Line, RiSettings5Fill } from 'react-icons/ri';
 import { ImNewTab } from 'react-icons/im';
-import { MdOutlineSyncAlt, MdSettingsBackupRestore, MdClose, MdExpandMore, MdExpandLess, MdBugReport, MdFileDownload } from 'react-icons/md';
+import { MdOutlineSyncAlt, MdSettingsBackupRestore, MdClose, MdExpandMore, MdExpandLess, MdBugReport, MdFileDownload, MdHistory } from 'react-icons/md';
 import { FaRegCheckCircle } from 'react-icons/fa';
 import { IoMoon, IoSunny } from 'react-icons/io5';
 import { BsStars } from 'react-icons/bs';
 
 const SyncDebugModal = lazy(() => import('./SyncDebugModal').then((module) => ({ default: module.SyncDebugModal })));
 const AIEnableModal = lazy(() => import('./AIEnableModal'));
+const SessionsModal = lazy(() => import('./SessionsModal').then(module => ({ default: module.SessionsModal })));
 
 export default function SettingsMenu(props) {
     const { variant = 'popup' } = props;
@@ -32,8 +34,11 @@ export default function SettingsMenu(props) {
     const [, setPerformanceModeEnabled] = useState(false);
     const [isSyncDebugModalOpen, setIsSyncDebugModalOpen] = useState(false);
     const [isAIEnableModalOpen, setIsAIEnableModalOpen] = useState(false);
+    const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
+    const [sessionList, setSessionList] = useState([]);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [activeCategory, setActiveCategory] = useState('general');
+    const isMountedRef = useRef(true);
     const [expandedSections, setExpandedSections] = useState({
         general: true,
         ai: true,
@@ -105,6 +110,33 @@ export default function SettingsMenu(props) {
     useEffect(() => {
         setToastViewContext(isFullPageVariant ? 'fullpage' : 'popup');
     }, [isFullPageVariant]);
+
+    useEffect(() => {
+        const loadSessions = async () => {
+            const sessions = await loadBrowserSessions();
+            if (isMountedRef.current) setSessionList(sessions);
+        };
+
+        loadSessions();
+
+        const unsubscribe = subscribeToBrowserSessions(async () => {
+            const sessions = await loadBrowserSessions();
+            if (isMountedRef.current) setSessionList(sessions);
+        });
+
+        return () => {
+            isMountedRef.current = false;
+            unsubscribe();
+        };
+    }, []);
+
+    useEffect(() => {
+        const openSession = () => {
+            if (isMountedRef.current && sessionList.length > 0) setIsSessionModalOpen(true);
+        };
+        window.addEventListener('tabox:open-restore-session', openSession);
+        return () => window.removeEventListener('tabox:open-restore-session', openSession);
+    }, [sessionList]);
 
     const handleDarkModeToggle = async () => {
         const newMode = themeMode === 'dark' ? 'light' : 'dark';
@@ -196,6 +228,11 @@ export default function SettingsMenu(props) {
                 document.documentElement.classList.remove('performance-mode');
             }
         }, 100);
+    };
+
+    const handleRestoreSession = () => {
+        setIsSessionModalOpen(true);
+        closeMenu();
     };
 
     const handleTaboxAIBeforeChange = (nextChecked) => {
@@ -454,6 +491,20 @@ export default function SettingsMenu(props) {
         icon: MdSettingsBackupRestore,
         items: [
             ...(orphanRecoveryItem ? [orphanRecoveryItem] : []),
+            {
+                type: 'button',
+                key: 'restore-session',
+                title: 'Restore recently closed',
+                description: 'View and restore recently closed tabs and windows from your browser.',
+                onClick: handleRestoreSession,
+                isVisible: sessionList.length > 0,
+                content: (
+                    <>
+                        <MdHistory size="14" style={{ marginRight: '8px' }} />
+                        Restore recently closed
+                    </>
+                ),
+            },
             {
                 type: 'button',
                 key: 'export-all',
@@ -739,6 +790,26 @@ export default function SettingsMenu(props) {
                         onClose={() => setIsAIEnableModalOpen(false)}
                     />
                 </Suspense>
+            )}
+
+            {!isFullPageVariant && (
+                <Modal
+                    isOpen={isSessionModalOpen}
+                    onRequestClose={() => setIsSessionModalOpen(false)}
+                    contentLabel="Sessions Modal"
+                    className="modal-content"
+                    overlayClassName="modal-overlay"
+                    ariaHideApp={false}
+                >
+                    <Suspense fallback={<div style={{padding: '20px', textAlign: 'center'}}>Loading...</div>}>
+                        <SessionsModal
+                            isOpen={isSessionModalOpen}
+                            sessions={sessionList}
+                            addCollection={props.addCollection}
+                            onClose={() => setIsSessionModalOpen(false)}
+                        />
+                    </Suspense>
+                </Modal>
             )}
         </>
     );

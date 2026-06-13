@@ -163,7 +163,7 @@ function GroupContainer({
     const headerStyle = {
         background: `linear-gradient(90deg, ${hexToRgba(groupColor, 0.08)} 0%, ${hexToRgba(groupColor, 0.04)} 100%)`,
         borderBottom: localExpanded ? `1px solid ${hexToRgba(groupColor, 0.15)}` : 'none',
-        padding: '12px 16px',
+        padding: '4px 16px 4px 8px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -174,7 +174,7 @@ function GroupContainer({
     const titleSectionStyle = {
         display: 'flex',
         alignItems: 'center',
-        gap: '12px',
+        gap: '6px',
         flex: 1,
         minWidth: 0, // Allow text truncation
     };
@@ -215,6 +215,7 @@ function GroupContainer({
         gap: '2px',
         flex: 1,
         minWidth: 0,
+        marginLeft: '4px',
     };
 
     const groupTitleStyle = {
@@ -251,21 +252,16 @@ function GroupContainer({
 
     const openButtonStyle = {
         border: 'none',
-        background: 'linear-gradient(135deg, rgba(22, 152, 226, 0.18) 0%, rgba(22, 152, 226, 0.1) 100%)',
+        background: 'transparent',
         color: 'var(--primary-color)',
-        padding: '8px 12px',
-        borderRadius: '999px',
+        padding: '4px',
+        borderRadius: '8px',
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
-        fontSize: '12px',
-        fontWeight: '700',
-        letterSpacing: '0.01em',
-        lineHeight: 1,
-        boxShadow: 'inset 0 0 0 1px rgba(22, 152, 226, 0.18)',
         opacity: tabCount > 0 ? 1 : 0.45,
         cursor: tabCount > 0 ? 'pointer' : 'not-allowed',
-        transition: 'all 0.2s ease',
+        transition: 'background 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
     };
 
     const tabsContainerStyle = {
@@ -305,19 +301,28 @@ function GroupContainer({
                 }}>
                     <div style={titleSectionStyle}>
                         {/* Drag handle for group */}
-                        <div 
-                            className="group-drag-handle" 
-                            style={{ 
+                        <div
+                            className="group-drag-handle"
+                            style={{
                                 cursor: isDragging ? 'grabbing' : 'grab',
                                 display: 'flex',
                                 alignItems: 'center',
-                                padding: '4px',
-                                marginRight: '4px'
+                                padding: '4px 2px',
                             }}
                             {...dragAttributes}
                             {...dragListeners}
                         >
                             <MdDragIndicator size="16px" color="var(--text-color)" />
+                        </div>
+                        <div onClick={(e) => e.stopPropagation()}>
+                            <ColorPicker
+                                colorList={tabGrooupColorChart}
+                                tooltip="Choose a color for this group"
+                                group={group}
+                                currentColor={group.color}
+                                action={onSaveGroupColor}
+                                size="small"
+                            />
                         </div>
                         <div style={iconWrapStyle}>
                             <PiTabs style={iconStyle} />
@@ -355,18 +360,14 @@ function GroupContainer({
                                 aria-label={`Open all tabs in ${group.title}`}
                                 data-tooltip-id="main-tooltip"
                                 data-tooltip-content={`Open all tabs in ${group.title}`}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(22, 152, 226, 0.15)'; e.currentTarget.style.transform = 'scale(1.08)'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.transform = 'scale(1)'; }}
+                                onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.92)'; }}
+                                onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1.08)'; }}
                             >
-                                <MdOpenInNew size={14} />
+                                <MdOpenInNew size={17} />
                             </button>
                         )}
-                        <ColorPicker
-                            colorList={tabGrooupColorChart}
-                            tooltip="Choose a color for this group"
-                            group={group}
-                            currentColor={group.color}
-                            action={onSaveGroupColor}
-                            size="small"
-                        />
                         <DeleteWithConfirmationButton
                             action={onDeleteGroup}
                             group={group}
