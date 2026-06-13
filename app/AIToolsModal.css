@@ -306,3 +306,60 @@
     filter: none;
     background: rgba(128, 128, 128, 0.1);
 }
+
+/* ── Smart Organize panel ────────────────────────────────────────────────── */
+
+.ai-so-summary {
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.ai-so-done-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ai-so-window-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ai-so-window-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid rgba(124, 58, 237, 0.3);
+    border-radius: 8px;
+    background: rgba(124, 58, 237, 0.05);
+    cursor: pointer;
+    text-align: left;
+    color: var(--text-color);
+    font-size: 13px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.ai-so-window-item:hover {
+    border-color: #7c3aed;
+    box-shadow: 0 0 6px rgba(124, 58, 237, 0.2);
+}
+
+.ai-so-window-label {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 75%;
+}
+
+.ai-so-window-ungrouped {
+    font-size: 11px;
+    opacity: 0.7;
+    flex-shrink: 0;
+}

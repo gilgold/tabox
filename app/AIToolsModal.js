@@ -7,10 +7,15 @@ import { aiToolsModalOpenState, aiToolsScopeState, aiProcessingUidsState, aiProc
 import { viewContextState } from './atoms/globalAppSettingsState';
 import { AI_TOOLS } from './ai/aiTasks';
 import { autoRenameCollections } from './ai/tasks/autoRenameCollections';
+import { smartOrganizeTabs } from './ai/tasks/smartOrganizeTabs';
 import { getAIAvailability } from './ai/aiClient';
+import { readWindowStructure } from './ai/readWindowStructure';
 import { loadAllCollections } from './utils/storageUtils';
-import { showUndoToast } from './toastHelpers';
+import { buildCollectionFromSnapshot } from './utils/saveCollectionSnapshot';
+import { getCurrentTabsAndGroups } from './utils';
+import { showUndoToast, showSuccessToast } from './toastHelpers';
 import { UNDO_TIME } from './constants';
+import { browser } from '../static/globals';
 import './Modal.css';
 import './AIToolsModal.css';
 
@@ -32,6 +37,13 @@ function AIToolsModal({ updateRemoteData }) {
     // Bulk-run progress (i/N label + determinate bar)
     const [progressLabel, setProgressLabel] = useState('');
     const [progressFill, setProgressFill] = useState(0); // 0–100
+
+    // Smart Organize panel state
+    const [soWindowId, setSoWindowId] = useState(null);
+    const [soStructure, setSoStructure] = useState(null); // { ungroupedTabs, existingGroups }
+    const [soSummary, setSoSummary] = useState(null); // string
+    const [soWindows, setSoWindows] = useState([]); // for full-page picker
+    const [soLoadingWindows, setSoLoadingWindows] = useState(false);
 
     // Abort controller for the running engine
     const abortControllerRef = useRef(null);
@@ -63,6 +75,12 @@ function AIToolsModal({ updateRemoteData }) {
         setIsCancelling(false);
         setProgressLabel('');
         setProgressFill(0);
+        // Reset Smart Organize panel state
+        setSoWindowId(null);
+        setSoStructure(null);
+        setSoSummary(null);
+        setSoWindows([]);
+        setSoLoadingWindows(false);
         loadAllCollections().then(setCollections).catch((loadError) => {
             console.error('Tabox AI: failed to load collections', loadError);
             setCollections([]);
@@ -209,6 +227,166 @@ function AIToolsModal({ updateRemoteData }) {
         }
     };
 
+    // When entering the smart-organize panel, resolve the target window and read its structure.
+    useEffect(() => {
+        if (activeToolId !== 'smart-organize') return;
+        let cancelled = false;
+
+        const loadPopupWindow = async () => {
+            try {
+                const win = await browser.windows.getCurrent();
+                if (cancelled) return;
+                setSoWindowId(win.id);
+                const structure = await readWindowStructure(win.id);
+                if (cancelled) return;
+                setSoStructure(structure);
+            } catch (e) {
+                console.error('Smart Organize: failed to read current window', e);
+            }
+        };
+
+        const loadFullPageWindows = async () => {
+            setSoLoadingWindows(true);
+            try {
+                const allWins = await browser.windows.getAll({ populate: true });
+                if (cancelled) return;
+                const withStructure = await Promise.all(
+                    allWins.map(async (win) => {
+                        const structure = await readWindowStructure(win.id);
+                        const activeTab = (win.tabs || []).find((t) => t.active);
+                        const label = `${activeTab?.title || 'Window'} (+${(win.tabs || []).length} tabs)`;
+                        return { id: win.id, label, ungroupedCount: structure.eligibleCount, structure };
+                    })
+                );
+                if (cancelled) return;
+                setSoWindows(withStructure);
+            } catch (e) {
+                console.error('Smart Organize: failed to load windows', e);
+            } finally {
+                if (!cancelled) setSoLoadingWindows(false);
+            }
+        };
+
+        if (viewContext !== 'fullpage') {
+            loadPopupWindow();
+        } else {
+            loadFullPageWindows();
+        }
+
+        return () => { cancelled = true; };
+    }, [activeToolId, viewContext]);
+
+    const handleSmartOrganizeSelectWindow = async (win) => {
+        setSoWindowId(win.id);
+        setSoStructure(win.structure);
+    };
+
+    const handleSmartOrganizeRun = async () => {
+        if (panelStatus !== 'idle') return;
+        if (runStartedRef.current) return;
+        runStartedRef.current = true;
+
+        // Pre-flight check
+        const availability = await getAIAvailability();
+        if (availability !== 'available') {
+            runStartedRef.current = false;
+            setError('Tabox AI is not ready on this device. Check the Tabox AI setting.');
+            return;
+        }
+
+        const token = ++runTokenRef.current;
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
+        setPanelStatus('running');
+        setError(null);
+        setSoSummary(null);
+
+        const { ungroupedTabs, existingGroups } = soStructure;
+        let plan;
+        try {
+            plan = await smartOrganizeTabs({ ungroupedTabs, existingGroups, signal: controller.signal });
+        } catch (runError) {
+            if (token !== runTokenRef.current) return;
+            if (runError?.name === 'AbortError') {
+                setPanelStatus('idle');
+                runStartedRef.current = false;
+                return;
+            }
+            console.error('Smart Organize: engine threw:', runError);
+            setError('An unexpected error occurred. Please try again.');
+            setPanelStatus('idle');
+            runStartedRef.current = false;
+            return;
+        }
+
+        if (token !== runTokenRef.current) return;
+
+        let applyResult;
+        try {
+            applyResult = await browser.runtime.sendMessage({
+                type: 'smartOrganizeApply',
+                windowId: soWindowId,
+                plan,
+                createdAt: Date.now(),
+            });
+        } catch (applyError) {
+            if (token !== runTokenRef.current) return;
+            console.error('Smart Organize: apply failed:', applyError);
+            setError('Could not apply the grouping. Please try again.');
+            setPanelStatus('idle');
+            runStartedRef.current = false;
+            return;
+        }
+
+        if (token !== runTokenRef.current) return;
+
+        const { groupsCreated = 0, tabsAdded = 0, skipped: skippedCount = 0 } = applyResult || {};
+        // tabsAdded from applyResult = ALL tabs grouped (new groups + additions).
+        // We need tabs added to EXISTING groups only.
+        const newGroupTabs = plan.newGroups.reduce((sum, g) => sum + g.tabIds.length, 0);
+        const addedToExisting = tabsAdded - newGroupTabs;
+        const summary = `Created ${groupsCreated} groups · added ${Math.max(0, addedToExisting)} tabs to existing groups · ${skippedCount} left ungrouped`;
+        setSoSummary(summary);
+
+        showUndoToast(
+            <BsStars />,
+            'Organized tabs into groups',
+            'Smart Organize',
+            () => browser.runtime.sendMessage({ type: 'smartOrganizeUndo', windowId: soWindowId }),
+            UNDO_TIME,
+        );
+
+        setPanelStatus('done');
+        runStartedRef.current = false;
+    };
+
+    const handleSmartOrganizeSaveAsCollection = async () => {
+        try {
+            let snapshot;
+            if (viewContext !== 'fullpage') {
+                // Popup: capture the current window
+                snapshot = await getCurrentTabsAndGroups('Smart Organize');
+            } else {
+                // Full-page: re-read the picked window's structure and build a snapshot
+                const structure = await readWindowStructure(soWindowId);
+                snapshot = {
+                    name: 'Smart Organize',
+                    tabs: structure.ungroupedTabs.map((t) => ({ id: t.tabId, title: t.title, url: t.url })),
+                    chromeGroups: structure.existingGroups,
+                };
+            }
+            const newCollection = buildCollectionFromSnapshot({ snapshot, name: 'Smart Organize' });
+            const all = await loadAllCollections();
+            await updateRemoteData([...all, newCollection]);
+            showSuccessToast('Collection saved!');
+            close();
+        } catch (e) {
+            console.error('Smart Organize: save as collection failed:', e);
+            setError('Could not save the collection. Please try again.');
+        }
+    };
+
     const n = targets.length;
     const idleDescription = n === 1
         ? 'Automatically rename 1 collection using on-device AI. You can review and undo afterwards.'
@@ -279,6 +457,115 @@ function AIToolsModal({ updateRemoteData }) {
                                 );
                             })}
                         </div>
+                    </div>
+                )}
+
+                {activeToolId === 'smart-organize' && (
+                    <div className="ai-tool-panel">
+                        {/* Full-page window picker */}
+                        {viewContext === 'fullpage' && !soWindowId && (
+                            <div className="ai-so-window-picker">
+                                {soLoadingWindows ? (
+                                    <p className="ai-rename-hint">Loading windows…</p>
+                                ) : (
+                                    <>
+                                        <p className="ai-rename-description">Choose a window to organize:</p>
+                                        <ul className="ai-so-window-list">
+                                            {soWindows.map((win) => (
+                                                <li key={win.id}>
+                                                    <button
+                                                        type="button"
+                                                        className="ai-so-window-item"
+                                                        onClick={() => handleSmartOrganizeSelectWindow(win)}
+                                                    >
+                                                        <span className="ai-so-window-label">{win.label}</span>
+                                                        <span className="ai-so-window-ungrouped">
+                                                            {win.ungroupedCount} ungrouped
+                                                        </span>
+                                                    </button>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Idle state */}
+                        {panelStatus === 'idle' && soStructure && (
+                            <>
+                                {soStructure.eligibleCount === 0 ? (
+                                    <p className="ai-rename-hint">Everything here is already grouped.</p>
+                                ) : (
+                                    <p className="ai-rename-description">
+                                        Organize {soStructure.eligibleCount} ungrouped tabs in this window using AI.
+                                    </p>
+                                )}
+                                {error && <div className="ai-tool-error">{error}</div>}
+                                <button
+                                    type="button"
+                                    className="ai-tool-action-btn"
+                                    onClick={handleSmartOrganizeRun}
+                                    disabled={soStructure.eligibleCount === 0}
+                                    aria-label={`Organize ${soStructure.eligibleCount} ungrouped tabs`}
+                                >
+                                    <BsStars size={14} style={{ marginRight: '6px' }} />
+                                    Organize now
+                                </button>
+                            </>
+                        )}
+
+                        {/* Running state */}
+                        {panelStatus === 'running' && (
+                            <>
+                                <div className="ai-rename-progress">
+                                    <div className="ai-rename-progress-track">
+                                        <div className="ai-rename-progress-fill ai-rename-progress-fill--animated" />
+                                    </div>
+                                    <span className="ai-rename-progress-label">Organizing tabs…</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    className="ai-tool-action-btn ai-tool-action-btn--cancel"
+                                    onClick={handleCancel}
+                                >
+                                    Cancel
+                                </button>
+                            </>
+                        )}
+
+                        {/* Done state */}
+                        {panelStatus === 'done' && (
+                            <>
+                                {error && <div className="ai-tool-error">{error}</div>}
+                                {soSummary && (
+                                    <p className="ai-rename-description ai-so-summary">{soSummary}</p>
+                                )}
+                                <div className="ai-so-done-actions">
+                                    <button
+                                        type="button"
+                                        className="ai-tool-action-btn"
+                                        onClick={handleSmartOrganizeSaveAsCollection}
+                                    >
+                                        Save as collection
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="ai-tool-action-btn ai-tool-action-btn--cancel"
+                                        onClick={() => browser.runtime.sendMessage({ type: 'smartOrganizeUndo', windowId: soWindowId })}
+                                    >
+                                        Undo
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="ai-tool-action-btn ai-tool-action-btn--cancel"
+                                        onClick={close}
+                                    >
+                                        Close
+                                    </button>
+                                </div>
+                            </>
+                        )}
                     </div>
                 )}
 
