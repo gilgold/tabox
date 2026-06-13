@@ -9,12 +9,15 @@ jest.mock('../app/ai/readWindowStructure', () => ({ readWindowStructure: jest.fn
 jest.mock('../app/ai/aiClient', () => ({ getAIAvailability: jest.fn().mockResolvedValue('available') }));
 jest.mock('../app/ai/tasks/smartOrganizeTabs', () => ({ smartOrganizeTabs: jest.fn() }));
 jest.mock('../app/toastHelpers', () => ({ showUndoToast: jest.fn(), showSuccessToast: jest.fn() }));
+jest.mock('../app/ai/captureWindowSnapshot', () => ({ captureWindowSnapshot: jest.fn() }));
 
 import AIToolsModal from '../app/AIToolsModal';
 import { readWindowStructure } from '../app/ai/readWindowStructure';
 import { smartOrganizeTabs } from '../app/ai/tasks/smartOrganizeTabs';
 import { showUndoToast } from '../app/toastHelpers';
 import { browser } from '../static/globals';
+import { captureWindowSnapshot } from '../app/ai/captureWindowSnapshot';
+import { loadAllCollections } from '../app/utils/storageUtils';
 
 const openModal = async () => {
     const store = createStore();
@@ -63,5 +66,46 @@ describe('Smart Organize panel (popup)', () => {
         await openModal();
         fireEvent.click(screen.getByText('Smart Organize'));
         await waitFor(() => expect(screen.getByText(/already grouped/i)).toBeInTheDocument());
+    });
+
+    test('"Save as collection" calls captureWindowSnapshot and persists grouped tabs', async () => {
+        const updateRemoteData = jest.fn().mockResolvedValue(undefined);
+        // Snapshot returned by captureWindowSnapshot includes grouped tabs
+        captureWindowSnapshot.mockResolvedValue({
+            tabs: [
+                { id: 1, url: 'https://a.com', title: 'A', groupId: 10 },
+                { id: 2, url: 'https://b.com', title: 'B', groupId: 10 },
+                { id: 3, url: 'https://c.com', title: 'C', groupId: -1 },
+            ],
+            chromeGroups: [{ id: 10, title: 'Work', color: 'blue' }],
+        });
+        loadAllCollections.mockResolvedValue([]);
+
+        const store = createStore();
+        store.set(aiToolsModalOpenState, true);
+        await act(async () => {
+            render(<Provider store={store}><AIToolsModal updateRemoteData={updateRemoteData} /></Provider>);
+        });
+
+        // Navigate to smart-organize panel
+        fireEvent.click(screen.getByText('Smart Organize'));
+        await waitFor(() => expect(screen.getByRole('button', { name: /organize/i })).toBeInTheDocument());
+
+        // Run organize
+        fireEvent.click(screen.getByRole('button', { name: /organize/i }));
+        await waitFor(() => expect(screen.getByText(/save as collection/i)).toBeInTheDocument());
+
+        // Click save
+        fireEvent.click(screen.getByText(/save as collection/i));
+
+        await waitFor(() => expect(captureWindowSnapshot).toHaveBeenCalledWith(100));
+        await waitFor(() => expect(updateRemoteData).toHaveBeenCalled());
+
+        // The persisted collection should include grouped tabs (groupId 10)
+        const [[savedCollections]] = updateRemoteData.mock.calls;
+        const savedCollection = savedCollections[savedCollections.length - 1];
+        expect(savedCollection.tabs.some((t) => t.groupId === 10)).toBe(true);
+        expect(savedCollection.chromeGroups).toHaveLength(1);
+        expect(savedCollection.chromeGroups[0].id).toBe(10);
     });
 });

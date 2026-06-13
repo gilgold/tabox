@@ -12,7 +12,7 @@ import { getAIAvailability } from './ai/aiClient';
 import { readWindowStructure } from './ai/readWindowStructure';
 import { loadAllCollections } from './utils/storageUtils';
 import { buildCollectionFromSnapshot } from './utils/saveCollectionSnapshot';
-import { getCurrentTabsAndGroups } from './utils';
+import { captureWindowSnapshot } from './ai/captureWindowSnapshot';
 import { showUndoToast, showSuccessToast } from './toastHelpers';
 import { UNDO_TIME } from './constants';
 import { browser } from '../static/globals';
@@ -342,11 +342,9 @@ function AIToolsModal({ updateRemoteData }) {
         if (token !== runTokenRef.current) return;
 
         const { groupsCreated = 0, tabsAdded = 0, skipped: skippedCount = 0 } = applyResult || {};
-        // tabsAdded from applyResult = ALL tabs grouped (new groups + additions).
-        // We need tabs added to EXISTING groups only.
-        const newGroupTabs = plan.newGroups.reduce((sum, g) => sum + g.tabIds.length, 0);
-        const addedToExisting = tabsAdded - newGroupTabs;
-        const summary = `Created ${groupsCreated} groups · added ${Math.max(0, addedToExisting)} tabs to existing groups · ${skippedCount} left ungrouped`;
+        // tabsAdded from applyResult = tabs added to existing groups only (accumulated from plan.additions).
+        const addedToExisting = tabsAdded;
+        const summary = `Created ${groupsCreated} groups · added ${addedToExisting} tabs to existing groups · ${skippedCount} left ungrouped`;
         setSoSummary(summary);
 
         showUndoToast(
@@ -363,19 +361,9 @@ function AIToolsModal({ updateRemoteData }) {
 
     const handleSmartOrganizeSaveAsCollection = async () => {
         try {
-            let snapshot;
-            if (viewContext !== 'fullpage') {
-                // Popup: capture the current window
-                snapshot = await getCurrentTabsAndGroups('Smart Organize');
-            } else {
-                // Full-page: re-read the picked window's structure and build a snapshot
-                const structure = await readWindowStructure(soWindowId);
-                snapshot = {
-                    name: 'Smart Organize',
-                    tabs: structure.ungroupedTabs.map((t) => ({ id: t.tabId, title: t.title, url: t.url })),
-                    chromeGroups: structure.existingGroups,
-                };
-            }
+            // Capture the full window (all non-fullpage tabs with groupIds + real group objects)
+            // for both popup and full-page contexts, keyed by the resolved soWindowId.
+            const snapshot = await captureWindowSnapshot(soWindowId);
             const newCollection = buildCollectionFromSnapshot({ snapshot, name: 'Smart Organize' });
             const all = await loadAllCollections();
             await updateRemoteData([...all, newCollection]);
