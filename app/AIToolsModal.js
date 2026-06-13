@@ -256,16 +256,29 @@ function AIToolsModal({ updateRemoteData }) {
 
                 {!activeToolId && (
                     <div className="ai-tools-list">
-                        {AI_TOOLS.map((tool) => {
+                        {AI_TOOLS.filter((t) => t.featured).map((tool) => {
                             const ToolIcon = tool.icon;
                             return (
-                                <button key={tool.id} type="button" className="ai-tool-card" onClick={() => setActiveToolId(tool.id)}>
-                                    <ToolIcon size={22} className="ai-tool-card-icon" />
-                                    <span className="ai-tool-card-title">{tool.title}</span>
-                                    <span className="ai-tool-card-description">{tool.description}</span>
+                                <button key={tool.id} type="button" className="ai-hero-card" onClick={() => setActiveToolId(tool.id)}>
+                                    <span className="ai-hero-badge">Flagship</span>
+                                    <ToolIcon size={26} className="ai-hero-icon" />
+                                    <span className="ai-hero-title">{tool.title}</span>
+                                    <span className="ai-hero-description">{tool.description}</span>
                                 </button>
                             );
                         })}
+                        <div className="ai-tools-grid">
+                            {AI_TOOLS.filter((t) => !t.featured).map((tool) => {
+                                const ToolIcon = tool.icon;
+                                return (
+                                    <button key={tool.id} type="button" className="ai-tool-card" onClick={() => setActiveToolId(tool.id)}>
+                                        <ToolIcon size={22} className="ai-tool-card-icon" />
+                                        <span className="ai-tool-card-title">{tool.title}</span>
+                                        <span className="ai-tool-card-description">{tool.description}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
                 )}
 
