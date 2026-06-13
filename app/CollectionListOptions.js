@@ -3,6 +3,7 @@ import { useAtomValue, useSetAtom } from 'jotai';
 import { settingsDataState } from './atoms/globalAppSettingsState';
 import { highlightedCollectionUidState } from './atoms/animationsState';
 import AIButton from './AIButton';
+import SmartOrganizeUndoChip from './SmartOrganizeUndoChip';
 import './CollectionListOptions.css';
 import { PiGridNineFill } from "react-icons/pi";
 import { browser } from '../static/globals';
@@ -394,6 +395,7 @@ export function CollectionListOptions(props) {
                         </button>
                     </div>
 
+                    <SmartOrganizeUndoChip />
                     <AIButton withDivider />
                 </div>
             </div>
