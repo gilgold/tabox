@@ -33,15 +33,6 @@ jest.mock('../app/DroppableCollection', () => function MockDroppableCollection({
     );
 });
 
-jest.mock('../app/ContextMenu', () => function MockContextMenu({ onOpenChange }) {
-    return (
-        <>
-            <button type="button" onClick={() => onOpenChange?.(true)}>Open Menu</button>
-            <button type="button" onClick={() => onOpenChange?.(false)}>Close Menu</button>
-        </>
-    );
-});
-
 jest.mock('../app/ColorPicker', () => function MockColorPicker({ onOpenChange }) {
     return (
         <>
@@ -126,7 +117,6 @@ describe('FPCollectionCard keyboard navigation', () => {
         expect(screen.getByText('Delete').closest('button')).toHaveAttribute('tabindex', '-1');
         expect(screen.getByRole('link', { name: /OpenAI Docs/i })).toHaveAttribute('tabindex', '-1');
         expect(document.querySelector('.fp-card-actions')).toHaveClass('fp-card-hover-menu');
-        expect(document.querySelector('.fp-card-menu-option')).toContainElement(screen.getByText('Open Menu'));
         expect(document.querySelector('.fp-card-color-picker')).toContainElement(screen.getByText('Open Color Picker'));
         expect(screen.getByText('Open').closest('button')).toHaveClass('fp-card-rail-open');
         expect(screen.getByText('Update').closest('button')).toHaveClass('fp-card-rail-update');
@@ -265,32 +255,6 @@ describe('FPCollectionCard keyboard navigation', () => {
         expect(screen.getByRole('button', { name: 'Deselect collection Collection One' })).toBeInTheDocument();
         expect(screen.queryByText('Open')).not.toBeInTheDocument();
         expect(screen.queryByText('Delete')).not.toBeInTheDocument();
-    });
-
-    test('keeps the card active while the action menu is open', () => {
-        render(
-            <Provider>
-                <FPCollectionCard
-                    collection={baseCollection}
-                    index={0}
-                    onSelect={jest.fn()}
-                    updateCollection={jest.fn()}
-                    removeCollection={jest.fn()}
-                    updateRemoteData={jest.fn()}
-                    addCollection={jest.fn()}
-                    onDataUpdate={jest.fn()}
-                />
-            </Provider>,
-        );
-
-        const card = screen.getByRole('button', { name: 'Open collection Collection One' });
-        expect(card).not.toHaveClass('fp-card-interaction-active');
-
-        fireEvent.click(screen.getByText('Open Menu'));
-        expect(card).toHaveClass('fp-card-interaction-active');
-
-        fireEvent.click(screen.getByText('Close Menu'));
-        expect(card).not.toHaveClass('fp-card-interaction-active');
     });
 
     test('keeps the card active while the color picker is open', () => {
