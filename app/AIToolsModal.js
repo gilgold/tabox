@@ -13,6 +13,7 @@ import { readWindowStructure } from './ai/readWindowStructure';
 import { loadAllCollections } from './utils/storageUtils';
 import { buildCollectionFromSnapshot } from './utils/saveCollectionSnapshot';
 import { captureWindowSnapshot } from './ai/captureWindowSnapshot';
+import { useSmartOrganizeUndo } from './ai/useSmartOrganizeUndo';
 import { showUndoToast, showSuccessToast } from './toastHelpers';
 import { UNDO_TIME } from './constants';
 import { browser } from '../static/globals';
@@ -44,6 +45,9 @@ function AIToolsModal({ updateRemoteData }) {
     const [soSummary, setSoSummary] = useState(null); // string
     const [soWindows, setSoWindows] = useState([]); // for full-page picker
     const [soLoadingWindows, setSoLoadingWindows] = useState(false);
+
+    // Persistent Smart Organize undo snapshot (survives popup close)
+    const { snapshot: soUndoSnapshot, undo: soUndoLast } = useSmartOrganizeUndo();
 
     // Abort controller for the running engine
     const abortControllerRef = useRef(null);
@@ -281,6 +285,27 @@ function AIToolsModal({ updateRemoteData }) {
         setSoStructure(win.structure);
     };
 
+    // Re-read the target window structure and reset to idle (used after undo)
+    const reloadWindowAndGoIdle = async (windowId) => {
+        setSoSummary(null);
+        setPanelStatus('idle');
+        if (!windowId) return;
+        try {
+            const token = runTokenRef.current;
+            const structure = await readWindowStructure(windowId);
+            if (token !== runTokenRef.current) return;
+            setSoStructure(structure);
+        } catch (e) {
+            console.error('Smart Organize: failed to re-read window after undo', e);
+        }
+    };
+
+    const handleSmartOrganizeUndoLast = async () => {
+        const windowId = soUndoSnapshot?.windowId ?? soWindowId;
+        await soUndoLast();
+        await reloadWindowAndGoIdle(windowId);
+    };
+
     const handleSmartOrganizeRun = async () => {
         if (panelStatus !== 'idle') return;
         if (runStartedRef.current) return;
@@ -500,6 +525,17 @@ function AIToolsModal({ updateRemoteData }) {
                                     <BsStars size={14} style={{ marginRight: '6px' }} />
                                     Organize now
                                 </button>
+                                {soUndoSnapshot && (
+                                    <div className="ai-so-undo-row">
+                                        <button
+                                            type="button"
+                                            className="ai-so-undo-btn"
+                                            onClick={handleSmartOrganizeUndoLast}
+                                        >
+                                            ↩ Undo last organize
+                                        </button>
+                                    </div>
+                                )}
                             </>
                         )}
 
@@ -540,7 +576,7 @@ function AIToolsModal({ updateRemoteData }) {
                                     <button
                                         type="button"
                                         className="ai-tool-action-btn ai-tool-action-btn--cancel"
-                                        onClick={() => browser.runtime.sendMessage({ type: 'smartOrganizeUndo', windowId: soWindowId })}
+                                        onClick={handleSmartOrganizeUndoLast}
                                     >
                                         Undo
                                     </button>

@@ -10,6 +10,7 @@ jest.mock('../app/ai/aiClient', () => ({ getAIAvailability: jest.fn().mockResolv
 jest.mock('../app/ai/tasks/smartOrganizeTabs', () => ({ smartOrganizeTabs: jest.fn() }));
 jest.mock('../app/toastHelpers', () => ({ showUndoToast: jest.fn(), showSuccessToast: jest.fn() }));
 jest.mock('../app/ai/captureWindowSnapshot', () => ({ captureWindowSnapshot: jest.fn() }));
+jest.mock('../app/ai/useSmartOrganizeUndo', () => ({ useSmartOrganizeUndo: jest.fn() }));
 
 import AIToolsModal from '../app/AIToolsModal';
 import { readWindowStructure } from '../app/ai/readWindowStructure';
@@ -18,6 +19,12 @@ import { showUndoToast } from '../app/toastHelpers';
 import { browser } from '../static/globals';
 import { captureWindowSnapshot } from '../app/ai/captureWindowSnapshot';
 import { loadAllCollections } from '../app/utils/storageUtils';
+import { useSmartOrganizeUndo } from '../app/ai/useSmartOrganizeUndo';
+
+// Default: no persistent undo snapshot
+beforeEach(() => {
+    useSmartOrganizeUndo.mockReturnValue({ snapshot: null, undo: jest.fn().mockResolvedValue(undefined), dismiss: jest.fn() });
+});
 
 const openModal = async () => {
     const store = createStore();
@@ -107,5 +114,65 @@ describe('Smart Organize panel (popup)', () => {
         expect(savedCollection.tabs.some((t) => t.groupId === 10)).toBe(true);
         expect(savedCollection.chromeGroups).toHaveLength(1);
         expect(savedCollection.chromeGroups[0].id).toBe(10);
+    });
+});
+
+describe('Smart Organize — in-modal undo affordance', () => {
+    beforeEach(() => {
+        browser.windows.getCurrent = jest.fn().mockResolvedValue({ id: 100 });
+        browser.runtime.sendMessage = jest.fn().mockResolvedValue({ success: true, groupsCreated: 2, tabsAdded: 3, skipped: 0 });
+        readWindowStructure.mockResolvedValue({
+            ungroupedTabs: [{ tabId: 1, title: 'A', url: 'https://a.com' }],
+            existingGroups: [], eligibleCount: 1,
+        });
+        smartOrganizeTabs.mockResolvedValue({ newGroups: [{ name: 'Work', color: 'blue', tabIds: [1] }], additions: [], skippedTabIds: [] });
+    });
+
+    test('done-state Undo calls undo message and transitions panel back to idle, clearing the summary', async () => {
+        const undoFn = jest.fn().mockResolvedValue(undefined);
+        useSmartOrganizeUndo.mockReturnValue({ snapshot: null, undo: undoFn, dismiss: jest.fn() });
+
+        await openModal();
+        fireEvent.click(screen.getByText('Smart Organize'));
+        await waitFor(() => expect(screen.getByRole('button', { name: /organize/i })).toBeInTheDocument());
+
+        // Run organize → done state
+        fireEvent.click(screen.getByRole('button', { name: /organize/i }));
+        await waitFor(() => expect(screen.getByText(/created 2 groups/i)).toBeInTheDocument());
+
+        // Undo — after this the panel should be idle and summary gone
+        fireEvent.click(screen.getByRole('button', { name: /^undo$/i }));
+
+        await waitFor(() => expect(undoFn).toHaveBeenCalled());
+        await waitFor(() => expect(screen.queryByText(/created 2 groups/i)).not.toBeInTheDocument());
+        // Panel is back to idle — "Organize now" button should be visible
+        await waitFor(() => expect(screen.getByRole('button', { name: /organize/i })).toBeInTheDocument());
+    });
+
+    test('idle state shows "Undo last organize" row when a persistent snapshot exists', async () => {
+        const undoFn = jest.fn().mockResolvedValue(undefined);
+        useSmartOrganizeUndo.mockReturnValue({
+            snapshot: { windowId: 100, createdAt: Date.now() },
+            undo: undoFn,
+            dismiss: jest.fn(),
+        });
+
+        await openModal();
+        fireEvent.click(screen.getByText('Smart Organize'));
+        await waitFor(() => expect(screen.getByText(/undo last organize/i)).toBeInTheDocument());
+
+        fireEvent.click(screen.getByText(/undo last organize/i));
+
+        await waitFor(() => expect(undoFn).toHaveBeenCalled());
+    });
+
+    test('idle state does not show "Undo last organize" when no snapshot', async () => {
+        useSmartOrganizeUndo.mockReturnValue({ snapshot: null, undo: jest.fn(), dismiss: jest.fn() });
+
+        await openModal();
+        fireEvent.click(screen.getByText('Smart Organize'));
+        await waitFor(() => expect(screen.getByRole('button', { name: /organize/i })).toBeInTheDocument());
+
+        expect(screen.queryByText(/undo last organize/i)).not.toBeInTheDocument();
     });
 });
