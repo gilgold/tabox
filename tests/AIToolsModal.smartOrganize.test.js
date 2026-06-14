@@ -7,23 +7,41 @@ import { aiToolsModalOpenState } from '../app/atoms/aiState';
 jest.mock('../app/utils/storageUtils', () => ({ loadAllCollections: jest.fn().mockResolvedValue([]) }));
 jest.mock('../app/ai/readWindowStructure', () => ({ readWindowStructure: jest.fn().mockResolvedValue({ ungroupedTabs: [], existingGroups: [], eligibleCount: 0 }) }));
 jest.mock('../app/ai/aiClient', () => ({ getAIAvailability: jest.fn().mockResolvedValue('available') }));
-jest.mock('../app/ai/tasks/smartOrganizeTabs', () => ({ smartOrganizeTabs: jest.fn() }));
 jest.mock('../app/toastHelpers', () => ({ showUndoToast: jest.fn(), showSuccessToast: jest.fn() }));
 jest.mock('../app/ai/captureWindowSnapshot', () => ({ captureWindowSnapshot: jest.fn() }));
 jest.mock('../app/ai/useSmartOrganizeUndo', () => ({ useSmartOrganizeUndo: jest.fn() }));
 
 import AIToolsModal from '../app/AIToolsModal';
 import { readWindowStructure } from '../app/ai/readWindowStructure';
-import { smartOrganizeTabs } from '../app/ai/tasks/smartOrganizeTabs';
 import { showUndoToast } from '../app/toastHelpers';
 import { browser } from '../static/globals';
 import { captureWindowSnapshot } from '../app/ai/captureWindowSnapshot';
 import { loadAllCollections } from '../app/utils/storageUtils';
 import { useSmartOrganizeUndo } from '../app/ai/useSmartOrganizeUndo';
 
+// Captured storage.onChanged listener(s) so tests can simulate the SW writing
+// aiTaskState. The modal (and any undo hooks) register listeners; fan changes
+// out to all of them.
+let storageListeners;
+
+const fireStorageChange = async (newValue) => {
+    await act(async () => {
+        storageListeners.forEach((fn) => fn({ aiTaskState: { newValue } }, 'local'));
+    });
+};
+
+// The plan the SW writes into aiTaskState.results for a finished planning run.
+const PLAN = { newGroups: [{ name: 'Docs', color: 'blue', tabIds: [1, 2] }], additions: [], skippedTabIds: [] };
+const donePlanState = (taskId = 'so1', results = PLAN) => ({ taskId, type: 'smart-organize', status: 'done', results });
+
 // Default: no persistent undo snapshot
 beforeEach(() => {
     useSmartOrganizeUndo.mockReturnValue({ snapshot: null, undo: jest.fn().mockResolvedValue(undefined), dismiss: jest.fn() });
+    storageListeners = [];
+    browser.storage.onChanged.addListener = jest.fn((fn) => { storageListeners.push(fn); });
+    browser.storage.onChanged.removeListener = jest.fn((fn) => {
+        storageListeners = storageListeners.filter((f) => f !== fn);
+    });
 });
 
 const openModal = async () => {
@@ -36,6 +54,7 @@ const openModal = async () => {
 };
 
 test('renders Smart Organize as a featured hero card', async () => {
+    browser.runtime.sendMessage = jest.fn().mockResolvedValue(null);
     await openModal();
     expect(screen.getByText('Smart Organize')).toBeInTheDocument();
     expect(document.querySelector('.ai-hero-card')).toBeInTheDocument();
@@ -44,27 +63,78 @@ test('renders Smart Organize as a featured hero card', async () => {
 describe('Smart Organize panel (popup)', () => {
     beforeEach(() => {
         browser.windows.getCurrent = jest.fn().mockResolvedValue({ id: 100 });
-        browser.runtime.sendMessage = jest.fn().mockResolvedValue({ success: true, groupsCreated: 2, tabsAdded: 5, skipped: 0 });
+        browser.runtime.sendMessage = jest.fn().mockImplementation((msg) => {
+            if (msg.type === 'aiGetState') return Promise.resolve(null);
+            if (msg.type === 'smartOrganizeApply') return Promise.resolve({ success: true, groupsCreated: 2, tabsAdded: 5, skipped: 0 });
+            return Promise.resolve({});
+        });
         readWindowStructure.mockResolvedValue({
             ungroupedTabs: [{ tabId: 1, title: 'A', url: 'https://a.com' }, { tabId: 2, title: 'B', url: 'https://b.com' }],
             existingGroups: [], eligibleCount: 2,
         });
-        smartOrganizeTabs.mockResolvedValue({ newGroups: [{ name: 'Docs', color: 'blue', tabIds: [1, 2] }], additions: [], skippedTabIds: [] });
     });
 
-    test('shows the ungrouped count, runs, applies, and fires the undo toast', async () => {
+    test('clicking organize dispatches aiRun(smart-organize) with the windowId', async () => {
         await openModal();
         fireEvent.click(screen.getByText('Smart Organize'));
         await waitFor(() => expect(screen.getByText(/2 ungrouped tabs/i)).toBeInTheDocument());
 
-        fireEvent.click(screen.getByRole('button', { name: /organize/i }));
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /organize/i })); });
 
-        await waitFor(() => expect(smartOrganizeTabs).toHaveBeenCalled());
-        await waitFor(() => expect(browser.runtime.sendMessage).toHaveBeenCalledWith(
-            expect.objectContaining({ type: 'smartOrganizeApply', windowId: 100 })
-        ));
+        await waitFor(() => {
+            const runCall = browser.runtime.sendMessage.mock.calls.find((c) => c[0].type === 'aiRun');
+            expect(runCall).toBeTruthy();
+            expect(runCall[0]).toEqual({ type: 'aiRun', task: 'smart-organize', params: { windowId: 100 } });
+        });
+    });
+
+    test('a done plan state applies the plan, renders the summary, and fires the undo toast', async () => {
+        await openModal();
+        fireEvent.click(screen.getByText('Smart Organize'));
+        await waitFor(() => expect(screen.getByText(/2 ungrouped tabs/i)).toBeInTheDocument());
+
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /organize/i })); });
+        await waitFor(() => expect(browser.runtime.sendMessage.mock.calls.some((c) => c[0].type === 'aiRun')).toBe(true));
+
+        await fireStorageChange(donePlanState());
+
+        await waitFor(() => {
+            const applyCall = browser.runtime.sendMessage.mock.calls.find((c) => c[0].type === 'smartOrganizeApply');
+            expect(applyCall).toBeTruthy();
+            expect(applyCall[0]).toMatchObject({ type: 'smartOrganizeApply', windowId: 100, plan: PLAN });
+        });
+
         await waitFor(() => expect(showUndoToast).toHaveBeenCalled());
         expect(screen.getByText(/created 2 groups/i)).toBeInTheDocument();
+    });
+
+    test('the undo toast action sends smartOrganizeUndo', async () => {
+        await openModal();
+        fireEvent.click(screen.getByText('Smart Organize'));
+        await waitFor(() => expect(screen.getByText(/2 ungrouped tabs/i)).toBeInTheDocument());
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /organize/i })); });
+
+        await fireStorageChange(donePlanState());
+        await waitFor(() => expect(showUndoToast).toHaveBeenCalled());
+
+        const undoFn = showUndoToast.mock.calls[0][3];
+        browser.runtime.sendMessage.mockClear();
+        await act(async () => { await undoFn(); });
+        expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'smartOrganizeUndo', windowId: 100 });
+    });
+
+    test('applies the plan only once even if the done state re-renders', async () => {
+        await openModal();
+        fireEvent.click(screen.getByText('Smart Organize'));
+        await waitFor(() => expect(screen.getByText(/2 ungrouped tabs/i)).toBeInTheDocument());
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /organize/i })); });
+
+        await fireStorageChange(donePlanState('so1'));
+        await fireStorageChange(donePlanState('so1'));
+
+        await waitFor(() => expect(screen.getByText(/created 2 groups/i)).toBeInTheDocument());
+        const applyCalls = browser.runtime.sendMessage.mock.calls.filter((c) => c[0].type === 'smartOrganizeApply');
+        expect(applyCalls).toHaveLength(1);
     });
 
     test('disables run when there are no ungrouped tabs', async () => {
@@ -76,7 +146,6 @@ describe('Smart Organize panel (popup)', () => {
 
     test('"Save as collection" calls captureWindowSnapshot and persists grouped tabs', async () => {
         const updateRemoteData = jest.fn().mockResolvedValue(undefined);
-        // Snapshot returned by captureWindowSnapshot includes grouped tabs
         captureWindowSnapshot.mockResolvedValue({
             tabs: [
                 { id: 1, url: 'https://a.com', title: 'A', groupId: 10 },
@@ -93,38 +162,54 @@ describe('Smart Organize panel (popup)', () => {
             render(<Provider store={store}><AIToolsModal updateRemoteData={updateRemoteData} /></Provider>);
         });
 
-        // Navigate to smart-organize panel
         fireEvent.click(screen.getByText('Smart Organize'));
         await waitFor(() => expect(screen.getByRole('button', { name: /organize/i })).toBeInTheDocument());
 
-        // Run organize
-        fireEvent.click(screen.getByRole('button', { name: /organize/i }));
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /organize/i })); });
+        await fireStorageChange(donePlanState());
         await waitFor(() => expect(screen.getByText(/save as collection/i)).toBeInTheDocument());
 
-        // Click save
         fireEvent.click(screen.getByText(/save as collection/i));
 
         await waitFor(() => expect(captureWindowSnapshot).toHaveBeenCalledWith(100));
         await waitFor(() => expect(updateRemoteData).toHaveBeenCalled());
 
-        // The persisted collection should include grouped tabs (groupId 10)
         const [[savedCollections]] = updateRemoteData.mock.calls;
         const savedCollection = savedCollections[savedCollections.length - 1];
         expect(savedCollection.tabs.some((t) => t.groupId === 10)).toBe(true);
         expect(savedCollection.chromeGroups).toHaveLength(1);
         expect(savedCollection.chromeGroups[0].id).toBe(10);
     });
+
+    test('reopening while planning is running shows the running panel (reattach)', async () => {
+        browser.runtime.sendMessage = jest.fn().mockImplementation((msg) => {
+            if (msg.type === 'aiGetState') {
+                return Promise.resolve({ taskId: 'so-run', type: 'smart-organize', status: 'running' });
+            }
+            return Promise.resolve({});
+        });
+
+        await openModal();
+
+        // The running panel renders without clicking the card: the "Organizing tabs…"
+        // label proves activeToolId auto-selected to smart-organize on reattach.
+        await waitFor(() => expect(screen.getByText(/Organizing tabs…/i)).toBeInTheDocument());
+        expect(screen.queryByRole('button', { name: /organize now/i })).not.toBeInTheDocument();
+    });
 });
 
 describe('Smart Organize — in-modal undo affordance', () => {
     beforeEach(() => {
         browser.windows.getCurrent = jest.fn().mockResolvedValue({ id: 100 });
-        browser.runtime.sendMessage = jest.fn().mockResolvedValue({ success: true, groupsCreated: 2, tabsAdded: 3, skipped: 0 });
+        browser.runtime.sendMessage = jest.fn().mockImplementation((msg) => {
+            if (msg.type === 'aiGetState') return Promise.resolve(null);
+            if (msg.type === 'smartOrganizeApply') return Promise.resolve({ success: true, groupsCreated: 2, tabsAdded: 3, skipped: 0 });
+            return Promise.resolve({});
+        });
         readWindowStructure.mockResolvedValue({
             ungroupedTabs: [{ tabId: 1, title: 'A', url: 'https://a.com' }],
             existingGroups: [], eligibleCount: 1,
         });
-        smartOrganizeTabs.mockResolvedValue({ newGroups: [{ name: 'Work', color: 'blue', tabIds: [1] }], additions: [], skippedTabIds: [] });
     });
 
     test('done-state Undo calls undo message and transitions panel back to idle, clearing the summary', async () => {
@@ -135,16 +220,14 @@ describe('Smart Organize — in-modal undo affordance', () => {
         fireEvent.click(screen.getByText('Smart Organize'));
         await waitFor(() => expect(screen.getByRole('button', { name: /organize/i })).toBeInTheDocument());
 
-        // Run organize → done state
-        fireEvent.click(screen.getByRole('button', { name: /organize/i }));
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /organize/i })); });
+        await fireStorageChange(donePlanState());
         await waitFor(() => expect(screen.getByText(/created 2 groups/i)).toBeInTheDocument());
 
-        // Undo — after this the panel should be idle and summary gone
         fireEvent.click(screen.getByRole('button', { name: /^undo$/i }));
 
         await waitFor(() => expect(undoFn).toHaveBeenCalled());
         await waitFor(() => expect(screen.queryByText(/created 2 groups/i)).not.toBeInTheDocument());
-        // Panel is back to idle — "Organize now" button should be visible
         await waitFor(() => expect(screen.getByRole('button', { name: /organize/i })).toBeInTheDocument());
     });
 

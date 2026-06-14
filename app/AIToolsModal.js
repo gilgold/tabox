@@ -6,7 +6,6 @@ import { BsStars } from 'react-icons/bs';
 import { aiToolsModalOpenState, aiToolsScopeState, aiProcessingUidsState, aiProcessingCurrentUidState } from './atoms/aiState';
 import { viewContextState } from './atoms/globalAppSettingsState';
 import { AI_TOOLS } from './ai/aiTasks';
-import { smartOrganizeTabs } from './ai/tasks/smartOrganizeTabs';
 import { getAIAvailability } from './ai/aiClient';
 import { readWindowStructure } from './ai/readWindowStructure';
 import { loadAllCollections } from './utils/storageUtils';
@@ -390,70 +389,93 @@ function AIToolsModal({ updateRemoteData }) {
             return;
         }
 
-        const token = ++runTokenRef.current;
-        const controller = new AbortController();
-        abortControllerRef.current = controller;
+        // Allow a fresh apply/toast for the run we're about to start.
+        toastedTaskIdRef.current = null;
 
         setPanelStatus('running');
         setError(null);
         setSoSummary(null);
 
-        const { ungroupedTabs, existingGroups } = soStructure;
-        let plan;
-        try {
-            plan = await smartOrganizeTabs({ ungroupedTabs, existingGroups, signal: controller.signal });
-        } catch (runError) {
-            if (token !== runTokenRef.current) return;
-            if (runError?.name === 'AbortError') {
-                setPanelStatus('idle');
-                runStartedRef.current = false;
-                return;
-            }
-            console.error('Smart Organize: engine threw:', runError);
+        // Planning only — the SW reads the window, calls the AI, and writes the
+        // plan to aiTaskState. The aiTaskState→UI effect applies it on 'done'.
+        dispatchAiRun('smart-organize', { windowId: soWindowId }).catch((runError) => {
+            console.error('Tabox AI: aiRun(smart-organize) dispatch failed:', runError);
+            setError('An unexpected error occurred. Please try again.');
+            setPanelStatus('idle');
+            runStartedRef.current = false;
+        });
+    };
+
+    // Drive the Smart-Organize panel UI from the service-worker-owned aiTaskState.
+    // The SW does planning only; this effect applies the plan (via the existing
+    // smartOrganizeApply message) when it observes the plan is done.
+    useEffect(() => {
+        if (activeToolId !== 'smart-organize') return;
+        if (!aiTaskState || aiTaskState.type !== 'smart-organize') return;
+
+        const { status, results, taskId } = aiTaskState;
+
+        if (status === 'running') {
+            setPanelStatus('running');
+            return;
+        }
+
+        if (status === 'cancelled') {
+            setPanelStatus('idle');
+            runStartedRef.current = false;
+            return;
+        }
+
+        if (status === 'error') {
             setError('An unexpected error occurred. Please try again.');
             setPanelStatus('idle');
             runStartedRef.current = false;
             return;
         }
 
-        if (token !== runTokenRef.current) return;
+        if (status === 'done' && results) {
+            // Apply is async; guard once-per-taskId BEFORE awaiting so a React
+            // re-render can't re-enter and double-apply the same plan.
+            if (toastedTaskIdRef.current === taskId) return;
+            // The window must be resolved before we can apply; the effect re-runs
+            // when soWindowId lands (it's in deps).
+            if (!soWindowId) return;
+            toastedTaskIdRef.current = taskId;
 
-        let applyResult;
-        try {
-            applyResult = await browser.runtime.sendMessage({
-                type: 'smartOrganizeApply',
-                windowId: soWindowId,
-                plan,
-                createdAt: Date.now(),
-            });
-        } catch (applyError) {
-            if (token !== runTokenRef.current) return;
-            console.error('Smart Organize: apply failed:', applyError);
-            setError('Could not apply the grouping. Please try again.');
-            setPanelStatus('idle');
-            runStartedRef.current = false;
-            return;
+            (async () => {
+                let applyResult;
+                try {
+                    applyResult = await browser.runtime.sendMessage({
+                        type: 'smartOrganizeApply',
+                        windowId: soWindowId,
+                        plan: results,
+                        createdAt: Date.now(),
+                    });
+                } catch (applyError) {
+                    console.error('Smart Organize: apply failed:', applyError);
+                    setError('Could not apply the grouping. Please try again.');
+                    setPanelStatus('idle');
+                    runStartedRef.current = false;
+                    return;
+                }
+
+                const { groupsCreated = 0, tabsAdded = 0, skipped: skippedCount = 0 } = applyResult || {};
+                const summary = `Created ${groupsCreated} groups · added ${tabsAdded} tabs to existing groups · ${skippedCount} left ungrouped`;
+                setSoSummary(summary);
+
+                showUndoToast(
+                    <BsStars />,
+                    'Organized tabs into groups',
+                    'Smart Organize',
+                    () => browser.runtime.sendMessage({ type: 'smartOrganizeUndo', windowId: soWindowId }),
+                    UNDO_TIME,
+                );
+
+                setPanelStatus('done');
+                runStartedRef.current = false;
+            })();
         }
-
-        if (token !== runTokenRef.current) return;
-
-        const { groupsCreated = 0, tabsAdded = 0, skipped: skippedCount = 0 } = applyResult || {};
-        // tabsAdded from applyResult = tabs added to existing groups only (accumulated from plan.additions).
-        const addedToExisting = tabsAdded;
-        const summary = `Created ${groupsCreated} groups · added ${addedToExisting} tabs to existing groups · ${skippedCount} left ungrouped`;
-        setSoSummary(summary);
-
-        showUndoToast(
-            <BsStars />,
-            'Organized tabs into groups',
-            'Smart Organize',
-            () => browser.runtime.sendMessage({ type: 'smartOrganizeUndo', windowId: soWindowId }),
-            UNDO_TIME,
-        );
-
-        setPanelStatus('done');
-        runStartedRef.current = false;
-    };
+    }, [aiTaskState, activeToolId, soWindowId]);
 
     const handleSmartOrganizeSaveAsCollection = async () => {
         try {
