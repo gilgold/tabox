@@ -56,6 +56,10 @@ function AIToolsModal({ updateRemoteData }) {
 
     // Auto-Arrange panel state
     const [aaSummary, setAaSummary] = useState(null);
+    // Auto-Arrange determinate progress: collections filed (paced) of total.
+    const [aaFiled, setAaFiled] = useState(0);
+    const [aaTotal, setAaTotal] = useState(0);
+    const aaTickRef = useRef(null);
     const { snapshot: aaUndoSnapshot, undo: aaUndoLast } = useAutoArrangeUndo();
 
     // Abort controller for the running engine
@@ -95,6 +99,9 @@ function AIToolsModal({ updateRemoteData }) {
         setSoWindows([]);
         setSoLoadingWindows(false);
         setAaSummary(null);
+        setAaFiled(0);
+        setAaTotal(0);
+        stopAaTicker();
         loadAllCollections().then(setCollections).catch((loadError) => {
             console.error('Tabox AI: failed to load collections', loadError);
             setCollections([]);
@@ -106,6 +113,10 @@ function AIToolsModal({ updateRemoteData }) {
         return () => {
             if (abortControllerRef.current) {
                 abortControllerRef.current.abort();
+            }
+            if (aaTickRef.current) {
+                clearInterval(aaTickRef.current);
+                aaTickRef.current = null;
             }
             setAiProcessingUids([]);
             setAiProcessingCurrentUid(null);
@@ -413,6 +424,13 @@ function AIToolsModal({ updateRemoteData }) {
         }
     };
 
+    const stopAaTicker = () => {
+        if (aaTickRef.current) {
+            clearInterval(aaTickRef.current);
+            aaTickRef.current = null;
+        }
+    };
+
     const handleAutoArrangeRun = async () => {
         if (panelStatus !== 'idle' || rootCollections.length === 0) return;
         if (runStartedRef.current) return;
@@ -434,6 +452,17 @@ function AIToolsModal({ updateRemoteData }) {
         setIsCancelling(false);
         setAaSummary(null);
 
+        // Paced determinate progress: tick the filed count up toward the total
+        // while the (single, opaque) AI plan + batch apply run. Held one short of
+        // the total until the real result lands, then snapped to the moved count.
+        const total = rootCollections.length;
+        setAaTotal(total);
+        setAaFiled(0);
+        stopAaTicker();
+        aaTickRef.current = setInterval(() => {
+            setAaFiled((prev) => (prev < total - 1 ? prev + 1 : prev));
+        }, 700);
+
         let plan;
         try {
             const folders = await loadAllFolders({ metadataOnly: true });
@@ -444,6 +473,7 @@ function AIToolsModal({ updateRemoteData }) {
                 signal: controller.signal,
             });
         } catch (runError) {
+            stopAaTicker();
             if (token !== runTokenRef.current) return;
             if (runError?.name === 'AbortError') {
                 setPanelStatus('idle');
@@ -457,12 +487,13 @@ function AIToolsModal({ updateRemoteData }) {
             return;
         }
 
-        if (token !== runTokenRef.current) return;
+        if (token !== runTokenRef.current) { stopAaTicker(); return; }
 
         let applyResult;
         try {
             applyResult = await applyAutoArrange(plan);
         } catch (applyError) {
+            stopAaTicker();
             if (token !== runTokenRef.current) return;
             console.error('Auto-Arrange: apply failed:', applyError);
             setError('Could not arrange the collections. Please try again.');
@@ -471,9 +502,11 @@ function AIToolsModal({ updateRemoteData }) {
             return;
         }
 
-        if (token !== runTokenRef.current) return;
+        if (token !== runTokenRef.current) { stopAaTicker(); return; }
 
+        stopAaTicker();
         const { foldersCreated = 0, collectionsMoved = 0 } = applyResult || {};
+        setAaFiled(collectionsMoved);
         const summary = `Filed ${collectionsMoved} collection${collectionsMoved === 1 ? '' : 's'} into folders · created ${foldersCreated} new folder${foldersCreated === 1 ? '' : 's'}`;
         setAaSummary(summary);
 
@@ -862,9 +895,16 @@ function AIToolsModal({ updateRemoteData }) {
                                 <AutoArrangeFoldAnimation />
                                 <div className="ai-rename-progress">
                                     <div className="ai-rename-progress-track">
-                                        <div className="ai-rename-progress-fill ai-rename-progress-fill--animated" />
+                                        <div
+                                            className="ai-rename-progress-fill"
+                                            style={{ width: `${aaTotal ? Math.round((aaFiled / aaTotal) * 100) : 0}%` }}
+                                        />
                                     </div>
-                                    <span className="ai-rename-progress-label">Arranging collections…</span>
+                                    <span className="ai-rename-progress-label">
+                                        {aaTotal
+                                            ? `Filing ${aaFiled} of ${aaTotal} collection${aaTotal === 1 ? '' : 's'}…`
+                                            : 'Arranging collections…'}
+                                    </span>
                                 </div>
                                 <button
                                     type="button"
