@@ -28,4 +28,33 @@ describe('ai-planners module', () => {
         expect(other.tabIds).toContain(2);
         expect(GROUP_COLORS).toContain('blue');
     });
+
+    test('normalizeArrangePlan merges a new folder name that case-insensitively matches an existing folder', () => {
+        const out = normalizeArrangePlan(
+            { assignments: [{ collectionId: 'a', existingFolderId: null, newFolderName: 'work' }] },
+            [{ uid: 'a', name: 'A' }],
+            [{ id: 'f1', name: 'Work' }],
+        );
+        expect(out.assignments[0]).toEqual({ collectionId: 'a', existingFolderId: 'f1', newFolderName: null });
+    });
+
+    test('normalizeOrganizePlan routes tabs to an existing group via additions', () => {
+        const tabs = [{ tabId: 1 }, { tabId: 2 }];
+        const out = normalizeOrganizePlan(
+            { groups: [{ existingGroupId: 99, tabIndexes: [1, 2] }] },
+            tabs,
+            [{ id: 99, title: 'Work' }],
+        );
+        expect(out.additions).toEqual([{ groupId: 99, tabIds: [1, 2] }]);
+        expect(out.newGroups).toEqual([]);
+    });
+
+    test('normalizeOrganizePlan replaces an invalid color with a GROUP_COLORS value', () => {
+        const out = normalizeOrganizePlan(
+            { groups: [{ name: 'G', color: 'not-a-color', tabIndexes: [1] }] },
+            [{ tabId: 1 }],
+            [],
+        );
+        expect(GROUP_COLORS).toContain(out.newGroups[0].color);
+    });
 });

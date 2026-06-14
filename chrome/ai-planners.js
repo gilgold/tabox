@@ -44,6 +44,7 @@ function buildNamePrompt(collection) {
 // autoArrangeCollections constants + builders + normalizer
 // ---------------------------------------------------------------------------
 
+// Auto-arrange folder-name cap; kept distinct from MAX_NAME_LENGTH (collection names) so the two limits can diverge independently.
 const ARRANGE_MAX_NAME_LENGTH = 50;
 const MAX_COLLECTIONS = 20; // bounds prompt length
 const MAX_TITLES_PER_COLLECTION = 5; // bounds prompt length
