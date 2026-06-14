@@ -264,6 +264,7 @@ async function applySyncSnapshotAtomically({ storageArea, syncData, now = Date.n
 const syncApplyApi = {
     STORAGE_KEYS,
     buildIndexedSyncPayload,
+    isSyncManagedKey,
     applySyncSnapshotAtomically
 };
 
