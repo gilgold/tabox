@@ -1441,23 +1441,37 @@ try {
           });
         }
         
-        // Check if there's a persistent auth error that requires user action
+        // Check if there's a persistent auth error that requires user action.
+        // A stored error can go stale: a dev build with missing credentials, or a
+        // transient failure that has since recovered, would otherwise lock the user
+        // out forever because this early return runs before the token is ever
+        // re-validated (and before the clear at the bottom of this handler). So when a
+        // refresh token is still present, try to obtain a token first — if that works
+        // the stored error is stale and we clear it and continue normally.
         if (syncAuthError && syncAuthError.type) {
-          logSyncOperation('info', 'Auth error detected, user needs to re-authenticate', {
+          const recoveryToken = googleRefreshToken ? await getAuthToken() : false;
+          if (recoveryToken === false) {
+            logSyncOperation('info', 'Auth error detected, user needs to re-authenticate', {
+              errorType: syncAuthError.type,
+              age: Date.now() - syncAuthError.timestamp
+            });
+            await updateSharedSyncSessionState({
+              status: SYNC_SESSION_STATUS.AUTH_REQUIRED,
+              error: syncAuthError.message || 'Please sign out and sign back in to restore sync.'
+            });
+            return Promise.resolve({
+              ...googleUser,
+              syncStatus: 'auth_required',
+              syncError: syncAuthError.message || 'Please sign out and sign back in to restore sync.'
+            });
+          }
+          logSyncOperation('info', 'Cleared stale sync auth error after recovering a valid token', {
             errorType: syncAuthError.type,
             age: Date.now() - syncAuthError.timestamp
           });
-          await updateSharedSyncSessionState({
-            status: SYNC_SESSION_STATUS.AUTH_REQUIRED,
-            error: syncAuthError.message || 'Please sign out and sign back in to restore sync.'
-          });
-          return Promise.resolve({ 
-            ...googleUser, 
-            syncStatus: 'auth_required',
-            syncError: syncAuthError.message || 'Please sign out and sign back in to restore sync.'
-          });
+          await browser.storage.local.remove('syncAuthError');
         }
-        
+
         // Try to get auth token with improved error handling
         const token = await getAuthToken();
         if (token === false) {

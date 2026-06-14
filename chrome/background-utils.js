@@ -1265,6 +1265,10 @@ async function getNewAccessToken() {
                 await browser.storage.local.set({ googleRefreshToken: tokenData.refresh_token });
             }
             
+            // Any previously stored auth error is now stale since we just obtained a
+            // valid token — clear it so the UI doesn't stay stuck on "auth required".
+            await browser.storage.local.remove('syncAuthError');
+
             logSyncOperation('success', 'Successfully refreshed access token', {
                 expiresIn: tokenData.expires_in
             });

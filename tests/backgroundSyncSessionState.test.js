@@ -45,3 +45,69 @@ describe('background shared sync session state', () => {
         }));
     });
 });
+
+describe('background checkSyncStatus stale auth error recovery', () => {
+    let browser;
+    const user = { displayName: 'Jane Doe', emailAddress: 'jane@example.com' };
+
+    const setup = (overrides = {}) => {
+        jest.resetModules();
+        browser = createBrowserHarness({
+            localData: {
+                googleUser: user,
+                googleRefreshToken: 'refresh-token',
+                syncAuthError: {
+                    type: 'missing_credentials',
+                    message: 'Sync credentials not configured.',
+                    timestamp: 1
+                },
+                ...overrides
+            }
+        });
+
+        global.browser = browser;
+        global.chrome = { runtime: browser.runtime };
+        global.importScripts = jest.fn();
+        global.loadCollectionsIndexBG = jest.fn(async () => ({}));
+        global.syncData = jest.fn(async () => true);
+        global.logSyncOperation = jest.fn();
+        global.getGoogleUser = jest.fn(async () => user);
+        global.getOrCreateSyncFile = jest.fn(async () => true);
+    };
+
+    afterEach(() => {
+        delete global.browser;
+        delete global.chrome;
+        delete global.importScripts;
+        delete global.loadCollectionsIndexBG;
+        delete global.getAuthToken;
+        delete global.syncData;
+        delete global.logSyncOperation;
+        delete global.getGoogleUser;
+        delete global.getOrCreateSyncFile;
+    });
+
+    test('clears a stale auth error and reports active when a token can still be obtained', async () => {
+        setup();
+        global.getAuthToken = jest.fn(async () => 'valid-token');
+
+        require('../chrome/background.js');
+
+        const response = await browser.runtime.sendMessage({ type: 'checkSyncStatus' });
+
+        expect(response).toEqual(expect.objectContaining({ syncStatus: 'active' }));
+        expect(browser.storage.local._data.syncAuthError).toBeUndefined();
+    });
+
+    test('keeps the auth error and reports auth_required when a token cannot be obtained', async () => {
+        setup();
+        global.getAuthToken = jest.fn(async () => false);
+
+        require('../chrome/background.js');
+
+        const response = await browser.runtime.sendMessage({ type: 'checkSyncStatus' });
+
+        expect(response).toEqual(expect.objectContaining({ syncStatus: 'auth_required' }));
+        expect(browser.storage.local._data.syncAuthError).toBeDefined();
+    });
+});
