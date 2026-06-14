@@ -40,6 +40,9 @@ export function buildArrangePrompt({ collections = [], existingFolders = [] } = 
         'If a collection clearly fits an existing folder, set existingFolderId to that folder id and leave newFolderName null.',
         'Otherwise create a new folder: set newFolderName to a short Title Case name (2-4 words) and leave existingFolderId null.',
         'Reuse the same newFolderName for collections that belong together. Never set both fields.',
+        'Prefer fuller folders over many tiny ones: avoid creating a folder that holds only a single collection. '
+            + 'If several collections would each end up alone in their own folder, group them into a broader shared '
+            + 'folder by theme, or place them into a suitable existing folder, instead of making one folder per collection.',
         '',
         'Collections (referenced by id):',
         collectionBlocks.join('\n'),

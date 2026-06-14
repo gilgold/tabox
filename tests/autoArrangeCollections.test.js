@@ -20,6 +20,11 @@ describe('buildArrangePrompt', () => {
         expect(prompt).toContain('Pasta');
         expect(prompt).toContain('Development');
     });
+
+    test('instructs the model to avoid single-collection folders', () => {
+        const prompt = buildArrangePrompt({ collections: rootCollections, existingFolders });
+        expect(prompt.toLowerCase()).toContain('single collection');
+    });
 });
 
 describe('autoArrangeCollections', () => {
