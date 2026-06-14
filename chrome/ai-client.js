@@ -19,6 +19,9 @@ async function aiAvailability() {
 }
 
 async function createAISession({ systemPrompt, temperature, topK, signal } = {}) {
+    if (typeof globalThis.LanguageModel === 'undefined') {
+        throw new Error('Tabox AI: LanguageModel is unavailable in this context');
+    }
     const options = { ...LANGUAGE_OPTIONS };
     if (systemPrompt) options.initialPrompts = [{ role: 'system', content: systemPrompt }];
     if (temperature !== undefined) options.temperature = temperature;
