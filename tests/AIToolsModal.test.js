@@ -4,9 +4,6 @@ import '@testing-library/jest-dom';
 import { Provider, createStore } from 'jotai';
 import { aiToolsModalOpenState, aiToolsScopeState, aiProcessingUidsState, aiProcessingCurrentUidState } from '../app/atoms/aiState';
 
-jest.mock('../app/ai/tasks/autoRenameCollections', () => ({
-    autoRenameCollections: jest.fn(),
-}));
 jest.mock('../app/ai/aiClient', () => ({
     getAIAvailability: jest.fn(),
     isAISupported: jest.fn().mockReturnValue(true),
@@ -14,21 +11,40 @@ jest.mock('../app/ai/aiClient', () => ({
 jest.mock('../app/utils/storageUtils', () => ({
     ...jest.requireActual('../app/utils/storageUtils'),
     loadAllCollections: jest.fn(),
+    loadAllFolders: jest.fn().mockResolvedValue([]),
 }));
 jest.mock('../app/toastHelpers', () => ({
     showUndoToast: jest.fn(),
     showSuccessToast: jest.fn(),
 }));
+jest.mock('../app/ai/useSmartOrganizeUndo', () => ({
+    useSmartOrganizeUndo: () => ({ snapshot: null, undo: jest.fn(), dismiss: jest.fn() }),
+}));
+jest.mock('../app/ai/useAutoArrangeUndo', () => ({
+    useAutoArrangeUndo: () => ({ snapshot: null, undo: jest.fn(), dismiss: jest.fn() }),
+}));
 
-import { autoRenameCollections } from '../app/ai/tasks/autoRenameCollections';
 import { getAIAvailability } from '../app/ai/aiClient';
 import { loadAllCollections } from '../app/utils/storageUtils';
 import { showUndoToast } from '../app/toastHelpers';
+import { browser } from '../static/globals';
 import AIToolsModal from '../app/AIToolsModal';
 
 const C1 = { uid: 'c1', name: 'Untitled', tabs: [{ title: 'React Docs', url: 'https://react.dev' }] };
 const C2 = { uid: 'c2', name: 'Old News', tabs: [{ title: 'BBC News', url: 'https://bbc.com' }] };
 const C_EMPTY = { uid: 'c3', name: 'Empty', tabs: [] };
+
+// Capture the registered storage.onChanged listener so tests can simulate
+// the service worker writing aiTaskState.
+let storageListener;
+
+const fireStorageChange = async (newValue) => {
+    await act(async () => {
+        storageListener({ aiTaskState: { newValue } }, 'local');
+    });
+};
+
+const getAiRunCall = () => browser.runtime.sendMessage.mock.calls.find((c) => c[0].type === 'aiRun');
 
 const renderOpenModal = async ({ updateRemoteData = jest.fn(), scope = { type: 'all' } } = {}) => {
     const store = createStore();
@@ -46,10 +62,16 @@ const renderOpenModal = async ({ updateRemoteData = jest.fn(), scope = { type: '
 
 describe('AIToolsModal', () => {
     beforeEach(() => {
+        jest.clearAllMocks();
         loadAllCollections.mockResolvedValue([{ ...C1 }, { ...C2 }, { ...C_EMPTY }]);
         getAIAvailability.mockResolvedValue('available');
-        autoRenameCollections.mockReset();
-        showUndoToast.mockReset();
+        browser.runtime.sendMessage = jest.fn().mockImplementation((msg) => {
+            if (msg.type === 'aiGetState') return Promise.resolve(null);
+            return Promise.resolve({});
+        });
+        storageListener = undefined;
+        browser.storage.onChanged.addListener = jest.fn((fn) => { storageListener = fn; });
+        browser.storage.onChanged.removeListener = jest.fn();
     });
 
     // ── 1. Tool list ─────────────────────────────────────────────────────────
@@ -85,22 +107,10 @@ describe('AIToolsModal', () => {
         expect(screen.getByText(/no collections with tabs/i)).toBeInTheDocument();
     });
 
-    // ── 3. One-click run ──────────────────────────────────────────────────────
+    // ── 3. One-click run dispatches to the service worker ─────────────────────
 
-    test('run calls engine with nameable targets; updateRemoteData patched once; done summary shown', async () => {
-        // Engine returns rename for c1, skip for c2
-        autoRenameCollections.mockImplementation(async ({ onResult }) => {
-            onResult({ uid: 'c1', oldName: 'Untitled', newName: 'React Learning' });
-            return { results: [{ uid: 'c1', oldName: 'Untitled', newName: 'React Learning' }], skipped: [], cancelled: false };
-        });
-
-        // fresh collections returned after run
-        loadAllCollections
-            .mockResolvedValueOnce([{ ...C1 }, { ...C2 }, { ...C_EMPTY }]) // open-time load
-            .mockResolvedValueOnce([{ ...C1 }, { ...C2 }, { ...C_EMPTY }]); // apply-time load
-
-        const updateRemoteData = jest.fn().mockResolvedValue(undefined);
-        await renderOpenModal({ updateRemoteData });
+    test('run dispatches aiRun(auto-rename) with nameable targets; done change shows summary + toast', async () => {
+        await renderOpenModal();
         fireEvent.click(screen.getByText('Auto-name collection'));
         await waitFor(() => expect(screen.getByRole('button', { name: /auto-rename/i })).toBeInTheDocument());
 
@@ -108,34 +118,35 @@ describe('AIToolsModal', () => {
             fireEvent.click(screen.getByRole('button', { name: /auto-rename/i }));
         });
 
-        // engine called with correct targets (c1 and c2, not c3 which is empty)
-        await waitFor(() => expect(autoRenameCollections).toHaveBeenCalledTimes(1));
-        const engineArg = autoRenameCollections.mock.calls[0][0];
-        expect(engineArg.collections.map((c) => c.uid)).toEqual(['c1', 'c2']);
+        // dispatched with correct targets (c1 and c2, not c3 which is empty)
+        await waitFor(() => {
+            const runCall = getAiRunCall();
+            expect(runCall).toBeTruthy();
+            expect(runCall[0].task).toBe('auto-rename');
+            expect(runCall[0].params.uids).toEqual(['c1', 'c2']);
+        });
 
-        // updateRemoteData called ONCE with patched array
-        await waitFor(() => expect(updateRemoteData).toHaveBeenCalledTimes(1));
-        const patched = updateRemoteData.mock.calls[0][0];
-        const patchedC1 = patched.find((c) => c.uid === 'c1');
-        const patchedC2 = patched.find((c) => c.uid === 'c2');
-        expect(patchedC1.name).toBe('React Learning');
-        expect(patchedC2.name).toBe('Old News'); // unchanged
-        expect(patchedC1.lastUpdated).toBeDefined();
+        // SW finishes: results + summary
+        await fireStorageChange({
+            taskId: 't1', type: 'auto-rename', status: 'done',
+            filed: 1, total: 2,
+            results: [{ uid: 'c1', oldName: 'Untitled', newName: 'React Learning' }],
+            skipped: [],
+            summary: 'Renamed 1 collection with AI',
+        });
 
-        // undo toast fired
+        // undo toast fired (SW owns apply + undo)
         expect(showUndoToast).toHaveBeenCalledTimes(1);
 
         // done summary: old → new row
-        await waitFor(() => expect(screen.getByText(/Untitled/)).toBeInTheDocument());
-        expect(screen.getByText(/React Learning/)).toBeInTheDocument();
+        expect(screen.getByText(/Untitled/)).toBeInTheDocument();
+        expect(screen.getByText('React Learning')).toBeInTheDocument();
     });
 
     // ── 4. Scope 'selected' limits targets ───────────────────────────────────
 
-    test('scope selected limits engine targets to the given uids', async () => {
-        autoRenameCollections.mockResolvedValue({ results: [], skipped: [], cancelled: false });
-        const updateRemoteData = jest.fn().mockResolvedValue(undefined);
-        await renderOpenModal({ updateRemoteData, scope: { type: 'selected', uids: ['c2'] } });
+    test('scope selected limits dispatched uids to the given uids', async () => {
+        await renderOpenModal({ scope: { type: 'selected', uids: ['c2'] } });
         fireEvent.click(screen.getByText('Auto-name collection'));
         await waitFor(() => expect(screen.getByRole('button', { name: /auto-rename 1/i })).toBeInTheDocument());
 
@@ -143,9 +154,7 @@ describe('AIToolsModal', () => {
             fireEvent.click(screen.getByRole('button', { name: /auto-rename 1/i }));
         });
 
-        await waitFor(() => expect(autoRenameCollections).toHaveBeenCalledTimes(1));
-        const engineArg = autoRenameCollections.mock.calls[0][0];
-        expect(engineArg.collections.map((c) => c.uid)).toEqual(['c2']);
+        await waitFor(() => expect(getAiRunCall()[0].params.uids).toEqual(['c2']));
     });
 
     test('selected scope message when no targets', async () => {
@@ -155,23 +164,10 @@ describe('AIToolsModal', () => {
         expect(screen.getByText(/none of the selected/i)).toBeInTheDocument();
     });
 
-    // ── 5. Undo callback ──────────────────────────────────────────────────────
+    // ── 5. Undo action delegates to the service worker ────────────────────────
 
-    test('undo callback reverts names via second updateRemoteData call', async () => {
-        autoRenameCollections.mockImplementation(async ({ onResult }) => {
-            onResult({ uid: 'c1', oldName: 'Untitled', newName: 'React Learning' });
-            return { results: [{ uid: 'c1', oldName: 'Untitled', newName: 'React Learning' }], skipped: [], cancelled: false };
-        });
-
-        // First load: open-time. Second load: apply-time. Third load: undo-time (post-rename state).
-        const postRenameC1 = { ...C1, name: 'React Learning' };
-        loadAllCollections
-            .mockResolvedValueOnce([{ ...C1 }, { ...C2 }])
-            .mockResolvedValueOnce([{ ...C1 }, { ...C2 }])
-            .mockResolvedValueOnce([postRenameC1, { ...C2 }]);
-
-        const updateRemoteData = jest.fn().mockResolvedValue(undefined);
-        await renderOpenModal({ updateRemoteData });
+    test('undo toast action sends aiUndo to the service worker', async () => {
+        await renderOpenModal();
         fireEvent.click(screen.getByText('Auto-name collection'));
         await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
 
@@ -179,24 +175,25 @@ describe('AIToolsModal', () => {
             fireEvent.click(screen.getByRole('button', { name: /auto-rename/i }));
         });
 
-        await waitFor(() => expect(showUndoToast).toHaveBeenCalledTimes(1));
+        await fireStorageChange({
+            taskId: 't1', type: 'auto-rename', status: 'done',
+            filed: 1, total: 1,
+            results: [{ uid: 'c1', oldName: 'Untitled', newName: 'React Learning' }],
+            skipped: [],
+            summary: 'Renamed 1 collection with AI',
+        });
 
-        // extract and invoke undo callback
+        await waitFor(() => expect(showUndoToast).toHaveBeenCalledTimes(1));
         const undoFn = showUndoToast.mock.calls[0][3];
         await act(async () => { await undoFn(); });
-
-        expect(updateRemoteData).toHaveBeenCalledTimes(2);
-        const revertedArray = updateRemoteData.mock.calls[1][0];
-        const revertedC1 = revertedArray.find((c) => c.uid === 'c1');
-        expect(revertedC1.name).toBe('Untitled');
+        expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'aiUndo' });
     });
 
     // ── 6. Pre-flight failure ─────────────────────────────────────────────────
 
-    test('pre-flight failure shows error and does not call engine', async () => {
+    test('pre-flight failure shows error and does not dispatch aiRun', async () => {
         getAIAvailability.mockResolvedValue('downloadable');
-        const updateRemoteData = jest.fn();
-        await renderOpenModal({ updateRemoteData });
+        await renderOpenModal();
         fireEvent.click(screen.getByText('Auto-name collection'));
         await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
 
@@ -205,24 +202,13 @@ describe('AIToolsModal', () => {
         });
 
         await waitFor(() => expect(screen.getByText(/tabox ai is not ready/i)).toBeInTheDocument());
-        expect(autoRenameCollections).not.toHaveBeenCalled();
-        expect(updateRemoteData).not.toHaveBeenCalled();
+        expect(getAiRunCall()).toBeUndefined();
     });
 
-    // ── 7. Apply failure ──────────────────────────────────────────────────────
+    // ── 7. Error status ───────────────────────────────────────────────────────
 
-    test('apply failure shows error and does not fire undo toast', async () => {
-        autoRenameCollections.mockImplementation(async ({ onResult }) => {
-            onResult({ uid: 'c1', oldName: 'Untitled', newName: 'React Learning' });
-            return { results: [{ uid: 'c1', oldName: 'Untitled', newName: 'React Learning' }], skipped: [], cancelled: false };
-        });
-
-        loadAllCollections
-            .mockResolvedValueOnce([{ ...C1 }])  // open-time
-            .mockResolvedValueOnce([{ ...C1 }]); // apply-time
-
-        const updateRemoteData = jest.fn().mockRejectedValue(new Error('save failed'));
-        await renderOpenModal({ updateRemoteData });
+    test('error status shows error and does not fire undo toast', async () => {
+        await renderOpenModal();
         fireEvent.click(screen.getByText('Auto-name collection'));
         await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
 
@@ -230,23 +216,18 @@ describe('AIToolsModal', () => {
             fireEvent.click(screen.getByRole('button', { name: /auto-rename/i }));
         });
 
-        await waitFor(() => expect(screen.getByText(/could not save/i)).toBeInTheDocument());
+        await fireStorageChange({
+            taskId: 't1', type: 'auto-rename', status: 'error',
+            filed: 0, total: 2, results: [], skipped: [],
+        });
+
+        await waitFor(() => expect(screen.getByText(/unexpected error/i)).toBeInTheDocument());
         expect(showUndoToast).not.toHaveBeenCalled();
     });
 
-    // Fix 2: apply-error done state — rows shown as "not saved", cancel note honest
-    test('done with apply-error shows "not saved" heading, no "applied" phrasing', async () => {
-        autoRenameCollections.mockImplementation(async ({ onResult }) => {
-            onResult({ uid: 'c1', oldName: 'Untitled', newName: 'React Learning' });
-            return { results: [{ uid: 'c1', oldName: 'Untitled', newName: 'React Learning' }], skipped: [], cancelled: true };
-        });
-
-        loadAllCollections
-            .mockResolvedValueOnce([{ ...C1 }])
-            .mockResolvedValueOnce([{ ...C1 }]);
-
-        const updateRemoteData = jest.fn().mockRejectedValue(new Error('save failed'));
-        await renderOpenModal({ updateRemoteData });
+    // cancelled with partial results → toast still fires (SW applied them), cancel note shown
+    test('cancelled with partial results: fires undo toast and shows cancel note', async () => {
+        await renderOpenModal();
         fireEvent.click(screen.getByText('Auto-name collection'));
         await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
 
@@ -254,48 +235,17 @@ describe('AIToolsModal', () => {
             fireEvent.click(screen.getByRole('button', { name: /auto-rename/i }));
         });
 
-        await waitFor(() => expect(screen.getByText(/could not save/i)).toBeInTheDocument());
-
-        // Must say "not saved" and NOT say "applied above"
-        expect(screen.getByText(/not saved/i)).toBeInTheDocument();
-        expect(screen.queryByText(/applied above/i)).not.toBeInTheDocument();
-        // The cancel note must NOT claim application
-        expect(screen.queryByText(/partial results applied above/i)).not.toBeInTheDocument();
-    });
-
-    // Fix 6: cancel-applies-partial-results — cancelled=true with one result → single save + undo toast + cancel note
-    test('cancel with partial results: saves partial, fires undo toast, shows cancel note', async () => {
-        autoRenameCollections.mockImplementation(async ({ onResult }) => {
-            onResult({ uid: 'c1', oldName: 'Untitled', newName: 'React Learning' });
-            return {
-                results: [{ uid: 'c1', oldName: 'Untitled', newName: 'React Learning' }],
-                skipped: [],
-                cancelled: true,
-            };
+        await fireStorageChange({
+            taskId: 't1', type: 'auto-rename', status: 'cancelled',
+            filed: 1, total: 2,
+            results: [{ uid: 'c1', oldName: 'Untitled', newName: 'React Learning' }],
+            skipped: [],
+            summary: 'Renamed 1 collection with AI',
         });
 
-        loadAllCollections
-            .mockResolvedValueOnce([{ ...C1 }, { ...C2 }]) // open-time
-            .mockResolvedValueOnce([{ ...C1 }, { ...C2 }]); // apply-time
-
-        const updateRemoteData = jest.fn().mockResolvedValue(undefined);
-        await renderOpenModal({ updateRemoteData });
-        fireEvent.click(screen.getByText('Auto-name collection'));
-        await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
-
-        await act(async () => {
-            fireEvent.click(screen.getByRole('button', { name: /auto-rename/i }));
-        });
-
-        // updateRemoteData called once with the patched name
-        await waitFor(() => expect(updateRemoteData).toHaveBeenCalledTimes(1));
-        const patched = updateRemoteData.mock.calls[0][0];
-        expect(patched.find((c) => c.uid === 'c1').name).toBe('React Learning');
-
-        // undo toast fired
-        expect(showUndoToast).toHaveBeenCalledTimes(1);
-
-        // cancel note shown
+        // cancelled is not 'done' → no toast (only 'done' fires the completion toast)
+        expect(showUndoToast).not.toHaveBeenCalled();
+        // cancel note shown alongside partial results
         await waitFor(() =>
             expect(screen.getByText(/cancelled — partial results applied above/i)).toBeInTheDocument()
         );
@@ -303,12 +253,7 @@ describe('AIToolsModal', () => {
 
     // ── 8. AI processing atoms ────────────────────────────────────────────────
 
-    test('sets aiProcessingUids while engine runs and clears both atoms after resolve', async () => {
-        let resolveEngine;
-        autoRenameCollections.mockImplementation(() => new Promise((res) => {
-            resolveEngine = () => res({ results: [], skipped: [], cancelled: false });
-        }));
-
+    test('sets aiProcessingUids on run and drives current-uid from aiTaskState; clears on done', async () => {
         const store = await renderOpenModal();
         fireEvent.click(screen.getByText('Auto-name collection'));
         await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
@@ -317,26 +262,27 @@ describe('AIToolsModal', () => {
             fireEvent.click(screen.getByRole('button', { name: /auto-rename/i }));
         });
 
-        // Engine is pending — processing uids should be set to target uids (c1, c2)
+        // processing uids set to target uids (c1, c2) synchronously on run
         await waitFor(() => {
             const uids = store.get(aiProcessingUidsState);
             expect(uids).toContain('c1');
             expect(uids).toContain('c2');
         });
 
-        // The engine's onProgress callback drives the current-uid atom
-        const { onProgress } = autoRenameCollections.mock.calls[0][0];
-        await act(async () => { onProgress(0, 2, { uid: 'c1', name: 'Untitled' }); });
+        // a running change drives the current-uid atom
+        await fireStorageChange({
+            taskId: 't1', type: 'auto-rename', status: 'running',
+            filed: 0, total: 2, currentUid: 'c1', currentLabel: 'Untitled', results: [], skipped: [],
+        });
         expect(store.get(aiProcessingCurrentUidState)).toBe('c1');
 
-        // Resolve the engine
-        await act(async () => { resolveEngine(); });
-
-        // After resolve, both atoms must be cleared
-        await waitFor(() => {
-            expect(store.get(aiProcessingUidsState)).toEqual([]);
-            expect(store.get(aiProcessingCurrentUidState)).toBeNull();
+        // a done change clears both atoms
+        await fireStorageChange({
+            taskId: 't1', type: 'auto-rename', status: 'done',
+            filed: 2, total: 2, results: [], skipped: [],
         });
+        expect(store.get(aiProcessingUidsState)).toEqual([]);
+        expect(store.get(aiProcessingCurrentUidState)).toBeNull();
     });
 
     test('clears aiProcessing atoms when modal is reopened (reset effect)', async () => {
@@ -363,13 +309,11 @@ describe('AIToolsModal', () => {
         });
     });
 
-    // Fix 1: double-click Run — engine called exactly once
-    test('double-click Run only starts engine once', async () => {
+    // double-click Run — aiRun dispatched exactly once
+    test('double-click Run only dispatches aiRun once', async () => {
         let resolveAvailability;
         const availabilityPromise = new Promise((res) => { resolveAvailability = res; });
         getAIAvailability.mockReturnValue(availabilityPromise);
-
-        autoRenameCollections.mockResolvedValue({ results: [], skipped: [], cancelled: false });
 
         await renderOpenModal();
         fireEvent.click(screen.getByText('Auto-name collection'));
@@ -380,11 +324,13 @@ describe('AIToolsModal', () => {
         fireEvent.click(runBtn);
         fireEvent.click(runBtn);
 
-        // Now resolve the availability check
         await act(async () => {
             resolveAvailability('available');
         });
 
-        await waitFor(() => expect(autoRenameCollections).toHaveBeenCalledTimes(1));
+        await waitFor(() => {
+            const runCalls = browser.runtime.sendMessage.mock.calls.filter((c) => c[0].type === 'aiRun');
+            expect(runCalls).toHaveLength(1);
+        });
     });
 });

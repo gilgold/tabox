@@ -1,3 +1,4 @@
+/** @jest-environment jsdom */
 import { act, fireEvent, render } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { Provider, createStore } from 'jotai';

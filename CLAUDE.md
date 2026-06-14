@@ -86,6 +86,14 @@ webpack.js            # Webpack config
 ### Communication
 - Popup ↔ Background: `browser.runtime.sendMessage()` via webextension-polyfill
 
+### AI tasks (MUST run in the service worker)
+- AI features use Chrome's built-in Gemini Nano (`globalThis.LanguageModel`, wrapped in `app/ai/aiClient.js`). That global is available in the MV3 service worker, not only the popup.
+- **Every AI task's long-running work must execute in the service worker** (`chrome/background.js` / `background-utils.js`), driven by `browser.runtime.sendMessage` from the popup — so closing the popup does NOT abort it. The popup only initiates the task, observes progress, and renders results; it is a detachable observer, never the owner of the work.
+- Persist progress/state to `chrome.storage.local` (like `SMART_ORGANIZE_UNDO_KEY` / `AUTO_ARRANGE_UNDO_KEY`) so a reopened popup can reattach and re-render progress. Push updates back via messages / `storage.onChanged`.
+- Follow the existing `smartOrganizeApply` handler (`background-utils.js`) as the reference pattern. Respect MV3 SW constraints: keep the message handler awaiting the work; never defer it to a standalone `setTimeout` (the worker can be discarded).
+- Fast one-shot suggestions (suggest collection/folder name) are exempt; anything that loops over multiple collections/tabs is not.
+- **Existing tasks still running inline in the popup (must be migrated):** Auto-Rename Collections, Auto-Arrange into Folders, and Smart Organize *planning*.
+
 ## Code Conventions
 
 - **Files**: PascalCase for components (`CollectionList.js`), camelCase for utilities (`storageUtils.js`)

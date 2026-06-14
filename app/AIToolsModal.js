@@ -6,7 +6,6 @@ import { BsStars } from 'react-icons/bs';
 import { aiToolsModalOpenState, aiToolsScopeState, aiProcessingUidsState, aiProcessingCurrentUidState } from './atoms/aiState';
 import { viewContextState } from './atoms/globalAppSettingsState';
 import { AI_TOOLS } from './ai/aiTasks';
-import { autoRenameCollections } from './ai/tasks/autoRenameCollections';
 import { smartOrganizeTabs } from './ai/tasks/smartOrganizeTabs';
 import { getAIAvailability } from './ai/aiClient';
 import { readWindowStructure } from './ai/readWindowStructure';
@@ -43,6 +42,15 @@ function AIToolsModal({ updateRemoteData }) {
     // Bulk-run progress (i/N label + determinate bar)
     const [progressLabel, setProgressLabel] = useState('');
     const [progressFill, setProgressFill] = useState(0); // 0–100
+
+    // Shared service-worker AI task state. The SW owns task execution and writes
+    // progress/results to chrome.storage.local under `aiTaskState`; the popup
+    // observes it so a reopened popup re-attaches to an in-progress run. Reused
+    // by Auto-Rename now and Auto-Arrange / Smart-Organize next.
+    const [aiTaskState, setAiTaskState] = useState(null);
+    // Tracks which finished taskId we've already shown a completion toast for,
+    // so reopening the popup (or re-render) doesn't re-fire the toast.
+    const toastedTaskIdRef = useRef(null);
 
     // Smart Organize panel state
     const [soWindowId, setSoWindowId] = useState(null);
@@ -123,6 +131,33 @@ function AIToolsModal({ updateRemoteData }) {
         };
     }, [setAiProcessingUids, setAiProcessingCurrentUid]);
 
+    // ── Shared service-worker plumbing ──────────────────────────────────────
+    // Fire an AI task in the service worker. Returns the promise resolving to the
+    // final aiTaskState; live progress comes via the storage subscription below.
+    const dispatchAiRun = (task, params) => browser.runtime.sendMessage({ type: 'aiRun', task, params });
+    const sendAiCancel = () => browser.runtime.sendMessage({ type: 'aiCancel' });
+    const sendAiUndo = () => browser.runtime.sendMessage({ type: 'aiUndo' });
+
+    // Subscribe to aiTaskState: read once on open, then track storage changes so
+    // a reopened popup re-attaches to an in-progress run.
+    useEffect(() => {
+        if (!isOpen) return undefined;
+        let cancelled = false;
+        browser.runtime.sendMessage({ type: 'aiGetState' })
+            .then((state) => { if (!cancelled) setAiTaskState(state || null); })
+            .catch(() => { if (!cancelled) setAiTaskState(null); });
+
+        const onChanged = (changes, area) => {
+            if (area !== 'local' || !changes.aiTaskState) return;
+            setAiTaskState(changes.aiTaskState.newValue || null);
+        };
+        browser.storage.onChanged.addListener(onChanged);
+        return () => {
+            cancelled = true;
+            browser.storage.onChanged.removeListener(onChanged);
+        };
+    }, [isOpen]);
+
     const busy = panelStatus === 'running';
     const close = () => setIsOpen(false);
 
@@ -151,10 +186,7 @@ function AIToolsModal({ updateRemoteData }) {
             return;
         }
 
-        const token = ++runTokenRef.current;
-        const controller = new AbortController();
-        abortControllerRef.current = controller;
-
+        // Reset local UI; the service worker now owns execution, apply, and undo.
         setPanelStatus('running');
         setRenameResults([]);
         setSkipped([]);
@@ -165,91 +197,75 @@ function AIToolsModal({ updateRemoteData }) {
         setProgressFill(0);
         setAiProcessingUids(targets.map((t) => t.uid));
 
-        const total = targets.length;
+        // Allow a fresh completion toast for the run we're about to start.
+        toastedTaskIdRef.current = null;
 
-        let engineResult;
-        try {
-            engineResult = await autoRenameCollections({
-                collections: targets,
-                signal: controller.signal,
-                onProgress: (index, _total, collection) => {
-                    if (token !== runTokenRef.current) return;
-                    setProgressLabel(`Renaming ${index + 1} of ${total}: ${collection.name}`);
-                    setProgressFill(Math.round((index / total) * 100));
-                    setAiProcessingCurrentUid(collection.uid);
-                },
-                onResult: (entry) => {
-                    if (token !== runTokenRef.current) return;
-                    if (entry.newName) {
-                        setRenameResults((prev) => [...prev, entry]);
-                    } else {
-                        setSkipped((prev) => [...prev, entry]);
-                    }
-                },
-            });
-        } catch (runError) {
-            // Unexpected engine throw (shouldn't normally happen — AbortError is caught inside)
-            console.error('Tabox AI: autoRenameCollections threw unexpectedly:', runError);
-            if (token !== runTokenRef.current) return;
+        // Fire-and-forget; live progress + results arrive via the aiTaskState
+        // storage subscription. (We don't await the final state — the storage
+        // subscription is the source of truth.)
+        dispatchAiRun('auto-rename', { uids: targets.map((t) => t.uid) }).catch((runError) => {
+            console.error('Tabox AI: aiRun(auto-rename) dispatch failed:', runError);
             setAiProcessingUids([]);
             setAiProcessingCurrentUid(null);
             setError('An unexpected error occurred. Please try again.');
             setPanelStatus('done');
             runStartedRef.current = false;
+        });
+    };
+
+    // Drive the Auto-Rename panel UI from the service-worker-owned aiTaskState.
+    useEffect(() => {
+        if (activeToolId !== 'auto-rename') return;
+        if (!aiTaskState || aiTaskState.type !== 'auto-rename') return;
+
+        const { status, filed = 0, total = 0, currentLabel, currentUid, results = [], skipped: skippedList = [], summary } = aiTaskState;
+
+        if (status === 'running') {
+            setPanelStatus('running');
+            setProgressLabel(total ? `Renaming ${filed + 1} of ${total}: ${currentLabel || ''}` : 'Renaming collections with AI…');
+            setProgressFill(total ? Math.round((filed / total) * 100) : 0);
+            setAiProcessingCurrentUid(currentUid || null);
+            setRenameResults(results);
+            setSkipped(skippedList);
             return;
         }
 
-        if (token !== runTokenRef.current) return;
+        if (status === 'done' || status === 'cancelled' || status === 'error') {
+            setRenameResults(results);
+            setSkipped(skippedList);
+            setAiProcessingUids([]);
+            setAiProcessingCurrentUid(null);
+            setWasCancelled(status === 'cancelled');
+            setIsCancelling(false);
+            runStartedRef.current = false;
 
-        // Clear AI processing effects before applying results
-        setAiProcessingUids([]);
-        setAiProcessingCurrentUid(null);
+            if (status === 'error') {
+                setError('An unexpected error occurred. Please try again.');
+                setPanelStatus('done');
+                return;
+            }
 
-        const { results, cancelled } = engineResult;
-        setWasCancelled(cancelled);
+            setError(null);
+            setPanelStatus('done');
 
-        if (results.length > 0) {
-            try {
-                const fresh = await loadAllCollections();
-                const byUid = Object.fromEntries(results.map((r) => [r.uid, r]));
-                const patched = fresh.map((c) =>
-                    c.uid in byUid ? { ...c, name: byUid[c.uid].newName, lastUpdated: Date.now() } : c
-                );
-                await updateRemoteData(patched);
-
-                const renamed = results;
+            // Fire the undo toast once per finished run with renames applied.
+            if (status === 'done' && results.length > 0 && toastedTaskIdRef.current !== aiTaskState.taskId) {
+                toastedTaskIdRef.current = aiTaskState.taskId;
                 showUndoToast(
                     <BsStars />,
-                    `Renamed ${renamed.length} collection${renamed.length === 1 ? '' : 's'} with AI`,
+                    summary || `Renamed ${results.length} collection${results.length === 1 ? '' : 's'} with AI`,
                     'Tabox AI',
-                    async () => {
-                        const current = await loadAllCollections();
-                        // Only revert names the user has not changed since the run.
-                        const reverted = current.map((c) => {
-                            if (c.uid in byUid && c.name === byUid[c.uid].newName) {
-                                return { ...c, name: byUid[c.uid].oldName, lastUpdated: Date.now() };
-                            }
-                            return c;
-                        });
-                        await updateRemoteData(reverted);
-                    },
+                    () => sendAiUndo(),
                     UNDO_TIME,
                 );
-            } catch (applyError) {
-                console.error('Tabox AI: failed to save renamed collections:', applyError);
-                if (token !== runTokenRef.current) return;
-                setError('Could not save the new names. Please try again.');
             }
         }
-
-        if (token !== runTokenRef.current) return;
-        setPanelStatus('done');
-        runStartedRef.current = false;
-    };
+    }, [aiTaskState, activeToolId]);
 
     const handleCancel = () => {
         if (!busy || isCancelling) return;
         setIsCancelling(true);
+        sendAiCancel();
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
         }
