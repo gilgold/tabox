@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Modal from 'react-modal';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { MdClose, MdArrowBack } from 'react-icons/md';
@@ -110,6 +110,10 @@ function AIToolsModal({ updateRemoteData }) {
         setAaFiled(0);
         setAaTotal(0);
         stopAaTicker();
+        // Drop any prior task state + toast guard so a stale terminal run from a
+        // previous session can't clobber the freshly-reset idle panel on reopen.
+        setAiTaskState(null);
+        toastedTaskIdRef.current = null;
         loadAllCollections().then(setCollections).catch((loadError) => {
             console.error('Tabox AI: failed to load collections', loadError);
             setCollections([]);
@@ -134,18 +138,28 @@ function AIToolsModal({ updateRemoteData }) {
     // ── Shared service-worker plumbing ──────────────────────────────────────
     // Fire an AI task in the service worker. Returns the promise resolving to the
     // final aiTaskState; live progress comes via the storage subscription below.
-    const dispatchAiRun = (task, params) => browser.runtime.sendMessage({ type: 'aiRun', task, params });
-    const sendAiCancel = () => browser.runtime.sendMessage({ type: 'aiCancel' });
-    const sendAiUndo = () => browser.runtime.sendMessage({ type: 'aiUndo' });
+    const dispatchAiRun = useCallback((task, params) => browser.runtime.sendMessage({ type: 'aiRun', task, params }), []);
+    const sendAiCancel = useCallback(() => browser.runtime.sendMessage({ type: 'aiCancel' }), []);
+    const sendAiUndo = useCallback(() => browser.runtime.sendMessage({ type: 'aiUndo' }), []);
 
     // Subscribe to aiTaskState: read once on open, then track storage changes so
     // a reopened popup re-attaches to an in-progress run.
     useEffect(() => {
         if (!isOpen) return undefined;
         let cancelled = false;
-        browser.runtime.sendMessage({ type: 'aiGetState' })
-            .then((state) => { if (!cancelled) setAiTaskState(state || null); })
-            .catch(() => { if (!cancelled) setAiTaskState(null); });
+        // Only REATTACH to an actively-running task on open. A terminal
+        // (done/cancelled/error) initial state is stale from a prior session and
+        // must not overwrite the idle panel or re-fire the completion toast — the
+        // live storage.onChanged listener below still adopts changes, so a run
+        // that completes while the popup is open drives the done panel + toast.
+        (async () => {
+            try {
+                const initial = await browser.runtime.sendMessage({ type: 'aiGetState' });
+                if (!cancelled && initial && initial.status === 'running') setAiTaskState(initial);
+            } catch {
+                // No reachable SW state — leave the panel idle.
+            }
+        })();
 
         const onChanged = (changes, area) => {
             if (area !== 'local' || !changes.aiTaskState) return;
@@ -260,7 +274,7 @@ function AIToolsModal({ updateRemoteData }) {
                 );
             }
         }
-    }, [aiTaskState, activeToolId]);
+    }, [aiTaskState, activeToolId, setAiProcessingUids, setAiProcessingCurrentUid, sendAiUndo]);
 
     const handleCancel = () => {
         if (!busy || isCancelling) return;

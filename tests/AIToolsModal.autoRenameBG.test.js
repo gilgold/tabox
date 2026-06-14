@@ -253,10 +253,55 @@ describe('AIToolsModal – Auto-Rename driven by the service worker', () => {
             return Promise.resolve({});
         });
 
-        await renderOpenModal();
+        const store = await renderOpenModal();
         fireEvent.click(screen.getByText('Auto-name collection'));
 
         // The in-progress result should render without clicking Run
         await waitFor(() => expect(screen.getByText('React Learning')).toBeInTheDocument());
+        // The AI-border atom is restored to the running currentUid so the
+        // processed collection keeps its highlight after reattach.
+        expect(store.get(aiProcessingCurrentUidState)).toBe('c2');
+    });
+
+    test('reopening after a finished run does not re-toast and leaves the panel idle', async () => {
+        // aiGetState returns a TERMINAL done state from a prior session.
+        browser.runtime.sendMessage = jest.fn().mockImplementation((msg) => {
+            if (msg.type === 'aiGetState') {
+                return Promise.resolve({
+                    taskId: 't-old', type: 'auto-rename', status: 'done',
+                    filed: 1, total: 1,
+                    results: [{ uid: 'c1', oldName: 'Untitled', newName: 'React Learning' }],
+                    skipped: [], summary: 'Renamed 1 collection with AI',
+                });
+            }
+            return Promise.resolve({});
+        });
+
+        await renderOpenModal();
+        fireEvent.click(screen.getByText('Auto-name collection'));
+
+        // The idle run button is shown — not the done summary — and no toast fires.
+        await waitFor(() => expect(screen.getByRole('button', { name: /auto-rename/i })).toBeInTheDocument());
+        expect(screen.queryByText('React Learning')).not.toBeInTheDocument();
+        expect(showUndoToast).not.toHaveBeenCalled();
+    });
+
+    test('reopening during a running task reattaches and shows progress', async () => {
+        browser.runtime.sendMessage = jest.fn().mockImplementation((msg) => {
+            if (msg.type === 'aiGetState') {
+                return Promise.resolve({
+                    taskId: 't-run', type: 'auto-rename', status: 'running',
+                    filed: 1, total: 3, currentUid: 'c2', currentLabel: 'X',
+                    results: [], skipped: [],
+                });
+            }
+            return Promise.resolve({});
+        });
+
+        await renderOpenModal();
+        fireEvent.click(screen.getByText('Auto-name collection'));
+
+        // Progress label reflects the running state (2 of 3: X).
+        await waitFor(() => expect(screen.getByText(/Renaming 2 of 3: X/)).toBeInTheDocument());
     });
 });
