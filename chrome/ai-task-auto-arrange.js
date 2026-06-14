@@ -10,6 +10,8 @@ function shuffledColors() {
     }
     return colors;
 }
+// Fail-fast: if folder creation fails partway, already-created folders may be orphaned with no undo path
+// (the snapshot is only written after all moves succeed). Matches the original autoArrangeApply.js behavior.
 async function resolveTargets(assignments, storage) {
     const createdFolderUids = [];
     const createdByLowerName = new Map();

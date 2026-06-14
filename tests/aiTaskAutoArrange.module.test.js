@@ -36,6 +36,19 @@ test('auto-arrange creates a folder, moves the collection, records undo, trigger
   expect(res.undo).toEqual({ task: 'auto-arrange', moves: [{ uid: 'c1', prevParentId: null }], createdFolderUids: ['f-new'] });
 });
 
+test('auto-arrange assigns to an existing folder without creating one', async () => {
+  const base = baseCtx();
+  const c = baseCtx({
+    storage: { ...base.storage, loadFoldersIndexBG: jest.fn().mockResolvedValue({ f1: { name: 'Work' } }), loadCollectionsIndexBG: jest.fn().mockResolvedValue({ c1: { parentId: null } }) },
+    client: { createAISession: jest.fn().mockResolvedValue({ prompt: jest.fn(), destroy: jest.fn() }),
+      promptForJSON: jest.fn().mockResolvedValue({ assignments: [{ collectionId: 'c1', existingFolderId: 'f1', newFolderName: null }] }) },
+  });
+  const res = await createEngine({ registry, ctx: c }).runTask({ id: 'auto-arrange', params: {} });
+  expect(c.storage.createFolderBG).not.toHaveBeenCalled();
+  expect(c.storage.moveCollectionsToFoldersBG).toHaveBeenCalledWith([{ uid: 'c1', parentId: 'f1' }]);
+  expect(res.undo.createdFolderUids).toEqual([]);
+});
+
 test('auto-arrange undo restores parentId and deletes the now-empty created folder', async () => {
   const c = baseCtx({ storage: { ...baseCtx().storage, loadCollectionsIndexBG: jest.fn().mockResolvedValue({}) } });
   const engine = createEngine({ registry, ctx: c });

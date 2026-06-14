@@ -9,18 +9,26 @@ const def = {
         const targets = all.filter((c) => params.uids.includes(c.uid));
         await report({ total: targets.length, filed: 0 });
         const renames = [];
+        const skipped = [];
         for (let i = 0; i < targets.length; i++) {
             if (await isCancelled()) break;
             const c = targets[i];
             await report({ filed: i, currentLabel: c.name, currentUid: c.uid });
-            const session = await client.createAISession({ systemPrompt: 'You name groups of browser tabs. Names are short (2-4 words), specific, and in Title Case. Never include quotes or emojis.', temperature: 0.7, topK: 3 });
             let name;
-            try { ({ name } = await client.promptForJSON(session, planners.buildNamePrompt(c), planners.NAME_SCHEMA)); }
-            finally { session.destroy(); }
+            try {
+                const session = await client.createAISession({ systemPrompt: 'You name groups of browser tabs. Names are short (2-4 words), specific, and in Title Case. Never include quotes or emojis.', temperature: 0.7, topK: 3 });
+                try { ({ name } = await client.promptForJSON(session, planners.buildNamePrompt(c), planners.NAME_SCHEMA)); }
+                finally { session.destroy(); }
+            } catch (err) {
+                if (err.name === 'AbortError') break;
+                console.error('Tabox AI: rename suggestion failed for', c.uid, err);
+                skipped.push({ uid: c.uid, reason: 'error' });
+                continue;
+            }
             name = String(name).trim().slice(0, 50);
             if (name && name !== c.name) renames.push({ uid: c.uid, oldName: c.name, newName: name });
         }
-        await report({ filed: targets.length, results: renames });
+        await report({ filed: targets.length, results: renames, skipped });
         if (renames.length) { await storage.renameCollectionsBG(renames); await triggerSync(); }
         return { summary: `Renamed ${renames.length} collection${renames.length === 1 ? '' : 's'} with AI`, undo: { task: 'auto-rename', renames } };
     },

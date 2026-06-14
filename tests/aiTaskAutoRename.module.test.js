@@ -42,3 +42,33 @@ test('auto-rename skips a collection whose suggested name is unchanged', async (
   expect(c.storage.renameCollectionsBG).not.toHaveBeenCalled();
   expect(res.undo).toEqual({ task: 'auto-rename', renames: [] });
 });
+
+test('auto-rename continues past a per-item AI error and applies the successful ones', async () => {
+  let call = 0;
+  const c = ctx({
+    loadCollections: jest.fn().mockResolvedValue([
+      { uid: 'c1', name: 'O1', tabs: [] }, { uid: 'c2', name: 'O2', tabs: [] }, { uid: 'c3', name: 'O3', tabs: [] },
+    ]),
+    client: { createAISession: jest.fn().mockResolvedValue({ prompt: jest.fn(), destroy: jest.fn() }),
+      promptForJSON: jest.fn().mockImplementation(async () => { call++; if (call === 2) throw new Error('transient'); return { name: `N${call}` }; }) },
+  });
+  const res = await createEngine({ registry, ctx: c }).runTask({ id: 'auto-rename', params: { uids: ['c1', 'c2', 'c3'] } });
+  expect(res.status).toBe('done');
+  expect(c.storage.renameCollectionsBG.mock.calls[0][0].map((r) => r.uid)).toEqual(['c1', 'c3']);
+});
+
+test('auto-rename applies already-completed renames then stops when cancelled mid-loop', async () => {
+  let call = 0;
+  const c = ctx({
+    loadCollections: jest.fn().mockResolvedValue([{ uid: 'c1', name: 'O1', tabs: [] }, { uid: 'c2', name: 'O2', tabs: [] }]),
+    client: { createAISession: jest.fn().mockResolvedValue({ prompt: jest.fn(), destroy: jest.fn() }),
+      promptForJSON: jest.fn().mockImplementation(async () => {
+        call++;
+        if (call === 1) { const s = (await browser.storage.local.get('aiTaskState')).aiTaskState; await browser.storage.local.set({ aiTaskState: { ...s, cancelRequested: true } }); return { name: 'New1' }; }
+        return { name: 'New2' };
+      }) },
+  });
+  const res = await createEngine({ registry, ctx: c }).runTask({ id: 'auto-rename', params: { uids: ['c1', 'c2'] } });
+  expect(c.storage.renameCollectionsBG).toHaveBeenCalledWith([{ uid: 'c1', oldName: 'O1', newName: 'New1' }]);
+  expect(res.status).toBe('cancelled');
+});
