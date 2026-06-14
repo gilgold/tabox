@@ -33,6 +33,14 @@ describe('CreateFolderModal AI suggest', () => {
         expect(screen.getByRole('button', { name: /suggest name with ai/i })).toBeDisabled();
     });
 
+    test('button is disabled in edit mode when the folder has no collections', async () => {
+        await act(async () => {
+            render(<CreateFolderModal isOpen onClose={jest.fn()} onSave={jest.fn()} folder={{ uid: 'empty', name: 'Empty' }} />);
+        });
+        // f1's collections don't match uid 'empty', so folderCollections stays empty
+        await waitFor(() => expect(screen.getByRole('button', { name: /suggest name with ai/i })).toBeDisabled());
+    });
+
     test('suggests a folder name from its collections in edit mode', async () => {
         suggestFolderName.mockResolvedValue('Frontend Docs');
         await act(async () => {

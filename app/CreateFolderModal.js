@@ -49,7 +49,7 @@ function CreateFolderModal({ isOpen, onClose, onSave, folder }) {
         } else {
             setFolderCollections([]);
         }
-    }, [isOpen, isEditMode, folder]);
+    }, [isOpen, isEditMode, folder?.uid]);
 
     const handleSave = async () => {
         const trimmedName = folderName.trim();
