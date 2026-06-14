@@ -7,6 +7,14 @@ try {
   importScripts('sync-apply.js');
   importScripts('sync-throttle.js');
   importScripts('background-utils.js');
+  importScripts('ai-client.js');
+  importScripts('ai-planners.js');
+  importScripts('ai-storage.js');
+  importScripts('ai-registry.js');
+  importScripts('ai-engine.js');
+  importScripts('ai-task-auto-rename.js');
+  importScripts('ai-task-auto-arrange.js');
+  importScripts('ai-task-smart-organize.js');
 }
 catch (e) {
   console.error(e);
@@ -1979,6 +1987,40 @@ try {
     if (request.type === 'smartOrganizeUndo') {
       const result = await undoSmartOrganize({ windowId: request.windowId });
       return Promise.resolve(result);
+    }
+
+    if (request.type === 'aiRun' || request.type === 'aiUndo') {
+      // Build the engine + ctx HERE so SW-native deps are in scope (throttleSync /
+      // handleRemoteUpdate / loadAllCollectionsBG are background.js lexical bindings,
+      // not module-load globals).
+      const engine = globalThis.TaboxAIEngine.createEngine({
+        registry: globalThis.TaboxAIRegistry,
+        ctx: {
+          client: globalThis.TaboxAIClient,
+          planners: globalThis.TaboxAIPlanners,
+          storage: globalThis.TaboxAIStorage,
+          loadCollections: () => loadAllCollectionsBG(true),
+          readWindow: (windowId) => readWindowForAI(windowId),
+          triggerSync: () => throttleSync(() => handleRemoteUpdate()),
+        },
+      });
+      if (request.type === 'aiUndo') { await engine.undoLast(); return Promise.resolve({ ok: true }); }
+      const controller = new AbortController();
+      globalThis.__aiAbort = controller; // single in-flight AI task
+      let result;
+      try {
+        result = await engine.runTask({ id: request.task, params: request.params || {}, signal: controller.signal });
+      } finally { globalThis.__aiAbort = null; }
+      return Promise.resolve(result); // engine maps throw/abort to status:error/cancelled
+    }
+    if (request.type === 'aiCancel') {
+      if (globalThis.__aiAbort) globalThis.__aiAbort.abort();
+      const cur = (await browser.storage.local.get('aiTaskState')).aiTaskState || {};
+      await browser.storage.local.set({ aiTaskState: { ...cur, cancelRequested: true } });
+      return Promise.resolve({ ok: true });
+    }
+    if (request.type === 'aiGetState') {
+      return Promise.resolve((await browser.storage.local.get('aiTaskState')).aiTaskState || null);
     }
 
   });
