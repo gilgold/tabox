@@ -98,6 +98,10 @@
     "setupFiles": [
       "jest-webextension-mock",
       "<rootDir>/jest.setup.js"
+    ],
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/tests/zz_repro"
     ]
   },
   "dependencies": {
