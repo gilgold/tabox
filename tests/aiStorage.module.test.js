@@ -45,6 +45,8 @@ test('moveCollectionsToFoldersBG sets parentId in index + record', async () => {
   await store.moveCollectionsToFoldersBG([{ uid: 'c1', parentId: 'f1' }]);
   const idx = (await local.get(STORAGE_KEYS.COLLECTIONS_INDEX))[STORAGE_KEYS.COLLECTIONS_INDEX];
   expect(idx.c1.parentId).toBe('f1');
+  const rec = (await local.get(`${STORAGE_KEYS.COLLECTION_PREFIX}c1`))[`${STORAGE_KEYS.COLLECTION_PREFIX}c1`];
+  expect(rec.parentId).toBe('f1');
 });
 
 test('createFolderBG writes folder record + index entry', async () => {
@@ -52,6 +54,21 @@ test('createFolderBG writes folder record + index entry', async () => {
   const idx = (await local.get(STORAGE_KEYS.FOLDERS_INDEX))[STORAGE_KEYS.FOLDERS_INDEX];
   expect(idx[folder.uid].name).toBe('Reading');
   expect(folder.collapsed).toBe(true);
+});
+
+test('updateFolderCountsBG recounts collections per folder', async () => {
+  await local.set({
+    [STORAGE_KEYS.COLLECTIONS_INDEX]: { c1: { parentId: 'f1' }, c2: { parentId: 'f1' }, c3: { parentId: null } },
+    [STORAGE_KEYS.FOLDERS_INDEX]: { f1: { collectionCount: 0, lastUpdated: 0 } },
+    [`${STORAGE_KEYS.FOLDER_PREFIX}f1`]: { uid: 'f1', collectionCount: 0 },
+  });
+  await store.updateFolderCountsBG(['f1']);
+  const idx = (await local.get(STORAGE_KEYS.FOLDERS_INDEX))[STORAGE_KEYS.FOLDERS_INDEX];
+  expect(idx.f1.collectionCount).toBe(2);
+});
+
+test('updateFolderCountsBG returns false (no write) for empty input', async () => {
+  expect(await store.updateFolderCountsBG([])).toBe(false);
 });
 
 test('deleteFolderBG removes folder and writes a tombstone', async () => {

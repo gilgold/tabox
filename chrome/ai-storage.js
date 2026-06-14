@@ -11,6 +11,8 @@
 const KEYS = (typeof STORAGE_KEYS !== 'undefined') ? STORAGE_KEYS : globalThis.STORAGE_KEYS;
 const local = (globalThis.browser || globalThis.chrome).storage.local;
 
+const FOLDER_DEFAULT_ORDER = 999999; // new folders sort to the bottom; UI reorders after
+
 async function getKey(k) { return (await local.get(k))[k]; }
 
 async function loadCollectionsIndexBG() { return (await getKey(KEYS.COLLECTIONS_INDEX)) || {}; }
@@ -60,12 +62,15 @@ function newUid() {
 }
 
 async function createFolderBG(name, color, collapsed) {
+    if (!name || typeof name !== 'string' || !name.trim()) {
+        throw new Error('createFolderBG: name is required');
+    }
     const now = Date.now();
     const folder = {
         uid: newUid(), name, type: 'folder',
         color: color || 'var(--folder-default-color)',
         createdOn: now, lastUpdated: now, collapsed: !!collapsed,
-        order: 999999, collectionCount: 0,
+        order: FOLDER_DEFAULT_ORDER, collectionCount: 0,
     };
     const index = await loadFoldersIndexBG();
     index[folder.uid] = { name: folder.name, color: folder.color, collapsed: folder.collapsed, order: folder.order, lastUpdated: now, collectionCount: 0 };
@@ -87,6 +92,7 @@ async function deleteFolderBG(uid) {
 }
 
 async function updateFolderCountsBG(folderUids) {
+    if (!Array.isArray(folderUids) || folderUids.length === 0) return false;
     const cIndex = await loadCollectionsIndexBG();
     const fIndex = await loadFoldersIndexBG();
     const now = Date.now();
