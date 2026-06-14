@@ -3,6 +3,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { Provider } from 'jotai';
+import { browser } from '../static/globals';
 
 jest.mock('../app/ai/useTaboxAIEnabled', () => ({ useTaboxAIEnabled: jest.fn() }));
 jest.mock('../app/ai/aiClient', () => ({ isAISupported: jest.fn() }));
@@ -58,5 +59,21 @@ describe('AddNewTextbox AI suggest', () => {
         useTaboxAIEnabled.mockReturnValue(false);
         await renderBox();
         expect(screen.queryByRole('button', { name: /suggest name with ai/i })).toBeNull();
+    });
+
+    test('AI suggest button is disabled when saveMode is all-windows with multiple windows', async () => {
+        browser.windows.getAll.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+        await renderBox();
+
+        // Wait for the window-count effect to settle and enable the toggle
+        await waitFor(() => {
+            expect(screen.getByRole('button', { name: 'Save all windows as folder' })).not.toBeDisabled();
+        });
+
+        // Switch to all-windows mode
+        fireEvent.click(screen.getByRole('button', { name: 'Save all windows as folder' }));
+
+        // AI button must be disabled in all-windows mode
+        expect(screen.getByRole('button', { name: /suggest name with ai/i })).toBeDisabled();
     });
 });

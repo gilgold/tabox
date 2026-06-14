@@ -331,7 +331,7 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
                 <AiSuggestNameButton
                     suggest={handleSuggestName}
                     onSuggested={(name) => {
-                        setSearch(name);
+                        setSearch(name.trim() !== '' ? name : null);
                         setName(name);
                     }}
                     onBusyChange={setAiBusy}
