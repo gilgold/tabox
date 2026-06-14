@@ -152,6 +152,28 @@ test('persistent "Undo last arrange" button appears for a done auto-arrange and 
     expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'aiUndo' });
 });
 
+test('reopening while an auto-arrange is running shows the running panel (reattach)', async () => {
+    // aiGetState returns a RUNNING auto-arrange state from the SW.
+    browser.runtime.sendMessage = jest.fn().mockImplementation((msg) => {
+        if (msg.type === 'aiGetState') {
+            return Promise.resolve({
+                taskId: 't-run', type: 'auto-arrange', status: 'running',
+                filed: 1, total: 3,
+            });
+        }
+        return Promise.resolve({});
+    });
+
+    renderModal();
+
+    // Without clicking the auto-arrange card, the running panel is shown:
+    // the determinate "Filing … collections…" progress label appears, proving
+    // activeToolId was auto-selected on reattach.
+    await waitFor(() => expect(screen.getByText(/Filing .* collections?…/i)).toBeInTheDocument());
+    // No tool-hub card is rendered while the running panel is active.
+    expect(screen.queryByRole('button', { name: /Arrange now/i })).not.toBeInTheDocument();
+});
+
 test('reopening after a done run does not re-toast (only running tasks reattach)', async () => {
     // aiGetState returns a terminal done state from a prior session.
     browser.runtime.sendMessage = jest.fn().mockImplementation((msg) => {

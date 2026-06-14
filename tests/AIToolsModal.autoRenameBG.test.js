@@ -254,9 +254,9 @@ describe('AIToolsModal – Auto-Rename driven by the service worker', () => {
         });
 
         const store = await renderOpenModal();
-        fireEvent.click(screen.getByText('Auto-name collection'));
 
-        // The in-progress result should render without clicking Run
+        // Reattach auto-navigates to the auto-rename panel; the in-progress
+        // result renders without clicking the tool card or Run.
         await waitFor(() => expect(screen.getByText('React Learning')).toBeInTheDocument());
         // The AI-border atom is restored to the running currentUid so the
         // processed collection keeps its highlight after reattach.
@@ -299,9 +299,9 @@ describe('AIToolsModal – Auto-Rename driven by the service worker', () => {
         });
 
         await renderOpenModal();
-        fireEvent.click(screen.getByText('Auto-name collection'));
 
-        // Progress label reflects the running state (2 of 3: X).
+        // Reattach auto-navigates to the auto-rename panel; the progress label
+        // reflects the running state (2 of 3: X) without clicking the tool card.
         await waitFor(() => expect(screen.getByText(/Renaming 2 of 3: X/)).toBeInTheDocument());
     });
 });

@@ -22,6 +22,14 @@ import { browser } from '../static/globals';
 import './Modal.css';
 import './AIToolsModal.css';
 
+// Map a service-worker aiTaskState.type to the modal's activeToolId, so a
+// reopened popup can auto-navigate to the running task's panel.
+const TASK_TO_TOOL = {
+    'auto-rename': 'auto-rename',
+    'auto-arrange': 'auto-arrange-folders',
+    'smart-organize': 'smart-organize',
+};
+
 function AIToolsModal({ updateRemoteData }) {
     const [isOpen, setIsOpen] = useAtom(aiToolsModalOpenState);
     const scope = useAtomValue(aiToolsScopeState);
@@ -153,7 +161,18 @@ function AIToolsModal({ updateRemoteData }) {
         (async () => {
             try {
                 const initial = await browser.runtime.sendMessage({ type: 'aiGetState' });
-                if (!cancelled && initial && initial.status === 'running') setAiTaskState(initial);
+                if (!cancelled && initial && initial.status === 'running') {
+                    setAiTaskState(initial);
+                    // Reopen mid-run: auto-navigate to the running task's panel so
+                    // the user immediately sees the in-progress run instead of the
+                    // tool hub. Only on the initial (reattach) fetch and only while
+                    // no tool is selected yet, to avoid overriding user navigation.
+                    const toolId = TASK_TO_TOOL[initial.type];
+                    if (toolId && !activeToolId) {
+                        setActiveToolId(toolId);
+                        setPanelStatus('running');
+                    }
+                }
             } catch {
                 // No reachable SW state — leave the panel idle.
             }
@@ -483,13 +502,12 @@ function AIToolsModal({ updateRemoteData }) {
         const total = rootCollections.length;
         setAaTotal(total);
         setAaFiled(0);
+        // Allow a fresh completion toast for the run we're about to start.
+        toastedTaskIdRef.current = null;
         stopAaTicker();
         aaTickRef.current = setInterval(() => {
             setAaFiled((prev) => (prev < total - 1 ? prev + 1 : prev));
         }, 700);
-
-        // Allow a fresh completion toast for the run we're about to start.
-        toastedTaskIdRef.current = null;
 
         // Fire-and-forget; the SW plans, creates folders, moves collections,
         // stores the undo snapshot, and syncs. Live progress + the final result
