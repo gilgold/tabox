@@ -13,6 +13,8 @@ export const AUTO_ARRANGE_UNDO_KEY = 'autoArrangeUndo';
 
 // Resolve every assignment's newFolderName to a real folder uid, creating each
 // unique name exactly once. Returns { targetByCollection: Map, createdFolderUids: [] }.
+// Note: on partial failure, already-created folders may be orphaned — acceptable since
+// fail-fast is the only safe option when a complete snapshot isn't yet available.
 async function resolveTargets(assignments) {
     const createdFolderUids = [];
     const createdByLowerName = new Map();
@@ -63,7 +65,8 @@ export async function applyAutoArrange(plan) {
     }
 
     // Single batched storage write (never per-item parallel writes).
-    await batchUpdateCollections(updates);
+    const ok = await batchUpdateCollections(updates);
+    if (!ok) throw new Error('Auto-arrange: failed to move collections');
 
     for (const folderUid of affectedFolderUids) {
         await updateFolderCollectionCount(folderUid);
@@ -71,6 +74,7 @@ export async function applyAutoArrange(plan) {
 
     const snapshot = { moves, createdFolderUids, createdAt: now };
     await browser.storage.local.set({ [AUTO_ARRANGE_UNDO_KEY]: snapshot });
+    // createFolder triggers sync internally; this is the authoritative final sync for the full operation.
     await triggerBackgroundSync();
 
     return { snapshot, foldersCreated: createdFolderUids.length, collectionsMoved: moves.length };
@@ -81,7 +85,8 @@ export async function undoAutoArrange(snapshot) {
 
     const now = Date.now();
     const restores = snapshot.moves.map((m) => ({ uid: m.uid, parentId: m.prevParentId ?? null, lastUpdated: now }));
-    await batchUpdateCollections(restores);
+    const ok = await batchUpdateCollections(restores);
+    if (!ok) throw new Error('Auto-arrange undo: failed to restore collections');
 
     const affected = new Set(snapshot.createdFolderUids || []);
     for (const m of snapshot.moves) {

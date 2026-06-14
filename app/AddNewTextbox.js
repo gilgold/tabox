@@ -9,6 +9,8 @@ import { triggerBackgroundSync } from './utils/sharedSync';
 import { showErrorToast } from './toastHelpers';
 import { IoClose } from 'react-icons/io5';
 import { HiOutlineDesktopComputer, HiCollection } from 'react-icons/hi';
+import AiSuggestNameButton from './AiSuggestNameButton';
+import { suggestCollectionName } from './ai/tasks/suggestCollectionName';
 
 function SaveHighlightedOnlyLabel({ saveMode, windowCount }) {
     const [totalHighlighted, setTotalHighlighted] = useState(0);
@@ -103,6 +105,7 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
     const [hideClear, setHideClear] = useState(true);
     const [saveMode, setSaveMode] = useState('current'); // 'current' or 'all'
     const [windowCount, setWindowCount] = useState(1);
+    const [aiBusy, setAiBusy] = useState(false);
 
     useEffect(() => {
         setInputFocus();
@@ -296,9 +299,14 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
         setInputFocus();
     }
 
+    const handleSuggestName = async () => {
+        const { tabs } = await getCurrentTabsAndGroups('');
+        return suggestCollectionName({ tabs: tabs || [] });
+    };
+
     return <section className='add-collections-wrapper'>
         <div className="left-controls-group">
-            <div className="add-collection-group">
+            <div className={`add-collection-group${aiBusy ? ' ai-name-processing' : ''}`}>
                 <input
                     type="text"
                     maxLength="50"
@@ -317,6 +325,16 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
                     onClick={handleClear}>
                     <IoClose size="16px" />
                 </button>
+                <AiSuggestNameButton
+                    suggest={handleSuggestName}
+                    onSuggested={(name) => {
+                        setSearch(name.trim() !== '' ? name : null);
+                        setName(name);
+                    }}
+                    onBusyChange={setAiBusy}
+                    disabled={saveMode === 'all' && windowCount > 1}
+                    disabledReason="Switch to single-window mode to name from the current window"
+                />
             </div>
             
             <div className="add-button-container">

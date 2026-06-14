@@ -1,6 +1,5 @@
 jest.mock('../app/utils/storageUtils', () => ({
     loadAllCollections: jest.fn(),
-    loadAllFolders: jest.fn(),
     batchUpdateCollections: jest.fn(),
     updateFolderCollectionCount: jest.fn(),
 }));
@@ -12,7 +11,7 @@ jest.mock('../app/utils/sharedSync', () => ({ triggerBackgroundSync: jest.fn() }
 
 import { browser } from '../static/globals';
 import {
-    loadAllCollections, loadAllFolders, batchUpdateCollections, updateFolderCollectionCount,
+    loadAllCollections, batchUpdateCollections, updateFolderCollectionCount,
 } from '../app/utils/storageUtils';
 import { createFolder, deleteFolder } from '../app/utils/folderOperations';
 import { applyAutoArrange, undoAutoArrange, AUTO_ARRANGE_UNDO_KEY } from '../app/ai/autoArrangeApply';
@@ -40,7 +39,6 @@ describe('applyAutoArrange', () => {
         setupStorageMocks();
         batchUpdateCollections.mockResolvedValue(true);
         updateFolderCollectionCount.mockResolvedValue(true);
-        loadAllFolders.mockResolvedValue([{ uid: 'f-dev', name: 'Development' }]);
         loadAllCollections.mockResolvedValue([
             { uid: 'c1', parentId: null },
             { uid: 'c2', parentId: null },
