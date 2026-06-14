@@ -14,6 +14,7 @@ import { loadAllCollections } from './utils/storageUtils';
 import { buildCollectionFromSnapshot } from './utils/saveCollectionSnapshot';
 import { captureWindowSnapshot } from './ai/captureWindowSnapshot';
 import { useSmartOrganizeUndo } from './ai/useSmartOrganizeUndo';
+import SmartOrganizeFoldAnimation from './SmartOrganizeFoldAnimation';
 import { showUndoToast, showSuccessToast } from './toastHelpers';
 import { UNDO_TIME } from './constants';
 import { browser } from '../static/globals';
@@ -542,6 +543,7 @@ function AIToolsModal({ updateRemoteData }) {
                         {/* Running state */}
                         {panelStatus === 'running' && (
                             <>
+                                <SmartOrganizeFoldAnimation />
                                 <div className="ai-rename-progress">
                                     <div className="ai-rename-progress-track">
                                         <div className="ai-rename-progress-fill ai-rename-progress-fill--animated" />

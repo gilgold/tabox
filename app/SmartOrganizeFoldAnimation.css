@@ -1,0 +1,114 @@
+/* ── Smart Organize fold animation ──────────────────────────────────────────
+ * Loose tab chips slide down and fold into a collapsed tab group, on a loop.
+ * Animates only transform/opacity (compositor thread). Decorative — hidden
+ * from assistive tech via aria-hidden on the host element.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+.so-fold-anim {
+    display: flex;
+    justify-content: center;
+    padding: 6px 0 2px;
+}
+
+.so-fold-stage {
+    position: relative;
+    width: 150px;
+    height: 78px;
+}
+
+/* The collapsed group the tabs fold into — always visible (static anchor). */
+.so-fold-group {
+    position: absolute;
+    left: 50%;
+    bottom: 6px;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: 116px;
+    height: 22px;
+    padding: 0 10px;
+    box-sizing: border-box;
+    border-radius: 7px;
+    background: rgba(124, 58, 237, 0.12);
+    border: 1px solid rgba(124, 58, 237, 0.45);
+}
+
+.so-fold-group-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, #7c3aed, #2563eb);
+}
+
+.so-fold-group-label {
+    flex: 1;
+    height: 5px;
+    border-radius: 3px;
+    background: rgba(124, 58, 237, 0.4);
+}
+
+/* The loose tabs that fold in. */
+.so-fold-tab {
+    position: absolute;
+    left: 50%;
+    top: 4px;
+    width: 84px;
+    height: 18px;
+    margin-left: -42px;
+    border-radius: 6px;
+    transform-origin: bottom center;
+    opacity: 0;
+    will-change: transform, opacity;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.so-fold-tab--1 { background: linear-gradient(135deg, #2563eb, #38bdf8); }
+.so-fold-tab--2 { background: linear-gradient(135deg, #7c3aed, #2563eb); }
+.so-fold-tab--3 { background: linear-gradient(135deg, #ec4899, #7c3aed); }
+
+@keyframes so-fold-tab {
+    0%        { transform: translateY(-10px) scaleY(1); opacity: 0; }
+    12%       { transform: translateY(-10px) scaleY(1); opacity: 1; }
+    45%       { transform: translateY(34px) scaleY(1); opacity: 1; }
+    62%       { transform: translateY(48px) scaleY(0.08); opacity: 0.95; }
+    74%, 100% { transform: translateY(48px) scaleY(0.08); opacity: 0; }
+}
+
+/* Subtle "absorb" pulse on the group as each tab lands. */
+@keyframes so-fold-group-pulse {
+    0%, 55%, 100% { transform: translateX(-50%) scale(1); }
+    66%           { transform: translateX(-50%) scale(1.05); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .so-fold-tab {
+        animation: so-fold-tab 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+    .so-fold-tab--1 { animation-delay: 0s; }
+    .so-fold-tab--2 { animation-delay: 0.45s; }
+    .so-fold-tab--3 { animation-delay: 0.9s; }
+
+    .so-fold-group {
+        animation: so-fold-group-pulse 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+}
+
+/* Static fallback: no looping motion. The group stays visible with a single
+ * resting tab tucked into it so the concept still reads. */
+@media (prefers-reduced-motion: reduce) {
+    .so-fold-tab--2 { opacity: 1; transform: translateY(46px) scaleY(0.2); }
+    .so-fold-tab--1,
+    .so-fold-tab--3 { display: none; }
+}
+
+html.performance-mode .so-fold-tab {
+    animation: none !important;
+}
+html.performance-mode .so-fold-group {
+    animation: none !important;
+}
+html.performance-mode .so-fold-tab--2 { opacity: 1; transform: translateY(46px) scaleY(0.2); }
+html.performance-mode .so-fold-tab--1,
+html.performance-mode .so-fold-tab--3 { display: none; }
