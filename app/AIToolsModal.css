@@ -1,6 +1,10 @@
 .ai-tools-modal {
     max-width: 360px;
     width: 90%;
+    /* Match the inner content radius and don't clip its glow/gradient ring
+     * (the shared .modal-content uses 20px + overflow:auto). */
+    border-radius: 16px;
+    overflow: visible;
 }
 
 .ai-tools-modal--fullpage {
@@ -13,9 +17,10 @@
     gap: 14px;
     padding: 16px;
     border-radius: 16px;
-    background: linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(248, 248, 252, 0.92));
-    backdrop-filter: blur(40px) saturate(180%);
-    -webkit-backdrop-filter: blur(40px) saturate(180%);
+    /* No backdrop-filter: Chrome ignores border-radius when clipping it, which
+     * bleeds square corners behind the rounded edge. The surface is opaque
+     * enough that a blur added nothing. */
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(248, 248, 252, 0.96));
     box-shadow:
         0 18px 48px rgba(124, 58, 237, 0.16),
         0 6px 18px rgba(37, 99, 235, 0.12),
@@ -46,7 +51,7 @@
 }
 
 [data-theme="dark"] .ai-tools-modal-content {
-    background: linear-gradient(145deg, rgba(24, 24, 30, 0.96), rgba(34, 34, 44, 0.92));
+    background: linear-gradient(145deg, rgba(24, 24, 30, 0.98), rgba(34, 34, 44, 0.97));
     box-shadow:
         0 18px 48px rgba(124, 58, 237, 0.32),
         0 6px 18px rgba(56, 189, 248, 0.18),
