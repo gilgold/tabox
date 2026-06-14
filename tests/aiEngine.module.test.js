@@ -55,3 +55,21 @@ test('unknown task id resolves to status:error (no crash)', async () => {
   const res = await createEngine({ registry, ctx: ctx() }).runTask({ id: 'nope', params: {} });
   expect(res.status).toBe('error');
 });
+
+test('report() persists incremental progress mid-run', async () => {
+  const seen = [];
+  const origSet = browser.storage.local.set;
+  browser.storage.local.set = jest.fn(async (payload) => {
+    if (payload.aiTaskState) seen.push(payload.aiTaskState.filed);
+    return origSet(payload);
+  });
+  registry.register({ id: 'prog', async run({ report }) { await report({ filed: 1 }); await report({ filed: 2 }); return { summary: '', undo: null }; }, async undo() {} });
+  await createEngine({ registry, ctx: ctx() }).runTask({ id: 'prog', params: {} });
+  browser.storage.local.set = origSet;
+  expect(seen).toEqual(expect.arrayContaining([1, 2]));
+});
+
+test('undoLast is a no-op when there is no undo snapshot', async () => {
+  await browser.storage.local.set({ aiTaskState: { undo: null } });
+  await expect(createEngine({ registry, ctx: ctx() }).undoLast()).resolves.toBeUndefined();
+});
