@@ -1,0 +1,57 @@
+require('jest-webextension-mock');
+const { installStatefulLocalStorage } = require('./helpers/statefulLocalStorage');
+installStatefulLocalStorage();
+const registry = require('../chrome/ai-registry.js');
+const { createEngine } = require('../chrome/ai-engine.js');
+
+beforeEach(async () => { await browser.storage.local.clear(); registry._reset(); });
+
+function ctx(overrides = {}) {
+  return { storage: {}, loadCollections: jest.fn(), readWindow: jest.fn(),
+           triggerSync: jest.fn().mockResolvedValue(true), client: {}, planners: {}, ...overrides };
+}
+
+test('engine runs ANY registered task and writes the full aiTaskState lifecycle', async () => {
+  registry.register({
+    id: 'demo',
+    async run({ report }) { await report({ total: 2, filed: 1, currentLabel: 'x' }); return { summary: 'done demo', undo: { task: 'demo', n: 1 } }; },
+    async undo() {},
+  });
+  const engine = createEngine({ registry, ctx: ctx() });
+  const res = await engine.runTask({ id: 'demo', params: {} });
+  expect(res.status).toBe('done');
+  expect(res.type).toBe('demo');
+  expect(res.summary).toBe('done demo');
+  expect(res.undo).toEqual({ task: 'demo', n: 1 });
+  const persisted = (await browser.storage.local.get('aiTaskState')).aiTaskState;
+  expect(persisted.status).toBe('done');
+  expect(persisted.total).toBe(2);
+});
+
+test('engine maps a task throw to status:error without rejecting', async () => {
+  registry.register({ id: 'boom', async run() { throw new Error('kaboom'); }, async undo() {} });
+  const res = await createEngine({ registry, ctx: ctx() }).runTask({ id: 'boom', params: {} });
+  expect(res.status).toBe('error');
+  expect((await browser.storage.local.get('aiTaskState')).aiTaskState.status).toBe('error');
+});
+
+test('engine marks cancelled when the signal aborts mid-run', async () => {
+  registry.register({ id: 'cancellable', async run({ signal }) { if (signal.aborted) return { summary: '', undo: null }; const e = new Error('a'); e.name = 'AbortError'; throw e; }, async undo() {} });
+  const controller = new AbortController(); controller.abort();
+  const res = await createEngine({ registry, ctx: ctx() }).runTask({ id: 'cancellable', params: {}, signal: controller.signal });
+  expect(res.status).toBe('cancelled');
+});
+
+test('undoLast dispatches to the task named in the stored snapshot', async () => {
+  const undoSpy = jest.fn();
+  registry.register({ id: 'demo', async run() { return { summary: '', undo: { task: 'demo' } }; }, undo: undoSpy });
+  await browser.storage.local.set({ aiTaskState: { undo: { task: 'demo', x: 1 } } });
+  await createEngine({ registry, ctx: ctx() }).undoLast();
+  expect(undoSpy).toHaveBeenCalledWith(expect.objectContaining({ snapshot: { task: 'demo', x: 1 } }));
+  expect((await browser.storage.local.get('aiTaskState')).aiTaskState).toBeFalsy(); // cleared
+});
+
+test('unknown task id resolves to status:error (no crash)', async () => {
+  const res = await createEngine({ registry, ctx: ctx() }).runTask({ id: 'nope', params: {} });
+  expect(res.status).toBe('error');
+});
