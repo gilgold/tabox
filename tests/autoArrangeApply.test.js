@@ -58,7 +58,8 @@ describe('applyAutoArrange', () => {
         const result = await applyAutoArrange(plan);
 
         expect(createFolder).toHaveBeenCalledTimes(1);
-        expect(createFolder).toHaveBeenCalledWith('Cooking');
+        // New folders are created collapsed (3rd arg true) with a color from the palette.
+        expect(createFolder).toHaveBeenCalledWith('Cooking', expect.any(String), true);
         expect(result.foldersCreated).toBe(1);
         expect(result.collectionsMoved).toBe(3);
 
@@ -71,6 +72,22 @@ describe('applyAutoArrange', () => {
         expect(stored.createdFolderUids).toEqual(['new-Cooking']);
         const prior = Object.fromEntries(stored.moves.map((m) => [m.uid, m.prevParentId]));
         expect(prior).toEqual({ c1: null, c2: null, c3: 'f-old' });
+    });
+
+    test('gives each newly created folder a distinct color and creates them collapsed', async () => {
+        const plan = {
+            assignments: [
+                { collectionId: 'c1', existingFolderId: null, newFolderName: 'Cooking' },
+                { collectionId: 'c2', existingFolderId: null, newFolderName: 'Reading' },
+                { collectionId: 'c3', existingFolderId: null, newFolderName: 'Travel' },
+            ],
+        };
+        await applyAutoArrange(plan);
+
+        expect(createFolder).toHaveBeenCalledTimes(3);
+        const colors = createFolder.mock.calls.map((call) => call[1]);
+        expect(new Set(colors).size).toBe(3); // not all the same color
+        createFolder.mock.calls.forEach((call) => expect(call[2]).toBe(true)); // collapsed
     });
 });
 

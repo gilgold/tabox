@@ -11,14 +11,31 @@ import { triggerBackgroundSync } from '../utils/sharedSync';
 
 export const AUTO_ARRANGE_UNDO_KEY = 'autoArrangeUndo';
 
+// The same folder palette the Create/Save Folder UIs offer. New auto-arrange
+// folders draw from a shuffled copy so they aren't all one color.
+const FOLDER_COLORS = ['#4facfe', '#43e97b', '#a855f7', '#fb923c', '#ef4444', '#eab308', '#ec4899', '#14b8a6', '#6b7280'];
+
+// Fisher-Yates shuffle (returns a new array). Math.random is fine in app code.
+function shuffledColors() {
+    const colors = [...FOLDER_COLORS];
+    for (let i = colors.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [colors[i], colors[j]] = [colors[j], colors[i]];
+    }
+    return colors;
+}
+
 // Resolve every assignment's newFolderName to a real folder uid, creating each
-// unique name exactly once. Returns { targetByCollection: Map, createdFolderUids: [] }.
+// unique name exactly once. New folders are created collapsed, with varied colors.
+// Returns { targetByCollection: Map, createdFolderUids: [] }.
 // Note: on partial failure, already-created folders may be orphaned — acceptable since
 // fail-fast is the only safe option when a complete snapshot isn't yet available.
 async function resolveTargets(assignments) {
     const createdFolderUids = [];
     const createdByLowerName = new Map();
     const targetByCollection = new Map();
+    // Assign distinct colors in turn (wraps after the palette is exhausted).
+    const palette = shuffledColors();
 
     for (const a of assignments) {
         if (a.existingFolderId) {
@@ -28,7 +45,9 @@ async function resolveTargets(assignments) {
         const key = a.newFolderName.toLowerCase();
         let uid = createdByLowerName.get(key);
         if (!uid) {
-            const folder = await createFolder(a.newFolderName);
+            const color = palette[createdFolderUids.length % palette.length];
+            // createFolder(name, color, collapsed) — collapsed so new folders fold away.
+            const folder = await createFolder(a.newFolderName, color, true);
             if (!folder) throw new Error(`Failed to create folder "${a.newFolderName}"`);
             uid = folder.uid;
             createdByLowerName.set(key, uid);
