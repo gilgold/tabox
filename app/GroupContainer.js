@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { MdExpandMore, MdExpandLess, MdDragIndicator, MdOpenInNew } from 'react-icons/md';
 import { PiTabs } from 'react-icons/pi';
 import { AutoSaveTextbox } from './AutoSaveTextbox';
@@ -7,6 +7,7 @@ import DeleteWithConfirmationButton from './DeleteWithConfirmationButton';
 import DroppableGroupHeader from './DroppableGroupHeader';
 import { getColorCode, tabGrooupColorChart } from './utils';
 import { getColorValue } from './utils/colorMigration';
+import { suggestCollectionName } from './ai/tasks/suggestCollectionName';
 
 // Compact label for the tab-count badge so large numbers fit a small circle:
 // 0–999 shown as-is, 1,000–99,999 collapse to "1k"…"99k", anything bigger caps at "99k+".
@@ -111,6 +112,8 @@ function GroupContainer({
         }
     };
     
+    const handleSuggestGroupName = useCallback(() => suggestCollectionName({ tabs: tabs || [] }), [tabs]);
+
     const groupColor = getGroupColor();
     const tabCount = tabs ? tabs.length : 0;
     
@@ -346,6 +349,7 @@ function GroupContainer({
                                     inputClassName="group-title-input"
                                     wrapperClassName="group-title-autosave-wrapper"
                                     hideEditIcon
+                                    aiSuggest={{ suggest: handleSuggestGroupName }}
                                 />
                             </div>
                         </div>

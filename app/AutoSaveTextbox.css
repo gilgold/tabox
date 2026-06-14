@@ -177,3 +177,18 @@
       transform: rotate(360deg);
     }
   }
+
+/* AI suggest button — float it absolutely so it doesn't push the input or get clipped */
+.autosave-wrapper.has-ai-suggest .ai-suggest-name-btn {
+    position: absolute;
+    right: 2px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 4;
+}
+
+/* Shift save indicators left so the AI button doesn't overlap them */
+.autosave-wrapper.has-ai-suggest .checkmark,
+.autosave-wrapper.has-ai-suggest .lds-ring {
+    right: 26px;
+}

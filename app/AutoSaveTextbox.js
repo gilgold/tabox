@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './AutoSaveTextbox.css';
+import './AIEffects.css';
 import { AiFillEdit } from 'react-icons/ai';
+import AiSuggestNameButton from './AiSuggestNameButton';
 
 const TypingLoader = () => <div className="lds-ring"><div /><div /><div /><div /></div>;
 
@@ -8,6 +10,7 @@ export const AutoSaveTextbox = (props) => {
     const [value, setValue] = useState(props.initValue);
     const [saved, setSaved] = useState(false);
     const [typing, setTyping] = useState(false);
+    const [aiBusy, setAiBusy] = useState(false);
     const [isInitial, setIsInitial] = useState(true);
     const inputRef = useRef();
     const mountedRef = useRef(true);
@@ -107,7 +110,7 @@ export const AutoSaveTextbox = (props) => {
     }, [value]);
 
     return (
-        <div className={`autosave-wrapper ${props.wrapperClassName || ''}`.trim()} onClick={(e) => e.stopPropagation()}>
+        <div className={['autosave-wrapper', props.wrapperClassName, props.aiSuggest ? 'has-ai-suggest' : '', aiBusy ? 'ai-name-processing' : ''].filter(Boolean).join(' ')} onClick={(e) => e.stopPropagation()}>
             {!props.hideEditIcon && (
                 <div className="edit-icon" onClick={(e) => { e.stopPropagation(); inputRef.current.focus(); }}>
                     <AiFillEdit size="14px" color="var(--text-color)" />
@@ -125,6 +128,19 @@ export const AutoSaveTextbox = (props) => {
                 data-tooltip-id="main-tooltip" data-tooltip-content="Click to edit • Auto-saves as you type" 
                 data-tooltip-class-name="small-tooltip"
                 value={value} />
+            {props.aiSuggest && (
+                <AiSuggestNameButton
+                    suggest={props.aiSuggest.suggest}
+                    disabled={props.aiSuggest.disabled}
+                    disabledReason={props.aiSuggest.disabledReason}
+                    onBusyChange={setAiBusy}
+                    onSuggested={(name) => {
+                        setSaved(false);
+                        if (props.onChange) props.onChange(name);
+                        setValue(name);
+                    }}
+                />
+            )}
             {saved ? (
                 <svg key={`saved-${saved}`} className="checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
                     <circle className="checkmark__circle" cx="26" cy="26" r="25" fill="none" />
