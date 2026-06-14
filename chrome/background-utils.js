@@ -1072,12 +1072,31 @@ async function applySmartOrganizePlan({ windowId, plan, createdAt }) {
         ...plan.additions.flatMap((a) => a.tabIds),
     ];
 
+    // Capture the prior collapsed state of the existing groups we're about to
+    // add tabs to (and collapse), so undo can restore exactly how the user had
+    // them. New groups are removed on undo, so they need no record.
+    const groupCollapsedBefore = {};
+    const additionGroupIds = [...new Set(plan.additions.map((a) => a.groupId))];
+    if (additionGroupIds.length && browser.tabGroups) {
+        try {
+            const existing = await browser.tabGroups.query({ windowId });
+            for (const group of existing) {
+                if (additionGroupIds.includes(group.id)) {
+                    groupCollapsedBefore[group.id] = group.collapsed === true;
+                }
+            }
+        } catch (e) {
+            console.error('Smart Organize: failed to read existing group state', e);
+        }
+    }
+
     await browser.storage.local.set({
         [SMART_ORGANIZE_UNDO_KEY]: {
             windowId,
             createdAt: createdAt || Date.now(),
             orderedTabIds,
             affectedTabIds,
+            groupCollapsedBefore,
             summary: { groupsCreated: plan.newGroups.length, tabsAdded: affectedTabIds.length },
         },
     });
@@ -1090,6 +1109,9 @@ async function applySmartOrganizePlan({ windowId, plan, createdAt }) {
         try {
             await browser.tabs.group({ groupId: add.groupId, tabIds: add.tabIds });
             tabsAdded += add.tabIds.length;
+            // Keep the organized window tidy: collapse the group we added to.
+            // A collapse failure must not negate the successful grouping above.
+            await browser.tabGroups.update(add.groupId, { collapsed: true });
         } catch (e) {
             console.error('Smart Organize: addition failed for group', add.groupId, e);
         }
@@ -1099,7 +1121,9 @@ async function applySmartOrganizePlan({ windowId, plan, createdAt }) {
         if (!g.tabIds.length) continue;
         try {
             const groupId = await browser.tabs.group({ createProperties: { windowId }, tabIds: g.tabIds });
-            await browser.tabGroups.update(groupId, { title: g.name, color: g.color });
+            // New groups are created expanded by default — collapse them so the
+            // organized window reads as tidy rather than a wall of open groups.
+            await browser.tabGroups.update(groupId, { title: g.name, color: g.color, collapsed: true });
             groupsCreated += 1;
         } catch (e) {
             console.error('Smart Organize: new group failed', g.name, e);
@@ -1131,6 +1155,18 @@ async function undoSmartOrganize({ windowId } = {}) {
             await browser.tabs.ungroup(affected);
         } catch (e) {
             console.error('Smart Organize undo: ungroup failed', e);
+        }
+    }
+
+    // Restore the prior collapsed state of existing groups we collapsed on apply.
+    const collapsedBefore = snap.groupCollapsedBefore || {};
+    if (Object.keys(collapsedBefore).length && browser.tabGroups) {
+        for (const [groupId, wasCollapsed] of Object.entries(collapsedBefore)) {
+            try {
+                await browser.tabGroups.update(Number(groupId), { collapsed: wasCollapsed });
+            } catch {
+                // Group may no longer exist (e.g. all its tabs were closed); skip.
+            }
         }
     }
 
