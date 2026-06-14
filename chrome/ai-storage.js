@@ -2,13 +2,23 @@
 // Minimal, atomic collection/folder storage ops for AI apply, runnable in the
 // service worker. Each function does a SINGLE read-modify-write of each index
 // (never per-item parallel writes — see storage-index-atomic-writes). Folder
-// deletes write a tombstone so sync doesn't resurrect them. STORAGE_KEYS is the
-// global provided by background-utils.js (and shimmed by tests).
+// deletes write a tombstone so sync doesn't resurrect them.
 (() => {
-// STORAGE_KEYS comes from background-utils.js, which is importScripts-ed BEFORE
-// this file (see Task 5 ordering), so the bare reference resolves via the worker's
-// shared global lexical scope. In tests, set `global.STORAGE_KEYS` before require().
-const KEYS = (typeof STORAGE_KEYS !== 'undefined') ? STORAGE_KEYS : globalThis.STORAGE_KEYS;
+// IMPORTANT: STORAGE_KEYS is intentionally duplicated here (not imported from
+// background-utils.js) so this module is self-contained and lint-safe. This
+// copy MUST stay in sync with app/utils/sharedConstants.js,
+// chrome/background-utils.js, and chrome/sync-apply.js.
+const STORAGE_KEYS = {
+    COLLECTIONS_INDEX: 'collections_index',
+    FOLDERS_INDEX: 'folders_index',
+    LEGACY_TABS_ARRAY: 'tabsArray',
+    DELETED_COLLECTION_TOMBSTONES: 'deleted_collection_tombstones',
+    DELETED_FOLDER_TOMBSTONES: 'deleted_folder_tombstones',
+    COLLECTION_PREFIX: 'collection_',
+    FOLDER_PREFIX: 'folder_',
+    STORAGE_VERSION: 'tabox_storage_version'
+};
+const KEYS = STORAGE_KEYS;
 const local = (globalThis.browser || globalThis.chrome).storage.local;
 
 const FOLDER_DEFAULT_ORDER = 999999; // new folders sort to the bottom; UI reorders after
