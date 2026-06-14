@@ -1,4 +1,4 @@
-import { MdDriveFileRenameOutline, MdAutoAwesomeMosaic } from 'react-icons/md';
+import { MdDriveFileRenameOutline, MdAutoAwesomeMosaic, MdCreateNewFolder } from 'react-icons/md';
 
 // Registry of AI tools shown in the AI Tools modal.
 // To add a new AI feature: implement it under app/ai/tasks/ and add an entry
@@ -16,5 +16,11 @@ export const AI_TOOLS = [
         title: 'Auto-name collection',
         description: 'Let AI suggest a name for a collection based on its tabs.',
         icon: MdDriveFileRenameOutline,
+    },
+    {
+        id: 'auto-arrange-folders',
+        title: 'Auto-arrange into folders',
+        description: 'Sort your loose collections into folders automatically.',
+        icon: MdCreateNewFolder,
     },
 ];
