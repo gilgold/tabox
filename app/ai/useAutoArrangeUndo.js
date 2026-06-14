@@ -1,37 +1,23 @@
 // app/ai/useAutoArrangeUndo.js
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { browser } from '../../static/globals';
-import { AUTO_ARRANGE_UNDO_KEY, undoAutoArrange } from './autoArrangeApply';
 
-// Live view of the persistent auto-arrange undo snapshot. Drives the in-modal
-// "Undo" button; survives popup close because the snapshot lives in
-// chrome.storage.local (written by applyAutoArrange).
+const AI_TASK_STATE_KEY = 'aiTaskState';
+// Persistent "undo last arrange" affordance. The SW stores the undo snapshot in
+// aiTaskState.undo (survives popup close). Undo is performed by the SW via the
+// aiUndo message. Only a COMPLETED auto-arrange run is undoable.
 export function useAutoArrangeUndo() {
     const [snapshot, setSnapshot] = useState(null);
-    const loaded = useRef(false);
-
+    const derive = (st) => (st && st.type === 'auto-arrange' && st.status === 'done' && st.undo) ? st.undo : null;
     useEffect(() => {
-        browser.storage.local.get(AUTO_ARRANGE_UNDO_KEY).then((items) => {
-            if (!loaded.current) {
-                setSnapshot(items[AUTO_ARRANGE_UNDO_KEY] || null);
-                loaded.current = true;
-            }
-        }).catch(() => {});
-
-        const onChanged = (changes) => {
-            if (changes[AUTO_ARRANGE_UNDO_KEY]) {
-                loaded.current = true;
-                setSnapshot(changes[AUTO_ARRANGE_UNDO_KEY].newValue || null);
-            }
+        browser.runtime.sendMessage({ type: 'aiGetState' }).then((st) => setSnapshot(derive(st))).catch(() => {});
+        const onChanged = (changes, area) => {
+            if (area !== 'local') return;
+            if (changes[AI_TASK_STATE_KEY]) setSnapshot(derive(changes[AI_TASK_STATE_KEY].newValue));
         };
         browser.storage.onChanged.addListener(onChanged);
         return () => browser.storage.onChanged.removeListener(onChanged);
     }, []);
-
-    const undo = useCallback(async () => {
-        if (!snapshot) return;
-        await undoAutoArrange(snapshot);
-    }, [snapshot]);
-
+    const undo = useCallback(async () => { await browser.runtime.sendMessage({ type: 'aiUndo' }); }, []);
     return { snapshot, undo };
 }

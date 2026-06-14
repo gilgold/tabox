@@ -1,33 +1,58 @@
-jest.mock('../app/ai/autoArrangeApply', () => ({
-    AUTO_ARRANGE_UNDO_KEY: 'autoArrangeUndo',
-    undoAutoArrange: jest.fn(),
-}));
-
+/** @jest-environment jsdom */
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { browser } from '../static/globals';
 import { useAutoArrangeUndo } from '../app/ai/useAutoArrangeUndo';
-import { undoAutoArrange } from '../app/ai/autoArrangeApply';
+
+let storageListener;
 
 beforeEach(() => {
     jest.clearAllMocks();
-    browser.storage.local.get = jest.fn().mockResolvedValue({});
-    jest.spyOn(browser.storage.onChanged, 'addListener');
-    jest.spyOn(browser.storage.onChanged, 'removeListener');
+    storageListener = undefined;
+    browser.runtime.sendMessage = jest.fn().mockResolvedValue(null);
+    jest.spyOn(browser.storage.onChanged, 'addListener').mockImplementation((fn) => { storageListener = fn; });
+    jest.spyOn(browser.storage.onChanged, 'removeListener').mockImplementation(() => {});
 });
 afterEach(() => jest.restoreAllMocks());
 
-test('loads the snapshot from storage on mount', async () => {
-    const snap = { moves: [{ uid: 'c1', prevParentId: null }], createdFolderUids: [] };
-    browser.storage.local.get.mockResolvedValue({ autoArrangeUndo: snap });
+test('derives the snapshot from a completed auto-arrange aiTaskState on mount', async () => {
+    const undo = { task: 'auto-arrange', moves: [{ uid: 'c1', prevParentId: null }], createdFolderUids: [] };
+    browser.runtime.sendMessage.mockResolvedValue({ type: 'auto-arrange', status: 'done', undo });
     const { result } = renderHook(() => useAutoArrangeUndo());
-    await waitFor(() => expect(result.current.snapshot).toEqual(snap));
+    await waitFor(() => expect(result.current.snapshot).toEqual(undo));
 });
 
-test('undo() calls undoAutoArrange with the snapshot', async () => {
-    const snap = { moves: [{ uid: 'c1', prevParentId: null }], createdFolderUids: [] };
-    browser.storage.local.get.mockResolvedValue({ autoArrangeUndo: snap });
+test('does not expose a snapshot for a still-running auto-arrange task', async () => {
+    browser.runtime.sendMessage.mockResolvedValue({ type: 'auto-arrange', status: 'running', undo: null });
     const { result } = renderHook(() => useAutoArrangeUndo());
-    await waitFor(() => expect(result.current.snapshot).toEqual(snap));
+    await act(async () => {});
+    expect(result.current.snapshot).toBeNull();
+});
+
+test('ignores aiTaskState for a different task type', async () => {
+    browser.runtime.sendMessage.mockResolvedValue({ type: 'auto-rename', status: 'done', undo: { foo: 1 } });
+    const { result } = renderHook(() => useAutoArrangeUndo());
+    await act(async () => {});
+    expect(result.current.snapshot).toBeNull();
+});
+
+test('tracks storage.onChanged updates to aiTaskState', async () => {
+    const { result } = renderHook(() => useAutoArrangeUndo());
+    await act(async () => {});
+    const undo = { task: 'auto-arrange', moves: [], createdFolderUids: ['nf'] };
+    await act(async () => {
+        storageListener({ aiTaskState: { newValue: { type: 'auto-arrange', status: 'done', undo } } }, 'local');
+    });
+    expect(result.current.snapshot).toEqual(undo);
+    // Cleared after the SW clears aiTaskState on undo.
+    await act(async () => {
+        storageListener({ aiTaskState: { newValue: null } }, 'local');
+    });
+    expect(result.current.snapshot).toBeNull();
+});
+
+test('undo() sends the aiUndo message', async () => {
+    const { result } = renderHook(() => useAutoArrangeUndo());
+    await act(async () => {});
     await act(async () => { await result.current.undo(); });
-    expect(undoAutoArrange).toHaveBeenCalledWith(snap);
+    expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'aiUndo' });
 });

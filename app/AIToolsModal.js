@@ -9,12 +9,10 @@ import { AI_TOOLS } from './ai/aiTasks';
 import { smartOrganizeTabs } from './ai/tasks/smartOrganizeTabs';
 import { getAIAvailability } from './ai/aiClient';
 import { readWindowStructure } from './ai/readWindowStructure';
-import { loadAllCollections, loadAllFolders } from './utils/storageUtils';
+import { loadAllCollections } from './utils/storageUtils';
 import { buildCollectionFromSnapshot } from './utils/saveCollectionSnapshot';
 import { captureWindowSnapshot } from './ai/captureWindowSnapshot';
 import { useSmartOrganizeUndo } from './ai/useSmartOrganizeUndo';
-import { autoArrangeCollections } from './ai/tasks/autoArrangeCollections';
-import { applyAutoArrange } from './ai/autoArrangeApply';
 import { useAutoArrangeUndo } from './ai/useAutoArrangeUndo';
 import AutoArrangeFoldAnimation from './AutoArrangeFoldAnimation';
 import SmartOrganizeFoldAnimation from './SmartOrganizeFoldAnimation';
@@ -68,7 +66,7 @@ function AIToolsModal({ updateRemoteData }) {
     const [aaFiled, setAaFiled] = useState(0);
     const [aaTotal, setAaTotal] = useState(0);
     const aaTickRef = useRef(null);
-    const { snapshot: aaUndoSnapshot, undo: aaUndoLast } = useAutoArrangeUndo();
+    const { snapshot: aaUndoSnapshot } = useAutoArrangeUndo();
 
     // Abort controller for the running engine
     const abortControllerRef = useRef(null);
@@ -473,18 +471,15 @@ function AIToolsModal({ updateRemoteData }) {
             return;
         }
 
-        const token = ++runTokenRef.current;
-        const controller = new AbortController();
-        abortControllerRef.current = controller;
-
         setPanelStatus('running');
         setError(null);
         setIsCancelling(false);
         setAaSummary(null);
 
         // Paced determinate progress: tick the filed count up toward the total
-        // while the (single, opaque) AI plan + batch apply run. Held one short of
-        // the total until the real result lands, then snapped to the moved count.
+        // while the single SW plan + batch apply run. Held one short of the total
+        // until the real result lands, then snapped to the moved count by the
+        // aiTaskState→UI effect on completion.
         const total = rootCollections.length;
         setAaTotal(total);
         setAaFiled(0);
@@ -493,75 +488,76 @@ function AIToolsModal({ updateRemoteData }) {
             setAaFiled((prev) => (prev < total - 1 ? prev + 1 : prev));
         }, 700);
 
-        let plan;
-        try {
-            const folders = await loadAllFolders({ metadataOnly: true });
-            const existing = folders.map((f) => ({ id: f.uid, name: f.name }));
-            plan = await autoArrangeCollections({
-                collections: rootCollections,
-                existingFolders: existing,
-                signal: controller.signal,
-            });
-        } catch (runError) {
+        // Allow a fresh completion toast for the run we're about to start.
+        toastedTaskIdRef.current = null;
+
+        // Fire-and-forget; the SW plans, creates folders, moves collections,
+        // stores the undo snapshot, and syncs. Live progress + the final result
+        // arrive via the aiTaskState storage subscription, and App auto-refreshes
+        // the list on the collections/folders index change.
+        dispatchAiRun('auto-arrange', {}).catch((runError) => {
             stopAaTicker();
-            if (token !== runTokenRef.current) return;
-            if (runError?.name === 'AbortError') {
-                setPanelStatus('idle');
-                runStartedRef.current = false;
-                return;
-            }
-            console.error('Auto-Arrange: engine threw:', runError);
+            console.error('Tabox AI: aiRun(auto-arrange) dispatch failed:', runError);
             setError('An unexpected error occurred. Please try again.');
             setPanelStatus('idle');
             runStartedRef.current = false;
-            return;
-        }
-
-        if (token !== runTokenRef.current) { stopAaTicker(); return; }
-
-        let applyResult;
-        try {
-            applyResult = await applyAutoArrange(plan);
-        } catch (applyError) {
-            stopAaTicker();
-            if (token !== runTokenRef.current) return;
-            console.error('Auto-Arrange: apply failed:', applyError);
-            setError('Could not arrange the collections. Please try again.');
-            setPanelStatus('idle');
-            runStartedRef.current = false;
-            return;
-        }
-
-        if (token !== runTokenRef.current) { stopAaTicker(); return; }
-
-        stopAaTicker();
-        const { foldersCreated = 0, collectionsMoved = 0 } = applyResult || {};
-        setAaFiled(collectionsMoved);
-        const summary = `Filed ${collectionsMoved} collection${collectionsMoved === 1 ? '' : 's'} into folders · created ${foldersCreated} new folder${foldersCreated === 1 ? '' : 's'}`;
-        setAaSummary(summary);
-
-        showUndoToast(
-            <BsStars />,
-            'Arranged collections into folders',
-            'Tabox AI',
-            async () => {
-                await aaUndoLast();
-                await updateRemoteData(await loadAllCollections());
-            },
-            UNDO_TIME,
-        );
-
-        await updateRemoteData(await loadAllCollections());
-
-        setPanelStatus('done');
-        runStartedRef.current = false;
+        });
     };
 
+    // Drive the Auto-Arrange panel UI from the service-worker-owned aiTaskState.
+    useEffect(() => {
+        if (activeToolId !== 'auto-arrange-folders') return;
+        if (!aiTaskState || aiTaskState.type !== 'auto-arrange') return;
+
+        const { status, filed = 0, total, summary } = aiTaskState;
+
+        if (status === 'running') {
+            setPanelStatus('running');
+            // Leave the paced ticker running; only adopt a real total if present.
+            if (total) setAaTotal(total);
+            return;
+        }
+
+        if (status === 'done' || status === 'cancelled' || status === 'error') {
+            stopAaTicker();
+            setIsCancelling(false);
+            runStartedRef.current = false;
+
+            if (status === 'error') {
+                setError('Could not arrange the collections. Please try again.');
+                setPanelStatus('idle');
+                return;
+            }
+            if (status === 'cancelled') {
+                // Auto-Arrange has no partial-results panel — return to idle.
+                setPanelStatus('idle');
+                return;
+            }
+
+            // status === 'done'
+            setError(null);
+            setAaFiled(filed);
+            setAaSummary(summary);
+            setPanelStatus('done');
+
+            // Fire the undo toast once per finished run.
+            if (toastedTaskIdRef.current !== aiTaskState.taskId) {
+                toastedTaskIdRef.current = aiTaskState.taskId;
+                showUndoToast(
+                    <BsStars />,
+                    'Arranged collections into folders',
+                    'Tabox AI',
+                    () => sendAiUndo(),
+                    UNDO_TIME,
+                );
+            }
+        }
+    }, [aiTaskState, activeToolId, sendAiUndo]);
+
     const handleAutoArrangeUndo = async () => {
-        await aaUndoLast();
+        await sendAiUndo();
         setAaSummary(null);
         setPanelStatus('idle');
-        await updateRemoteData(await loadAllCollections());
     };
 
     const n = targets.length;
