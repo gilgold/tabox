@@ -12,34 +12,48 @@
     flex-direction: column;
     gap: 14px;
     padding: 16px;
-    background: linear-gradient(
-        145deg,
-        rgba(255, 255, 255, 0.95) 0%,
-        rgba(255, 255, 255, 0.9) 100%
-    );
-    backdrop-filter: blur(40px) saturate(200%) brightness(110%);
-    -webkit-backdrop-filter: blur(40px) saturate(200%) brightness(110%);
+    /* Animated AI gradient border: a solid surface clipped to the padding box
+     * sits over a shifting multi-stop gradient clipped to the border box. */
+    border: 1.5px solid transparent;
     border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(248, 248, 252, 0.92)) padding-box,
+        linear-gradient(120deg, #7c3aed, #2563eb, #38bdf8, #ec4899, #7c3aed) border-box;
+    background-size: 100% 100%, 300% 100%;
+    background-position: 0 0, 0 0;
+    backdrop-filter: blur(40px) saturate(180%);
+    -webkit-backdrop-filter: blur(40px) saturate(180%);
     box-shadow:
-        0 20px 40px rgba(0, 0, 0, 0.1),
-        0 8px 16px rgba(0, 0, 0, 0.05),
+        0 18px 48px rgba(124, 58, 237, 0.16),
+        0 6px 18px rgba(37, 99, 235, 0.12),
         inset 0 1px 0 rgba(255, 255, 255, 0.6);
     position: relative;
     overflow: hidden;
 }
 
 [data-theme="dark"] .ai-tools-modal-content {
-    background: linear-gradient(
-        145deg,
-        rgba(23, 23, 23, 0.95) 0%,
-        rgba(38, 38, 38, 0.9) 100%
-    );
-    border-color: rgba(255, 255, 255, 0.1);
+    background:
+        linear-gradient(145deg, rgba(24, 24, 30, 0.96), rgba(34, 34, 44, 0.92)) padding-box,
+        linear-gradient(120deg, #a78bfa, #38bdf8, #7c3aed, #ec4899, #a78bfa) border-box;
+    background-size: 100% 100%, 300% 100%;
     box-shadow:
-        0 20px 40px rgba(0, 0, 0, 0.4),
-        0 8px 16px rgba(0, 0, 0, 0.3),
-        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        0 18px 48px rgba(124, 58, 237, 0.32),
+        0 6px 18px rgba(56, 189, 248, 0.18),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+@keyframes ai-modal-border-flow {
+    to { background-position: 0 0, 300% 0; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .ai-tools-modal-content {
+        animation: ai-modal-border-flow 7s linear infinite;
+    }
+}
+
+html.performance-mode .ai-tools-modal-content {
+    animation: none !important;
 }
 
 .ai-tools-modal-header {
