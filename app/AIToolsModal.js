@@ -10,10 +10,14 @@ import { autoRenameCollections } from './ai/tasks/autoRenameCollections';
 import { smartOrganizeTabs } from './ai/tasks/smartOrganizeTabs';
 import { getAIAvailability } from './ai/aiClient';
 import { readWindowStructure } from './ai/readWindowStructure';
-import { loadAllCollections } from './utils/storageUtils';
+import { loadAllCollections, loadAllFolders } from './utils/storageUtils';
 import { buildCollectionFromSnapshot } from './utils/saveCollectionSnapshot';
 import { captureWindowSnapshot } from './ai/captureWindowSnapshot';
 import { useSmartOrganizeUndo } from './ai/useSmartOrganizeUndo';
+import { autoArrangeCollections } from './ai/tasks/autoArrangeCollections';
+import { applyAutoArrange } from './ai/autoArrangeApply';
+import { useAutoArrangeUndo } from './ai/useAutoArrangeUndo';
+import AutoArrangeFoldAnimation from './AutoArrangeFoldAnimation';
 import SmartOrganizeFoldAnimation from './SmartOrganizeFoldAnimation';
 import { showUndoToast, showSuccessToast } from './toastHelpers';
 import { UNDO_TIME } from './constants';
@@ -49,6 +53,10 @@ function AIToolsModal({ updateRemoteData }) {
 
     // Persistent Smart Organize undo snapshot (survives popup close)
     const { snapshot: soUndoSnapshot, undo: soUndoLast } = useSmartOrganizeUndo();
+
+    // Auto-Arrange panel state
+    const [aaSummary, setAaSummary] = useState(null);
+    const { snapshot: aaUndoSnapshot, undo: aaUndoLast } = useAutoArrangeUndo();
 
     // Abort controller for the running engine
     const abortControllerRef = useRef(null);
@@ -86,6 +94,7 @@ function AIToolsModal({ updateRemoteData }) {
         setSoSummary(null);
         setSoWindows([]);
         setSoLoadingWindows(false);
+        setAaSummary(null);
         loadAllCollections().then(setCollections).catch((loadError) => {
             console.error('Tabox AI: failed to load collections', loadError);
             setCollections([]);
@@ -113,6 +122,9 @@ function AIToolsModal({ updateRemoteData }) {
     const targets = scope.type === 'selected'
         ? nameableCollections.filter((c) => scope.uids.includes(c.uid))
         : nameableCollections;
+
+    // Auto-Arrange operates on root (loose) collections only.
+    const rootCollections = collections.filter((c) => (c.parentId ?? null) === null);
 
     const handleRun = async () => {
         if (panelStatus !== 'idle' || targets.length === 0) return;
@@ -401,6 +413,94 @@ function AIToolsModal({ updateRemoteData }) {
         }
     };
 
+    const handleAutoArrangeRun = async () => {
+        if (panelStatus !== 'idle' || rootCollections.length === 0) return;
+        if (runStartedRef.current) return;
+        runStartedRef.current = true;
+
+        const availability = await getAIAvailability();
+        if (availability !== 'available') {
+            runStartedRef.current = false;
+            setError('Tabox AI is not ready on this device. Check the Tabox AI setting.');
+            return;
+        }
+
+        const token = ++runTokenRef.current;
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
+        setPanelStatus('running');
+        setError(null);
+        setIsCancelling(false);
+        setAaSummary(null);
+
+        let plan;
+        try {
+            const folders = await loadAllFolders({ metadataOnly: true });
+            const existing = folders.map((f) => ({ id: f.uid, name: f.name }));
+            plan = await autoArrangeCollections({
+                collections: rootCollections,
+                existingFolders: existing,
+                signal: controller.signal,
+            });
+        } catch (runError) {
+            if (token !== runTokenRef.current) return;
+            if (runError?.name === 'AbortError') {
+                setPanelStatus('idle');
+                runStartedRef.current = false;
+                return;
+            }
+            console.error('Auto-Arrange: engine threw:', runError);
+            setError('An unexpected error occurred. Please try again.');
+            setPanelStatus('idle');
+            runStartedRef.current = false;
+            return;
+        }
+
+        if (token !== runTokenRef.current) return;
+
+        let applyResult;
+        try {
+            applyResult = await applyAutoArrange(plan);
+        } catch (applyError) {
+            if (token !== runTokenRef.current) return;
+            console.error('Auto-Arrange: apply failed:', applyError);
+            setError('Could not arrange the collections. Please try again.');
+            setPanelStatus('idle');
+            runStartedRef.current = false;
+            return;
+        }
+
+        if (token !== runTokenRef.current) return;
+
+        const { foldersCreated = 0, collectionsMoved = 0 } = applyResult || {};
+        const summary = `Filed ${collectionsMoved} collection${collectionsMoved === 1 ? '' : 's'} into folders · created ${foldersCreated} new folder${foldersCreated === 1 ? '' : 's'}`;
+        setAaSummary(summary);
+
+        showUndoToast(
+            <BsStars />,
+            'Arranged collections into folders',
+            'Tabox AI',
+            async () => {
+                await aaUndoLast();
+                await updateRemoteData(await loadAllCollections());
+            },
+            UNDO_TIME,
+        );
+
+        await updateRemoteData(await loadAllCollections());
+
+        setPanelStatus('done');
+        runStartedRef.current = false;
+    };
+
+    const handleAutoArrangeUndo = async () => {
+        await aaUndoLast();
+        setAaSummary(null);
+        setPanelStatus('idle');
+        await updateRemoteData(await loadAllCollections());
+    };
+
     const n = targets.length;
     const idleDescription = n === 1
         ? 'Automatically rename 1 collection using on-device AI. You can review and undo afterwards.'
@@ -461,8 +561,16 @@ function AIToolsModal({ updateRemoteData }) {
                         <div className="ai-tools-grid">
                             {AI_TOOLS.filter((t) => !t.featured).map((tool) => {
                                 const ToolIcon = tool.icon;
+                                const disabled = tool.id === 'auto-arrange-folders' && rootCollections.length === 0;
                                 return (
-                                    <button key={tool.id} type="button" className="ai-tool-card" onClick={() => setActiveToolId(tool.id)}>
+                                    <button
+                                        key={tool.id}
+                                        type="button"
+                                        className="ai-tool-card"
+                                        onClick={() => setActiveToolId(tool.id)}
+                                        disabled={disabled}
+                                        title={disabled ? 'No collections at the top level to arrange' : undefined}
+                                    >
                                         <ToolIcon size={22} className="ai-tool-card-icon" />
                                         <span className="ai-tool-card-title">{tool.title}</span>
                                         <span className="ai-tool-card-description">{tool.description}</span>
@@ -714,6 +822,76 @@ function AIToolsModal({ updateRemoteData }) {
                                 >
                                     Done
                                 </button>
+                            </>
+                        )}
+                    </div>
+                )}
+
+                {activeToolId === 'auto-arrange-folders' && (
+                    <div className="ai-tool-panel">
+                        {panelStatus === 'idle' && (
+                            <>
+                                <p className="ai-rename-description">
+                                    This will move all your loose collections into folders — using your existing folders and creating new ones where needed.
+                                </p>
+                                {rootCollections.length === 0 && (
+                                    <p className="ai-rename-hint">No collections at the top level to arrange.</p>
+                                )}
+                                {error && <div className="ai-tool-error">{error}</div>}
+                                <button
+                                    type="button"
+                                    className="ai-tool-action-btn"
+                                    onClick={handleAutoArrangeRun}
+                                    disabled={rootCollections.length === 0}
+                                >
+                                    <BsStars size={14} style={{ marginRight: '6px' }} />
+                                    Arrange now
+                                </button>
+                                {aaUndoSnapshot && (
+                                    <div className="ai-so-undo-row">
+                                        <button type="button" className="ai-so-undo-btn" onClick={handleAutoArrangeUndo}>
+                                            ↩ Undo last arrange
+                                        </button>
+                                    </div>
+                                )}
+                            </>
+                        )}
+
+                        {panelStatus === 'running' && (
+                            <>
+                                <AutoArrangeFoldAnimation />
+                                <div className="ai-rename-progress">
+                                    <div className="ai-rename-progress-track">
+                                        <div className="ai-rename-progress-fill ai-rename-progress-fill--animated" />
+                                    </div>
+                                    <span className="ai-rename-progress-label">Arranging collections…</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    className="ai-tool-action-btn ai-tool-action-btn--cancel"
+                                    onClick={handleCancel}
+                                >
+                                    Cancel
+                                </button>
+                            </>
+                        )}
+
+                        {panelStatus === 'done' && (
+                            <>
+                                {error && <div className="ai-tool-error">{error}</div>}
+                                {aaSummary && <p className="ai-rename-description ai-so-summary">{aaSummary}</p>}
+                                <div className="ai-so-done-actions">
+                                    <button
+                                        type="button"
+                                        className="ai-tool-action-btn ai-tool-action-btn--cancel"
+                                        onClick={handleAutoArrangeUndo}
+                                    >
+                                        Undo
+                                    </button>
+                                    <button type="button" className="ai-tool-action-btn ai-tool-action-btn--cancel" onClick={close}>
+                                        Close
+                                    </button>
+                                </div>
                             </>
                         )}
                     </div>
