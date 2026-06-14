@@ -11,6 +11,8 @@ import { IoClose } from 'react-icons/io5';
 import { HiOutlineDesktopComputer, HiCollection } from 'react-icons/hi';
 import AiSuggestNameButton from './AiSuggestNameButton';
 import { suggestCollectionName } from './ai/tasks/suggestCollectionName';
+import { useTaboxAIEnabled } from './ai/useTaboxAIEnabled';
+import { isAISupported } from './ai/aiClient';
 
 function SaveHighlightedOnlyLabel({ saveMode, windowCount }) {
     const [totalHighlighted, setTotalHighlighted] = useState(0);
@@ -106,6 +108,7 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
     const [saveMode, setSaveMode] = useState('current'); // 'current' or 'all'
     const [windowCount, setWindowCount] = useState(1);
     const [aiBusy, setAiBusy] = useState(false);
+    const aiAvailable = useTaboxAIEnabled() && isAISupported();
 
     useEffect(() => {
         setInputFocus();
@@ -306,7 +309,7 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
 
     return <section className='add-collections-wrapper'>
         <div className="left-controls-group">
-            <div className={`add-collection-group${aiBusy ? ' ai-name-processing' : ''}`}>
+            <div className={`add-collection-group${aiAvailable ? ' has-ai-suggest' : ''}${aiBusy ? ' ai-name-processing' : ''}`}>
                 <input
                     type="text"
                     maxLength="50"
@@ -328,7 +331,7 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
                 <AiSuggestNameButton
                     suggest={handleSuggestName}
                     onSuggested={(name) => {
-                        setSearch(name.trim() !== '' ? name : null);
+                        setSearch(name);
                         setName(name);
                     }}
                     onBusyChange={setAiBusy}

@@ -17,6 +17,7 @@ import { useTaboxAIEnabled } from '../app/ai/useTaboxAIEnabled';
 import { isAISupported } from '../app/ai/aiClient';
 import { suggestCollectionName } from '../app/ai/tasks/suggestCollectionName';
 import { getCurrentTabsAndGroups } from '../app/utils';
+import { showErrorToast } from '../app/toastHelpers';
 import AddNewTextbox from '../app/AddNewTextbox';
 
 const renderBox = async () => {
@@ -43,5 +44,19 @@ describe('AddNewTextbox AI suggest', () => {
         fireEvent.click(screen.getByRole('button', { name: /suggest name with ai/i }));
         await waitFor(() => expect(screen.getByDisplayValue('React Learning')).toBeInTheDocument());
         expect(suggestCollectionName).toHaveBeenCalledWith({ tabs: [expect.objectContaining({ title: 'React Docs' })] });
+    });
+
+    test('shows error toast and leaves input empty when suggestCollectionName rejects', async () => {
+        suggestCollectionName.mockRejectedValue(new Error('AI unavailable'));
+        await renderBox();
+        fireEvent.click(screen.getByRole('button', { name: /suggest name with ai/i }));
+        await waitFor(() => expect(showErrorToast).toHaveBeenCalled());
+        expect(screen.getByRole('textbox').value).toBe('');
+    });
+
+    test('does not render the AI button when AI is disabled', async () => {
+        useTaboxAIEnabled.mockReturnValue(false);
+        await renderBox();
+        expect(screen.queryByRole('button', { name: /suggest name with ai/i })).toBeNull();
     });
 });

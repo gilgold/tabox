@@ -4,7 +4,7 @@
   padding: 7px 10px;
   border: none;
   border-radius: 14px;
-  padding-right: 52px;
+  padding-right: 25px;
   background: linear-gradient(var(--input-bg-color), var(--input-bg-color)) padding-box,
     linear-gradient(90deg, var(--gradient-blue), var(--gradient-purple), var(--gradient-orange)) border-box;
   border: 2px solid transparent;
@@ -13,6 +13,10 @@
   display: flex;
   flex: none;
   flex-basis: 310px;
+}
+
+.add-collection-group.has-ai-suggest input[type="text"] {
+  padding-right: 52px;
 }
 
 .add-collection-group input[type="text"]:hover {
