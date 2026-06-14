@@ -1,0 +1,107 @@
+/* ── Auto-Arrange fold animation ─────────────────────────────────────────────
+ * Loose collection cards slide down and drop into a folder, on a loop.
+ * Animates only transform/opacity (compositor thread). Decorative —
+ * aria-hidden on the host element. Mirrors SmartOrganizeFoldAnimation.css.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+.aa-fold-anim {
+    display: flex;
+    justify-content: center;
+    padding: 6px 0 2px;
+}
+
+.aa-fold-stage {
+    position: relative;
+    width: 150px;
+    height: 82px;
+}
+
+/* The folder the cards drop into — always visible (static anchor). */
+.aa-fold-folder {
+    position: absolute;
+    left: 50%;
+    bottom: 6px;
+    transform: translateX(-50%);
+    width: 120px;
+    height: 30px;
+}
+
+.aa-fold-folder-tab {
+    position: absolute;
+    top: 0;
+    left: 8px;
+    width: 42px;
+    height: 8px;
+    border-radius: 4px 4px 0 0;
+    background: rgba(124, 58, 237, 0.5);
+}
+
+.aa-fold-folder-body {
+    position: absolute;
+    top: 6px;
+    left: 0;
+    width: 120px;
+    height: 24px;
+    border-radius: 4px 7px 7px 7px;
+    background: rgba(124, 58, 237, 0.14);
+    border: 1px solid rgba(124, 58, 237, 0.45);
+}
+
+/* The loose collection cards that drop in. */
+.aa-fold-card {
+    position: absolute;
+    left: 50%;
+    top: 4px;
+    width: 88px;
+    height: 16px;
+    margin-left: -44px;
+    border-radius: 5px;
+    transform-origin: bottom center;
+    opacity: 0;
+    will-change: transform, opacity;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.aa-fold-card--1 { background: linear-gradient(135deg, #2563eb, #38bdf8); }
+.aa-fold-card--2 { background: linear-gradient(135deg, #7c3aed, #2563eb); }
+.aa-fold-card--3 { background: linear-gradient(135deg, #ec4899, #7c3aed); }
+
+@keyframes aa-fold-card {
+    0%        { transform: translateY(-12px) scale(1); opacity: 0; }
+    12%       { transform: translateY(-12px) scale(1); opacity: 1; }
+    50%       { transform: translateY(40px) scale(1); opacity: 1; }
+    64%       { transform: translateY(52px) scale(0.7); opacity: 0.5; }
+    74%, 100% { transform: translateY(54px) scale(0.5); opacity: 0; }
+}
+
+/* Subtle "absorb" pulse on the folder as each card lands. */
+@keyframes aa-fold-folder-pulse {
+    0%, 55%, 100% { transform: translateX(-50%) scale(1); }
+    66%           { transform: translateX(-50%) scale(1.04); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .aa-fold-card {
+        animation: aa-fold-card 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+    .aa-fold-card--1 { animation-delay: 0s; }
+    .aa-fold-card--2 { animation-delay: 0.45s; }
+    .aa-fold-card--3 { animation-delay: 0.9s; }
+
+    .aa-fold-folder {
+        animation: aa-fold-folder-pulse 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+}
+
+/* Static fallback: no looping motion. One card rests tucked into the folder. */
+@media (prefers-reduced-motion: reduce) {
+    .aa-fold-card--2 { opacity: 1; transform: translateY(40px) scale(0.85); }
+    .aa-fold-card--1,
+    .aa-fold-card--3 { display: none; }
+}
+
+html.performance-mode .aa-fold-card { animation: none !important; }
+html.performance-mode .aa-fold-folder { animation: none !important; }
+html.performance-mode .aa-fold-card--2 { opacity: 1; transform: translateY(40px) scale(0.85); }
+html.performance-mode .aa-fold-card--1,
+html.performance-mode .aa-fold-card--3 { display: none; }
