@@ -181,6 +181,47 @@ describe('Smart Organize panel (popup)', () => {
         expect(savedCollection.chromeGroups[0].id).toBe(10);
     });
 
+    test('shows an error and returns to idle when smartOrganizeApply fails', async () => {
+        browser.runtime.sendMessage = jest.fn().mockImplementation((msg) => {
+            if (msg.type === 'aiGetState') return Promise.resolve(null);
+            if (msg.type === 'smartOrganizeApply') return Promise.reject(new Error('apply boom'));
+            return Promise.resolve({});
+        });
+
+        await openModal();
+        fireEvent.click(screen.getByText('Smart Organize'));
+        await waitFor(() => expect(screen.getByText(/2 ungrouped tabs/i)).toBeInTheDocument());
+
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /organize/i })); });
+        await waitFor(() => expect(browser.runtime.sendMessage.mock.calls.some((c) => c[0].type === 'aiRun')).toBe(true));
+
+        await fireStorageChange(donePlanState());
+
+        // apply was attempted but rejected
+        await waitFor(() => expect(browser.runtime.sendMessage.mock.calls.some((c) => c[0].type === 'smartOrganizeApply')).toBe(true));
+        await waitFor(() => expect(screen.getByText(/could not apply the grouping/i)).toBeInTheDocument());
+        // panel back to idle: the run button is available again
+        await waitFor(() => expect(screen.getByRole('button', { name: /organize/i })).toBeInTheDocument());
+    });
+
+    test('shows an error when the smart-organize plan fails in the SW', async () => {
+        await openModal();
+        fireEvent.click(screen.getByText('Smart Organize'));
+        await waitFor(() => expect(screen.getByText(/2 ungrouped tabs/i)).toBeInTheDocument());
+
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /organize/i })); });
+        await waitFor(() => expect(browser.runtime.sendMessage.mock.calls.some((c) => c[0].type === 'aiRun')).toBe(true));
+
+        browser.runtime.sendMessage.mockClear();
+        await fireStorageChange({ taskId: 'so-err', type: 'smart-organize', status: 'error', summary: 'planning failed' });
+
+        await waitFor(() => expect(screen.getByText(/an unexpected error occurred/i)).toBeInTheDocument());
+        // panel back to idle: the run button is available again
+        await waitFor(() => expect(screen.getByRole('button', { name: /organize/i })).toBeInTheDocument());
+        // no apply was dispatched for an SW-error plan
+        expect(browser.runtime.sendMessage.mock.calls.some((c) => c[0].type === 'smartOrganizeApply')).toBe(false);
+    });
+
     test('reopening while planning is running shows the running panel (reattach)', async () => {
         browser.runtime.sendMessage = jest.fn().mockImplementation((msg) => {
             if (msg.type === 'aiGetState') {

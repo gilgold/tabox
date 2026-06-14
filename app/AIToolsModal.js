@@ -53,9 +53,10 @@ function AIToolsModal({ updateRemoteData }) {
     // observes it so a reopened popup re-attaches to an in-progress run. Reused
     // by Auto-Rename now and Auto-Arrange / Smart-Organize next.
     const [aiTaskState, setAiTaskState] = useState(null);
-    // Tracks which finished taskId we've already shown a completion toast for,
-    // so reopening the popup (or re-render) doesn't re-fire the toast.
-    const toastedTaskIdRef = useRef(null);
+    // Tracks the taskId we've already finalized (toast shown for rename/arrange;
+    // plan applied for smart-organize) so a re-render or duplicate done-event
+    // can't double-fire.
+    const completedTaskIdRef = useRef(null);
 
     // Smart Organize panel state
     const [soWindowId, setSoWindowId] = useState(null);
@@ -118,7 +119,7 @@ function AIToolsModal({ updateRemoteData }) {
         // Drop any prior task state + toast guard so a stale terminal run from a
         // previous session can't clobber the freshly-reset idle panel on reopen.
         setAiTaskState(null);
-        toastedTaskIdRef.current = null;
+        completedTaskIdRef.current = null;
         loadAllCollections().then(setCollections).catch((loadError) => {
             console.error('Tabox AI: failed to load collections', loadError);
             setCollections([]);
@@ -228,7 +229,7 @@ function AIToolsModal({ updateRemoteData }) {
         setAiProcessingUids(targets.map((t) => t.uid));
 
         // Allow a fresh completion toast for the run we're about to start.
-        toastedTaskIdRef.current = null;
+        completedTaskIdRef.current = null;
 
         // Fire-and-forget; live progress + results arrive via the aiTaskState
         // storage subscription. (We don't await the final state — the storage
@@ -279,8 +280,8 @@ function AIToolsModal({ updateRemoteData }) {
             setPanelStatus('done');
 
             // Fire the undo toast once per finished run with renames applied.
-            if (status === 'done' && results.length > 0 && toastedTaskIdRef.current !== aiTaskState.taskId) {
-                toastedTaskIdRef.current = aiTaskState.taskId;
+            if (status === 'done' && results.length > 0 && completedTaskIdRef.current !== aiTaskState.taskId) {
+                completedTaskIdRef.current = aiTaskState.taskId;
                 showUndoToast(
                     <BsStars />,
                     summary || `Renamed ${results.length} collection${results.length === 1 ? '' : 's'} with AI`,
@@ -390,7 +391,7 @@ function AIToolsModal({ updateRemoteData }) {
         }
 
         // Allow a fresh apply/toast for the run we're about to start.
-        toastedTaskIdRef.current = null;
+        completedTaskIdRef.current = null;
 
         setPanelStatus('running');
         setError(null);
@@ -410,37 +411,41 @@ function AIToolsModal({ updateRemoteData }) {
     // The SW does planning only; this effect applies the plan (via the existing
     // smartOrganizeApply message) when it observes the plan is done.
     useEffect(() => {
-        if (activeToolId !== 'smart-organize') return;
-        if (!aiTaskState || aiTaskState.type !== 'smart-organize') return;
+        if (activeToolId !== 'smart-organize') return undefined;
+        if (!aiTaskState || aiTaskState.type !== 'smart-organize') return undefined;
 
         const { status, results, taskId } = aiTaskState;
 
         if (status === 'running') {
             setPanelStatus('running');
-            return;
+            return undefined;
         }
 
         if (status === 'cancelled') {
             setPanelStatus('idle');
             runStartedRef.current = false;
-            return;
+            return undefined;
         }
 
         if (status === 'error') {
             setError('An unexpected error occurred. Please try again.');
             setPanelStatus('idle');
             runStartedRef.current = false;
-            return;
+            return undefined;
         }
 
         if (status === 'done' && results) {
             // Apply is async; guard once-per-taskId BEFORE awaiting so a React
             // re-render can't re-enter and double-apply the same plan.
-            if (toastedTaskIdRef.current === taskId) return;
+            if (completedTaskIdRef.current === taskId) return undefined;
             // The window must be resolved before we can apply; the effect re-runs
             // when soWindowId lands (it's in deps).
-            if (!soWindowId) return;
-            toastedTaskIdRef.current = taskId;
+            if (!soWindowId) return undefined;
+            completedTaskIdRef.current = taskId;
+
+            // Guard the async apply against unmount / isOpen flip: if this effect
+            // tears down mid-apply, skip the post-await setState calls.
+            let dead = false;
 
             (async () => {
                 let applyResult;
@@ -452,12 +457,15 @@ function AIToolsModal({ updateRemoteData }) {
                         createdAt: Date.now(),
                     });
                 } catch (applyError) {
+                    if (dead) return;
                     console.error('Smart Organize: apply failed:', applyError);
                     setError('Could not apply the grouping. Please try again.');
                     setPanelStatus('idle');
                     runStartedRef.current = false;
                     return;
                 }
+
+                if (dead) return;
 
                 const { groupsCreated = 0, tabsAdded = 0, skipped: skippedCount = 0 } = applyResult || {};
                 const summary = `Created ${groupsCreated} groups · added ${tabsAdded} tabs to existing groups · ${skippedCount} left ungrouped`;
@@ -474,7 +482,11 @@ function AIToolsModal({ updateRemoteData }) {
                 setPanelStatus('done');
                 runStartedRef.current = false;
             })();
+
+            return () => { dead = true; };
         }
+
+        return undefined;
     }, [aiTaskState, activeToolId, soWindowId]);
 
     const handleSmartOrganizeSaveAsCollection = async () => {
@@ -525,7 +537,7 @@ function AIToolsModal({ updateRemoteData }) {
         setAaTotal(total);
         setAaFiled(0);
         // Allow a fresh completion toast for the run we're about to start.
-        toastedTaskIdRef.current = null;
+        completedTaskIdRef.current = null;
         stopAaTicker();
         aaTickRef.current = setInterval(() => {
             setAaFiled((prev) => (prev < total - 1 ? prev + 1 : prev));
@@ -581,8 +593,8 @@ function AIToolsModal({ updateRemoteData }) {
             setPanelStatus('done');
 
             // Fire the undo toast once per finished run.
-            if (toastedTaskIdRef.current !== aiTaskState.taskId) {
-                toastedTaskIdRef.current = aiTaskState.taskId;
+            if (completedTaskIdRef.current !== aiTaskState.taskId) {
+                completedTaskIdRef.current = aiTaskState.taskId;
                 showUndoToast(
                     <BsStars />,
                     'Arranged collections into folders',
