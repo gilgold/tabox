@@ -2004,7 +2004,15 @@ try {
           triggerSync: () => throttleSync(() => handleRemoteUpdate()),
         },
       });
-      if (request.type === 'aiUndo') { await engine.undoLast(); return Promise.resolve({ ok: true }); }
+      if (request.type === 'aiUndo') {
+        try {
+          await engine.undoLast();
+          return Promise.resolve({ ok: true });
+        } catch (error) {
+          console.error('Tabox AI: aiUndo failed:', error);
+          return Promise.resolve({ ok: false, error: error?.message || String(error) });
+        }
+      }
       const controller = new AbortController();
       globalThis.__aiAbort = controller; // single in-flight AI task
       let result;
