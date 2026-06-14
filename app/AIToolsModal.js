@@ -452,7 +452,6 @@ function AIToolsModal({ updateRemoteData }) {
                             const ToolIcon = tool.icon;
                             return (
                                 <button key={tool.id} type="button" className="ai-hero-card" onClick={() => setActiveToolId(tool.id)}>
-                                    <span className="ai-hero-badge">Flagship</span>
                                     <ToolIcon size={26} className="ai-hero-icon" />
                                     <span className="ai-hero-title">{tool.title}</span>
                                     <span className="ai-hero-description">{tool.description}</span>

@@ -35,10 +35,9 @@ const openModal = async () => {
     return store;
 };
 
-test('renders Smart Organize as a featured hero card with a Flagship badge', async () => {
+test('renders Smart Organize as a featured hero card', async () => {
     await openModal();
     expect(screen.getByText('Smart Organize')).toBeInTheDocument();
-    expect(screen.getByText(/flagship/i)).toBeInTheDocument();
     expect(document.querySelector('.ai-hero-card')).toBeInTheDocument();
 });
 
