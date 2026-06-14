@@ -115,7 +115,6 @@ import { CURRENT_WINDOWS_ACCENT_COLOR } from './fpAccentColors';
 import { getFavoriteCollections } from '../utils/favoritesUtils';
 
 import AIButton from '../AIButton';
-import SmartOrganizeUndoChip from '../SmartOrganizeUndoChip';
 
 const SessionsModal = lazy(() => import('../SessionsModal').then(m => ({ default: m.SessionsModal })));
 const SaveCollectionModal = lazy(() => import('./SaveCollectionModal'));
@@ -2570,7 +2569,6 @@ function FPContentArea({
                 </button>
             </div>
 
-            <SmartOrganizeUndoChip />
             <AIButton withDivider selectedUids={selectedVisibleCollections.map((c) => c.uid)} />
         </>
     );
