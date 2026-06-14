@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef, Activity } from 'react';
 import Modal from 'react-modal';
 import { MdFolder, MdClose } from 'react-icons/md';
+import AiSuggestNameButton from './AiSuggestNameButton';
+import { loadAllCollections } from './utils/storageUtils';
+import { suggestFolderName } from './ai/tasks/suggestFolderName';
 import './Modal.css';
 
 function CreateFolderModal({ isOpen, onClose, onSave, folder }) {
@@ -8,6 +11,8 @@ function CreateFolderModal({ isOpen, onClose, onSave, folder }) {
     const [folderName, setFolderName] = useState('');
     const [selectedColor, setSelectedColor] = useState('#4facfe');
     const [isSaving, setIsSaving] = useState(false);
+    const [folderCollections, setFolderCollections] = useState([]);
+    const [aiBusy, setAiBusy] = useState(false);
     const inputRef = useRef(null);
 
     const folderColors = [
@@ -33,6 +38,16 @@ function CreateFolderModal({ isOpen, onClose, onSave, folder }) {
                     if (isEditMode) inputRef.current.select();
                 }
             }, 100);
+        }
+    }, [isOpen, isEditMode, folder]);
+
+    useEffect(() => {
+        if (isOpen && isEditMode && folder?.uid) {
+            loadAllCollections()
+                .then((all) => setFolderCollections(all.filter((c) => (c.parentId || null) === folder.uid)))
+                .catch(() => setFolderCollections([]));
+        } else {
+            setFolderCollections([]);
         }
     }, [isOpen, isEditMode, folder]);
 
@@ -113,18 +128,29 @@ function CreateFolderModal({ isOpen, onClose, onSave, folder }) {
                         <label htmlFor="folder-name-input" className="create-folder-label">
                             Folder Name
                         </label>
-                        <input
-                            ref={inputRef}
-                            id="folder-name-input"
-                            type="text"
-                            value={folderName}
-                            onChange={(e) => setFolderName(e.target.value)}
-                            onKeyDown={handleKeyDown}
-                            placeholder="Enter folder name..."
-                            className="create-folder-input"
-                            maxLength={50}
-                            disabled={isSaving}
-                        />
+                        <div className={`create-folder-input-row${aiBusy ? ' ai-name-processing' : ''}`}>
+                            <input
+                                ref={inputRef}
+                                id="folder-name-input"
+                                type="text"
+                                value={folderName}
+                                onChange={(e) => setFolderName(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                                placeholder="Enter folder name..."
+                                className="create-folder-input"
+                                maxLength={50}
+                                disabled={isSaving}
+                            />
+                            <AiSuggestNameButton
+                                suggest={() => suggestFolderName({ collections: folderCollections })}
+                                onSuggested={setFolderName}
+                                onBusyChange={setAiBusy}
+                                disabled={!isEditMode || folderCollections.length === 0}
+                                disabledReason={!isEditMode
+                                    ? 'Create the folder and add collections first'
+                                    : 'This folder has no collections to name from'}
+                            />
+                        </div>
                     </div>
 
                     {/* Color Selection */}
