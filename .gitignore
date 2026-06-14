@@ -35,3 +35,6 @@ quick-seed.js
 # Cross-project working notes (crxbox), kept locally, not committed to tabox
 crxbox-assessment.md
 crxbox-feedback.md
+
+# Local design docs / plans — not tracked
+docs/
