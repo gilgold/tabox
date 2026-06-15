@@ -10,64 +10,103 @@ function shuffledColors() {
     }
     return colors;
 }
-// Fail-fast: if folder creation fails partway, already-created folders may be orphaned with no undo path
-// (the snapshot is only written after all moves succeed). Matches the original autoArrangeApply.js behavior.
-async function resolveTargets(assignments, storage) {
-    const createdFolderUids = [];
-    const createdByLowerName = new Map();
-    const targetByCollection = new Map();
-    const palette = shuffledColors();
+
+// Resolve one chunk's assignments to concrete folder uids, batch-creating any new
+// folders this chunk needs. Mutates the shared cross-chunk state (existingFolders /
+// createdByLowerName / createdFolderUids) so a folder created for an earlier chunk is
+// offered to later chunks for reuse instead of being recreated.
+// Fail-fast: if folder creation fails partway, already-created folders may be orphaned
+// with no undo path (the snapshot is only written after all moves succeed).
+async function resolveChunkTargets(assignments, state) {
+    const { storage, palette, existingFolders, createdByLowerName, createdFolderUids } = state;
+    const pendingNames = [];
     for (const a of assignments) {
-        if (a.existingFolderId) { targetByCollection.set(a.collectionId, a.existingFolderId); continue; }
+        if (a.existingFolderId) continue;
         const key = a.newFolderName.toLowerCase();
-        let uid = createdByLowerName.get(key);
-        if (!uid) {
-            const color = palette[createdFolderUids.length % palette.length];
-            const folder = await storage.createFolderBG(a.newFolderName, color, true);
-            if (!folder) throw new Error(`Failed to create folder "${a.newFolderName}"`);
-            uid = folder.uid;
-            createdByLowerName.set(key, uid);
-            createdFolderUids.push(uid);
-        }
-        targetByCollection.set(a.collectionId, uid);
+        if (createdByLowerName.has(key) || pendingNames.some((n) => n.toLowerCase() === key)) continue;
+        pendingNames.push(a.newFolderName);
     }
-    return { targetByCollection, createdFolderUids };
+    if (pendingNames.length) {
+        const specs = pendingNames.map((name, i) => ({
+            name,
+            color: palette[(createdFolderUids.length + i) % palette.length],
+            collapsed: true,
+        }));
+        const created = await storage.createFoldersBG(specs);
+        if (!created || created.length !== specs.length) throw new Error('Failed to create folders');
+        created.forEach((folder, i) => {
+            const key = pendingNames[i].toLowerCase();
+            createdByLowerName.set(key, folder.uid);
+            createdFolderUids.push(folder.uid);
+            existingFolders.push({ id: folder.uid, name: pendingNames[i] });
+        });
+    }
+    const targetByCollection = new Map();
+    for (const a of assignments) {
+        const target = a.existingFolderId || createdByLowerName.get(a.newFolderName.toLowerCase());
+        targetByCollection.set(a.collectionId, target);
+    }
+    return targetByCollection;
 }
+
 const def = {
     id: 'auto-arrange',
     async run({ ctx, report }) {
-        const { planners, client, storage, loadCollections, triggerSync, isCancelled } = ctx;
-        const all = await loadCollections();
-        const loose = all.filter((c) => !c.parentId).slice(0, planners.MAX_COLLECTIONS);
+        const { planners, client, storage, loadLooseSummaries, triggerSync, isCancelled } = ctx;
+        const loose = await loadLooseSummaries();
         const fIndex = await storage.loadFoldersIndexBG();
-        const existingFolders = Object.keys(fIndex).map((id) => ({ id, name: fIndex[id].name }));
-        await report({ total: loose.length, filed: 0 });
-        if (await isCancelled()) return { summary: '', undo: null };
-        const session = await client.createAISession({ systemPrompt: 'You sort browser-tab collections into folders. Folder names are short (2-4 words), specific, Title Case, no quotes or emojis.', temperature: 0.7, topK: 3 });
-        let raw;
-        try { raw = await client.promptForJSON(session, planners.buildArrangePrompt({ collections: loose, existingFolders }), planners.ARRANGE_SCHEMA); }
-        finally { session.destroy(); }
-        const { assignments } = planners.normalizeArrangePlan(raw, loose, existingFolders);
         const cIndex = await storage.loadCollectionsIndexBG();
         const priorParentById = new Map(loose.map((c) => [c.uid, (cIndex[c.uid] && cIndex[c.uid].parentId) || null]));
-        const { targetByCollection, createdFolderUids } = await resolveTargets(assignments, storage);
+        await report({ total: loose.length, filed: 0 });
+        if (await isCancelled() || loose.length === 0) {
+            return { summary: loose.length === 0 ? 'No loose collections to arrange' : '', undo: null };
+        }
+
+        // Live folder list: starts with the real existing folders and grows as chunks
+        // create new ones, so a folder created for chunk 1 can be reused by chunk 2.
+        const existingFolders = Object.keys(fIndex).map((id) => ({ id, name: fIndex[id].name }));
+        const state = { storage, palette: shuffledColors(), existingFolders, createdByLowerName: new Map(), createdFolderUids: [] };
+
         const moves = [];
         const updates = [];
         const affected = new Set();
-        for (const a of assignments) {
-            const target = targetByCollection.get(a.collectionId);
-            const prev = priorParentById.has(a.collectionId) ? priorParentById.get(a.collectionId) : null;
-            moves.push({ uid: a.collectionId, prevParentId: prev });
-            updates.push({ uid: a.collectionId, parentId: target });
-            affected.add(target);
-            if (prev) affected.add(prev);
+
+        const session = await client.createAISession({
+            systemPrompt: 'You sort browser-tab collections into folders. Folder names are short (2-4 words), specific, Title Case, no quotes or emojis.',
+            temperature: 0,
+        });
+        try {
+            for (let start = 0; start < loose.length; start += planners.MAX_COLLECTIONS) {
+                if (await isCancelled()) break;
+                const chunk = loose.slice(start, start + planners.MAX_COLLECTIONS);
+                const raw = await client.promptForJSON(
+                    session,
+                    planners.buildArrangePrompt({ collections: chunk, existingFolders }),
+                    planners.ARRANGE_SCHEMA,
+                );
+                const { assignments } = planners.normalizeArrangePlan(raw, chunk, existingFolders);
+                const targetByCollection = await resolveChunkTargets(assignments, state);
+                for (const a of assignments) {
+                    const target = targetByCollection.get(a.collectionId);
+                    const prev = priorParentById.has(a.collectionId) ? priorParentById.get(a.collectionId) : null;
+                    moves.push({ uid: a.collectionId, prevParentId: prev });
+                    updates.push({ uid: a.collectionId, parentId: target });
+                    affected.add(target);
+                    if (prev) affected.add(prev);
+                }
+                await report({ filed: moves.length });
+            }
+        } finally {
+            session.destroy();
         }
+
         await storage.moveCollectionsToFoldersBG(updates);
         await storage.updateFolderCountsBG([...affected]);
         await report({ filed: moves.length });
         await triggerSync();
-        const summary = `Filed ${moves.length} collection${moves.length === 1 ? '' : 's'} into folders · created ${createdFolderUids.length} new folder${createdFolderUids.length === 1 ? '' : 's'}`;
-        return { summary, undo: { task: 'auto-arrange', moves, createdFolderUids } };
+        const createdCount = state.createdFolderUids.length;
+        const summary = `Filed ${moves.length} collection${moves.length === 1 ? '' : 's'} into folders · created ${createdCount} new folder${createdCount === 1 ? '' : 's'}`;
+        return { summary, undo: { task: 'auto-arrange', moves, createdFolderUids: state.createdFolderUids } };
     },
     async undo({ ctx, snapshot }) {
         const { storage, triggerSync } = ctx;
