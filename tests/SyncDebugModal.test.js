@@ -86,17 +86,25 @@ describe('SyncDebugModal', () => {
         );
 
         expect(await screen.findByText(/Recent Sync Logs \(1\)/)).toBeInTheDocument();
-        expect(screen.getByText(/Before upload/i)).toBeInTheDocument();
+        // Pre-sync backups are metadata-only and not restorable, so they are not shown at all.
+        expect(screen.queryByText(/Before upload/i)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Diagnostic only/i)).not.toBeInTheDocument();
 
-        fireEvent.click(screen.getAllByRole('button', { name: 'Restore' })[0]);
+        // The only Restore button restores the full auto backup, not the pre-sync metadata.
+        const restoreButtons = screen.getAllByRole('button', { name: 'Restore' });
+        expect(restoreButtons).toHaveLength(1);
+        fireEvent.click(restoreButtons[0]);
 
         await waitFor(() => {
             expect(browser.runtime.sendMessage).toHaveBeenCalledWith({
                 type: 'recoverFromBackup',
-                backupType: 'preSync',
+                backupType: 'auto',
                 backupIndex: 0,
             });
         });
+        expect(browser.runtime.sendMessage).not.toHaveBeenCalledWith(
+            expect.objectContaining({ type: 'recoverFromBackup', backupType: 'preSync' }),
+        );
 
         expect(updateRemoteData).toHaveBeenCalledWith(recoveredCollections);
         expect(onRecoverySuccess).toHaveBeenCalledWith(previousCollections);

@@ -3,7 +3,7 @@ import './Modal.css';
 import { MdBugReport } from 'react-icons/md';
 import { browser } from '../static/globals';
 
-export const SyncDebugModal = ({ isOpen, onClose, applyDataFromServer, updateRemoteData, onRecoverySuccess }) => {
+export const SyncDebugModal = ({ isOpen, onClose, applyDataFromServer, updateRemoteData, onDataUpdate, onRecoverySuccess }) => {
     const [syncLogs, setSyncLogs] = useState([]);
     const [backupOptions, setBackupOptions] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -53,15 +53,21 @@ export const SyncDebugModal = ({ isOpen, onClose, applyDataFromServer, updateRem
             if (!isMountedRef.current) return;
             
             if (result) {
-                // 🚀 NEW: Reload the UI with recovered data from NEW STORAGE
-                const recoveredCollections = await loadAllCollections();
-                updateRemoteData(recoveredCollections);
-                
+                // Reload BOTH collections and folders from storage. A restore now also
+                // rewrites the folder layout, so refreshing collections alone left the
+                // popup showing stale folders (the "restored but nothing changed" bug).
+                if (onDataUpdate) {
+                    await onDataUpdate();
+                } else {
+                    const recoveredCollections = await loadAllCollections();
+                    updateRemoteData(recoveredCollections);
+                }
+
                 // Show success snackbar with undo option via callback
                 if (onRecoverySuccess) {
                     onRecoverySuccess(previousCollections);
                 }
-                
+
                 onClose();
             } else {
                 alert('Failed to recover from backup');
@@ -131,27 +137,10 @@ export const SyncDebugModal = ({ isOpen, onClose, applyDataFromServer, updateRem
                         {backupOptions && (
                             <div className='modal-card-body-section sync-debug-section'>
                                 <strong className='sync-debug-section-title'>Available Backups</strong>
-                                
-                                {backupOptions.preSyncBackups.length > 0 && (
-                                    <div className='sync-debug-backup-group'>
-                                        <div className='sync-debug-backup-group-title'>Pre-Sync Backups:</div>
-                                        {backupOptions.preSyncBackups.slice(0, 3).map((backup, index) => (
-                                            <div key={index} className='sync-debug-backup-item'>
-                                                <span>
-                                                    {backup.label} - {new Date(backup.timestamp).toLocaleString()} 
-                                                    ({backup.tabsArray?.length || 0} collections)
-                                                </span>
-                                                <button 
-                                                    onClick={() => handleRecoverFromBackup('preSync', index)}
-                                                    disabled={loading}
-                                                    className="modal-button sync-debug-backup-btn"
-                                                >
-                                                    Restore
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
+
+                                {/* Pre-sync backups are intentionally not shown here: they store only a
+                                    summary (tab counts + a few sample tabs), never full tab data, so they
+                                    are not restorable. They remain captured for sync diagnostics/logs. */}
 
                                 {backupOptions.autoBackups.length > 0 && (
                                     <div className='sync-debug-backup-group'>

@@ -777,6 +777,7 @@ export default function SettingsMenu(props) {
                             onClose={closeSyncDebugModal}
                             applyDataFromServer={props.applyDataFromServer}
                             updateRemoteData={props.updateRemoteData}
+                            onDataUpdate={props.onDataUpdate}
                             onRecoverySuccess={showRecoverySuccess}
                         />
                     </Suspense>

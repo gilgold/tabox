@@ -244,6 +244,7 @@ function Header(props) {
                     <SettingsMenu
                         updateRemoteData={props.updateRemoteData}
                         applyDataFromServer={props.applyDataFromServer}
+                        onDataUpdate={props.onDataUpdate}
                         addCollection={props.addCollection} />
                 </Suspense>
             </div>

@@ -268,6 +268,9 @@ async function createEmergencySelectionBackup(reason) {
 async function overwriteBackupSelection(payload = {}) {
   const selectedCollections = Array.isArray(payload.collections) ? payload.collections : [];
   const selectedFolders = Array.isArray(payload.folders) ? payload.folders : [];
+  // Full-backup restores ask to mirror the backup exactly: folders that aren't part
+  // of the backup must be removed. Selective (pick-items) restores leave them alone.
+  const pruneMissingFolders = payload.pruneMissingFolders === true;
   const currentFolders = await loadAllFoldersBG();
   const currentCollections = await loadAllCollectionsBG(true);
 
@@ -318,12 +321,35 @@ async function overwriteBackupSelection(payload = {}) {
     }
   }
 
+  let removedFolders = 0;
+  if (pruneMissingFolders) {
+    const foldersToRemove = currentFolders.filter((folder) => !selectedFolderIds.has(folder.uid));
+    if (foldersToRemove.length > 0) {
+      const removeFolderIds = new Set(foldersToRemove.map((folder) => folder.uid));
+      // Re-home any collection still pointing at a folder we're about to remove so we
+      // never orphan or destroy user data — they fall back to the root (no folder).
+      const latestCollections = await loadAllCollectionsBG(true);
+      for (const collection of latestCollections) {
+        if (collection.parentId && removeFolderIds.has(collection.parentId)) {
+          await saveSingleCollectionBG({ ...collection, parentId: null }, true);
+        }
+      }
+      for (const folder of foldersToRemove) {
+        const deleted = await deleteSingleFolderBG(folder.uid);
+        if (deleted) {
+          removedFolders++;
+        }
+      }
+    }
+  }
+
   await forceLegacyStorageSync();
 
   return {
     success: true,
     overwrittenCollections,
-    overwrittenFolders
+    overwrittenFolders,
+    removedFolders
   };
 }
 
@@ -1638,15 +1664,29 @@ try {
         }
         
         if (backupData && backupData.tabsArray) {
-          // Write through the indexed storage system so the restored collections are
-          // actually visible. Writing only the legacy tabsArray is inert for existing
-          // users, since loadAllCollections() reads the index and only falls back to
-          // tabsArray when the index is empty.
-          await updateAllCollectionsBG(backupData.tabsArray);
+          // Pre-sync (and other metadata-only) backups store just tabCount + sampleTabs,
+          // never the full `tabs`. Restoring one would overwrite live collections with
+          // empty tabs, wiping real data. Refuse anything that isn't a full snapshot.
+          if (!isFullCollectionSnapshot(backupData)) {
+            console.warn('[Recovery] Refusing to restore a metadata-only backup (no full tabs)');
+            return Promise.resolve(false);
+          }
+
+          // Restore the FULL backup state, not just collections. Use the same overwrite
+          // path as the recovery panel so folders are restored, collection parentIds are
+          // normalized, and folders absent from the backup are pruned (their orphaned
+          // collections fall back to root). Writing collections alone left folder layout
+          // stale, so a restore appeared to "do nothing".
+          const restoreResult = await overwriteBackupSelection({
+            type: 'full_export',
+            collections: backupData.tabsArray,
+            folders: Array.isArray(backupData.foldersArray) ? backupData.foldersArray : [],
+            pruneMissingFolders: true
+          });
           await browser.storage.local.set({
             localTimestamp: Date.now() // Mark as newly updated
           });
-          return Promise.resolve(true);
+          return Promise.resolve(Boolean(restoreResult?.success));
         }
         
         return Promise.resolve(false);

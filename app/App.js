@@ -2075,6 +2075,7 @@ function App({ mode = 'popup' }) {
         isFullPage={isFullPage}
         applyDataFromServer={applyDataFromServer}
         updateRemoteData={updateRemoteData}
+        onDataUpdate={refreshDataAfterFolderOperation}
         addCollection={addCollection}
         logout={logout} />
       <div className={`main-content-wrapper${isFullPage && isPanelOpen ? ' panel-open' : ''}`}>

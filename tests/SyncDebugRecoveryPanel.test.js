@@ -98,7 +98,7 @@ describe('SyncDebugRecoveryPanel', () => {
                 type: 'restoreBackupSelection',
                 backupId: 'auto:0',
                 mode: 'overwrite',
-                payload: fullBackupPayload,
+                payload: { ...fullBackupPayload, pruneMissingFolders: true },
             });
         });
         expect(showSuccessToast).toHaveBeenCalledWith(
@@ -165,6 +165,7 @@ describe('SyncDebugRecoveryPanel', () => {
                     collections: [
                         { uid: 'collection-1', name: 'Alpha', color: '#4fc3f7', parentId: 'folder-1', tabs: [], chromeGroups: [] },
                     ],
+                    pruneMissingFolders: false,
                 },
             });
         });

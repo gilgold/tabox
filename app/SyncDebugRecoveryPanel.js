@@ -537,18 +537,25 @@ function SyncDebugRecoveryPanel({
         return buildLegacyImportPreview(preview.payload);
     };
 
-    const sendRestoreRequest = async ({ backup, previewData, selectedIds, successMessage }) => {
+    const sendRestoreRequest = async ({ backup, previewData, selectedIds, successMessage, pruneMissingFolders = false }) => {
         const payload = buildLegacyImportPayloadFromSelection({
             parsedImportData: previewData.parsedImportData,
             selectedCollectionIds: selectedIds,
             allPreviewCollections: previewData.collections,
         });
 
+        // A full restore should mirror the backup exactly, so it must keep (and recreate)
+        // every backup folder — including empty ones the selection-based payload omits.
+        // Those empty folders also belong in the "keep" set the prune step compares against.
+        const folders = pruneMissingFolders && payload?.type === 'full_export'
+            ? (previewData.parsedImportData?.folders || [])
+            : payload?.folders;
+
         const result = await browser.runtime.sendMessage({
             type: 'restoreBackupSelection',
             backupId: backup.id,
             mode: 'overwrite',
-            payload,
+            payload: { ...payload, ...(folders ? { folders } : {}), pruneMissingFolders },
         });
 
         if (!result?.success) {
@@ -577,6 +584,8 @@ function SyncDebugRecoveryPanel({
                 previewData,
                 selectedIds: previewData.collections.map((collection) => collection.previewId),
                 successMessage: 'Backup restored by overwriting matching saved items',
+                // Full restore mirrors the backup: drop folders that aren't part of it.
+                pruneMissingFolders: true,
             });
         } catch (error) {
             console.error('Backup restore failed:', error);
