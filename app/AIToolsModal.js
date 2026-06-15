@@ -124,6 +124,9 @@ function AIToolsModal({ updateRemoteData }) {
             console.error('Tabox AI: failed to load collections', loadError);
             setCollections([]);
         });
+        // Warm the on-device model so the first AI task starts faster. Fire-and-forget;
+        // the SW creates+destroys a throwaway session to load the model into memory.
+        browser.runtime.sendMessage({ type: 'aiWarmup' }).catch(() => {});
     }, [isOpen, setAiProcessingUids, setAiProcessingCurrentUid]);
 
     // Abort on unmount and clear AI processing atoms

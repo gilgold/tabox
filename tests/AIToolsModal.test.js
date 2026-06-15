@@ -74,6 +74,15 @@ describe('AIToolsModal', () => {
         browser.storage.onChanged.removeListener = jest.fn();
     });
 
+    // ── 0. Warmup ─────────────────────────────────────────────────────────────
+
+    test('sends an aiWarmup message when the modal opens', async () => {
+        await renderOpenModal();
+        await waitFor(() => {
+            expect(browser.runtime.sendMessage.mock.calls.some((c) => c[0].type === 'aiWarmup')).toBe(true);
+        });
+    });
+
     // ── 1. Tool list ─────────────────────────────────────────────────────────
 
     test('tool list renders from registry', async () => {

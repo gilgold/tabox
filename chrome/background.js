@@ -2030,6 +2030,19 @@ try {
       await browser.storage.local.set({ aiTaskState: { ...cur, cancelRequested: true } });
       return Promise.resolve({ ok: true });
     }
+    if (request.type === 'aiWarmup') {
+      // Fire-and-forget model warm-up: creating then destroying a session loads the
+      // model weights into memory so the first real AI task's session-create + first
+      // decode are faster. The warm cost persists past destroy(). Errors (model not
+      // downloaded / unavailable) are swallowed — there's simply nothing to warm.
+      try {
+        const warmSession = await globalThis.TaboxAIClient.createAISession({});
+        warmSession.destroy();
+      } catch (warmError) {
+        console.error('Tabox AI: warmup skipped:', warmError && warmError.message);
+      }
+      return Promise.resolve({ ok: true });
+    }
     if (request.type === 'aiGetState') {
       return Promise.resolve((await browser.storage.local.get('aiTaskState')).aiTaskState || null);
     }
