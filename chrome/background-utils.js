@@ -284,9 +284,45 @@ const loadAllCollectionsBG = async (useNewStorageFirst = true) => {
         // Fallback to legacy storage
         const { [STORAGE_KEYS.LEGACY_TABS_ARRAY]: tabsArray } = await browser.storage.local.get(STORAGE_KEYS.LEGACY_TABS_ARRAY);
         return (tabsArray || []).map((collection) => normalizeCollectionRecordBG(collection));
-        
+
     } catch (error) {
         console.error('Background: Failed to load collections:', error);
+        return [];
+    }
+};
+
+// Load ONLY loose (top-level) collections, projected to a lightweight summary
+// (name + first `maxTitles` tab titles). Used by auto-arrange so a large library
+// doesn't pay the cost of reading every collection's full tab array. Falls back to
+// a legacy full load + filter when no collections_index exists.
+const loadLooseCollectionSummariesBG = async (maxTitles = 5) => {
+    const projectSummary = (collection, order) => ({
+        uid: collection.uid,
+        name: collection.name,
+        parentId: collection.parentId ?? null,
+        order: collection.order ?? order,
+        tabs: (collection.tabs || []).slice(0, maxTitles).map((t) => ({ title: t.title, url: t.url })),
+    });
+    try {
+        const index = await loadCollectionsIndexBG();
+        const uids = Object.keys(index);
+        if (uids.length === 0) {
+            const all = await loadAllCollectionsBG(true);
+            return all.filter((c) => !c.parentId).map((c) => projectSummary(c, c.order));
+        }
+        const looseUids = uids.filter((uid) => !index[uid].parentId);
+        if (looseUids.length === 0) return [];
+        const keys = looseUids.map((uid) => `${STORAGE_KEYS.COLLECTION_PREFIX}${uid}`);
+        const results = await browser.storage.local.get(keys);
+        return looseUids
+            .map((uid) => {
+                const rec = results[`${STORAGE_KEYS.COLLECTION_PREFIX}${uid}`];
+                if (!rec) return null;
+                return projectSummary(normalizeCollectionRecordBG(rec), index[uid].order);
+            })
+            .filter(Boolean);
+    } catch (error) {
+        console.error('Background: Failed to load loose collection summaries:', error);
         return [];
     }
 };
@@ -2579,6 +2615,7 @@ const backgroundUtilsApi = {
     saveSingleCollectionBG,
     markCollectionOpenedBG,
     loadAllCollectionsBG,
+    loadLooseCollectionSummariesBG,
     updateAllCollectionsBG,
     deleteSingleCollectionBG,
     loadFoldersIndexBG,

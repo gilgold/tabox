@@ -2000,6 +2000,9 @@ try {
           planners: globalThis.TaboxAIPlanners,
           storage: globalThis.TaboxAIStorage,
           loadCollections: () => loadAllCollectionsBG(true),
+          loadLooseSummaries: () => loadLooseCollectionSummariesBG(
+            (globalThis.TaboxAIPlanners && globalThis.TaboxAIPlanners.MAX_TITLES_PER_COLLECTION) || 5
+          ),
           readWindow: (windowId) => readWindowForAI(windowId),
           triggerSync: () => throttleSync(() => handleRemoteUpdate()),
         },
