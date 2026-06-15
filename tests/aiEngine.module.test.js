@@ -73,3 +73,48 @@ test('undoLast is a no-op when there is no undo snapshot', async () => {
   await browser.storage.local.set({ aiTaskState: { undo: null } });
   await expect(createEngine({ registry, ctx: ctx() }).undoLast()).resolves.toBeUndefined();
 });
+
+test('undoItems delegates to the task, flags reverted results, trims the snapshot, and keeps state', async () => {
+  const undoItemsSpy = jest.fn();
+  registry.register({
+    id: 'demo', async run() { return { summary: '', undo: { task: 'demo' } }; },
+    async undo() {}, undoItems: undoItemsSpy,
+  });
+  await browser.storage.local.set({ aiTaskState: {
+    type: 'demo', status: 'done',
+    results: [{ uid: 'a', x: 1 }, { uid: 'b', x: 2 }],
+    undo: { task: 'demo', renames: [{ uid: 'a' }, { uid: 'b' }] },
+  } });
+
+  await createEngine({ registry, ctx: ctx() }).undoItems({ uids: ['a'] });
+
+  expect(undoItemsSpy).toHaveBeenCalledWith(expect.objectContaining({
+    snapshot: { task: 'demo', renames: [{ uid: 'a' }, { uid: 'b' }] }, uids: ['a'],
+  }));
+  const st = (await browser.storage.local.get('aiTaskState')).aiTaskState;
+  expect(st).toBeTruthy(); // NOT cleared
+  expect(st.results).toEqual([{ uid: 'a', x: 1, reverted: true }, { uid: 'b', x: 2 }]);
+  expect(st.undo).toEqual({ task: 'demo', renames: [{ uid: 'b' }] });
+});
+
+test('undoItems nulls the undo snapshot once every rename is reverted', async () => {
+  registry.register({ id: 'demo', async run() { return { summary: '', undo: null }; }, async undo() {}, undoItems: jest.fn() });
+  await browser.storage.local.set({ aiTaskState: {
+    type: 'demo', status: 'done', results: [{ uid: 'a' }], undo: { task: 'demo', renames: [{ uid: 'a' }] },
+  } });
+  await createEngine({ registry, ctx: ctx() }).undoItems({ uids: ['a'] });
+  const st = (await browser.storage.local.get('aiTaskState')).aiTaskState;
+  expect(st.undo).toBeNull();
+  expect(st.results).toEqual([{ uid: 'a', reverted: true }]);
+});
+
+test('undoItems is a no-op without a snapshot or with empty uids', async () => {
+  const undoItemsSpy = jest.fn();
+  registry.register({ id: 'demo', async run() { return { summary: '', undo: null }; }, async undo() {}, undoItems: undoItemsSpy });
+  await browser.storage.local.set({ aiTaskState: { type: 'demo', status: 'done', results: [], undo: null } });
+  const engine = createEngine({ registry, ctx: ctx() });
+  await engine.undoItems({ uids: ['a'] }); // no snapshot
+  await browser.storage.local.set({ aiTaskState: { type: 'demo', status: 'done', results: [], undo: { task: 'demo', renames: [] } } });
+  await engine.undoItems({ uids: [] }); // empty uids
+  expect(undoItemsSpy).not.toHaveBeenCalled();
+});

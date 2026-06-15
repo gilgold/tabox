@@ -46,7 +46,19 @@ function createEngine({ registry, ctx }) {
         if (def && typeof def.undo === 'function') await def.undo({ ctx, snapshot });
         await clearState();
     }
-    return { runTask, undoLast };
+    async function undoItems({ uids }) {
+        const state = await readState();
+        const snapshot = state.undo;
+        if (!snapshot || !snapshot.task || !Array.isArray(uids) || uids.length === 0) return;
+        const def = registry.getTask(snapshot.task);
+        if (!def || typeof def.undoItems !== 'function') return;
+        await def.undoItems({ ctx, snapshot, uids });
+        const want = new Set(uids);
+        const remaining = (snapshot.renames || []).filter((r) => !want.has(r.uid));
+        const results = (state.results || []).map((r) => (want.has(r.uid) ? { ...r, reverted: true } : r));
+        await writeState({ results, undo: remaining.length ? { ...snapshot, renames: remaining } : null });
+    }
+    return { runTask, undoLast, undoItems };
 }
 
 const api = { createEngine, AI_TASK_STATE_KEY };
