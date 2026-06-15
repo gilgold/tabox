@@ -84,7 +84,7 @@ function buildArrangePrompt({ collections = [], existingFolders = [] } = {}) {
     return [
         'You file browser-tab collections into folders. Every collection (referenced by its number) must end up in exactly one folder.',
         'Group collections that belong together into the same folder, listing their numbers together in one folder block.',
-        'If a folder fits an existing folder, set existingFolderId to that folder id and leave newFolderName null.',
+        'If the collections in this block belong in an existing folder, set existingFolderId to that folder id and leave newFolderName null.',
         'Otherwise create a new folder: set newFolderName to a short Title Case name (2-4 words) and leave existingFolderId null. Never set both.',
         'Prefer fuller folders over many tiny ones: avoid a folder holding a single collection when a broader shared '
             + 'folder by theme, or a suitable existing folder, fits instead.',
@@ -117,7 +117,8 @@ function normalizeArrangePlan(raw, capped, existingFolders) {
     const targetByUid = new Map(); // uid -> { existingFolderId, newFolderName }
     const placed = new Set();
 
-    for (const f of (raw.folders || [])) {
+    const folders = (raw && Array.isArray(raw.folders)) ? raw.folders : [];
+    for (const f of folders) {
         // Resolve each folder block to exactly one target (existingFolderId XOR newFolderName).
         // The JSON schema can't express mutual exclusion, so enforce it here.
         let existingFolderId = f && f.existingFolderId != null && validFolderIds.has(f.existingFolderId)
@@ -133,7 +134,7 @@ function normalizeArrangePlan(raw, capped, existingFolders) {
         // Unusable block (no valid target) — its members stay unplaced and fall to Misc below.
         if (!existingFolderId && !newFolderName) continue;
 
-        for (const idx of (f.collectionIndexes || [])) {
+        for (const idx of (Array.isArray(f.collectionIndexes) ? f.collectionIndexes : [])) {
             const uid = indexToUid.get(idx);
             if (uid === undefined || placed.has(uid)) continue; // first folder claiming a collection wins
             placed.add(uid);

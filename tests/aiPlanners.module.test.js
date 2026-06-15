@@ -1,6 +1,6 @@
 const {
     buildNamePrompt, buildArrangePrompt, normalizeArrangePlan,
-    buildOrganizePrompt, normalizeOrganizePlan, CATCHALL_FOLDER_NAME, GROUP_COLORS,
+    normalizeOrganizePlan, CATCHALL_FOLDER_NAME, GROUP_COLORS,
 } = require('../chrome/ai-planners.js');
 
 describe('ai-planners module', () => {
@@ -46,6 +46,28 @@ describe('ai-planners module', () => {
         expect(p).toContain('1. "A"');
         expect(p).toContain('Docs');
         expect(p).not.toContain(uid);
+    });
+
+    test('normalizeArrangePlan: first folder wins when two blocks claim the same index', () => {
+        const collections = [{ uid: 'a' }, { uid: 'b' }];
+        const out = normalizeArrangePlan(
+            { folders: [
+                { existingFolderId: null, newFolderName: 'Work', collectionIndexes: [1, 2] },
+                { existingFolderId: null, newFolderName: 'Fun', collectionIndexes: [2] },
+            ] },
+            collections, [],
+        );
+        expect(out.assignments[1].newFolderName).toBe('Work'); // 'b' claimed by the first block
+    });
+
+    test('normalizeArrangePlan drops out-of-range indexes and Miscs the unreferenced collection', () => {
+        const collections = [{ uid: 'a' }, { uid: 'b' }];
+        const out = normalizeArrangePlan(
+            { folders: [{ existingFolderId: null, newFolderName: 'Work', collectionIndexes: [0, 99, 2] }] },
+            collections, [],
+        );
+        expect(out.assignments[0]).toEqual({ collectionId: 'a', existingFolderId: null, newFolderName: CATCHALL_FOLDER_NAME });
+        expect(out.assignments[1]).toEqual({ collectionId: 'b', existingFolderId: null, newFolderName: 'Work' });
     });
 
     test('normalizeOrganizePlan puts unplaced capped tabs into Other', () => {
