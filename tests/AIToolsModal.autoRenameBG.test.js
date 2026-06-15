@@ -414,4 +414,17 @@ describe('AIToolsModal – Auto-Rename driven by the service worker', () => {
         expect(screen.queryByRole('button', { name: /undo rename of React Learning/i })).toBeNull();
         expect(screen.getByRole('button', { name: /undo rename of World News/i })).not.toBeDisabled();
     });
+
+    test('done with zero renames shows an explanatory empty state and no undo controls', async () => {
+        await driveToDone({ results: [], skipped: [], undo: null });
+        expect(screen.getByText(/no changes needed/i)).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /undo rename of/i })).toBeNull();
+        expect(screen.queryByRole('button', { name: /undo all/i })).toBeNull();
+        expect(screen.getByRole('button', { name: /^done$/i })).toBeInTheDocument();
+    });
+
+    test('done with only skipped collections explains nothing was renamed', async () => {
+        await driveToDone({ results: [], skipped: [{ uid: 'c1', reason: 'error' }], undo: null });
+        expect(screen.getByText(/no names were changed/i)).toBeInTheDocument();
+    });
 });

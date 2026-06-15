@@ -960,6 +960,13 @@ function AIToolsModal({ updateRemoteData }) {
                                         {skipped.length > 0 && (
                                             <p className="ai-rename-skipped">{skipped.length} skipped</p>
                                         )}
+                                        {!wasCancelled && renameResults.length === 0 && (
+                                            <p className="ai-rename-hint">
+                                                {skipped.length > 0
+                                                    ? 'No names were changed.'
+                                                    : 'No changes needed — your collections already have clear names.'}
+                                            </p>
+                                        )}
                                         {wasCancelled && renameResults.length === 0 && (
                                             <p className="ai-rename-hint">Cancelled — no changes made.</p>
                                         )}
