@@ -351,6 +351,62 @@ html.performance-mode .ai-tools-modal-content::before {
     background: rgba(128, 128, 128, 0.1);
 }
 
+/* ── Auto-Rename undo controls ───────────────────────────────────────────── */
+
+.ai-rename-new {
+    min-width: 0;
+}
+
+.ai-rename-undo-btn {
+    margin-left: auto;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    border: none;
+    background: transparent;
+    color: #7c3aed;
+    border-radius: 6px;
+    cursor: pointer;
+    line-height: 0;
+    transition: background 0.2s ease, opacity 0.2s ease;
+}
+
+.ai-rename-undo-btn:hover:not(:disabled) {
+    background: rgba(124, 58, 237, 0.12);
+}
+
+.ai-rename-undo-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.ai-rename-result-row--reverted {
+    opacity: 0.5;
+}
+
+.ai-rename-result-row--reverted .ai-rename-new {
+    text-decoration: line-through;
+    font-weight: 400;
+}
+
+.ai-rename-reverted-tag {
+    margin-left: auto;
+    flex-shrink: 0;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-color);
+    opacity: 0.7;
+}
+
+.ai-rename-undo-all {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
 /* ── Smart Organize panel ────────────────────────────────────────────────── */
 
 .ai-so-summary {
