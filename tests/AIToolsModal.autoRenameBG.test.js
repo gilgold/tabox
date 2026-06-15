@@ -365,4 +365,28 @@ describe('AIToolsModal – Auto-Rename driven by the service worker', () => {
         await act(async () => { fireEvent.click(screen.getByRole('button', { name: /undo all/i })); });
         expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'aiUndoItems', uids: ['c2'] });
     });
+
+    test('per-row undo disables its button until the SW writes back, then prunes', async () => {
+        await driveToDone();
+        const c1Btn = screen.getByRole('button', { name: /undo rename of React Learning/i });
+        await act(async () => { fireEvent.click(c1Btn); });
+        // disabled while the revert is in flight
+        expect(screen.getByRole('button', { name: /undo rename of React Learning/i })).toBeDisabled();
+
+        // SW writes back the partial revert: c1 reverted, c2 still applied
+        await fireStorageChange({
+            taskId: 't1', type: 'auto-rename', status: 'done', filed: 2, total: 2,
+            results: [
+                { uid: 'c1', oldName: 'Untitled', newName: 'React Learning', reverted: true },
+                { uid: 'c2', oldName: 'Old News', newName: 'World News' },
+            ],
+            skipped: [],
+            summary: 'Renamed 2 collections with AI',
+            undo: { task: 'auto-rename', renames: [{ uid: 'c2', oldName: 'Old News', newName: 'World News' }] },
+        });
+
+        // c1 is now reverted (button gone); c2 remains and its button is NOT stuck disabled
+        expect(screen.queryByRole('button', { name: /undo rename of React Learning/i })).toBeNull();
+        expect(screen.getByRole('button', { name: /undo rename of World News/i })).not.toBeDisabled();
+    });
 });
