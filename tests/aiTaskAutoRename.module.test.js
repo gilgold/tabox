@@ -72,3 +72,15 @@ test('auto-rename applies already-completed renames then stops when cancelled mi
   expect(c.storage.renameCollectionsBG).toHaveBeenCalledWith([{ uid: 'c1', oldName: 'O1', newName: 'New1' }]);
   expect(res.status).toBe('cancelled');
 });
+
+test('auto-rename reuses a single AI session across the loop at temperature 0', async () => {
+  const session = { prompt: jest.fn(), destroy: jest.fn() };
+  const c = ctx({
+    loadCollections: jest.fn().mockResolvedValue([{ uid: 'c1', name: 'O1', tabs: [] }, { uid: 'c2', name: 'O2', tabs: [] }]),
+    client: { createAISession: jest.fn().mockResolvedValue(session), promptForJSON: jest.fn().mockResolvedValue({ name: 'Fresh' }) },
+  });
+  await createEngine({ registry, ctx: c }).runTask({ id: 'auto-rename', params: { uids: ['c1', 'c2'] } });
+  expect(c.client.createAISession).toHaveBeenCalledTimes(1);
+  expect(c.client.createAISession).toHaveBeenCalledWith(expect.objectContaining({ temperature: 0 }));
+  expect(session.destroy).toHaveBeenCalledTimes(1);
+});
