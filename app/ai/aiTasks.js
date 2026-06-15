@@ -1,8 +1,11 @@
 import { MdDriveFileRenameOutline, MdAutoAwesomeMosaic, MdCreateNewFolder } from 'react-icons/md';
 
 // Registry of AI tools shown in the AI Tools modal.
-// To add a new AI feature: implement it under app/ai/tasks/ and add an entry
-// here; AIToolsModal renders the list and routes to the tool's panel by id.
+// To add a new AI feature whose work runs in the service worker:
+//   1. Add chrome/ai-task-<name>.js that self-registers with TaboxAIRegistry.
+//   2. Add an importScripts line for it in chrome/background.js.
+//   3. Add an entry to AI_TOOLS below plus a panel branch in app/AIToolsModal.js
+//      keyed by the tool id (it renders the list and routes by id).
 export const AI_TOOLS = [
     {
         id: 'smart-organize',
