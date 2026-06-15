@@ -8,6 +8,11 @@ const LANGUAGE_OPTIONS = {
     expectedOutputs: [{ type: 'text', languages: ['en'] }],
 };
 
+// Defaults used to satisfy the Prompt API's "both temperature and topK, or
+// neither" rule when a caller specifies only one of them.
+const DEFAULT_TOP_K = 3;
+const DEFAULT_TEMPERATURE = 1;
+
 async function aiAvailability() {
     if (typeof globalThis.LanguageModel === 'undefined') return 'unsupported';
     try {
@@ -24,8 +29,13 @@ async function createAISession({ systemPrompt, temperature, topK, signal } = {})
     }
     const options = { ...LANGUAGE_OPTIONS };
     if (systemPrompt) options.initialPrompts = [{ role: 'system', content: systemPrompt }];
-    if (temperature !== undefined) options.temperature = temperature;
-    if (topK !== undefined) options.topK = topK;
+    // The Prompt API requires temperature and topK together (or neither); pair a
+    // default for whichever a caller omitted so a one-sided value doesn't throw
+    // NotSupportedError.
+    if (temperature !== undefined || topK !== undefined) {
+        options.temperature = temperature !== undefined ? temperature : DEFAULT_TEMPERATURE;
+        options.topK = topK !== undefined ? topK : DEFAULT_TOP_K;
+    }
     if (signal) options.signal = signal;
     return globalThis.LanguageModel.create(options);
 }

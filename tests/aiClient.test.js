@@ -74,4 +74,30 @@ describe('aiClient', () => {
         await promptForJSON(session, 'prompt text', schema, signal);
         expect(session.prompt).toHaveBeenCalledWith('prompt text', { responseConstraint: schema, signal });
     });
+
+    // The Prompt API rejects a session that sets only one of temperature/topK
+    // (NotSupportedError: "must either specify both topK and temperature, or neither").
+    test('createAISession pairs a default topK when only temperature is given', async () => {
+        globalThis.LanguageModel = { create: jest.fn().mockResolvedValue({}) };
+        await createAISession({ temperature: 0 });
+        expect(globalThis.LanguageModel.create).toHaveBeenCalledWith(
+            expect.objectContaining({ temperature: 0, topK: 3 }),
+        );
+    });
+
+    test('createAISession pairs a default temperature when only topK is given', async () => {
+        globalThis.LanguageModel = { create: jest.fn().mockResolvedValue({}) };
+        await createAISession({ topK: 5 });
+        expect(globalThis.LanguageModel.create).toHaveBeenCalledWith(
+            expect.objectContaining({ topK: 5, temperature: 1 }),
+        );
+    });
+
+    test('createAISession sends neither sampling param when neither is given', async () => {
+        globalThis.LanguageModel = { create: jest.fn().mockResolvedValue({}) };
+        await createAISession({});
+        const opts = globalThis.LanguageModel.create.mock.calls[0][0];
+        expect(opts.temperature).toBeUndefined();
+        expect(opts.topK).toBeUndefined();
+    });
 });
