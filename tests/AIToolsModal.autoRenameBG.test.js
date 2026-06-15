@@ -304,4 +304,65 @@ describe('AIToolsModal – Auto-Rename driven by the service worker', () => {
         // reflects the running state (2 of 3: X) without clicking the tool card.
         await waitFor(() => expect(screen.getByText(/Renaming 2 of 3: X/)).toBeInTheDocument());
     });
+
+    const driveToDone = async (overrides = {}) => {
+        await renderOpenModal();
+        fireEvent.click(screen.getByText('Auto-name collection'));
+        await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /auto-rename/i })); });
+        await fireStorageChange({
+            taskId: 't1', type: 'auto-rename', status: 'done', filed: 2, total: 2,
+            results: [
+                { uid: 'c1', oldName: 'Untitled', newName: 'React Learning' },
+                { uid: 'c2', oldName: 'Old News', newName: 'World News' },
+            ],
+            skipped: [],
+            summary: 'Renamed 2 collections with AI',
+            undo: { task: 'auto-rename', renames: [
+                { uid: 'c1', oldName: 'Untitled', newName: 'React Learning' },
+                { uid: 'c2', oldName: 'Old News', newName: 'World News' },
+            ] },
+            ...overrides,
+        });
+    };
+
+    test('done panel renders a per-row undo button that sends aiUndoItems for that uid', async () => {
+        await driveToDone();
+        const undoBtns = screen.getAllByRole('button', { name: /undo rename of/i });
+        expect(undoBtns).toHaveLength(2);
+        await act(async () => { fireEvent.click(undoBtns[0]); });
+        expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'aiUndoItems', uids: ['c1'] });
+    });
+
+    test('"Undo all" sends aiUndoItems with every still-applied uid', async () => {
+        await driveToDone();
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /undo all/i })); });
+        expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'aiUndoItems', uids: ['c1', 'c2'] });
+    });
+
+    test('reverted rows show no undo button; undo-all is replaced by the reverted hint', async () => {
+        await driveToDone({
+            results: [
+                { uid: 'c1', oldName: 'Untitled', newName: 'React Learning', reverted: true },
+                { uid: 'c2', oldName: 'Old News', newName: 'World News', reverted: true },
+            ],
+            undo: null,
+        });
+        expect(screen.queryByRole('button', { name: /undo rename of/i })).toBeNull();
+        expect(screen.queryByRole('button', { name: /undo all/i })).toBeNull();
+        expect(screen.getByText(/all renames reverted/i)).toBeInTheDocument();
+    });
+
+    test('a partial revert keeps undo controls for the remaining row', async () => {
+        await driveToDone({
+            results: [
+                { uid: 'c1', oldName: 'Untitled', newName: 'React Learning', reverted: true },
+                { uid: 'c2', oldName: 'Old News', newName: 'World News' },
+            ],
+            undo: { task: 'auto-rename', renames: [{ uid: 'c2', oldName: 'Old News', newName: 'World News' }] },
+        });
+        expect(screen.getAllByRole('button', { name: /undo rename of/i })).toHaveLength(1);
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /undo all/i })); });
+        expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'aiUndoItems', uids: ['c2'] });
+    });
 });

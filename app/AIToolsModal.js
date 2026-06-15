@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Modal from 'react-modal';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { MdClose, MdArrowBack } from 'react-icons/md';
+import { MdClose, MdArrowBack, MdUndo } from 'react-icons/md';
 import { BsStars } from 'react-icons/bs';
 import { aiToolsModalOpenState, aiToolsScopeState, aiProcessingUidsState, aiProcessingCurrentUidState } from './atoms/aiState';
 import { viewContextState } from './atoms/globalAppSettingsState';
@@ -47,6 +47,8 @@ function AIToolsModal({ updateRemoteData }) {
     // Bulk-run progress (i/N label + determinate bar)
     const [progressLabel, setProgressLabel] = useState('');
     const [progressFill, setProgressFill] = useState(0); // 0–100
+    // uids whose per-row undo is in flight (button disabled until the SW writes back)
+    const [revertingUids, setRevertingUids] = useState([]);
 
     // Shared service-worker AI task state. The SW owns task execution and writes
     // progress/results to chrome.storage.local under `aiTaskState`; the popup
@@ -150,6 +152,7 @@ function AIToolsModal({ updateRemoteData }) {
     const dispatchAiRun = useCallback((task, params) => browser.runtime.sendMessage({ type: 'aiRun', task, params }), []);
     const sendAiCancel = useCallback(() => browser.runtime.sendMessage({ type: 'aiCancel' }), []);
     const sendAiUndo = useCallback(() => browser.runtime.sendMessage({ type: 'aiUndo' }), []);
+    const sendAiUndoItems = useCallback((uids) => browser.runtime.sendMessage({ type: 'aiUndoItems', uids }), []);
 
     // Subscribe to aiTaskState: read once on open, then track storage changes so
     // a reopened popup re-attaches to an in-progress run.
@@ -195,6 +198,22 @@ function AIToolsModal({ updateRemoteData }) {
     const busy = panelStatus === 'running';
     const close = () => setIsOpen(false);
 
+    // uids still undoable on the done panel — the live undo snapshot the SW maintains.
+    const renameUndoUids = (aiTaskState && aiTaskState.type === 'auto-rename' && aiTaskState.undo && aiTaskState.undo.renames)
+        ? aiTaskState.undo.renames.map((r) => r.uid)
+        : [];
+
+    const handleUndoItem = (uid) => {
+        setRevertingUids((prev) => (prev.includes(uid) ? prev : [...prev, uid]));
+        sendAiUndoItems([uid]);
+    };
+
+    const handleUndoAll = () => {
+        if (renameUndoUids.length === 0) return;
+        setRevertingUids((prev) => Array.from(new Set([...prev, ...renameUndoUids])));
+        sendAiUndoItems(renameUndoUids);
+    };
+
     // Collections that have tabs (can be renamed by AI)
     const nameableCollections = collections.filter((c) => (c.tabs || []).length > 0);
 
@@ -229,6 +248,7 @@ function AIToolsModal({ updateRemoteData }) {
         setIsCancelling(false);
         setProgressLabel('');
         setProgressFill(0);
+        setRevertingUids([]);
         setAiProcessingUids(targets.map((t) => t.uid));
 
         // Allow a fresh completion toast for the run we're about to start.
@@ -252,7 +272,7 @@ function AIToolsModal({ updateRemoteData }) {
         if (activeToolId !== 'auto-rename') return;
         if (!aiTaskState || aiTaskState.type !== 'auto-rename') return;
 
-        const { status, filed = 0, total = 0, currentLabel, currentUid, results = [], skipped: skippedList = [], summary } = aiTaskState;
+        const { status, filed = 0, total = 0, currentLabel, currentUid, results = [], skipped: skippedList = [], summary, undo } = aiTaskState;
 
         if (status === 'running') {
             setPanelStatus('running');
@@ -266,6 +286,8 @@ function AIToolsModal({ updateRemoteData }) {
 
         if (status === 'done' || status === 'cancelled' || status === 'error') {
             setRenameResults(results);
+            const undoUids = (undo && undo.renames ? undo.renames : []).map((r) => r.uid);
+            setRevertingUids((prev) => prev.filter((u) => undoUids.includes(u)));
             setSkipped(skippedList);
             setAiProcessingUids([]);
             setAiProcessingCurrentUid(null);
@@ -910,10 +932,27 @@ function AIToolsModal({ updateRemoteData }) {
                                         {renameResults.length > 0 && (
                                             <ul className="ai-rename-results">
                                                 {renameResults.map((r) => (
-                                                    <li key={r.uid} className="ai-rename-result-row">
+                                                    <li
+                                                        key={r.uid}
+                                                        className={`ai-rename-result-row${r.reverted ? ' ai-rename-result-row--reverted' : ''}`}
+                                                    >
                                                         <span className="ai-rename-old">{r.oldName}</span>
                                                         <span className="ai-rename-arrow">→</span>
                                                         <span className="ai-rename-new">{r.newName}</span>
+                                                        {r.reverted ? (
+                                                            <span className="ai-rename-reverted-tag">reverted</span>
+                                                        ) : renameUndoUids.includes(r.uid) ? (
+                                                            <button
+                                                                type="button"
+                                                                className="ai-rename-undo-btn"
+                                                                onClick={() => handleUndoItem(r.uid)}
+                                                                disabled={revertingUids.includes(r.uid)}
+                                                                aria-label={`Undo rename of ${r.newName}`}
+                                                                title="Undo this rename"
+                                                            >
+                                                                <MdUndo size={15} />
+                                                            </button>
+                                                        ) : null}
                                                     </li>
                                                 ))}
                                             </ul>
@@ -927,6 +966,19 @@ function AIToolsModal({ updateRemoteData }) {
                                         {wasCancelled && renameResults.length > 0 && (
                                             <p className="ai-rename-hint">Cancelled — partial results applied above.</p>
                                         )}
+                                        {renameUndoUids.length > 0 ? (
+                                            <button
+                                                type="button"
+                                                className="ai-tool-action-btn ai-tool-action-btn--cancel ai-rename-undo-all"
+                                                onClick={handleUndoAll}
+                                                disabled={revertingUids.length > 0}
+                                            >
+                                                <MdUndo size={15} style={{ marginRight: '6px' }} />
+                                                Undo all
+                                            </button>
+                                        ) : renameResults.some((r) => r.reverted) ? (
+                                            <p className="ai-rename-hint">All renames reverted.</p>
+                                        ) : null}
                                     </>
                                 )}
                                 <button
