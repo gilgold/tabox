@@ -110,24 +110,32 @@ export const AutoSaveTextbox = (props) => {
     }, [value]);
 
     return (
-        <div className={['autosave-wrapper', props.wrapperClassName, props.aiSuggest ? 'has-ai-suggest' : '', aiBusy ? 'ai-name-processing' : ''].filter(Boolean).join(' ')} onClick={(e) => e.stopPropagation()}>
-            {!props.hideEditIcon && (
-                <div className="edit-icon" onClick={(e) => { e.stopPropagation(); inputRef.current.focus(); }}>
-                    <AiFillEdit size="14px" color="var(--text-color)" />
-                </div>
-            )}
-            <input 
-                ref={inputRef} 
-                className={`autosave-textbox ${props.inputClassName || ''}`.trim()}
-                placeholder={props.placeholder || "Enter name..."} 
-                maxLength={props.maxLength ?? -1}
-                onChange={handleOnChange} 
-                onClick={(e) => e.stopPropagation()}
-                onFocus={(e) => e.stopPropagation()}
-                
-                data-tooltip-id="main-tooltip" data-tooltip-content="Click to edit • Auto-saves as you type" 
-                data-tooltip-class-name="small-tooltip"
-                value={value} />
+        <>
+            <div className={['autosave-wrapper', props.wrapperClassName, aiBusy ? 'ai-name-processing' : ''].filter(Boolean).join(' ')} onClick={(e) => e.stopPropagation()}>
+                {!props.hideEditIcon && (
+                    <div className="edit-icon" onClick={(e) => { e.stopPropagation(); inputRef.current.focus(); }}>
+                        <AiFillEdit size="14px" color="var(--text-color)" />
+                    </div>
+                )}
+                <input
+                    ref={inputRef}
+                    className={`autosave-textbox ${props.inputClassName || ''}`.trim()}
+                    placeholder={props.placeholder || "Enter name..."}
+                    maxLength={props.maxLength ?? -1}
+                    onChange={handleOnChange}
+                    onClick={(e) => e.stopPropagation()}
+                    onFocus={(e) => e.stopPropagation()}
+
+                    data-tooltip-id="main-tooltip" data-tooltip-content="Click to edit • Auto-saves as you type"
+                    data-tooltip-class-name="small-tooltip"
+                    value={value} />
+                {saved ? (
+                    <svg key={`saved-${saved}`} className="checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
+                        <circle className="checkmark__circle" cx="26" cy="26" r="25" fill="none" />
+                        <path className="checkmark__check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8" />
+                    </svg>
+                ) : typing ? <TypingLoader /> : null }
+            </div>
             {props.aiSuggest && (
                 <AiSuggestNameButton
                     suggest={props.aiSuggest.suggest}
@@ -141,12 +149,6 @@ export const AutoSaveTextbox = (props) => {
                     }}
                 />
             )}
-            {saved ? (
-                <svg key={`saved-${saved}`} className="checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
-                    <circle className="checkmark__circle" cx="26" cy="26" r="25" fill="none" />
-                    <path className="checkmark__check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8" />
-                </svg>
-            ) : typing ? <TypingLoader /> : null }
-        </div>
+        </>
     );
 };

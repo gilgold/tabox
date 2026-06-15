@@ -234,7 +234,7 @@ function GroupContainer({
     const actionsStyle = {
         display: 'flex',
         alignItems: 'center',
-        gap: '8px',
+        gap: '4px',
         flexShrink: 0,
     };
 

@@ -317,7 +317,7 @@
 	box-shadow: 0 2px 12px rgba(139, 93, 255, 0.15);
 }
 
-/* Override settings button in popup to match action buttons */
+/* Override settings button in popup to match action buttons with a purple accent */
 .header-popup .settings-wrapper {
 	position: relative;
 	top: auto;
@@ -328,6 +328,41 @@
 	width: 40px;
 	height: 40px;
 	border-radius: 10px;
+	background: rgba(139, 93, 255, 0.08);
+	border: 1px solid rgba(139, 93, 255, 0.22);
+	box-shadow: none;
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
+	opacity: 1;
+	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.header-popup .settings-button:hover {
+	background: rgba(139, 93, 255, 0.15);
+	border-color: rgba(139, 93, 255, 0.45);
+	box-shadow: 0 2px 12px rgba(139, 93, 255, 0.2);
+	transform: scale(1.06);
+}
+
+.header-popup .settings-button:active {
+	transform: scale(0.94);
+	box-shadow: none;
+}
+
+.header-popup .settings-button svg {
+	width: 18px;
+	height: 18px;
+}
+
+[data-theme="dark"] .header-popup .settings-button {
+	background: rgba(139, 93, 255, 0.12);
+	border-color: rgba(139, 93, 255, 0.28);
+}
+
+[data-theme="dark"] .header-popup .settings-button:hover {
+	background: rgba(139, 93, 255, 0.22);
+	border-color: rgba(139, 93, 255, 0.5);
+	box-shadow: 0 2px 14px rgba(139, 93, 255, 0.25);
 }
 
 /* ─── Vertical Separator (shared with FPTopBar) ─── */

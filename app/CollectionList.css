@@ -1387,14 +1387,14 @@ html.fullpage-mode .group-tab-count-badge {
     color: var(--text-color) !important;
     font-weight: 600 !important;
     font-size: 14px !important;
-    padding: 0 !important;
+    padding: 0 0 0 8px !important;
     margin: 0 !important;
     min-width: 120px;
 }
 
 .group-title-input:focus {
     outline: none !important;
-    padding: 2px 6px !important;
+    padding: 2px 6px 2px 8px !important;
 }
 
 /* Tab styling within groups */

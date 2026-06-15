@@ -15,10 +15,6 @@
   flex-basis: 310px;
 }
 
-.add-collection-group.has-ai-suggest input[type="text"] {
-  padding-right: 52px;
-}
-
 .add-collection-group input[type="text"]:hover {
   box-shadow: 0 0 8px rgba(58, 119, 216, 0.15);
 }
