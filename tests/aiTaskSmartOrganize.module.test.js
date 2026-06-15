@@ -21,3 +21,15 @@ test('smart-organize produces a plan in results and does NOT trigger sync', asyn
   expect(res.results.skippedTabIds).toEqual([]);
   expect(ctx.triggerSync).not.toHaveBeenCalled();
 });
+
+test('smart-organize creates the AI session at temperature 0', async () => {
+  const ctx = {
+    planners: require('../chrome/ai-planners.js'),
+    client: { createAISession: jest.fn().mockResolvedValue({ prompt: jest.fn(), destroy: jest.fn() }),
+              promptForJSON: jest.fn().mockResolvedValue({ groups: [{ name: 'Work', color: 'blue', existingGroupId: null, tabIndexes: [1] }] }) },
+    readWindow: jest.fn().mockResolvedValue({ ungroupedTabs: [{ tabId: 11, title: 'A', url: 'https://a.com' }], existingGroups: [] }),
+    triggerSync: jest.fn().mockResolvedValue(true),
+  };
+  await createEngine({ registry, ctx }).runTask({ id: 'smart-organize', params: { windowId: 5 } });
+  expect(ctx.client.createAISession).toHaveBeenCalledWith(expect.objectContaining({ temperature: 0 }));
+});

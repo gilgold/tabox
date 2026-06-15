@@ -9,7 +9,7 @@ const def = {
         const { ungroupedTabs, existingGroups } = await readWindow(params.windowId);
         const capped = ungroupedTabs.slice(0, planners.ORGANIZE_MAX_TABS);
         const skippedTabIds = ungroupedTabs.slice(planners.ORGANIZE_MAX_TABS).map((t) => t.tabId);
-        const session = await client.createAISession({ systemPrompt: 'You group browser tabs by topic. Group names are short, specific, Title Case, no quotes or emojis.', temperature: 0.7, topK: 3 });
+        const session = await client.createAISession({ systemPrompt: 'You group browser tabs by topic. Group names are short, specific, Title Case, no quotes or emojis.', temperature: 0 });
         let raw;
         try { raw = await client.promptForJSON(session, planners.buildOrganizePrompt({ ungroupedTabs: capped, existingGroups }), planners.ORGANIZE_SCHEMA); }
         finally { session.destroy(); }
