@@ -47,7 +47,7 @@ function createEngine({ registry, ctx }) {
         await clearState();
     }
     async function undoItems({ uids }) {
-        // Safe single read+write: undoItems runs only after a task completes, so no report() writes are in flight.
+        // Safe read+write: undoItems runs after task completion (no report() in flight), and the popup serializes undo dispatch (it disables all undo controls while one revert is in flight), so no concurrent undoItems either.
         const state = await readState();
         const snapshot = state.undo;
         if (!snapshot || !snapshot.task || !Array.isArray(uids) || uids.length === 0) return;

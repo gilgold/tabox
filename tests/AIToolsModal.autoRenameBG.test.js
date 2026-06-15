@@ -366,6 +366,31 @@ describe('AIToolsModal – Auto-Rename driven by the service worker', () => {
         expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'aiUndoItems', uids: ['c2'] });
     });
 
+    test('an in-flight per-row undo disables all undo controls (serialized dispatch)', async () => {
+        await driveToDone();
+        const c1Btn = screen.getByRole('button', { name: /undo rename of React Learning/i });
+        await act(async () => { fireEvent.click(c1Btn); });
+
+        // While c1's revert is in flight, every undo control is disabled — only one
+        // aiUndoItems may be outstanding (concurrent reverts would race collections_index).
+        expect(screen.getByRole('button', { name: /undo rename of React Learning/i })).toBeDisabled();
+        expect(screen.getByRole('button', { name: /undo rename of World News/i })).toBeDisabled();
+        expect(screen.getByRole('button', { name: /undo all/i })).toBeDisabled();
+
+        // After the SW writes back the c1 revert, controls re-enable for the remaining row.
+        await fireStorageChange({
+            taskId: 't1', type: 'auto-rename', status: 'done', filed: 2, total: 2,
+            results: [
+                { uid: 'c1', oldName: 'Untitled', newName: 'React Learning', reverted: true },
+                { uid: 'c2', oldName: 'Old News', newName: 'World News' },
+            ],
+            skipped: [],
+            summary: 'Renamed 2 collections with AI',
+            undo: { task: 'auto-rename', renames: [{ uid: 'c2', oldName: 'Old News', newName: 'World News' }] },
+        });
+        expect(screen.getByRole('button', { name: /undo rename of World News/i })).not.toBeDisabled();
+    });
+
     test('per-row undo disables its button until the SW writes back, then prunes', async () => {
         await driveToDone();
         const c1Btn = screen.getByRole('button', { name: /undo rename of React Learning/i });

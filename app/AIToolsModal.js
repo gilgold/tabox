@@ -946,7 +946,7 @@ function AIToolsModal({ updateRemoteData }) {
                                                                 type="button"
                                                                 className="ai-rename-undo-btn"
                                                                 onClick={() => handleUndoItem(r.uid)}
-                                                                disabled={revertingUids.includes(r.uid)}
+                                                                disabled={revertingUids.length > 0}
                                                                 aria-label={`Undo rename of ${r.newName}`}
                                                                 title="Undo this rename"
                                                             >
