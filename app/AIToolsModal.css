@@ -313,7 +313,9 @@ html.performance-mode .ai-tools-modal-content::before {
     gap: 6px;
     font-size: 12px;
     color: var(--text-color);
-    flex-wrap: wrap;
+    /* Single line: the new name (min-width:0 + ellipsis) shrinks so the trailing
+       undo button stays pinned right instead of wrapping below on long names. */
+    flex-wrap: nowrap;
 }
 
 .ai-rename-old {
