@@ -114,7 +114,7 @@ test('undoItems is a no-op without a snapshot or with empty uids', async () => {
   await browser.storage.local.set({ aiTaskState: { type: 'demo', status: 'done', results: [], undo: null } });
   const engine = createEngine({ registry, ctx: ctx() });
   await engine.undoItems({ uids: ['a'] }); // no snapshot
-  await browser.storage.local.set({ aiTaskState: { type: 'demo', status: 'done', results: [], undo: { task: 'demo', renames: [] } } });
+  await browser.storage.local.set({ aiTaskState: { type: 'demo', status: 'done', results: [{ uid: 'a' }], undo: { task: 'demo', renames: [{ uid: 'a' }] } } });
   await engine.undoItems({ uids: [] }); // empty uids
   expect(undoItemsSpy).not.toHaveBeenCalled();
 });
