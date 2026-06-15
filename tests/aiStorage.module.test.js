@@ -79,3 +79,23 @@ test('deleteFolderBG removes folder and writes a tombstone', async () => {
   expect(idx[folder.uid]).toBeUndefined();
   expect(tombs[folder.uid]).toBeTruthy();
 });
+
+test('createFoldersBG writes all folder records + a single merged index in one pass', async () => {
+  const created = await store.createFoldersBG([
+    { name: 'Reading', color: '#4facfe', collapsed: true },
+    { name: 'Work', color: '#43e97b', collapsed: false },
+  ]);
+  expect(created).toHaveLength(2);
+  const idx = (await local.get(STORAGE_KEYS.FOLDERS_INDEX))[STORAGE_KEYS.FOLDERS_INDEX];
+  expect(Object.keys(idx)).toHaveLength(2);
+  expect(idx[created[0].uid].name).toBe('Reading');
+  expect(idx[created[1].uid].name).toBe('Work');
+  // Each folder record persisted under its own key.
+  const rec = (await local.get(`${STORAGE_KEYS.FOLDER_PREFIX}${created[1].uid}`))[`${STORAGE_KEYS.FOLDER_PREFIX}${created[1].uid}`];
+  expect(rec.name).toBe('Work');
+});
+
+test('createFoldersBG returns [] for empty input and throws on a blank name', async () => {
+  expect(await store.createFoldersBG([])).toEqual([]);
+  await expect(store.createFoldersBG([{ name: '   ' }])).rejects.toThrow(/name is required/);
+});

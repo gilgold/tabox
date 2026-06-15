@@ -71,23 +71,36 @@ function newUid() {
         : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
 }
 
+async function createFoldersBG(specs) {
+    if (!Array.isArray(specs) || specs.length === 0) return [];
+    const now = Date.now();
+    const index = await loadFoldersIndexBG();
+    const writes = {};
+    const created = [];
+    for (const s of specs) {
+        if (!s || !s.name || typeof s.name !== 'string' || !s.name.trim()) {
+            throw new Error('createFoldersBG: name is required');
+        }
+        const folder = {
+            uid: newUid(), name: s.name, type: 'folder',
+            color: s.color || 'var(--folder-default-color)',
+            createdOn: now, lastUpdated: now, collapsed: !!s.collapsed,
+            order: FOLDER_DEFAULT_ORDER, collectionCount: 0,
+        };
+        index[folder.uid] = { name: folder.name, color: folder.color, collapsed: folder.collapsed, order: folder.order, lastUpdated: now, collectionCount: 0 };
+        writes[`${KEYS.FOLDER_PREFIX}${folder.uid}`] = folder;
+        created.push(folder);
+    }
+    writes[KEYS.FOLDERS_INDEX] = index;
+    await local.set(writes);
+    return created;
+}
+
 async function createFolderBG(name, color, collapsed) {
     if (!name || typeof name !== 'string' || !name.trim()) {
         throw new Error('createFolderBG: name is required');
     }
-    const now = Date.now();
-    const folder = {
-        uid: newUid(), name, type: 'folder',
-        color: color || 'var(--folder-default-color)',
-        createdOn: now, lastUpdated: now, collapsed: !!collapsed,
-        order: FOLDER_DEFAULT_ORDER, collectionCount: 0,
-    };
-    const index = await loadFoldersIndexBG();
-    index[folder.uid] = { name: folder.name, color: folder.color, collapsed: folder.collapsed, order: folder.order, lastUpdated: now, collectionCount: 0 };
-    await local.set({
-        [KEYS.FOLDERS_INDEX]: index,
-        [`${KEYS.FOLDER_PREFIX}${folder.uid}`]: folder,
-    });
+    const [folder] = await createFoldersBG([{ name, color, collapsed }]);
     return folder;
 }
 
@@ -123,7 +136,7 @@ async function updateFolderCountsBG(folderUids) {
 
 const aiStorageApi = {
     loadCollectionsIndexBG, loadFoldersIndexBG, renameCollectionsBG,
-    moveCollectionsToFoldersBG, createFolderBG, deleteFolderBG, updateFolderCountsBG,
+    moveCollectionsToFoldersBG, createFolderBG, createFoldersBG, deleteFolderBG, updateFolderCountsBG,
 };
 /* istanbul ignore next */
 if (typeof globalThis !== 'undefined') globalThis.TaboxAIStorage = aiStorageApi;
