@@ -1014,6 +1014,7 @@ function AIToolsModal({ updateRemoteData }) {
                         )}
                     </div>
                 )}
+                <p className="ai-tools-disclaimer">AI makes mistakes. Always review suggestions before applying them.</p>
             </div>
         </Modal>
     );

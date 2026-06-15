@@ -106,12 +106,13 @@ html.performance-mode .ai-tools-modal-content::before {
 }
 
 .ai-tools-list {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 10px;
 }
 
 .ai-hero-card {
+    grid-column: 1 / -1;
     position: relative;
     display: flex;
     flex-direction: column;
@@ -148,8 +149,8 @@ html.performance-mode .ai-tools-modal-content::before {
 .ai-hero-icon { color: #a78bfa; }
 .ai-hero-title { font-size: 15px; font-weight: 700; color: var(--text-color); }
 .ai-hero-description { font-size: 12px; opacity: 0.8; color: var(--text-color); }
-.ai-tools-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
-.ai-tools-modal--fullpage .ai-tools-grid { grid-template-columns: 1fr 1fr; }
+.ai-tools-grid { display: contents; }
+.ai-tools-modal--fullpage .ai-tools-grid { display: contents; }
 
 .ai-tool-card {
     display: flex;
@@ -427,4 +428,13 @@ html.performance-mode .ai-tools-modal-content::before {
 
 .ai-so-undo-btn:hover {
     opacity: 1;
+}
+
+.ai-tools-disclaimer {
+    font-size: 11px;
+    color: var(--text-color);
+    opacity: 0.45;
+    text-align: center;
+    margin: 0;
+    padding-top: 4px;
 }
