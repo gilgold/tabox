@@ -92,3 +92,31 @@ test('auto-arrange undo restores parentId and deletes the now-empty created fold
   expect(c.storage.moveCollectionsToFoldersBG).toHaveBeenCalledWith([{ uid: 'c1', parentId: null }]);
   expect(c.storage.deleteFolderBG).toHaveBeenCalledWith('f-new');
 });
+
+test('auto-arrange applies accumulated moves then stops when cancelled mid-loop, with undo + session destroyed', async () => {
+  const many = Array.from({ length: 25 }, (_, i) => ({ uid: `c${i + 1}`, name: `C${i + 1}`, tabs: [], parentId: null }));
+  const cIndex = Object.fromEntries(many.map((c) => [c.uid, { parentId: null }]));
+  const session = { prompt: jest.fn(), destroy: jest.fn() };
+  let call = 0;
+  const c = baseCtx({
+    loadLooseSummaries: jest.fn().mockResolvedValue(many),
+    storage: { ...baseCtx().storage, loadCollectionsIndexBG: jest.fn().mockResolvedValue(cIndex), createFoldersBG: jest.fn().mockResolvedValue([{ uid: 'f-new' }]) },
+    client: {
+      createAISession: jest.fn().mockResolvedValue(session),
+      promptForJSON: jest.fn().mockImplementation(async () => {
+        call += 1;
+        if (call === 1) {
+          const s = (await browser.storage.local.get('aiTaskState')).aiTaskState;
+          await browser.storage.local.set({ aiTaskState: { ...s, cancelRequested: true } });
+        }
+        return { folders: [{ existingFolderId: null, newFolderName: 'Reading', collectionIndexes: Array.from({ length: 20 }, (_, i) => i + 1) }] };
+      }),
+    },
+  });
+  const res = await createEngine({ registry, ctx: c }).runTask({ id: 'auto-arrange', params: {} });
+  expect(c.client.promptForJSON).toHaveBeenCalledTimes(1); // chunk 2 never runs after cancel
+  expect(c.storage.moveCollectionsToFoldersBG.mock.calls[0][0]).toHaveLength(20); // chunk 1's moves applied
+  expect(res.status).toBe('cancelled');
+  expect(res.undo).toEqual(expect.objectContaining({ task: 'auto-arrange' }));
+  expect(session.destroy).toHaveBeenCalledTimes(1);
+});

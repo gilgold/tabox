@@ -43,6 +43,8 @@ async function resolveChunkTargets(assignments, state) {
     }
     const targetByCollection = new Map();
     for (const a of assignments) {
+        // normalizeArrangePlan guarantees exactly one non-null target per assignment,
+        // so when existingFolderId is falsy, newFolderName is a non-null string here.
         const target = a.existingFolderId || createdByLowerName.get(a.newFolderName.toLowerCase());
         targetByCollection.set(a.collectionId, target);
     }
