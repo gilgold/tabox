@@ -20,6 +20,15 @@ describe('ai-client module', () => {
     expect(session.prompt).toHaveBeenCalledWith('p', expect.objectContaining({ responseConstraint: { type: 'object' } }));
   });
 
+  test('promptForJSON logs the inference duration', async () => {
+    const debugSpy = jest.spyOn(console, 'debug').mockImplementation(() => {});
+    const session = { prompt: jest.fn().mockResolvedValue('{"name":"X"}') };
+    const out = await promptForJSON(session, 'p', { type: 'object' });
+    expect(out).toEqual({ name: 'X' });
+    expect(debugSpy).toHaveBeenCalledWith(expect.stringContaining('Tabox AI: inference'));
+    debugSpy.mockRestore();
+  });
+
   test('createAISession passes merged options to LanguageModel.create', async () => {
     const fakeSession = { prompt: jest.fn() };
     global.LanguageModel = { create: jest.fn().mockResolvedValue(fakeSession) };

@@ -51,6 +51,8 @@ export async function createAISession({ systemPrompt, temperature, topK, signal 
 export async function promptForJSON(session, prompt, schema, signal) {
     const options = { responseConstraint: schema };
     if (signal) options.signal = signal;
+    const startedAt = Date.now();
     const raw = await session.prompt(prompt, options);
+    console.debug(`Tabox AI: inference ${Date.now() - startedAt}ms`);
     return JSON.parse(raw);
 }
