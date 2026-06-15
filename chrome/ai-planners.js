@@ -53,54 +53,58 @@ const CATCHALL_FOLDER_NAME = 'Misc';
 const ARRANGE_SCHEMA = {
     type: 'object',
     properties: {
-        assignments: {
+        folders: {
             type: 'array',
             items: {
                 type: 'object',
                 properties: {
-                    collectionId: { type: 'string' },
                     existingFolderId: { type: ['string', 'null'] },
                     newFolderName: { type: ['string', 'null'], maxLength: ARRANGE_MAX_NAME_LENGTH },
+                    collectionIndexes: { type: 'array', items: { type: 'integer' } },
                 },
-                required: ['collectionId'],
+                required: ['collectionIndexes'],
                 additionalProperties: false,
             },
         },
     },
-    required: ['assignments'],
+    required: ['folders'],
     additionalProperties: false,
 };
 
 function buildArrangePrompt({ collections = [], existingFolders = [] } = {}) {
-    const collectionBlocks = collections.slice(0, MAX_COLLECTIONS).map((c) => {
+    const capped = collections.slice(0, MAX_COLLECTIONS);
+    const collectionBlocks = capped.map((c, i) => {
         const titles = (c.tabs || [])
             .slice(0, MAX_TITLES_PER_COLLECTION)
             .map((t) => t.title || t.url || 'Untitled');
         const titleLine = titles.length ? `\n  tabs: ${titles.join('; ')}` : '';
-        return `- [id ${c.uid}] "${c.name || 'Untitled'}"${titleLine}`;
+        return `${i + 1}. "${c.name || 'Untitled'}"${titleLine}`;
     });
     const folderLines = (existingFolders || []).map((f) => `- [id ${f.id}] "${f.name}"`);
     return [
-        'You file browser-tab collections into folders. Assign every collection to exactly one folder.',
-        'If a collection clearly fits an existing folder, set existingFolderId to that folder id and leave newFolderName null.',
-        'Otherwise create a new folder: set newFolderName to a short Title Case name (2-4 words) and leave existingFolderId null.',
-        'Reuse the same newFolderName for collections that belong together. Never set both fields.',
-        'Prefer fuller folders over many tiny ones: avoid creating a folder that holds only a single collection. '
-            + 'If several collections would each end up alone in their own folder, group them into a broader shared '
-            + 'folder by theme, or place them into a suitable existing folder, instead of making one folder per collection.',
+        'You file browser-tab collections into folders. Every collection (referenced by its number) must end up in exactly one folder.',
+        'Group collections that belong together into the same folder, listing their numbers together in one folder block.',
+        'If a folder fits an existing folder, set existingFolderId to that folder id and leave newFolderName null.',
+        'Otherwise create a new folder: set newFolderName to a short Title Case name (2-4 words) and leave existingFolderId null. Never set both.',
+        'Prefer fuller folders over many tiny ones: avoid a folder holding a single collection when a broader shared '
+            + 'folder by theme, or a suitable existing folder, fits instead.',
         '',
-        'Collections (referenced by id):',
+        'Collections (referenced by number):',
         collectionBlocks.join('\n'),
         '',
         existingFolders && existingFolders.length ? `Existing folders:\n${folderLines.join('\n')}` : 'No existing folders.',
         '',
-        'Respond with JSON: { "assignments": [ { "collectionId": "...", "existingFolderId": null, "newFolderName": "Reading" } ] }.',
+        'Respond with JSON: { "folders": [ { "existingFolderId": null, "newFolderName": "Reading", "collectionIndexes": [1, 4] } ] }.',
     ].join('\n');
 }
 
 /**
  * Normalize the raw model output for autoArrangeCollections.
- * @param {object} raw - Raw model output with `.assignments` array.
+ * Input is folder-centric (folders[] each carrying collectionIndexes referencing the
+ * 1-based order of `capped`). Output is the SAME per-collection contract as before:
+ * { assignments: [{ collectionId, existingFolderId, newFolderName }] } with exactly one
+ * non-null target each. Collections the model never placed fall back to the Misc catch-all.
+ * @param {object} raw - Raw model output with `.folders` array.
  * @param {Array}  capped - Collections already sliced to MAX_COLLECTIONS.
  * @param {Array}  existingFolders - The existing folders passed to buildArrangePrompt.
  * @returns {{ assignments: Array }}
@@ -108,41 +112,43 @@ function buildArrangePrompt({ collections = [], existingFolders = [] } = {}) {
 function normalizeArrangePlan(raw, capped, existingFolders) {
     const validFolderIds = new Set((existingFolders || []).map((f) => f.id));
     const existingByLowerName = new Map((existingFolders || []).map((f) => [String(f.name).toLowerCase(), f.id]));
+    const indexToUid = new Map(capped.map((c, i) => [i + 1, c.uid]));
 
-    const byId = new Map((raw.assignments || []).map((a) => [a.collectionId, a]));
-    const assignments = capped.map((c) => {
-        const a = byId.get(c.uid);
-        // Normalize model output: ensure each assignment ends with exactly one non-null target
-        // (existingFolderId XOR newFolderName). The JSON schema can't express mutual exclusion,
-        // so we enforce it here.
-        let existingFolderId = a && a.existingFolderId != null && validFolderIds.has(a.existingFolderId)
-            ? a.existingFolderId
+    const targetByUid = new Map(); // uid -> { existingFolderId, newFolderName }
+    const placed = new Set();
+
+    for (const f of (raw.folders || [])) {
+        // Resolve each folder block to exactly one target (existingFolderId XOR newFolderName).
+        // The JSON schema can't express mutual exclusion, so enforce it here.
+        let existingFolderId = f && f.existingFolderId != null && validFolderIds.has(f.existingFolderId)
+            ? f.existingFolderId
             : null;
-        let newFolderName = a && a.newFolderName ? String(a.newFolderName).trim().slice(0, ARRANGE_MAX_NAME_LENGTH) : null;
-
+        let newFolderName = f && f.newFolderName ? String(f.newFolderName).trim().slice(0, ARRANGE_MAX_NAME_LENGTH) : null;
         if (existingFolderId) {
             newFolderName = null;
         } else if (newFolderName) {
             const collide = existingByLowerName.get(newFolderName.toLowerCase());
-            if (collide) {
-                existingFolderId = collide;
-                newFolderName = null;
-            }
+            if (collide) { existingFolderId = collide; newFolderName = null; }
         }
+        // Unusable block (no valid target) — its members stay unplaced and fall to Misc below.
+        if (!existingFolderId && !newFolderName) continue;
 
-        if (!existingFolderId && !newFolderName) {
-            const catchAllExisting = existingByLowerName.get(CATCHALL_FOLDER_NAME.toLowerCase());
-            if (catchAllExisting) {
-                existingFolderId = catchAllExisting;
-            } else {
-                newFolderName = CATCHALL_FOLDER_NAME;
-            }
+        for (const idx of (f.collectionIndexes || [])) {
+            const uid = indexToUid.get(idx);
+            if (uid === undefined || placed.has(uid)) continue; // first folder claiming a collection wins
+            placed.add(uid);
+            targetByUid.set(uid, { existingFolderId, newFolderName });
         }
+    }
 
-        return { collectionId: c.uid, existingFolderId, newFolderName };
+    const miscExisting = existingByLowerName.get(CATCHALL_FOLDER_NAME.toLowerCase()) || null;
+    const assignments = capped.map((c) => {
+        const t = targetByUid.get(c.uid);
+        if (t) return { collectionId: c.uid, existingFolderId: t.existingFolderId, newFolderName: t.newFolderName };
+        if (miscExisting) return { collectionId: c.uid, existingFolderId: miscExisting, newFolderName: null };
+        return { collectionId: c.uid, existingFolderId: null, newFolderName: CATCHALL_FOLDER_NAME };
     });
 
-    // Note: newFolderName is not deduped here — the apply step creates/reuses one folder per unique name.
     return { assignments };
 }
 
