@@ -2029,7 +2029,7 @@ try {
       return Promise.resolve(result);
     }
 
-    if (request.type === 'aiRun' || request.type === 'aiUndo') {
+    if (request.type === 'aiRun' || request.type === 'aiUndo' || request.type === 'aiUndoItems') {
       // Build the engine + ctx HERE so SW-native deps are in scope (throttleSync /
       // handleRemoteUpdate / loadAllCollectionsBG are background.js lexical bindings,
       // not module-load globals).
@@ -2053,6 +2053,15 @@ try {
           return Promise.resolve({ ok: true });
         } catch (error) {
           console.error('Tabox AI: aiUndo failed:', error);
+          return Promise.resolve({ ok: false, error: error?.message || String(error) });
+        }
+      }
+      if (request.type === 'aiUndoItems') {
+        try {
+          await engine.undoItems({ uids: request.uids || [] });
+          return Promise.resolve({ ok: true });
+        } catch (error) {
+          console.error('Tabox AI: aiUndoItems failed:', error);
           return Promise.resolve({ ok: false, error: error?.message || String(error) });
         }
       }
