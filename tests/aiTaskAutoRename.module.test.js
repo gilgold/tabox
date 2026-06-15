@@ -118,6 +118,7 @@ test('undoItems batches an "undo all" into one rename call', async () => {
   expect(c.storage.renameCollectionsBG).toHaveBeenCalledWith([
     { uid: 'c1', oldName: 'AA', newName: 'A' }, { uid: 'c2', oldName: 'BB', newName: 'B' },
   ]);
+  expect(c.triggerSync).toHaveBeenCalledTimes(1);
 });
 
 test('undoItems is a no-op when none of the uids are in the snapshot', async () => {
