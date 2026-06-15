@@ -42,6 +42,13 @@ const def = {
         const reverts = (snapshot.renames || []).map((r) => ({ uid: r.uid, oldName: r.newName, newName: r.oldName }));
         if (reverts.length) { await ctx.storage.renameCollectionsBG(reverts); await ctx.triggerSync(); }
     },
+    async undoItems({ ctx, snapshot, uids }) {
+        const want = new Set(uids);
+        const reverts = (snapshot.renames || [])
+            .filter((r) => want.has(r.uid))
+            .map((r) => ({ uid: r.uid, oldName: r.newName, newName: r.oldName }));
+        if (reverts.length) { await ctx.storage.renameCollectionsBG(reverts); await ctx.triggerSync(); }
+    },
 };
 /* istanbul ignore next */ if (typeof globalThis !== 'undefined' && globalThis.TaboxAIRegistry) globalThis.TaboxAIRegistry.register(def);
 /* istanbul ignore next */ if (typeof module !== 'undefined' && module.exports) module.exports = def;

@@ -84,3 +84,49 @@ test('auto-rename reuses a single AI session across the loop at temperature 0', 
   expect(c.client.createAISession).toHaveBeenCalledWith(expect.objectContaining({ temperature: 0 }));
   expect(session.destroy).toHaveBeenCalledTimes(1);
 });
+
+test('undoItems reverts the requested uids in a single batched rename', async () => {
+  const c = ctx();
+  await browser.storage.local.set({ aiTaskState: {
+    type: 'auto-rename', status: 'done',
+    results: [{ uid: 'c1', oldName: 'Old', newName: 'Fresh' }, { uid: 'c2', oldName: 'O2', newName: 'N2' }],
+    undo: { task: 'auto-rename', renames: [
+      { uid: 'c1', oldName: 'Old', newName: 'Fresh' }, { uid: 'c2', oldName: 'O2', newName: 'N2' },
+    ] },
+  } });
+
+  await createEngine({ registry, ctx: c }).undoItems({ uids: ['c1'] });
+
+  expect(c.storage.renameCollectionsBG).toHaveBeenCalledTimes(1);
+  expect(c.storage.renameCollectionsBG).toHaveBeenCalledWith([{ uid: 'c1', oldName: 'Fresh', newName: 'Old' }]);
+  expect(c.triggerSync).toHaveBeenCalledTimes(1);
+});
+
+test('undoItems batches an "undo all" into one rename call', async () => {
+  const c = ctx();
+  await browser.storage.local.set({ aiTaskState: {
+    type: 'auto-rename', status: 'done',
+    results: [{ uid: 'c1', oldName: 'A', newName: 'AA' }, { uid: 'c2', oldName: 'B', newName: 'BB' }],
+    undo: { task: 'auto-rename', renames: [
+      { uid: 'c1', oldName: 'A', newName: 'AA' }, { uid: 'c2', oldName: 'B', newName: 'BB' },
+    ] },
+  } });
+
+  await createEngine({ registry, ctx: c }).undoItems({ uids: ['c1', 'c2'] });
+
+  expect(c.storage.renameCollectionsBG).toHaveBeenCalledTimes(1);
+  expect(c.storage.renameCollectionsBG).toHaveBeenCalledWith([
+    { uid: 'c1', oldName: 'AA', newName: 'A' }, { uid: 'c2', oldName: 'BB', newName: 'B' },
+  ]);
+});
+
+test('undoItems is a no-op when none of the uids are in the snapshot', async () => {
+  const c = ctx();
+  await browser.storage.local.set({ aiTaskState: {
+    type: 'auto-rename', status: 'done',
+    results: [{ uid: 'c1', oldName: 'A', newName: 'AA' }],
+    undo: { task: 'auto-rename', renames: [{ uid: 'c1', oldName: 'A', newName: 'AA' }] },
+  } });
+  await createEngine({ registry, ctx: c }).undoItems({ uids: ['zzz'] });
+  expect(c.storage.renameCollectionsBG).not.toHaveBeenCalled();
+});
