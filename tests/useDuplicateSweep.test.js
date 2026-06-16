@@ -1,3 +1,4 @@
+/** @jest-environment jsdom */
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { browser } from '../static/globals';
 import { useDuplicateSweep } from '../app/ai/useDuplicateSweep';
