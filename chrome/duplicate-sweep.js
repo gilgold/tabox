@@ -136,6 +136,7 @@ async function applyDuplicateSweepAction({ groupId, action, keeperUid, applyToAl
     if (!state) return { ok: false, reason: 'missing' };
     const current = state.groups.find((g) => g.id === groupId);
     if (!current) return { ok: false, reason: 'unknown-group' };
+    if (current.status !== 'pending') return { ok: false, reason: 'not-pending' };
 
     const targets = [{ group: current, keeperUid }];
     if (applyToAll) {

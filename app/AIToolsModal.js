@@ -688,8 +688,16 @@ function AIToolsModal({ updateRemoteData }) {
             return;
         }
 
-        if (status === 'done' || status === 'error' || status === 'cancelled') {
+        if (status === 'cancelled') {
             runStartedRef.current = false;
+            setIsCancelling(false);
+            setPanelStatus('idle');
+            return;
+        }
+
+        if (status === 'done' || status === 'error') {
+            runStartedRef.current = false;
+            setIsCancelling(false);
             if (status === 'error') {
                 setError('An unexpected error occurred. Please try again.');
             }

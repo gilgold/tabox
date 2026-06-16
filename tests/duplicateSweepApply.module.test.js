@@ -80,6 +80,14 @@ test('dismiss clears the key', async () => {
   expect((await local.get(KEY))[KEY]).toBeUndefined();
 });
 
+test('applying to an already-resolved group is rejected and adds no history', async () => {
+  await sweep.applyDuplicateSweepAction({ groupId: 'cross:A|D', action: 'discard-all' });
+  const res = await sweep.applyDuplicateSweepAction({ groupId: 'cross:A|D', action: 'discard-all' });
+  expect(res).toEqual({ ok: false, reason: 'not-pending' });
+  const st = (await local.get(KEY))[KEY];
+  expect(st.history).toHaveLength(1);
+});
+
 test('undo restores full tab fidelity (pinned/favicon) when occurrence carries the tab', async () => {
   const st = (await local.get(KEY))[KEY];
   st.groups[0].urls[0].occurrences[0].tab = { uid: 'a1', url: 'https://x.com', title: 'X', pinned: true, favIconUrl: 'ic' };

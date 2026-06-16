@@ -14,7 +14,7 @@
     padding: 8px 16px;
     color: #fff;
     cursor: pointer;
-    background: linear-gradient(135deg, var(--ai-grad-start, #6d5efc), var(--ai-grad-end, #00d4ff));
+    background: linear-gradient(135deg, #6d5efc, #00d4ff);
     /* Animate only background/opacity/box-shadow — never transform. */
     transition: box-shadow 200ms ease, filter 200ms ease;
 }
@@ -31,7 +31,7 @@
 .dup-pill:hover::after { opacity: 1; animation: dup-shine 0.7s ease; }
 @keyframes dup-shine { from { left: -60%; } to { left: 120%; } }
 
-.dup-pill-recommended { box-shadow: 0 0 0 2px var(--ai-grad-end, #00d4ff); }
+.dup-pill-recommended { box-shadow: 0 0 0 2px #00d4ff; }
 .dup-pill-discard { background: linear-gradient(135deg, #ff6b6b, #c0392b); }
 .dup-pill-extract { background: linear-gradient(135deg, #6d5efc, #9b59b6); }
 
@@ -40,7 +40,8 @@
 .dup-sweep-skip { background: none; border: none; color: inherit; opacity: 0.7; cursor: pointer; text-decoration: underline; }
 .dup-sweep-undo { background: none; border: 1px solid rgba(127, 127, 127, 0.4); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
 .dup-sweep-undo:disabled { opacity: 0.4; cursor: default; }
-.dup-sweep-close { margin-left: auto; }
+.dup-sweep-close { margin-left: auto; background: none; border: none; cursor: pointer; color: inherit; opacity: 0.8; }
+.dup-sweep-close:hover { opacity: 1; }
 
 @media (prefers-reduced-motion: reduce) {
     .dup-pill:hover::after { animation: none; }
