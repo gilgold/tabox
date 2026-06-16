@@ -47,11 +47,16 @@ function bestTitleFor(group, normalizedUrl) {
 }
 
 function reconstructTab(group, occ, overrideTitle) {
-    return { uid: occ.tabUid, url: occ.url, title: overrideTitle || occ.title };
+    const base = occ.tab ? { ...occ.tab } : { uid: occ.tabUid, url: occ.url, title: occ.title };
+    return { ...base, title: overrideTitle || base.title };
 }
 
 function toRemovedTabs(group, removed) {
-    return removed.map((o) => ({ collectionUid: o.collectionUid, position: o.position, tab: { uid: o.tabUid, url: o.url, title: o.title } }));
+    return removed.map((o) => ({
+        collectionUid: o.collectionUid,
+        position: o.position,
+        tab: o.tab ? { ...o.tab } : { uid: o.tabUid, url: o.url, title: o.title },
+    }));
 }
 
 async function applyRemovals(S, removed) {
@@ -90,14 +95,22 @@ async function executeGroupAction(group, action, keeperUid) {
 
     if (action === 'extract') {
         const tabs = urls.map((e) => reconstructTab(group, e.occurrences[0], bestTitleFor(group, e.normalizedUrl)));
-        const created = await S.createCollectionBG({ name: group.recommendation.suggestedNewCollectionName, tabs });
         const removed = urls.flatMap((e) => e.occurrences);
-        await applyRemovals(S, removed);
+        let created;
+        try {
+            created = await S.createCollectionBG({ name: (group.recommendation && group.recommendation.suggestedNewCollectionName) || 'Shared Tabs', tabs });
+            await applyRemovals(S, removed);
+        } catch (err) {
+            if (created) { try { await S.deleteCollectionBG(created.uid); } catch (_) { /* best-effort rollback */ } }
+            throw err;
+        }
         return { actionId: newActionId(), groupId: group.id, action: 'extract', createdCollectionUid: created.uid, removedTabs: toRemovedTabs(group, removed) };
     }
 
     // keep-one
-    const keeper = group.collectionUids.includes(keeperUid) ? keeperUid : group.recommendation.recommendedKeeperUid;
+    const keeper = group.collectionUids.includes(keeperUid)
+        ? keeperUid
+        : (group.recommendation && group.recommendation.recommendedKeeperUid) || group.collectionUids[0];
     const removed = [];
     const titleEdits = [];
     for (const e of urls) {
@@ -132,16 +145,34 @@ async function applyDuplicateSweepAction({ groupId, action, keeperUid, applyToAl
         }
     }
 
-    for (const t of targets) {
-        const effectiveAction = (t.group.kind === 'within' && action !== 'skip') ? 'dedupe-within' : action;
-        const entry = await executeGroupAction(t.group, effectiveAction, t.keeperUid);
-        state.history.push(entry);
-        t.group.status = 'resolved';
+    let applied = 0;
+    try {
+        for (const t of targets) {
+            // within-kind groups have no keeper/extract semantics — any non-skip
+            // action collapses to dedupe-within (keep first copy). With applyToAll
+            // this means a "Discard all"/"Extract" click dedupes within-groups
+            // instead, which is intentional (less destructive, no keeper needed).
+            const effectiveAction = (t.group.kind === 'within' && action !== 'skip') ? 'dedupe-within' : action;
+            const entry = await executeGroupAction(t.group, effectiveAction, t.keeperUid);
+            state.history.push(entry);
+            t.group.status = 'resolved';
+            applied += 1;
+        }
+    } catch (err) {
+        // Persist whatever succeeded (their storage mutations already happened and
+        // their undo entries are in history) before surfacing the failure.
+        await writeState(state);
+        return { ok: false, reason: (err && err.message) || 'error', applied };
     }
     await writeState(state);
-    return { ok: true, applied: targets.length };
+    return { ok: true, applied };
 }
 
+// Pops and reverses the most recent action (multi-level; newest first). Known
+// v1 limitation: if an applyToAll run auto-resolved a later group as a no-op
+// because an earlier group removed their shared tabs, undoing the earlier group
+// restores those tabs but the later group stays 'resolved'. A fresh sweep run
+// re-detects them; no data is lost.
 async function undoDuplicateSweepLast() {
     const state = await readState();
     if (!state || !state.history.length) return { ok: false, reason: 'empty' };

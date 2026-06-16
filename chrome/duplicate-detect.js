@@ -45,7 +45,7 @@ function detectDuplicateGroups(collections) {
             if (!t || !t.url) return;
             const key = normalizeUrlForDedup(t.url);
             if (!byUrl.has(key)) byUrl.set(key, []);
-            byUrl.get(key).push({ collectionUid: c.uid, tabUid: t.uid, title: t.title || '', url: t.url, position });
+            byUrl.get(key).push({ collectionUid: c.uid, tabUid: t.uid, title: t.title || '', url: t.url, position, tab: { ...t } });
         });
     }
 

@@ -79,3 +79,14 @@ test('dismiss clears the key', async () => {
   await sweep.dismissDuplicateSweep();
   expect((await local.get(KEY))[KEY]).toBeUndefined();
 });
+
+test('undo restores full tab fidelity (pinned/favicon) when occurrence carries the tab', async () => {
+  const st = (await local.get(KEY))[KEY];
+  st.groups[0].urls[0].occurrences[0].tab = { uid: 'a1', url: 'https://x.com', title: 'X', pinned: true, favIconUrl: 'ic' };
+  await local.set({ [KEY]: st });
+  await sweep.applyDuplicateSweepAction({ groupId: 'cross:A|D', action: 'keep-one', keeperUid: 'D' });
+  await sweep.undoDuplicateSweepLast();
+  const restored = (await local.get('collection_A')).collection_A.tabs.find((t) => t.uid === 'a1');
+  expect(restored.pinned).toBe(true);
+  expect(restored.favIconUrl).toBe('ic');
+});

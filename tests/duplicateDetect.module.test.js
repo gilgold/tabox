@@ -57,4 +57,13 @@ describe('detectDuplicateGroups', () => {
   test('no duplicates -> empty', () => {
     expect(detectDuplicateGroups([mk('A', 'A', [{ uid: 'a1', url: 'https://x.com', title: 'X' }])]).groups).toEqual([]);
   });
+
+  test('occurrences carry the full original tab object', () => {
+    const cols = [
+      mk('A', 'A', [{ uid: 'a1', url: 'https://x.com', title: 'X', pinned: true, favIconUrl: 'ic' }]),
+      mk('B', 'B', [{ uid: 'b1', url: 'https://x.com', title: 'X2' }]),
+    ];
+    const occ = detectDuplicateGroups(cols).groups[0].urls[0].occurrences.find((o) => o.collectionUid === 'A');
+    expect(occ.tab).toEqual({ uid: 'a1', url: 'https://x.com', title: 'X', pinned: true, favIconUrl: 'ic' });
+  });
 });
