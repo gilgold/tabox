@@ -1,0 +1,37 @@
+# Tabox
+
+> Tabox is a free Chrome and Edge browser extension for saving, organizing, and reopening browser tabs and native tab groups. Users create named collections, organize them into folders, assign colors, and export/import or share their setups. Tabox is privacy-first: all data is stored locally by default, with optional, user-controlled sync via Google Drive. It preserves native Chromium tab group structure (names and colors), which the browser does not retain on its own.
+
+## Getting started
+
+- [Install on Chrome (Chrome Web Store)](https://chrome.google.com/webstore/detail/tabox-save-and-share-tab/bdbliblipiempfdkkkjohnecmeknnpoa): Add Tabox to Chrome or any Chromium browser.
+- [Install on Microsoft Edge (Edge Add-ons)](https://microsoftedge.microsoft.com/addons/detail/tabox-save-and-share-ta/ekkmpemnpkaecapbjcgidkflglondcem): Add Tabox to Microsoft Edge.
+- [Using Tabox](https://www.tabox.co/using-tabox): How collections, folders, tab groups, color coding, export/import, and Google Drive sync work.
+- [Home](https://www.tabox.co): Product overview and core features.
+
+## Core pages
+
+- [Privacy](https://www.tabox.co/privacy): Local-first storage model and how optional Google Drive sync is controlled by the user.
+- [Compare](https://www.tabox.co/compare): How Tabox compares to other tab managers.
+- [Contact](https://www.tabox.co/contact): Support and how to reach the team.
+- [Sponsorship](https://www.tabox.co/sponsorship): Support the project / sponsorship options.
+
+## Comparisons
+
+- [Tabox vs Workona](https://www.tabox.co/tabox-vs-workona): Feature and privacy comparison against Workona.
+- [Tabox vs Toby](https://www.tabox.co/tabox-vs-toby): Feature and privacy comparison against Toby.
+- [Tabox vs OneTab](https://www.tabox.co/tabox-vs-onetab): Feature and privacy comparison against OneTab.
+- [Tabox vs Session Buddy](https://www.tabox.co/tabox-vs-session-buddy): Feature and privacy comparison against Session Buddy.
+
+## Guides & blog
+
+- [Tab management that actually saves time](https://www.tabox.co/post/tab-management-that-actually-saves-time): How tab management cuts clutter, saves work sessions, and reopens projects fast.
+- [How to save Chrome tab groups and restore them later](https://www.tabox.co/post/how-to-save-chrome-tab-groups-and-restore-them-later): Methods for preserving Chrome tab groups through crashes and restarts.
+- [Best Chrome extension to save and share tab groups](https://www.tabox.co/post/best-chrome-extension-to-save-and-share-tab-groups): Why Chrome can't natively save/share tab groups, and how to solve it.
+- [How to back up Chrome tab groups](https://www.tabox.co/post/how-to-backup-chrome-tab-groups): Strategies for backing up tab groups and keeping organization across devices.
+- [How to sync browser tabs across devices](https://www.tabox.co/post/how-to-sync-browser-tabs-across-devices): Syncing browser tabs across multiple devices while preserving context.
+- [Blog](https://www.tabox.co/blog): All Tabox articles and guides.
+
+## Optional
+
+- [AI agent access (Wix Site MCP)](https://www.tabox.co/_api/mcp): Live Model Context Protocol endpoint for agentic access to public site content. No authentication required; only public information is exposed.

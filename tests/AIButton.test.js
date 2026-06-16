@@ -18,8 +18,11 @@ describe('AIButton', () => {
 
     test('renders when Tabox AI is enabled', async () => {
         browser.storage.local.get.mockResolvedValue({ chkTaboxAI: true });
-        render(<Provider><AIButton /></Provider>);
+        const { container } = render(<Provider><AIButton /></Provider>);
         await waitFor(() => expect(screen.getByRole('button', { name: /tabox ai/i })).toBeInTheDocument());
+        expect(screen.getByRole('button', { name: /tabox ai/i })).toHaveClass('ai-button');
+        expect(container.querySelector('.ai-button svg')).toHaveAttribute('width', '26');
+        expect(container.querySelector('.ai-button svg')).toHaveAttribute('height', '26');
     });
 
     test('renders nothing when Tabox AI is disabled', async () => {

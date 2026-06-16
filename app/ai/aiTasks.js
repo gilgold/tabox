@@ -9,14 +9,14 @@ import { MdDriveFileRenameOutline, MdAutoAwesomeMosaic, MdCreateNewFolder } from
 export const AI_TOOLS = [
     {
         id: 'smart-organize',
-        title: 'Smart Organize',
+        title: 'Smart Tab Grouping',
         description: 'Group this window’s loose tabs into tab groups automatically.',
         icon: MdAutoAwesomeMosaic,
         featured: true,
     },
     {
         id: 'auto-rename',
-        title: 'Auto-name collection',
+        title: 'Auto rename all collections',
         description: 'Let AI suggest a name for a collection based on its tabs.',
         icon: MdDriveFileRenameOutline,
     },

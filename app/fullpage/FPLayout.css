@@ -379,8 +379,8 @@ html.fullpage-mode {
     --color-focus-ring: rgb(79 70 229 / 12%);
     --color-selected-bg: #EEF2FF;
     --color-hover-bg: #F4F4F5;
-    --color-tooltip-bg: #18181B;
-    --color-tooltip-text: #FAFAFA;
+    --color-tooltip-bg: #FFFFFF;
+    --color-tooltip-text: #18181B;
     --color-success-bg: #F0FDF4;
     --color-success-text: #16A34A;
     --color-success-border: #BBF7D0;
@@ -458,8 +458,8 @@ html.fullpage-mode[data-theme="dark"] {
     --color-focus-ring: rgb(129 140 248 / 24%);
     --color-selected-bg: #0c2953;
     --color-hover-bg: #27272A;
-    --color-tooltip-bg: #FAFAFA;
-    --color-tooltip-text: #18181B;
+    --color-tooltip-bg: #18181B;
+    --color-tooltip-text: #FAFAFA;
     --color-success-bg: #052E16;
     --color-success-text: #86EFAC;
     --color-success-border: #166534;

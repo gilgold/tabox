@@ -1671,6 +1671,12 @@ function App({ mode = 'popup' }) {
           scheduleStorageDrivenReload();
         }
 
+        if (changes.theme) {
+          const newTheme = changes.theme.newValue || 'light';
+          setThemeMode(newTheme);
+          document.documentElement.setAttribute('data-theme', newTheme);
+        }
+
         if (changes.lastSuccessfulSyncTime) {
           setLastSyncTime(changes.lastSuccessfulSyncTime.newValue || null);
         }
@@ -1986,7 +1992,7 @@ function App({ mode = 'popup' }) {
     <Tooltip
       id="main-tooltip"
       delayShow={200}
-      variant={themeMode === 'light' ? 'dark' : 'light'}
+      variant={themeMode === 'dark' ? 'dark' : 'light'}
       place="bottom"
       style={{ zIndex: 2147483647, whiteSpace: 'pre-line' }}
     />,

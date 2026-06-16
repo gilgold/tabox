@@ -688,9 +688,11 @@ function AIToolsModal({ updateRemoteData }) {
                             const ToolIcon = tool.icon;
                             return (
                                 <button key={tool.id} type="button" className="ai-hero-card" onClick={() => setActiveToolId(tool.id)}>
-                                    <ToolIcon size={26} className="ai-hero-icon" />
-                                    <span className="ai-hero-title">{tool.title}</span>
-                                    <span className="ai-hero-description">{tool.description}</span>
+                                    <ToolIcon size={40} className="ai-hero-icon" />
+                                    <span className="ai-hero-text">
+                                        <span className="ai-hero-title">{tool.title}</span>
+                                        <span className="ai-hero-description">{tool.description}</span>
+                                    </span>
                                 </button>
                             );
                         })}
@@ -698,6 +700,9 @@ function AIToolsModal({ updateRemoteData }) {
                             {AI_TOOLS.filter((t) => !t.featured).map((tool) => {
                                 const ToolIcon = tool.icon;
                                 const disabled = tool.id === 'auto-arrange-folders' && rootCollections.length === 0;
+                                const tooltipHtml = disabled
+                                    ? '<div class="ai-tool-tip"><span class="ai-tool-tip-desc">No collections at the top level to arrange</span></div>'
+                                    : `<div class="ai-tool-tip"><span class="ai-tool-tip-title">${tool.title}</span><span class="ai-tool-tip-desc">${tool.description}</span></div>`;
                                 return (
                                     <button
                                         key={tool.id}
@@ -705,11 +710,12 @@ function AIToolsModal({ updateRemoteData }) {
                                         className="ai-tool-card"
                                         onClick={() => setActiveToolId(tool.id)}
                                         disabled={disabled}
-                                        title={disabled ? 'No collections at the top level to arrange' : undefined}
+                                        data-tooltip-id="main-tooltip"
+                                        data-tooltip-html={tooltipHtml}
+                                        data-tooltip-place="bottom"
                                     >
-                                        <ToolIcon size={22} className="ai-tool-card-icon" />
+                                        <ToolIcon size={30} className="ai-tool-card-icon" />
                                         <span className="ai-tool-card-title">{tool.title}</span>
-                                        <span className="ai-tool-card-description">{tool.description}</span>
                                     </button>
                                 );
                             })}
