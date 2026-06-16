@@ -12,6 +12,7 @@ const def = {
     async run({ ctx, params, report }) {
         const { client, planners, loadCollections, isCancelled } = ctx;
         const detect = ctx.detect || globalThis.TaboxDuplicateDetect;
+        await localArea().remove(DUPLICATE_SWEEP_KEY); // clear any prior sweep before a fresh scan
         const all = await loadCollections();
         const scoped = (params && Array.isArray(params.uids) && params.uids.length);
         const inScope = scoped ? all.filter((c) => params.uids.includes(c.uid)) : all;
@@ -52,6 +53,10 @@ const def = {
             }
         } finally {
             if (session) session.destroy();
+        }
+
+        if (isCancelled && await isCancelled()) {
+            return { summary: 'Duplicate scan cancelled', undo: null };
         }
 
         const totalDupes = groups.reduce((n, g) => n + g.urls.reduce((m, u) => m + u.occurrences.length, 0), 0);

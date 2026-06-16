@@ -69,3 +69,13 @@ test('params.uids scopes detection to selected collections', async () => {
   expect(_store.duplicateSweep.groups).toEqual([]);
   expect(_store.duplicateSweep.scope).toEqual({ type: 'selected', uids: ['A'] });
 });
+
+test('cancelled run does not write partial sweep state', async () => {
+  let calls = 0;
+  const cancelCtx = { ...ctx, isCancelled: async () => { calls += 1; return calls > 0; } };
+  // seed a stale sweep to prove it is cleared
+  _store.duplicateSweep = { createdAt: 0, scope: { type: 'all' }, groups: [{ id: 'stale' }], history: [] };
+  const out = await task.run({ ctx: cancelCtx, params: {}, report: async () => {} });
+  expect(_store.duplicateSweep).toBeUndefined();
+  expect(out.summary).toMatch(/cancel/i);
+});
