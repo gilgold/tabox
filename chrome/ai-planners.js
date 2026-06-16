@@ -262,6 +262,78 @@ function normalizeOrganizePlan(raw, capped, existingGroups) {
 }
 
 // ---------------------------------------------------------------------------
+// duplicate-sweep constants + builders + normalizer
+// ---------------------------------------------------------------------------
+
+const DEDUP_NEW_NAME_MAX = 40;
+const DEDUP_MESSAGE_MAX = 240;
+
+const DEDUP_SCHEMA = {
+    type: 'object',
+    properties: {
+        recommendedKeeper: { type: 'integer' }, // 1-based index into the collection set
+        message: { type: 'string', maxLength: DEDUP_MESSAGE_MAX },
+        suggestedNewCollectionName: { type: 'string', maxLength: DEDUP_NEW_NAME_MAX },
+        titles: {
+            type: 'array',
+            items: {
+                type: 'object',
+                properties: { urlIndex: { type: 'integer' }, title: { type: 'string' } },
+                required: ['urlIndex', 'title'],
+                additionalProperties: false,
+            },
+        },
+    },
+    required: ['recommendedKeeper', 'message'],
+    additionalProperties: false,
+};
+
+function buildDedupPrompt(group, collectionNamesByUid) {
+    const colLines = group.collectionUids.map((uid, i) => `${i + 1}. "${collectionNamesByUid[uid] || 'Untitled'}"`);
+    const urlLines = group.urls.map((u, i) => {
+        const titles = u.occurrences
+            .map((o) => `${collectionNamesByUid[o.collectionUid] || '?'}: "${o.title || 'Untitled'}"`)
+            .join('; ');
+        return `${i + 1}. ${u.normalizedUrl}\n   titles: ${titles}`;
+    });
+    return [
+        'These collections all contain the same tab(s). Recommend which SINGLE collection is the best home for them.',
+        'Pick the clearest title for each shared tab when titles differ.',
+        'Write one short, friendly sentence explaining the recommendation, e.g. "These tabs appear in Work, Read Later and Reference — consider keeping them in Reference only and removing them from the others."',
+        'Also suggest a short Title Case name for a new collection in case the user prefers to split them out.',
+        '',
+        'Collections (referenced by number):',
+        colLines.join('\n'),
+        '',
+        'Shared tabs (referenced by number):',
+        urlLines.join('\n'),
+        '',
+        'Respond with JSON: { "recommendedKeeper": 1, "message": "...", "suggestedNewCollectionName": "...", "titles": [ { "urlIndex": 1, "title": "..." } ] }.',
+    ].join('\n');
+}
+
+function normalizeDedupSuggestion(raw, group) {
+    const uids = group.collectionUids;
+    const idx = raw && Number.isInteger(raw.recommendedKeeper) ? raw.recommendedKeeper - 1 : -1;
+    const recommendedKeeperUid = (idx >= 0 && idx < uids.length) ? uids[idx] : uids[0];
+    const namesForMsg = uids.join(', ');
+    const message = (raw && typeof raw.message === 'string' && raw.message.trim())
+        ? raw.message.trim().slice(0, DEDUP_MESSAGE_MAX)
+        : `These tabs appear in ${namesForMsg} — consider keeping them in one collection only.`;
+    const suggestedNewCollectionName = (raw && raw.suggestedNewCollectionName && String(raw.suggestedNewCollectionName).trim())
+        ? String(raw.suggestedNewCollectionName).trim().slice(0, DEDUP_NEW_NAME_MAX)
+        : 'Shared Tabs';
+    const bestTitlePerUrl = [];
+    for (const t of (raw && Array.isArray(raw.titles) ? raw.titles : [])) {
+        const ui = Number.isInteger(t.urlIndex) ? t.urlIndex - 1 : -1;
+        if (ui >= 0 && ui < group.urls.length && t.title && String(t.title).trim()) {
+            bestTitlePerUrl.push({ normalizedUrl: group.urls[ui].normalizedUrl, title: String(t.title).trim() });
+        }
+    }
+    return { recommendedKeeperUid, message, suggestedNewCollectionName, bestTitlePerUrl };
+}
+
+// ---------------------------------------------------------------------------
 // Exports
 // ---------------------------------------------------------------------------
 
@@ -286,6 +358,10 @@ const taboxAIPlannersApi = {
     ORGANIZE_SCHEMA,
     buildOrganizePrompt,
     normalizeOrganizePlan,
+    // duplicate-sweep
+    DEDUP_SCHEMA,
+    buildDedupPrompt,
+    normalizeDedupSuggestion,
 };
 
 /* istanbul ignore next */
