@@ -35,6 +35,12 @@ test('normalizeDedupSuggestion maps 1-based keeper index to uid and url titles',
 
 test('normalizeDedupSuggestion falls back when keeper index is invalid', () => {
   const out = normalizeDedupSuggestion({ recommendedKeeper: 99, message: '' }, group);
-  expect(group.collectionUids).toContain(out.recommendedKeeperUid);
+  expect(out.recommendedKeeperUid).toBe('A');
   expect(out.message.length).toBeGreaterThan(0); // templated fallback
+});
+
+test('normalizeDedupSuggestion fallback message uses collection names when provided', () => {
+  const out = normalizeDedupSuggestion({ recommendedKeeper: 1 }, group, names);
+  expect(out.message).toContain('Work');
+  expect(out.message).not.toMatch(/\bA, B, D\b/);
 });

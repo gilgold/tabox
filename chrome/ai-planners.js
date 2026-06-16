@@ -312,11 +312,11 @@ function buildDedupPrompt(group, collectionNamesByUid) {
     ].join('\n');
 }
 
-function normalizeDedupSuggestion(raw, group) {
+function normalizeDedupSuggestion(raw, group, collectionNamesByUid = {}) {
     const uids = group.collectionUids;
     const idx = raw && Number.isInteger(raw.recommendedKeeper) ? raw.recommendedKeeper - 1 : -1;
     const recommendedKeeperUid = (idx >= 0 && idx < uids.length) ? uids[idx] : uids[0];
-    const namesForMsg = uids.join(', ');
+    const namesForMsg = uids.map((u) => collectionNamesByUid[u] || u).join(', ');
     const message = (raw && typeof raw.message === 'string' && raw.message.trim())
         ? raw.message.trim().slice(0, DEDUP_MESSAGE_MAX)
         : `These tabs appear in ${namesForMsg} — consider keeping them in one collection only.`;
@@ -359,6 +359,8 @@ const taboxAIPlannersApi = {
     buildOrganizePrompt,
     normalizeOrganizePlan,
     // duplicate-sweep
+    DEDUP_NEW_NAME_MAX,
+    DEDUP_MESSAGE_MAX,
     DEDUP_SCHEMA,
     buildDedupPrompt,
     normalizeDedupSuggestion,
