@@ -15,6 +15,14 @@ describe('normalizeUrlForDedup', () => {
     expect(normalizeUrlForDedup('  chrome://extensions  ')).toBe('chrome://extensions');
     expect(normalizeUrlForDedup('not a url')).toBe('not a url');
   });
+
+  test('sorts by key not insertion order', () => {
+    expect(normalizeUrlForDedup('https://e.com/p?b=1&a=2')).toBe(normalizeUrlForDedup('https://e.com/p?a=2&b=1'));
+  });
+
+  test('does not collapse non-http(s) schemes together', () => {
+    expect(normalizeUrlForDedup('ftp://example.com/f')).not.toBe(normalizeUrlForDedup('http://example.com/f'));
+  });
 });
 
 describe('detectDuplicateGroups', () => {

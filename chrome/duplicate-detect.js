@@ -22,8 +22,12 @@ function normalizeUrlForDedup(rawUrl) {
     for (const [k, v] of u.searchParams.entries()) {
         if (!TRACKING_PARAMS.has(k.toLowerCase())) params.push([k, v]);
     }
-    params.sort((a, b) => (a[0] === b[0] ? (a[1] < b[1] ? -1 : 1) : (a[0] < b[0] ? -1 : 1)));
-    const query = params.length ? `?${params.map(([k, v]) => `${k}=${v}`).join('&')}` : '';
+    // Sort by key then value (stable, total order — returns 0 on equality) so
+    // param order never affects the key.
+    params.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0));
+    // Re-serialize via URLSearchParams so values containing '&', '=', spaces, or
+    // '+' are encoded correctly and can't corrupt the key.
+    const query = params.length ? `?${new URLSearchParams(params).toString()}` : '';
     // Scheme intentionally omitted from the key so http/https collapse together.
     return `${host}${path}${query}`;
 }
@@ -32,6 +36,7 @@ function normalizeUrlForDedup(rawUrl) {
 // Returns { groups: [...] }.
 // Group shape:
 //   { id, kind: 'cross'|'within', collectionUids: [], urls: [ { normalizedUrl, occurrences: [ { collectionUid, tabUid, title, url, position } ] } ], status: 'pending', recommendation: null }
+//   position = zero-based index of the tab within its collection.
 function detectDuplicateGroups(collections) {
     const byUrl = new Map(); // normalizedUrl -> [{ collectionUid, tabUid, title, url, position }]
     for (const c of collections || []) {
@@ -71,7 +76,7 @@ function detectDuplicateGroups(collections) {
     return { groups };
 }
 
-const api = { normalizeUrlForDedup, detectDuplicateGroups };
-/* istanbul ignore next */ if (typeof globalThis !== 'undefined') globalThis.TaboxDuplicateDetect = api;
-/* istanbul ignore next */ if (typeof module !== 'undefined' && module.exports) module.exports = api;
+const taboxDuplicateDetectApi = { normalizeUrlForDedup, detectDuplicateGroups };
+/* istanbul ignore next */ if (typeof globalThis !== 'undefined') globalThis.TaboxDuplicateDetect = taboxDuplicateDetectApi;
+/* istanbul ignore next */ if (typeof module !== 'undefined' && module.exports) module.exports = taboxDuplicateDetectApi;
 })();
