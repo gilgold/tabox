@@ -15,6 +15,9 @@ try {
   importScripts('ai-task-auto-rename.js');
   importScripts('ai-task-auto-arrange.js');
   importScripts('ai-task-smart-organize.js');
+  importScripts('duplicate-detect.js');
+  importScripts('duplicate-sweep.js');
+  importScripts('ai-task-duplicate-sweep.js');
 }
 catch (e) {
   console.error(e);
@@ -2029,6 +2032,25 @@ try {
       return Promise.resolve(result);
     }
 
+    if (request.type === 'duplicateSweepApply') {
+      const result = await globalThis.TaboxDuplicateSweep.applyDuplicateSweepAction({
+        groupId: request.groupId, action: request.action, keeperUid: request.keeperUid, applyToAll: request.applyToAll,
+      });
+      await throttleSync(() => handleRemoteUpdate());
+      return Promise.resolve(result);
+    }
+
+    if (request.type === 'duplicateSweepUndo') {
+      const result = await globalThis.TaboxDuplicateSweep.undoDuplicateSweepLast();
+      await throttleSync(() => handleRemoteUpdate());
+      return Promise.resolve(result);
+    }
+
+    if (request.type === 'duplicateSweepDismiss') {
+      const result = await globalThis.TaboxDuplicateSweep.dismissDuplicateSweep();
+      return Promise.resolve(result);
+    }
+
     if (request.type === 'aiRun' || request.type === 'aiUndo' || request.type === 'aiUndoItems') {
       // Build the engine + ctx HERE so SW-native deps are in scope (throttleSync /
       // handleRemoteUpdate / loadAllCollectionsBG are background.js lexical bindings,
@@ -2039,6 +2061,7 @@ try {
           client: globalThis.TaboxAIClient,
           planners: globalThis.TaboxAIPlanners,
           storage: globalThis.TaboxAIStorage,
+          detect: globalThis.TaboxDuplicateDetect,
           loadCollections: () => loadAllCollectionsBG(true),
           loadLooseSummaries: () => loadLooseCollectionSummariesBG(
             (globalThis.TaboxAIPlanners && globalThis.TaboxAIPlanners.MAX_TITLES_PER_COLLECTION) || 5
