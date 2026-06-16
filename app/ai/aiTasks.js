@@ -1,4 +1,4 @@
-import { MdDriveFileRenameOutline, MdAutoAwesomeMosaic, MdCreateNewFolder } from 'react-icons/md';
+import { MdDriveFileRenameOutline, MdAutoAwesomeMosaic, MdCreateNewFolder, MdContentCopy } from 'react-icons/md';
 
 // Registry of AI tools shown in the AI Tools modal.
 // To add a new AI feature whose work runs in the service worker:
@@ -25,5 +25,11 @@ export const AI_TOOLS = [
         title: 'Auto-arrange into folders',
         description: 'Sort your loose collections into folders automatically.',
         icon: MdCreateNewFolder,
+    },
+    {
+        id: 'duplicate-sweep',
+        title: 'Duplicate-tab sweep',
+        description: 'Find duplicate tabs across collections and decide where to keep them.',
+        icon: MdContentCopy,
     },
 ];

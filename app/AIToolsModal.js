@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Modal from 'react-modal';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { MdClose, MdArrowBack, MdUndo } from 'react-icons/md';
@@ -13,6 +13,8 @@ import { buildCollectionFromSnapshot } from './utils/saveCollectionSnapshot';
 import { captureWindowSnapshot } from './ai/captureWindowSnapshot';
 import { useSmartOrganizeUndo } from './ai/useSmartOrganizeUndo';
 import { useAutoArrangeUndo } from './ai/useAutoArrangeUndo';
+import { useDuplicateSweep } from './ai/useDuplicateSweep';
+import { DuplicateSweepPanel } from './DuplicateSweepPanel';
 import AutoArrangeFoldAnimation from './AutoArrangeFoldAnimation';
 import SmartOrganizeFoldAnimation from './SmartOrganizeFoldAnimation';
 import { showUndoToast, showSuccessToast } from './toastHelpers';
@@ -27,6 +29,7 @@ const TASK_TO_TOOL = {
     'auto-rename': 'auto-rename',
     'auto-arrange': 'auto-arrange-folders',
     'smart-organize': 'smart-organize',
+    'duplicate-sweep': 'duplicate-sweep',
 };
 
 function AIToolsModal({ updateRemoteData }) {
@@ -77,6 +80,16 @@ function AIToolsModal({ updateRemoteData }) {
     const [aaTotal, setAaTotal] = useState(0);
     const aaTickRef = useRef(null);
     const { snapshot: aaUndoSnapshot } = useAutoArrangeUndo();
+
+    // Duplicate Sweep hook (state lives in chrome.storage.local, written by SW)
+    const duplicateSweep = useDuplicateSweep();
+
+    // Map uid → collection name for the DuplicateSweepPanel chips
+    const dupNamesByUid = useMemo(() => {
+        const map = {};
+        for (const c of collections) { map[c.uid] = c.name; }
+        return map;
+    }, [collections]);
 
     // Abort controller for the running engine
     const abortControllerRef = useRef(null);
@@ -637,6 +650,53 @@ function AIToolsModal({ updateRemoteData }) {
         setPanelStatus('idle');
     };
 
+    const handleDuplicateSweepRun = async () => {
+        if (panelStatus !== 'idle') return;
+        if (runStartedRef.current) return;
+        runStartedRef.current = true;
+
+        const availability = await getAIAvailability();
+        if (availability !== 'available') {
+            runStartedRef.current = false;
+            setError('Tabox AI is not ready on this device. Check the Tabox AI setting.');
+            return;
+        }
+
+        completedTaskIdRef.current = null;
+        setPanelStatus('running');
+        setError(null);
+
+        // Pass uids from scope; empty array means "scan all"
+        const uids = scope.type === 'selected' ? scope.uids : [];
+        dispatchAiRun('duplicate-sweep', { uids }).catch((runError) => {
+            console.error('Tabox AI: aiRun(duplicate-sweep) dispatch failed:', runError);
+            setError('An unexpected error occurred. Please try again.');
+            setPanelStatus('idle');
+            runStartedRef.current = false;
+        });
+    };
+
+    // Drive the Duplicate-Sweep panel UI from the service-worker-owned aiTaskState.
+    useEffect(() => {
+        if (activeToolId !== 'duplicate-sweep') return;
+        if (!aiTaskState || aiTaskState.type !== 'duplicate-sweep') return;
+
+        const { status } = aiTaskState;
+
+        if (status === 'running') {
+            setPanelStatus('running');
+            return;
+        }
+
+        if (status === 'done' || status === 'error' || status === 'cancelled') {
+            runStartedRef.current = false;
+            if (status === 'error') {
+                setError('An unexpected error occurred. Please try again.');
+            }
+            setPanelStatus('done');
+        }
+    }, [aiTaskState, activeToolId]);
+
     const n = targets.length;
     const idleDescription = n === 1
         ? 'Automatically rename 1 collection using on-device AI. You can review and undo afterwards.'
@@ -1082,6 +1142,52 @@ function AIToolsModal({ updateRemoteData }) {
                         )}
                     </div>
                 )}
+                {activeToolId === 'duplicate-sweep' && (
+                    <div className="ai-tool-panel">
+                        {panelStatus === 'idle' && (
+                            <>
+                                <p className="ai-rename-description">
+                                    Scan your collections for duplicate tabs and decide where to keep them.
+                                </p>
+                                {error && <div className="ai-tool-error">{error}</div>}
+                                <button
+                                    type="button"
+                                    className="ai-tool-action-btn"
+                                    onClick={handleDuplicateSweepRun}
+                                >
+                                    <BsStars size={14} style={{ marginRight: '6px' }} />
+                                    Scan for duplicate tabs
+                                </button>
+                            </>
+                        )}
+
+                        {panelStatus === 'running' && (
+                            <>
+                                <div className="ai-rename-progress">
+                                    <div className="ai-rename-progress-track">
+                                        <div className="ai-rename-progress-fill ai-rename-progress-fill--animated" />
+                                    </div>
+                                    <span className="ai-rename-progress-label">Scanning for duplicates…</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    className="ai-tool-action-btn ai-tool-action-btn--cancel"
+                                    onClick={handleCancel}
+                                >
+                                    Cancel
+                                </button>
+                            </>
+                        )}
+
+                        {panelStatus === 'done' && (
+                            <>
+                                {error && <div className="ai-tool-error">{error}</div>}
+                                <DuplicateSweepPanel sweep={duplicateSweep} namesByUid={dupNamesByUid} />
+                            </>
+                        )}
+                    </div>
+                )}
+
                 <p className="ai-tools-disclaimer">AI makes mistakes. Always review suggestions before applying them.</p>
             </div>
         </Modal>

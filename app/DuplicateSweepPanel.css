@@ -1,0 +1,47 @@
+.dup-sweep { display: flex; flex-direction: column; gap: 12px; }
+.dup-sweep-empty, .dup-sweep-done { padding: 24px 8px; text-align: center; opacity: 0.8; }
+.dup-sweep-progress { font-size: 12px; opacity: 0.7; }
+.dup-sweep-message { margin: 0; line-height: 1.4; }
+
+.dup-sweep-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Pill: fully rounded both ends, gradient bg, shine on hover, NO movement. */
+.dup-pill {
+    position: relative;
+    overflow: hidden;
+    border: none;
+    border-radius: 999px;
+    padding: 8px 16px;
+    color: #fff;
+    cursor: pointer;
+    background: linear-gradient(135deg, var(--ai-grad-start, #6d5efc), var(--ai-grad-end, #00d4ff));
+    /* Animate only background/opacity/box-shadow — never transform. */
+    transition: box-shadow 200ms ease, filter 200ms ease;
+}
+.dup-pill::after {
+    content: "";
+    position: absolute;
+    top: 0; left: -60%;
+    width: 40%; height: 100%;
+    background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+    transform: skewX(-20deg);
+    opacity: 0;
+}
+.dup-pill:hover { box-shadow: 0 2px 12px rgba(109, 94, 252, 0.45); filter: brightness(1.05); }
+.dup-pill:hover::after { opacity: 1; animation: dup-shine 0.7s ease; }
+@keyframes dup-shine { from { left: -60%; } to { left: 120%; } }
+
+.dup-pill-recommended { box-shadow: 0 0 0 2px var(--ai-grad-end, #00d4ff); }
+.dup-pill-discard { background: linear-gradient(135deg, #ff6b6b, #c0392b); }
+.dup-pill-extract { background: linear-gradient(135deg, #6d5efc, #9b59b6); }
+
+.dup-sweep-bottom { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(127, 127, 127, 0.2); }
+.dup-sweep-applyall { display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; }
+.dup-sweep-skip { background: none; border: none; color: inherit; opacity: 0.7; cursor: pointer; text-decoration: underline; }
+.dup-sweep-undo { background: none; border: 1px solid rgba(127, 127, 127, 0.4); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+.dup-sweep-undo:disabled { opacity: 0.4; cursor: default; }
+.dup-sweep-close { margin-left: auto; }
+
+@media (prefers-reduced-motion: reduce) {
+    .dup-pill:hover::after { animation: none; }
+}
