@@ -134,9 +134,115 @@ async function updateFolderCountsBG(folderUids) {
     return true;
 }
 
+async function removeTabsFromCollectionsBG(removals) {
+    if (!Array.isArray(removals) || removals.length === 0) return false;
+    const index = await loadCollectionsIndexBG();
+    const now = Date.now();
+    const recordKeys = removals.map((r) => `${KEYS.COLLECTION_PREFIX}${r.collectionUid}`);
+    const records = await local.get(recordKeys);
+    const writes = {};
+    for (const r of removals) {
+        const recKey = `${KEYS.COLLECTION_PREFIX}${r.collectionUid}`;
+        const rec = records[recKey];
+        if (!rec) continue;
+        const drop = new Set(r.tabUids || []);
+        const tabs = (rec.tabs || []).filter((t) => !drop.has(t.uid));
+        writes[recKey] = { ...rec, tabs, lastUpdated: now };
+        if (index[r.collectionUid]) index[r.collectionUid] = { ...index[r.collectionUid], tabCount: tabs.length, lastUpdated: now };
+    }
+    writes[KEYS.COLLECTIONS_INDEX] = index;
+    await local.set(writes);
+    return true;
+}
+
+async function restoreTabsToCollectionsBG(restorations) {
+    if (!Array.isArray(restorations) || restorations.length === 0) return false;
+    const index = await loadCollectionsIndexBG();
+    const now = Date.now();
+    const byCol = new Map();
+    for (const r of restorations) {
+        if (!byCol.has(r.collectionUid)) byCol.set(r.collectionUid, []);
+        byCol.get(r.collectionUid).push(r);
+    }
+    const recordKeys = [...byCol.keys()].map((uid) => `${KEYS.COLLECTION_PREFIX}${uid}`);
+    const records = await local.get(recordKeys);
+    const writes = {};
+    for (const [uid, items] of byCol.entries()) {
+        const recKey = `${KEYS.COLLECTION_PREFIX}${uid}`;
+        const rec = records[recKey];
+        if (!rec) continue;
+        const tabs = [...(rec.tabs || [])];
+        // Insert ascending by position so earlier insertions don't shift later ones.
+        items.sort((a, b) => a.position - b.position);
+        for (const it of items) {
+            const at = Math.max(0, Math.min(it.position, tabs.length));
+            tabs.splice(at, 0, it.tab);
+        }
+        writes[recKey] = { ...rec, tabs, lastUpdated: now };
+        if (index[uid]) index[uid] = { ...index[uid], tabCount: tabs.length, lastUpdated: now };
+    }
+    writes[KEYS.COLLECTIONS_INDEX] = index;
+    await local.set(writes);
+    return true;
+}
+
+async function setTabTitlesBG(edits) {
+    if (!Array.isArray(edits) || edits.length === 0) return false;
+    const now = Date.now();
+    const byCol = new Map();
+    for (const e of edits) {
+        if (!byCol.has(e.collectionUid)) byCol.set(e.collectionUid, []);
+        byCol.get(e.collectionUid).push(e);
+    }
+    const recordKeys = [...byCol.keys()].map((uid) => `${KEYS.COLLECTION_PREFIX}${uid}`);
+    const records = await local.get(recordKeys);
+    const writes = {};
+    for (const [uid, items] of byCol.entries()) {
+        const recKey = `${KEYS.COLLECTION_PREFIX}${uid}`;
+        const rec = records[recKey];
+        if (!rec) continue;
+        const titleByUid = new Map(items.map((i) => [i.tabUid, i.title]));
+        const tabs = (rec.tabs || []).map((t) => (titleByUid.has(t.uid) ? { ...t, title: titleByUid.get(t.uid) } : t));
+        writes[recKey] = { ...rec, tabs, lastUpdated: now };
+    }
+    await local.set(writes);
+    return true;
+}
+
+async function createCollectionBG({ name, tabs = [], color } = {}) {
+    if (!name || typeof name !== 'string' || !name.trim()) throw new Error('createCollectionBG: name is required');
+    const now = Date.now();
+    const uid = newUid();
+    const record = {
+        uid, name: name.trim(), type: 'collection', tabs,
+        color: color || 'var(--collection-default-color)',
+        createdOn: now, lastUpdated: now, lastOpened: null, chromeGroups: [], parentId: null,
+    };
+    const index = await loadCollectionsIndexBG();
+    index[uid] = {
+        name: record.name, type: 'collection', tabCount: tabs.length,
+        lastUpdated: now, lastOpened: null, createdOn: now, color: record.color,
+        size: JSON.stringify(record).length, parentId: null,
+    };
+    await local.set({ [`${KEYS.COLLECTION_PREFIX}${uid}`]: record, [KEYS.COLLECTIONS_INDEX]: index });
+    return record;
+}
+
+async function deleteCollectionBG(uid) {
+    const index = await loadCollectionsIndexBG();
+    delete index[uid];
+    const tombs = (await getKey(KEYS.DELETED_COLLECTION_TOMBSTONES)) || {};
+    tombs[uid] = Date.now();
+    await local.set({ [KEYS.COLLECTIONS_INDEX]: index, [KEYS.DELETED_COLLECTION_TOMBSTONES]: tombs });
+    await local.remove(`${KEYS.COLLECTION_PREFIX}${uid}`);
+    return true;
+}
+
 const aiStorageApi = {
     loadCollectionsIndexBG, loadFoldersIndexBG, renameCollectionsBG,
     moveCollectionsToFoldersBG, createFolderBG, createFoldersBG, deleteFolderBG, updateFolderCountsBG,
+    removeTabsFromCollectionsBG, restoreTabsToCollectionsBG, setTabTitlesBG,
+    createCollectionBG, deleteCollectionBG,
 };
 /* istanbul ignore next */
 if (typeof globalThis !== 'undefined') globalThis.TaboxAIStorage = aiStorageApi;
