@@ -138,17 +138,21 @@ async function removeTabsFromCollectionsBG(removals) {
     if (!Array.isArray(removals) || removals.length === 0) return false;
     const index = await loadCollectionsIndexBG();
     const now = Date.now();
-    const recordKeys = removals.map((r) => `${KEYS.COLLECTION_PREFIX}${r.collectionUid}`);
+    const byCol = new Map();
+    for (const r of removals) {
+        if (!byCol.has(r.collectionUid)) byCol.set(r.collectionUid, new Set());
+        (r.tabUids || []).forEach((uid) => byCol.get(r.collectionUid).add(uid));
+    }
+    const recordKeys = [...byCol.keys()].map((uid) => `${KEYS.COLLECTION_PREFIX}${uid}`);
     const records = await local.get(recordKeys);
     const writes = {};
-    for (const r of removals) {
-        const recKey = `${KEYS.COLLECTION_PREFIX}${r.collectionUid}`;
+    for (const [colUid, drop] of byCol.entries()) {
+        const recKey = `${KEYS.COLLECTION_PREFIX}${colUid}`;
         const rec = records[recKey];
         if (!rec) continue;
-        const drop = new Set(r.tabUids || []);
         const tabs = (rec.tabs || []).filter((t) => !drop.has(t.uid));
         writes[recKey] = { ...rec, tabs, lastUpdated: now };
-        if (index[r.collectionUid]) index[r.collectionUid] = { ...index[r.collectionUid], tabCount: tabs.length, lastUpdated: now };
+        if (index[colUid]) index[colUid] = { ...index[colUid], tabCount: tabs.length, lastUpdated: now };
     }
     writes[KEYS.COLLECTIONS_INDEX] = index;
     await local.set(writes);
@@ -188,6 +192,7 @@ async function restoreTabsToCollectionsBG(restorations) {
 
 async function setTabTitlesBG(edits) {
     if (!Array.isArray(edits) || edits.length === 0) return false;
+    const index = await loadCollectionsIndexBG();
     const now = Date.now();
     const byCol = new Map();
     for (const e of edits) {
@@ -204,7 +209,9 @@ async function setTabTitlesBG(edits) {
         const titleByUid = new Map(items.map((i) => [i.tabUid, i.title]));
         const tabs = (rec.tabs || []).map((t) => (titleByUid.has(t.uid) ? { ...t, title: titleByUid.get(t.uid) } : t));
         writes[recKey] = { ...rec, tabs, lastUpdated: now };
+        if (index[uid]) index[uid] = { ...index[uid], lastUpdated: now };
     }
+    writes[KEYS.COLLECTIONS_INDEX] = index;
     await local.set(writes);
     return true;
 }
@@ -213,16 +220,18 @@ async function createCollectionBG({ name, tabs = [], color } = {}) {
     if (!name || typeof name !== 'string' || !name.trim()) throw new Error('createCollectionBG: name is required');
     const now = Date.now();
     const uid = newUid();
+    const index = await loadCollectionsIndexBG();
+    const maxOrder = Object.values(index).reduce((m, e) => Math.max(m, (e && typeof e.order === 'number') ? e.order : 0), 0);
+    const order = maxOrder + 1;
     const record = {
         uid, name: name.trim(), type: 'collection', tabs,
         color: color || 'var(--collection-default-color)',
-        createdOn: now, lastUpdated: now, lastOpened: null, chromeGroups: [], parentId: null,
+        createdOn: now, lastUpdated: now, lastOpened: null, chromeGroups: [], parentId: null, order,
     };
-    const index = await loadCollectionsIndexBG();
     index[uid] = {
         name: record.name, type: 'collection', tabCount: tabs.length,
         lastUpdated: now, lastOpened: null, createdOn: now, color: record.color,
-        size: JSON.stringify(record).length, parentId: null,
+        size: JSON.stringify(record).length, parentId: null, order,
     };
     await local.set({ [`${KEYS.COLLECTION_PREFIX}${uid}`]: record, [KEYS.COLLECTIONS_INDEX]: index });
     return record;

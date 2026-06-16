@@ -58,3 +58,33 @@ test('createCollectionBG then deleteCollectionBG round-trips index + record + to
   expect(idx[created.uid]).toBeUndefined();
   expect(tombs[created.uid]).toBeTruthy();
 });
+
+test('removeTabsFromCollectionsBG merges duplicate entries for the same collection', async () => {
+  await store.removeTabsFromCollectionsBG([
+    { collectionUid: 'A', tabUids: ['t1'] },
+    { collectionUid: 'A', tabUids: ['t2'] },
+  ]);
+  const rec = (await local.get('collection_A')).collection_A;
+  expect(rec.tabs).toHaveLength(0);
+});
+
+test('restoreTabsToCollectionsBG restores multiple tabs in ascending position order', async () => {
+  await store.removeTabsFromCollectionsBG([{ collectionUid: 'A', tabUids: ['t1', 't2'] }]);
+  await store.restoreTabsToCollectionsBG([
+    { collectionUid: 'A', tab: { uid: 't2', url: 'https://y.com', title: 'Y' }, position: 1 },
+    { collectionUid: 'A', tab: { uid: 't1', url: 'https://x.com', title: 'X' }, position: 0 },
+  ]);
+  const rec = (await local.get('collection_A')).collection_A;
+  expect(rec.tabs.map((t) => t.uid)).toEqual(['t1', 't2']);
+});
+
+test('createCollectionBG sets an order field on record and index', async () => {
+  const created = await store.createCollectionBG({ name: 'New', tabs: [] });
+  expect(typeof created.order).toBe('number');
+  const idx = (await local.get('collections_index')).collections_index;
+  expect(typeof idx[created.uid].order).toBe('number');
+});
+
+test('deleteCollectionBG on unknown uid is a no-op (no throw)', async () => {
+  await expect(store.deleteCollectionBG('nope')).resolves.toBe(true);
+});
