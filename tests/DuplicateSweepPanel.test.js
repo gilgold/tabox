@@ -75,7 +75,11 @@ test('reveals/hides the duplicated tabs with favicon, title, and url tooltip', (
   fireEvent.click(screen.getByRole('button', { name: /Show 1 tab/i }));
   const title = screen.getByText('Example Page');
   expect(title).toBeInTheDocument();
-  expect(title.closest('li')).toHaveAttribute('title', 'https://x.com/p');
+  // URL is surfaced via the shared rich tooltip (react-tooltip), not native title.
+  const row = title.closest('li');
+  expect(row).not.toHaveAttribute('title');
+  expect(row).toHaveAttribute('data-tooltip-id', 'main-tooltip');
+  expect(row).toHaveAttribute('data-tooltip-content', 'https://x.com/p');
   // hide again
   fireEvent.click(screen.getByRole('button', { name: /Hide 1 tab/i }));
   expect(screen.queryByText('Example Page')).not.toBeInTheDocument();

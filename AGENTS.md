@@ -127,6 +127,7 @@ webpack.js            # Webpack config
 - **Styling**: Co-located CSS files (e.g., `CollectionList.js` + `CollectionList.css`)
 - **No prop-types** — disabled in ESLint
 - **No Prettier** — ESLint only
+- **Tooltips**: NEVER use the native `title` attribute for tooltips. Always use the shared rich tooltip (`react-tooltip`): put `data-tooltip-id="main-tooltip"` + `data-tooltip-content="…"` (optionally `data-tooltip-class-name="small-tooltip"`) on the anchor element. The global `<Tooltip id="main-tooltip">` instance lives in `app/App.js` (portaled to `document.body`, theme-aware, `whiteSpace: pre-line`). Native `title` is unstyled, theme-blind, and slow to appear.
 
 ## Testing
 

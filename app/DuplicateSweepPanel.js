@@ -42,7 +42,12 @@ function DuplicateGroupView({ group, rec, isWithin, nameOf, onAction }) {
             {showTabs && (
                 <ul className="dup-tab-list">
                     {rows.map((r) => (
-                        <li key={r.key} className="dup-tab-row" title={r.url}>
+                        <li
+                            key={r.key}
+                            className="dup-tab-row"
+                            data-tooltip-id="main-tooltip"
+                            data-tooltip-content={r.url}
+                        >
                             {r.favIconUrl
                                 ? <img className="dup-tab-favicon" src={r.favIconUrl} alt="" />
                                 : <span className="dup-tab-favicon dup-tab-favicon--blank" aria-hidden="true" />}
