@@ -27,12 +27,12 @@
 }
 .dup-sweep-reveal:hover { color: var(--link-hover-color, var(--primary-color)); }
 
+/* No independent scroll here — the whole .dup-sweep-scroll region (description
+   through action buttons) scrolls as one unit; only the footer stays static. */
 .dup-tab-list {
     list-style: none;
     margin: 0;
     padding: 0;
-    max-height: 168px;
-    overflow-y: auto;
     border: 1px solid var(--divider-color);
     border-radius: 8px;
     background: var(--input-bg-color);
