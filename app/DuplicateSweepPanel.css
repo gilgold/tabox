@@ -1,7 +1,45 @@
-.dup-sweep { display: flex; flex-direction: column; gap: 12px; }
-.dup-sweep-empty, .dup-sweep-done { padding: 24px 8px; text-align: center; opacity: 0.8; }
+.dup-sweep { display: flex; flex-direction: column; gap: 12px; color: var(--text-color); }
+.dup-sweep-empty, .dup-sweep-done { padding: 24px 8px; text-align: center; opacity: 0.8; color: var(--text-color); }
 .dup-sweep-progress { font-size: 12px; opacity: 0.7; }
 .dup-sweep-message { margin: 0; line-height: 1.4; }
+
+/* Reveal/hide the tabs this group is about. */
+.dup-sweep-reveal {
+    align-self: flex-start;
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 12px;
+    color: var(--primary-color);
+    cursor: pointer;
+    text-decoration: underline;
+}
+.dup-sweep-reveal:hover { color: var(--link-hover-color, var(--primary-color)); }
+
+.dup-tab-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 168px;
+    overflow-y: auto;
+    border: 1px solid var(--divider-color);
+    border-radius: 8px;
+    background: var(--input-bg-color);
+}
+.dup-tab-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    font-size: 13px;
+    color: var(--text-color);
+    border-bottom: 1px solid var(--divider-color);
+    overflow: hidden;
+}
+.dup-tab-row:last-child { border-bottom: none; }
+.dup-tab-favicon { width: 16px; height: 16px; flex-shrink: 0; border-radius: 3px; object-fit: contain; }
+.dup-tab-favicon--blank { background: var(--divider-color); }
+.dup-tab-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .dup-sweep-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 
@@ -35,12 +73,26 @@
 .dup-pill-discard { background: linear-gradient(135deg, #ff6b6b, #c0392b); }
 .dup-pill-extract { background: linear-gradient(135deg, #6d5efc, #9b59b6); }
 
-.dup-sweep-bottom { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(127, 127, 127, 0.2); }
-.dup-sweep-applyall { display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; }
-.dup-sweep-skip { background: none; border: none; color: inherit; opacity: 0.7; cursor: pointer; text-decoration: underline; }
-.dup-sweep-undo { background: none; border: 1px solid rgba(127, 127, 127, 0.4); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
-.dup-sweep-undo:disabled { opacity: 0.4; cursor: default; }
-.dup-sweep-close { margin-left: auto; background: none; border: none; cursor: pointer; color: inherit; opacity: 0.8; }
+.dup-sweep-bottom { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--divider-color); }
+.dup-sweep-applyall { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-color); cursor: pointer; }
+.dup-sweep-skip { background: none; border: none; color: var(--text-color); opacity: 0.7; cursor: pointer; text-decoration: underline; }
+.dup-sweep-skip:hover { opacity: 1; }
+
+/* Secondary button — theme-aware so it stays visible on dark backgrounds. */
+.dup-sweep-undo {
+    margin-left: auto;
+    background: var(--input-bg-color);
+    color: var(--text-color);
+    border: 1px solid var(--divider-color);
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 200ms ease, border-color 200ms ease;
+}
+.dup-sweep-undo:hover:not(:disabled) { background: var(--single-tab-row-hover-color); border-color: var(--primary-color); }
+.dup-sweep-undo:disabled { opacity: 0.45; cursor: default; }
+.dup-sweep-close { background: none; border: none; cursor: pointer; color: var(--text-color); opacity: 0.8; }
 .dup-sweep-close:hover { opacity: 1; }
 
 @media (prefers-reduced-motion: reduce) {

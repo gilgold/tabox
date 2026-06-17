@@ -55,3 +55,28 @@ test('shows done state when no pending groups remain', () => {
   render(<DuplicateSweepPanel sweep={done} namesByUid={namesByUid} />);
   expect(screen.getByText(/All duplicates handled/i)).toBeInTheDocument();
 });
+
+test('reveals/hides the duplicated tabs with favicon, title, and url tooltip', () => {
+  const s = {
+    apply: jest.fn(), undo: jest.fn(), dismiss: jest.fn(),
+    state: { history: [], groups: [{
+      id: 'cross:A|D', kind: 'cross', collectionUids: ['A', 'D'], status: 'pending',
+      recommendation: { recommendedKeeperUid: 'D', message: 'msg', suggestedNewCollectionName: 'S', bestTitlePerUrl: [] },
+      urls: [{ normalizedUrl: 'x.com/p', occurrences: [
+        { collectionUid: 'A', title: 'Example Page', url: 'https://x.com/p', tab: { uid: 'a1', url: 'https://x.com/p', title: 'Example Page', favIconUrl: 'https://x.com/ic.png' } },
+        { collectionUid: 'D', title: 'Example Page', url: 'https://x.com/p', tab: { uid: 'd1', url: 'https://x.com/p', title: 'Example Page' } },
+      ] }],
+    }] },
+  };
+  render(<DuplicateSweepPanel sweep={s} namesByUid={namesByUid} />);
+  // hidden initially
+  expect(screen.queryByText('Example Page')).not.toBeInTheDocument();
+  // reveal
+  fireEvent.click(screen.getByRole('button', { name: /Show 1 tab/i }));
+  const title = screen.getByText('Example Page');
+  expect(title).toBeInTheDocument();
+  expect(title.closest('li')).toHaveAttribute('title', 'https://x.com/p');
+  // hide again
+  fireEvent.click(screen.getByRole('button', { name: /Hide 1 tab/i }));
+  expect(screen.queryByText('Example Page')).not.toBeInTheDocument();
+});
