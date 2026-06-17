@@ -79,3 +79,27 @@ test('cancelled run does not write partial sweep state', async () => {
   expect(_store.duplicateSweep).toBeUndefined();
   expect(out.summary).toMatch(/cancel/i);
 });
+
+test('skips the AI entirely for cross groups whose copies share the same title', async () => {
+  const noAiCtx = {
+    planners, detect,
+    client: {
+      createAISession: async () => { throw new Error('AI should not be called for identical titles'); },
+      promptForJSON: async () => { throw new Error('AI should not be called for identical titles'); },
+    },
+    loadCollections: async () => ([
+      { uid: 'A', name: 'Work', lastUpdated: 10, tabs: [{ uid: 'a1', url: 'https://x.com', title: 'Same Title' }] },
+      { uid: 'D', name: 'Reference', lastUpdated: 99, tabs: [{ uid: 'd1', url: 'https://x.com', title: 'Same Title' }] },
+    ]),
+  };
+  const reports = [];
+  const out = await task.run({ ctx: noAiCtx, params: {}, report: async (p) => reports.push(p) });
+  const st = _store.duplicateSweep;
+  expect(st.groups).toHaveLength(1);
+  // deterministic keeper = freshest collection (D, lastUpdated 99)
+  expect(st.groups[0].recommendation.recommendedKeeperUid).toBe('D');
+  expect(st.groups[0].recommendation.message).toContain('Reference');
+  // total reported is 0 AI groups
+  expect(reports[0]).toEqual({ total: 0, filed: 0 });
+  expect(out.summary).toContain('duplicate');
+});

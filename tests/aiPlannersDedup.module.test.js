@@ -44,3 +44,50 @@ test('normalizeDedupSuggestion fallback message uses collection names when provi
   expect(out.message).toContain('Work');
   expect(out.message).not.toMatch(/\bA, B, D\b/);
 });
+
+describe('dedup AI-skip helpers', () => {
+  const { dedupGroupHasTitleConflict, buildDeterministicDedupSuggestion } = require('../chrome/ai-planners.js');
+
+  const groupSameTitles = {
+    collectionUids: ['A', 'D'],
+    urls: [{ normalizedUrl: 'x.com/', occurrences: [
+      { collectionUid: 'A', title: 'X' }, { collectionUid: 'D', title: 'X' },
+    ] }],
+  };
+  const groupDiffTitles = {
+    collectionUids: ['A', 'D'],
+    urls: [{ normalizedUrl: 'x.com/', occurrences: [
+      { collectionUid: 'A', title: 'X' }, { collectionUid: 'D', title: 'X Home' },
+    ] }],
+  };
+
+  test('dedupGroupHasTitleConflict is false when all copies share a title (case/space-insensitive)', () => {
+    expect(dedupGroupHasTitleConflict(groupSameTitles)).toBe(false);
+    expect(dedupGroupHasTitleConflict({ collectionUids: ['A', 'D'], urls: [{ normalizedUrl: 'x', occurrences: [
+      { collectionUid: 'A', title: ' X ' }, { collectionUid: 'D', title: 'x' },
+    ] }] })).toBe(false);
+  });
+
+  test('dedupGroupHasTitleConflict is true when titles differ', () => {
+    expect(dedupGroupHasTitleConflict(groupDiffTitles)).toBe(true);
+  });
+
+  test('empty titles are ignored (not counted as a conflict)', () => {
+    expect(dedupGroupHasTitleConflict({ collectionUids: ['A', 'D'], urls: [{ normalizedUrl: 'x', occurrences: [
+      { collectionUid: 'A', title: 'X' }, { collectionUid: 'D', title: '' },
+    ] }] })).toBe(false);
+  });
+
+  test('buildDeterministicDedupSuggestion uses the keeper and reads naturally', () => {
+    const out = buildDeterministicDedupSuggestion(groupSameTitles, { A: 'Work', D: 'Reference' }, 'D');
+    expect(out.recommendedKeeperUid).toBe('D');
+    expect(out.message).toContain('Work and Reference');
+    expect(out.message).toContain('keeping them in Reference only');
+    expect(out.bestTitlePerUrl).toEqual([]);
+  });
+
+  test('buildDeterministicDedupSuggestion falls back to first uid for an invalid keeper', () => {
+    const out = buildDeterministicDedupSuggestion(groupSameTitles, { A: 'Work', D: 'Reference' }, 'ZZZ');
+    expect(out.recommendedKeeperUid).toBe('A');
+  });
+});

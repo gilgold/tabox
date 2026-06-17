@@ -333,6 +333,36 @@ function normalizeDedupSuggestion(raw, group, collectionNamesByUid = {}) {
     return { recommendedKeeperUid, message, suggestedNewCollectionName, bestTitlePerUrl };
 }
 
+// True when at least one shared URL in the group has two or more *different*
+// (non-empty) titles across its copies — i.e. a case where which copy to keep is
+// genuinely ambiguous and worth an AI opinion. When false, the keeper can be
+// chosen deterministically with no model call (the common "same page, same
+// title, saved in several collections" case).
+function dedupGroupHasTitleConflict(group) {
+    const norm = (t) => String(t || '').trim().replace(/\s+/g, ' ').toLowerCase();
+    return (group.urls || []).some((u) => {
+        const titles = new Set((u.occurrences || []).map((o) => norm(o.title)));
+        titles.delete('');
+        return titles.size > 1;
+    });
+}
+
+// Deterministic, no-AI recommendation for an unambiguous group. Reads naturally
+// in the same style as the AI message, so the UI is consistent whether or not
+// the model was consulted. `keeperUid` is chosen by the caller (e.g. freshest
+// collection); falls back to the first collection if not in the set.
+function buildDeterministicDedupSuggestion(group, collectionNamesByUid = {}, keeperUid) {
+    const uids = group.collectionUids;
+    const keeper = uids.includes(keeperUid) ? keeperUid : uids[0];
+    const names = uids.map((u) => collectionNamesByUid[u] || u);
+    const keeperName = collectionNamesByUid[keeper] || keeper;
+    const others = uids.filter((u) => u !== keeper).map((u) => collectionNamesByUid[u] || u);
+    const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0];
+    const tail = others.length > 1 ? 'the others' : (others[0] || 'the rest');
+    const message = `These tabs appear in ${list} — consider keeping them in ${keeperName} only and removing them from ${tail}.`;
+    return { recommendedKeeperUid: keeper, message: message.slice(0, DEDUP_MESSAGE_MAX), suggestedNewCollectionName: 'Shared Tabs', bestTitlePerUrl: [] };
+}
+
 // ---------------------------------------------------------------------------
 // Exports
 // ---------------------------------------------------------------------------
@@ -364,6 +394,8 @@ const taboxAIPlannersApi = {
     DEDUP_SCHEMA,
     buildDedupPrompt,
     normalizeDedupSuggestion,
+    dedupGroupHasTitleConflict,
+    buildDeterministicDedupSuggestion,
 };
 
 /* istanbul ignore next */

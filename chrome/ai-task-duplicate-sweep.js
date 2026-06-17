@@ -19,8 +19,21 @@ const def = {
         const namesByUid = Object.fromEntries(inScope.map((c) => [c.uid, c.name]));
 
         const { groups } = detect.detectDuplicateGroups(inScope);
-        const crossGroups = groups.filter((g) => g.kind === 'cross');
-        await report({ total: crossGroups.length, filed: 0 });
+        // Pick the freshest collection (then most tabs, then uid) as the default
+        // keeper for groups that don't need an AI opinion.
+        const metaByUid = Object.fromEntries(inScope.map((c) => [c.uid, { lastUpdated: c.lastUpdated || 0, tabCount: (c.tabs || []).length }]));
+        const pickKeeper = (uids) => [...uids].sort((a, b) => {
+            const ma = metaByUid[a] || {}; const mb = metaByUid[b] || {};
+            return (mb.lastUpdated || 0) - (ma.lastUpdated || 0)
+                || (mb.tabCount || 0) - (ma.tabCount || 0)
+                || (a < b ? -1 : 1);
+        })[0];
+
+        // Only groups whose copies have *conflicting* titles need the model. The
+        // rest get a deterministic keeper + templated message with no inference —
+        // this is what keeps a clean library's scan near-instant.
+        const aiGroups = groups.filter((g) => g.kind === 'cross' && planners.dedupGroupHasTitleConflict(g));
+        await report({ total: aiGroups.length, filed: 0 });
 
         let session = null;
         let processed = 0;
@@ -34,6 +47,11 @@ const def = {
                         suggestedNewCollectionName: 'Shared Tabs',
                         bestTitlePerUrl: [],
                     };
+                    continue;
+                }
+                if (!planners.dedupGroupHasTitleConflict(g)) {
+                    // Unambiguous: same title everywhere — decide deterministically, no AI call.
+                    g.recommendation = planners.buildDeterministicDedupSuggestion(g, namesByUid, pickKeeper(g.collectionUids));
                     continue;
                 }
                 await report({ filed: processed, currentLabel: g.collectionUids.map((u) => namesByUid[u]).filter(Boolean).join(', ') });
@@ -68,7 +86,7 @@ const def = {
                 history: [],
             },
         });
-        await report({ filed: crossGroups.length });
+        await report({ filed: aiGroups.length });
         return { summary: groups.length ? `Found ${groups.length} duplicate group${groups.length === 1 ? '' : 's'} (${totalDupes} tabs)` : 'No duplicate tabs found', undo: null };
     },
     async undo() {}, // interactive undo is handled by chrome/duplicate-sweep.js, not the engine
