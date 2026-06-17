@@ -47,6 +47,7 @@
 .dup-pill {
     position: relative;
     overflow: hidden;
+    box-sizing: border-box;
     border: none;
     border-radius: 999px;
     padding: 8px 16px;
@@ -69,7 +70,16 @@
 .dup-pill:hover::after { opacity: 1; animation: dup-shine 0.7s ease; }
 @keyframes dup-shine { from { left: -60%; } to { left: 120%; } }
 
-.dup-pill-recommended { box-shadow: 0 0 0 2px #00d4ff; }
+/* Recommended action: vivid orange gradient border, distinct from the blue/cyan
+   fill so it stands out. padding-box/border-box layering keeps the gradient
+   border clipped to the pill's rounded radius (border-image would not). */
+.dup-pill-recommended {
+    border: 2px solid transparent;
+    background:
+        linear-gradient(135deg, #6d5efc, #00d4ff) padding-box,
+        linear-gradient(135deg, #ffb347, #ff8c42 45%, #ff5e3a) border-box;
+    box-shadow: 0 0 8px rgba(255, 140, 66, 0.45);
+}
 .dup-pill-discard { background: linear-gradient(135deg, #ff6b6b, #c0392b); }
 .dup-pill-extract { background: linear-gradient(135deg, #6d5efc, #9b59b6); }
 
