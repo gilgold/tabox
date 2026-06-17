@@ -1,4 +1,15 @@
-.dup-sweep { display: flex; flex-direction: column; gap: 12px; color: var(--text-color); }
+.dup-sweep { display: flex; flex-direction: column; gap: 12px; color: var(--text-color); flex: 1 1 auto; min-height: 0; }
+/* Scrollable body: message + reveal list + action buttons. Progress line and
+   bottom bar stay pinned so the modal never grows past the popup. */
+.dup-sweep-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-right: 4px;
+}
 .dup-sweep-empty, .dup-sweep-done { padding: 24px 8px; text-align: center; opacity: 0.8; color: var(--text-color); }
 .dup-sweep-progress { font-size: 12px; opacity: 0.7; }
 .dup-sweep-message { margin: 0; line-height: 1.4; }

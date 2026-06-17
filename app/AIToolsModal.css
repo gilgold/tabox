@@ -16,6 +16,9 @@
     flex-direction: column;
     gap: 14px;
     padding: 16px;
+    /* Never grow past the popup window; the active panel scrolls internally
+     * (header + footer disclaimer stay pinned). Matches .modal-content's 95vh. */
+    max-height: 95vh;
     border-radius: 16px;
     /* No backdrop-filter: Chrome ignores border-radius when clipping it, which
      * bleeds square corners behind the rounded edge. The surface is opaque
@@ -209,6 +212,12 @@ html.performance-mode .ai-hero-card::before {
     display: flex;
     flex-direction: column;
     gap: 10px;
+}
+
+/* Duplicate-sweep fills the remaining modal height so its body can scroll. */
+.ai-tool-panel--duplicate {
+    flex: 1 1 auto;
+    min-height: 0;
 }
 
 .ai-tool-action-btn {

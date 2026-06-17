@@ -1151,7 +1151,7 @@ function AIToolsModal({ updateRemoteData }) {
                     </div>
                 )}
                 {activeToolId === 'duplicate-sweep' && (
-                    <div className="ai-tool-panel">
+                    <div className="ai-tool-panel ai-tool-panel--duplicate">
                         {panelStatus === 'idle' && (
                             <>
                                 <p className="ai-rename-description">

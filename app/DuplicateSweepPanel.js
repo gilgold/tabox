@@ -130,14 +130,16 @@ export function DuplicateSweepPanel({ sweep, namesByUid }) {
         <div className="dup-sweep">
             <div className="dup-sweep-progress">{pendingCount} duplicate group{pendingCount === 1 ? '' : 's'} left</div>
 
-            <DuplicateGroupView
-                key={active.id}
-                group={active}
-                rec={rec}
-                isWithin={active.kind === 'within'}
-                nameOf={nameOf}
-                onAction={dispatch}
-            />
+            <div className="dup-sweep-scroll">
+                <DuplicateGroupView
+                    key={active.id}
+                    group={active}
+                    rec={rec}
+                    isWithin={active.kind === 'within'}
+                    nameOf={nameOf}
+                    onAction={dispatch}
+                />
+            </div>
 
             <div className="dup-sweep-bottom">
                 <button type="button" className="dup-sweep-skip" onClick={() => dispatch('skip')}>
