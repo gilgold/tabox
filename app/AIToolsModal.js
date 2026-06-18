@@ -3,7 +3,7 @@ import Modal from 'react-modal';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { MdClose, MdArrowBack, MdUndo } from 'react-icons/md';
 import { BsStars } from 'react-icons/bs';
-import { aiToolsModalOpenState, aiToolsScopeState, aiProcessingUidsState, aiProcessingCurrentUidState } from './atoms/aiState';
+import { aiToolsModalOpenState, aiToolsScopeState, aiProcessingUidsState, aiProcessingCurrentUidState, aiSplitTargetState } from './atoms/aiState';
 import { viewContextState } from './atoms/globalAppSettingsState';
 import { AI_TOOLS } from './ai/aiTasks';
 import { getAIAvailability } from './ai/aiClient';
@@ -15,6 +15,7 @@ import { useSmartOrganizeUndo } from './ai/useSmartOrganizeUndo';
 import { useAutoArrangeUndo } from './ai/useAutoArrangeUndo';
 import { useDuplicateSweep } from './ai/useDuplicateSweep';
 import { DuplicateSweepPanel } from './DuplicateSweepPanel';
+import SplitCollectionPanel from './SplitCollectionPanel';
 import AutoArrangeFoldAnimation from './AutoArrangeFoldAnimation';
 import SmartOrganizeFoldAnimation from './SmartOrganizeFoldAnimation';
 import { showUndoToast, showSuccessToast } from './toastHelpers';
@@ -30,6 +31,7 @@ const TASK_TO_TOOL = {
     'auto-arrange': 'auto-arrange-folders',
     'smart-organize': 'smart-organize',
     'duplicate-sweep': 'duplicate-sweep',
+    'split-collection': 'split-collection',
 };
 
 function AIToolsModal({ updateRemoteData }) {
@@ -38,6 +40,7 @@ function AIToolsModal({ updateRemoteData }) {
     const viewContext = useAtomValue(viewContextState);
     const setAiProcessingUids = useSetAtom(aiProcessingUidsState);
     const setAiProcessingCurrentUid = useSetAtom(aiProcessingCurrentUidState);
+    const [splitTarget, setSplitTarget] = useAtom(aiSplitTargetState);
     const [activeToolId, setActiveToolId] = useState(null);
     const [collections, setCollections] = useState([]);
     // Panel state machine: idle | running | done
@@ -98,6 +101,8 @@ function AIToolsModal({ updateRemoteData }) {
     // Synchronous re-entry guard — set before any await in handleRun so a
     // double-click cannot start two engine runs.
     const runStartedRef = useRef(false);
+    // Once-guard: ensures the context-menu split route kicks off the scan only once per open.
+    const splitScanStartedRef = useRef(false);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -107,6 +112,7 @@ function AIToolsModal({ updateRemoteData }) {
         }
         runTokenRef.current += 1;
         runStartedRef.current = false;
+        splitScanStartedRef.current = false;
         // Clear AI processing atoms from any previous run
         setAiProcessingUids([]);
         setAiProcessingCurrentUid(null);
@@ -144,6 +150,22 @@ function AIToolsModal({ updateRemoteData }) {
         browser.runtime.sendMessage({ type: 'aiWarmup' }).catch(() => {});
     }, [isOpen, setAiProcessingUids, setAiProcessingCurrentUid]);
 
+    // Context-menu route: when the modal opens with a pre-selected split target,
+    // jump straight to the Split Collection tool and kick off the scan once.
+    // Declared AFTER the open-reset effect so it runs after the reset clears state.
+    useEffect(() => {
+        if (!isOpen || !splitTarget || !splitTarget.uid) return;
+        setActiveToolId('split-collection');
+        if (!splitScanStartedRef.current) {
+            splitScanStartedRef.current = true;
+            dispatchAiRun('split-collection', { uid: splitTarget.uid });
+        }
+    }, [isOpen, splitTarget, dispatchAiRun]);
+
+    // Clear the split target when the modal closes. Placed after the routing
+    // effect so it doesn't wipe the pre-selection during the opening render.
+    useEffect(() => { if (!isOpen) setSplitTarget(null); }, [isOpen, setSplitTarget]);
+
     // Abort on unmount and clear AI processing atoms
     useEffect(() => {
         return () => {
@@ -166,6 +188,39 @@ function AIToolsModal({ updateRemoteData }) {
     const sendAiCancel = useCallback(() => browser.runtime.sendMessage({ type: 'aiCancel' }), []);
     const sendAiUndo = useCallback(() => browser.runtime.sendMessage({ type: 'aiUndo' }), []);
     const sendAiUndoItems = useCallback((uids) => browser.runtime.sendMessage({ type: 'aiUndoItems', uids }), []);
+
+    // ── Split Collection ─────────────────────────────────────────────────────
+    const startSplitScan = useCallback((uid) => {
+        dispatchAiRun('split-collection', { uid });
+    }, [dispatchAiRun]);
+
+    const confirmSplit = useCallback(async (payload) => {
+        let res;
+        try {
+            res = await browser.runtime.sendMessage({ type: 'splitCollectionApply', payload });
+        } catch (e) {
+            console.error('Split Collection: apply failed', e);
+            setError('Could not split the collection. Please try again.');
+            return;
+        }
+        if (res && res.success) {
+            const n = (payload.plan.groups || []).length;
+            showUndoToast(
+                <BsStars />,
+                `Split into ${n} collection${n === 1 ? '' : 's'}`,
+                'Split Collection',
+                () => browser.runtime.sendMessage({ type: 'splitCollectionUndo' }),
+                UNDO_TIME,
+            );
+            loadAllCollections().then(setCollections).catch(() => {});
+            if (typeof updateRemoteData === 'function') updateRemoteData();
+        }
+        // Leave the tool: clear target + task state and return to the hub.
+        setSplitTarget(null);
+        setAiTaskState(null);
+        await browser.storage.local.remove('aiTaskState').catch(() => {});
+        setActiveToolId(null);
+    }, [updateRemoteData, setSplitTarget]);
 
     // Subscribe to aiTaskState: read once on open, then track storage changes so
     // a reopened popup re-attaches to an in-progress run.
@@ -1171,9 +1226,16 @@ function AIToolsModal({ updateRemoteData }) {
 
                         {panelStatus === 'running' && (
                             <>
-                                <div className="ai-rename-progress">
-                                    <div className="ai-rename-progress-track">
-                                        <div className="ai-rename-progress-fill ai-rename-progress-fill--animated" />
+                                <div className="dup-scan" role="img" aria-label="Scanning collection for duplicate tabs">
+                                    <div className="dup-scan-stage" aria-hidden="true">
+                                        <div className="dup-scan-list">
+                                            {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((i) => (
+                                                <span
+                                                    key={i}
+                                                    className={`dup-scan-row${i === 5 || i === 6 ? ' dup-scan-row--dup' : ''}`}
+                                                />
+                                            ))}
+                                        </div>
                                     </div>
                                     <span className="ai-rename-progress-label">Scanning for duplicates…</span>
                                 </div>
@@ -1193,6 +1255,21 @@ function AIToolsModal({ updateRemoteData }) {
                                 <DuplicateSweepPanel sweep={duplicateSweep} namesByUid={dupNamesByUid} />
                             </>
                         )}
+                    </div>
+                )}
+
+                {activeToolId === 'split-collection' && (
+                    <div className="ai-tool-panel ai-tool-panel--split">
+                        {error && <div className="ai-tool-error">{error}</div>}
+                        <SplitCollectionPanel
+                            collections={collections}
+                            target={splitTarget}
+                            aiTaskState={aiTaskState}
+                            busy={busy}
+                            onStartScan={startSplitScan}
+                            onConfirm={confirmSplit}
+                            onCancel={() => { setSplitTarget(null); setAiTaskState(null); setActiveToolId(null); }}
+                        />
                     </div>
                 )}
 
