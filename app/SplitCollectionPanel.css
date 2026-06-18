@@ -1,0 +1,18 @@
+.split-panel { display: flex; flex-direction: column; gap: 12px; }
+.split-panel-status { font-size: 13px; opacity: 0.85; margin: 0; }
+.split-candidate-list, .split-card-tabs { list-style: none; margin: 0; padding: 0; }
+.split-candidate { display: flex; justify-content: space-between; width: 100%; padding: 8px 10px; border: 1px solid var(--border-color, #ddd); border-radius: 8px; background: transparent; cursor: pointer; transition: background 200ms; color: inherit; }
+.split-candidate:hover { background: var(--hover-bg, rgba(0,0,0,0.05)); }
+.split-candidate-count { opacity: 0.6; }
+.split-cards { display: flex; flex-direction: column; gap: 10px; }
+.split-card { border: 1px solid var(--border-color, #ddd); border-radius: 10px; padding: 10px; }
+.split-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.split-card-name { font-weight: 600; flex: 1; border: none; background: transparent; border-bottom: 1px dashed var(--border-color, #ccc); color: inherit; }
+.split-card-count { opacity: 0.6; font-size: 12px; }
+.split-card-tabs li { display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 2px 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.split-card-more { opacity: 0.6; }
+.split-folder-toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.split-folder-row { display: flex; align-items: center; gap: 6px; }
+.split-folder-name { flex: 1; padding: 6px 8px; border: 1px solid var(--border-color, #ddd); border-radius: 6px; background: transparent; color: inherit; }
+.split-actions { display: flex; justify-content: flex-end; gap: 8px; }
+@media (prefers-reduced-motion: reduce) { .split-panel--running .so-fold-anim { animation: none; } }
