@@ -232,19 +232,16 @@
     width: 36px;
     height: 36px;
     border-radius: var(--fp-radius-sm, 10px);
-    border: 1px solid color-mix(in srgb, var(--primary-color) 50%, transparent);
-    background: color-mix(in srgb, var(--primary-color) 14%, transparent);
-    color: var(--primary-color);
+    border: none;
+    background: transparent;
+    color: var(--text-color);
+    opacity: 0.6;
     cursor: pointer;
-    opacity: 1;
-    box-shadow:
-        0 1px 3px rgba(22, 152, 226, 0.16),
-        inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+    box-shadow: none;
     transition:
-        background var(--fp-duration) var(--fp-ease),
-        border-color var(--fp-duration) var(--fp-ease),
-        transform 0.1s var(--fp-ease),
-        box-shadow var(--fp-duration) var(--fp-ease);
+        color var(--fp-duration) var(--fp-ease),
+        opacity var(--fp-duration) var(--fp-ease),
+        transform 0.1s var(--fp-ease);
 }
 
 .fp-sidebar-add-folder svg {
@@ -253,11 +250,9 @@
 }
 
 .fp-sidebar-add-folder:hover {
-    background: color-mix(in srgb, var(--primary-color) 22%, transparent);
-    border-color: color-mix(in srgb, var(--primary-color) 65%, transparent);
-    box-shadow:
-        0 3px 10px rgba(22, 152, 226, 0.22),
-        inset 0 0 0 1px rgba(255, 255, 255, 0.24);
+    background: transparent;
+    color: var(--primary-color);
+    opacity: 1;
 }
 
 .fp-sidebar-add-folder:active {
@@ -269,20 +264,8 @@
     opacity: 0.9;
 }
 
-[data-theme="dark"] .fp-sidebar-add-folder {
-    background: color-mix(in srgb, var(--primary-color) 24%, transparent);
-    border-color: color-mix(in srgb, var(--primary-color) 70%, transparent);
-    box-shadow:
-        0 2px 8px rgba(10, 25, 56, 0.36),
-        inset 0 0 0 1px rgba(255, 255, 255, 0.08);
-}
-
 [data-theme="dark"] .fp-sidebar-add-folder:hover {
-    background: color-mix(in srgb, var(--primary-color) 32%, transparent);
-    border-color: color-mix(in srgb, var(--primary-color) 85%, transparent);
-    box-shadow:
-        0 4px 12px rgba(10, 25, 56, 0.44),
-        inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+    color: var(--primary-color);
 }
 
 .fp-sidebar-folder-list {
