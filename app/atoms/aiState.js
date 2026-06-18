@@ -18,3 +18,8 @@ export const aiProcessingUidsState = atom([]);
 // bulk run, or the single target for a panel rename). Drives the stronger
 // .ai-processing-overlay--current variant of the effect.
 export const aiProcessingCurrentUidState = atom(null);
+
+// The collection the Split Collection tool should operate on, set by the
+// context-menu route. null means "no pre-selected target" (modal shows the
+// picker). Variant: { uid: string }.
+export const aiSplitTargetState = atom(null);
