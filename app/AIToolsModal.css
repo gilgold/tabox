@@ -1,5 +1,5 @@
 .ai-tools-modal {
-    max-width: 360px;
+    max-width: 580px;
     width: 90%;
     /* Match the inner content radius and don't clip its glow/gradient ring
      * (the shared .modal-content uses 20px + overflow:auto). */
@@ -220,6 +220,13 @@ html.performance-mode .ai-hero-card::before {
     min-height: 0;
 }
 
+/* Split-collection fills the remaining modal height so its results list can
+ * scroll internally (header + footer actions stay pinned). */
+.ai-tool-panel--split {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
 .ai-tool-action-btn {
     display: inline-flex;
     align-items: center;
@@ -311,6 +318,72 @@ html.performance-mode .ai-hero-card::before {
     font-size: 12px;
     opacity: 0.8;
     color: var(--text-color);
+}
+
+/* ── Duplicate-scan animation ──────────────────────────────────────────────
+   A collection's tab rows scroll until two duplicates reach the centre, where
+   they flash the AI accent, slide off to the side, and the remaining rows close
+   the gap into one unified list. The flash uses the same indigo→cyan AI accent
+   as the rest of the AI scan/progress UI. */
+.dup-scan {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+.dup-scan-stage {
+    position: relative;
+    width: 100%;
+    max-width: 280px;
+    height: 140px;
+    overflow: hidden;
+    -webkit-mask: linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent);
+    mask: linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent);
+}
+.dup-scan-list {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    padding: 0 6px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    animation: dup-scan-scroll 4.8s ease-in-out infinite;
+}
+.dup-scan-row {
+    flex: none;
+    height: 13px;
+    margin-bottom: 9px;
+    border-radius: 7px;
+    background: var(--divider-color);
+    overflow: hidden;
+}
+/* The two duplicate rows: flash the AI accent, slide out, then collapse so the
+   list closes up. */
+.dup-scan-row--dup { animation: dup-scan-drop 4.8s ease-in-out infinite; }
+
+/* Start offset +10 and end offset -56 differ by 66px = 3 row pitches (22px),
+   and the two collapsed duplicates remove exactly 2 pitches — so the end frame
+   lands on the very same row grid as the start. That makes the repeat seamless
+   (no jump) while still centring the duplicates at the hold point. */
+@keyframes dup-scan-scroll {
+    0%   { transform: translateY(10px); }
+    36%  { transform: translateY(-56px); }
+    100% { transform: translateY(-56px); }
+}
+@keyframes dup-scan-drop {
+    0%, 36% { background: var(--divider-color); transform: translateX(0); opacity: 1; height: 13px; margin-bottom: 9px; }
+    42% { background: linear-gradient(90deg, #6b62d6, #2bb0cc); }
+    46% { background: var(--divider-color); }
+    50% { background: linear-gradient(90deg, #6b62d6, #2bb0cc); }
+    56% { background: linear-gradient(90deg, #6b62d6, #2bb0cc); transform: translateX(0); opacity: 1; height: 13px; margin-bottom: 9px; }
+    66% { background: linear-gradient(90deg, #6b62d6, #2bb0cc); transform: translateX(120px); opacity: 0; height: 13px; margin-bottom: 9px; }
+    76%, 100% { transform: translateX(120px); opacity: 0; height: 0; margin-bottom: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dup-scan-list, .dup-scan-row--dup { animation: none; }
 }
 
 /* Live results list */

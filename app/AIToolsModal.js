@@ -165,6 +165,17 @@ function AIToolsModal({ updateRemoteData }) {
         }
     }, [isOpen, splitTarget, dispatchAiRun]);
 
+    // SplitCollectionPanel manages its own running/review/done UI from
+    // aiTaskState, so the modal chrome must never enter the locked 'running'
+    // state for it — otherwise Back/Close (and the folder AI-suggest button)
+    // stay disabled on the review screen. The reattach effect can set it to
+    // 'running' for the in-flight scan, so force it back to 'idle' here.
+    useEffect(() => {
+        if (activeToolId === 'split-collection' && panelStatus !== 'idle') {
+            setPanelStatus('idle');
+        }
+    }, [activeToolId, panelStatus, aiTaskState]);
+
     // Clear the split target when the modal closes. Placed after the routing
     // effect so it doesn't wipe the pre-selection during the opening render.
     useEffect(() => { if (!isOpen) setSplitTarget(null); }, [isOpen, setSplitTarget]);

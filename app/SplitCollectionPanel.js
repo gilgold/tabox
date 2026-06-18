@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SPLIT_MIN_TABS, FALLBACK_FAVICON } from './utils/sharedConstants';
-import SmartOrganizeFoldAnimation from './SmartOrganizeFoldAnimation';
+import SplitScanAnimation from './SplitScanAnimation';
 import AiSuggestNameButton from './AiSuggestNameButton';
 import { suggestFolderName } from './ai/tasks/suggestFolderName';
 import './SplitCollectionPanel.css';
@@ -25,6 +25,8 @@ function SplitCollectionPanel({
     const [folderName, setFolderName] = useState('');
     // UX guard: prevent the confirm button from being mashed while submitting.
     const [submitting, setSubmitting] = useState(false);
+    // Which result cards have their full tab list expanded (index → bool).
+    const [expanded, setExpanded] = useState({});
 
     // Reset editable state whenever a new ok result arrives
     useEffect(() => {
@@ -33,6 +35,7 @@ function SplitCollectionPanel({
             setGroupIntoFolder(true);
             setFolderName(results.name || '');
             setSubmitting(false);
+            setExpanded({});
         }
     }, [results]);
 
@@ -40,7 +43,7 @@ function SplitCollectionPanel({
     if (status === 'running') {
         return (
             <div className="split-panel split-panel--running">
-                <SmartOrganizeFoldAnimation />
+                <SplitScanAnimation />
                 <p className="split-panel-status">Scanning tabs and proposing sub-collections…</p>
             </div>
         );
@@ -94,79 +97,96 @@ function SplitCollectionPanel({
             });
         };
 
+        const toggleExpanded = (i) => {
+            setExpanded(prev => ({ ...prev, [i]: !prev[i] }));
+        };
+
         return (
-            <div className="split-panel">
-                <div className="split-cards">
-                    {groups.map((group, i) => {
-                        const tabs = group.tabs || [];
-                        const shown = tabs.slice(0, MAX_TABS_SHOWN);
-                        const extra = tabs.length - shown.length;
-                        return (
-                            <div key={i} className="split-card">
-                                <div className="split-card-head">
-                                    <input
-                                        type="text"
-                                        className="split-card-name"
-                                        aria-label={`Sub-collection ${i + 1} name`}
-                                        value={names[i] !== undefined ? names[i] : group.name}
-                                        onChange={e => handleNameChange(i, e.target.value)}
-                                    />
-                                    <span className="split-card-count">{tabs.length} tabs</span>
-                                </div>
-                                <ul className="split-card-tabs">
-                                    {shown.map((t, ti) => (
-                                        <li key={ti}>
-                                            <img
-                                                src={t.favIconUrl || FALLBACK_FAVICON}
-                                                alt=""
-                                                width={14}
-                                                height={14}
-                                                onError={e => { e.currentTarget.src = FALLBACK_FAVICON; }}
-                                            />
-                                            <span>{t.title || t.url}</span>
-                                        </li>
-                                    ))}
-                                    {extra > 0 && (
-                                        <li className="split-card-more">+{extra} more</li>
+            <div className="split-panel split-panel--results">
+                <p className="split-panel-status">
+                    Review the {groups.length} sub-collections below, then confirm to replace the original.
+                </p>
+
+                <div className="split-scroll">
+                    <div className="split-cards">
+                        {groups.map((group, i) => {
+                            const tabs = group.tabs || [];
+                            const isExpanded = !!expanded[i];
+                            const shown = isExpanded ? tabs : tabs.slice(0, MAX_TABS_SHOWN);
+                            const extra = tabs.length - shown.length;
+                            return (
+                                <div key={i} className="split-card">
+                                    <div className="split-card-head">
+                                        <input
+                                            type="text"
+                                            className="split-card-name"
+                                            aria-label={`Sub-collection ${i + 1} name`}
+                                            value={names[i] !== undefined ? names[i] : group.name}
+                                            onChange={e => handleNameChange(i, e.target.value)}
+                                        />
+                                        <span className="split-card-count">{tabs.length} tabs</span>
+                                    </div>
+                                    <ul className="split-card-tabs">
+                                        {shown.map((t, ti) => (
+                                            <li key={ti}>
+                                                <img
+                                                    src={t.favIconUrl || FALLBACK_FAVICON}
+                                                    alt=""
+                                                    width={14}
+                                                    height={14}
+                                                    onError={e => { e.currentTarget.src = FALLBACK_FAVICON; }}
+                                                />
+                                                <span>{t.title || t.url}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                    {(extra > 0 || isExpanded) && tabs.length > MAX_TABS_SHOWN && (
+                                        <button
+                                            type="button"
+                                            className="split-card-more"
+                                            onClick={() => toggleExpanded(i)}
+                                            aria-expanded={isExpanded}
+                                        >
+                                            {isExpanded ? 'Show less' : `+${extra} more`}
+                                        </button>
                                     )}
-                                </ul>
-                            </div>
-                        );
-                    })}
-                </div>
-
-                <label className="split-folder-toggle">
-                    <input
-                        type="checkbox"
-                        checked={groupIntoFolder}
-                        onChange={e => setGroupIntoFolder(e.target.checked)}
-                        aria-label="Group these into a folder"
-                    />
-                    Group these into a folder
-                </label>
-
-                {groupIntoFolder && (
-                    <div className="split-folder-row">
-                        <input
-                            type="text"
-                            className="split-folder-name"
-                            aria-label="Folder name"
-                            value={folderName}
-                            onChange={e => setFolderName(e.target.value)}
-                        />
-                        <AiSuggestNameButton
-                            suggest={() => suggestFolderName({
-                                collections: groups.map((g, i) => ({
-                                    name: names[i] || g.name,
-                                    tabs: g.tabs,
-                                })),
-                            })}
-                            onSuggested={setFolderName}
-                            disabled={busy}
-                            label="Suggest folder name with AI"
-                        />
+                                </div>
+                            );
+                        })}
                     </div>
-                )}
+
+                    <label className="split-folder-toggle">
+                        <input
+                            type="checkbox"
+                            checked={groupIntoFolder}
+                            onChange={e => setGroupIntoFolder(e.target.checked)}
+                            aria-label="Group these into a folder"
+                        />
+                        Group these into a folder
+                    </label>
+
+                    {groupIntoFolder && (
+                        <div className="split-folder-row">
+                            <input
+                                type="text"
+                                className="split-folder-name"
+                                aria-label="Folder name"
+                                value={folderName}
+                                onChange={e => setFolderName(e.target.value)}
+                            />
+                            <AiSuggestNameButton
+                                suggest={() => suggestFolderName({
+                                    collections: groups.map((g, i) => ({
+                                        name: names[i] || g.name,
+                                        tabs: g.tabs,
+                                    })),
+                                })}
+                                onSuggested={setFolderName}
+                                label="Suggest folder name with AI"
+                            />
+                        </div>
+                    )}
+                </div>
 
                 <div className="split-actions">
                     <button

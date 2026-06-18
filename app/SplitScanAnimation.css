@@ -1,0 +1,161 @@
+/* Split Collection scan animation.
+   A source collection of tabs; a highlighted group peels off to the left and
+   forms a sub-collection, then another group peels off to the right. Every
+   keyframe track ends where it starts (opacity 0 / base transform) so the
+   loop is seamless. Compositor-friendly: only transform + opacity animate. */
+
+.split-scan {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 0 4px;
+}
+
+.split-scan-stage {
+    position: relative;
+    width: 240px;
+    height: 132px;
+}
+
+/* The source collection — always present, centered. */
+.ssc-source {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 92px;
+    box-sizing: border-box;
+    padding: 10px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    background: #fff;
+    border: 1px solid rgba(91, 79, 214, 0.25);
+    border-radius: 10px;
+    box-shadow: 0 4px 14px rgba(58, 99, 219, 0.12);
+    z-index: 2;
+}
+
+.ssc-row {
+    height: 8px;
+    border-radius: 3px;
+    background: linear-gradient(90deg, rgba(120, 120, 140, 0.35), rgba(120, 120, 140, 0.16));
+}
+
+/* Sub-collections that form at each side as a group flies out. */
+.ssc-formed {
+    position: absolute;
+    top: 50%;
+    width: 64px;
+    box-sizing: border-box;
+    padding: 8px 7px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    background: #fff;
+    border: 1px solid rgba(91, 79, 214, 0.4);
+    border-radius: 9px;
+    box-shadow: 0 4px 12px rgba(58, 99, 219, 0.18);
+    opacity: 0;
+    z-index: 1;
+}
+
+.ssc-formed-row {
+    height: 7px;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #3a63db, #5b4fd6);
+    opacity: 0.85;
+}
+
+.ssc-formed--left {
+    left: 4px;
+    transform: translateY(-50%) scale(0.6);
+    animation: sscFormLeft 4.8s ease-in-out infinite;
+}
+
+.ssc-formed--right {
+    right: 4px;
+    transform: translateY(-50%) scale(0.6);
+    animation: sscFormRight 4.8s ease-in-out infinite;
+}
+
+/* Highlighted tab groups that peel off the source. */
+.ssc-fly {
+    position: absolute;
+    left: 50%;
+    width: 80px;
+    box-sizing: border-box;
+    padding: 5px 7px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    background: linear-gradient(135deg, rgba(58, 99, 219, 0.18), rgba(91, 79, 214, 0.18));
+    border: 1px solid rgba(91, 79, 214, 0.5);
+    border-radius: 8px;
+    opacity: 0;
+    z-index: 3;
+}
+
+.ssc-fly-row {
+    height: 7px;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #3a63db, #5b4fd6);
+}
+
+.ssc-fly--left {
+    top: 22px;
+    transform: translateX(-50%);
+    animation: sscFlyLeft 4.8s ease-in-out infinite;
+}
+
+.ssc-fly--right {
+    bottom: 22px;
+    transform: translateX(-50%);
+    animation: sscFlyRight 4.8s ease-in-out infinite;
+}
+
+@keyframes sscFlyLeft {
+    0% { opacity: 0; transform: translateX(-50%) scale(1); }
+    6% { opacity: 1; transform: translateX(-50%) scale(1); }
+    12% { opacity: 1; transform: translateX(-50%) scale(1); }
+    34% { opacity: 1; transform: translateX(calc(-50% - 86px)) scale(0.82); }
+    42% { opacity: 0; transform: translateX(calc(-50% - 86px)) scale(0.68); }
+    100% { opacity: 0; transform: translateX(-50%) scale(1); }
+}
+
+@keyframes sscFormLeft {
+    0%, 22% { opacity: 0; transform: translateY(-50%) scale(0.6); }
+    36% { opacity: 1; transform: translateY(-50%) scale(1); }
+    48% { opacity: 1; transform: translateY(-50%) scale(1); }
+    60%, 100% { opacity: 0; transform: translateY(-50%) scale(0.6); }
+}
+
+@keyframes sscFlyRight {
+    0%, 46% { opacity: 0; transform: translateX(-50%) scale(1); }
+    52% { opacity: 1; transform: translateX(-50%) scale(1); }
+    58% { opacity: 1; transform: translateX(-50%) scale(1); }
+    80% { opacity: 1; transform: translateX(calc(-50% + 86px)) scale(0.82); }
+    88% { opacity: 0; transform: translateX(calc(-50% + 86px)) scale(0.68); }
+    100% { opacity: 0; transform: translateX(-50%) scale(1); }
+}
+
+@keyframes sscFormRight {
+    0%, 68% { opacity: 0; transform: translateY(-50%) scale(0.6); }
+    82% { opacity: 1; transform: translateY(-50%) scale(1); }
+    92% { opacity: 1; transform: translateY(-50%) scale(1); }
+    100% { opacity: 0; transform: translateY(-50%) scale(0.6); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ssc-fly--left,
+    .ssc-fly--right,
+    .ssc-formed--left,
+    .ssc-formed--right {
+        animation: none;
+    }
+    .ssc-formed--left,
+    .ssc-formed--right {
+        opacity: 0.6;
+        transform: translateY(-50%) scale(0.85);
+    }
+}
