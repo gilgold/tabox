@@ -3493,7 +3493,7 @@ function FPContentArea({
                         >
                             <MdCallSplit size={16} />
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                                <AiStarsIcon size={14} />
+                                <AiStarsIcon size={20} />
                                 Split Collection
                             </span>
                         </button>

@@ -75,7 +75,7 @@ export const createCollectionMenuItems = ({
         id: 'split-collection',
         text: (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                <AiStarsIcon size={14} />
+                <AiStarsIcon size={20} />
                 Split Collection
             </span>
         ),
