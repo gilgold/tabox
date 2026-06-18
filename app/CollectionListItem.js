@@ -4,6 +4,7 @@ import { FaPlay, FaStar, FaRegStar } from 'react-icons/fa';
 import { BsIncognito } from 'react-icons/bs';
 import ContextMenu from './ContextMenu';
 import { createCollectionMenuItems } from './utils/contextMenuItems';
+import { countNonEmptyGroups } from './utils/groupCount';
 import TimeAgo from 'javascript-time-ago';
 import { useSetAtom, useAtomValue } from 'jotai';
 import { deletingCollectionUidsState, highlightedCollectionUidState, dragSessionState } from './atoms/animationsState';
@@ -150,7 +151,7 @@ function CollectionListItem(props) {
         }
     };
 
-    const totalGroups = props.collection.chromeGroups ? props.collection.chromeGroups.length : 0;
+    const totalGroups = countNonEmptyGroups(props.collection);
     const timeAgo = new TimeAgo('en-US');
     let style = isDeleting ? {} : {};
 

@@ -22,6 +22,7 @@ import { useTaboxAIEnabled } from './ai/useTaboxAIEnabled';
 import { isAISupported } from './ai/aiClient';
 import { suggestCollectionName } from './ai/tasks/suggestCollectionName';
 import { loadSingleCollection } from './utils/storageUtils';
+import { countNonEmptyGroups } from './utils/groupCount';
 import './CollectionDetailPanel.css';
 import './AIEffects.css';
 
@@ -308,7 +309,7 @@ function CollectionDetailPanel({
     if (!collection) return null;
 
     const tabCount = collection.tabs?.length || 0;
-    const groupCount = collection.chromeGroups?.length || 0;
+    const groupCount = countNonEmptyGroups(collection);
     const wasFromIncognito = collection.savedFromIncognito === true;
 
     const formatTimeAgo = (timestamp) => {

@@ -15,7 +15,7 @@ import { isAISupported } from './ai/aiClient';
 import './AIEffects.css';
 
 import { getColorValue } from './utils/colorMigration';
-import { buildCollectionUrlList, copyToClipboard } from './utils/index';
+import { buildCollectionUrlList, copyToClipboard, countNonEmptyGroups } from './utils/index';
 import { showSuccessToast, showErrorToast, showInfoToast } from './toastHelpers';
 import ColorPicker from './ColorPicker';
 import { useCollectionOperations } from './useCollectionOperations';
@@ -166,7 +166,7 @@ function CollectionTile(props) {
 
     const timeAgo = useMemo(() => new TimeAgo('en-US'), []);
     const tabCount = props.collection.tabs?.length || 0;
-    const groupCount = props.collection.chromeGroups?.length || 0;
+    const groupCount = countNonEmptyGroups(props.collection);
 
     // Get first 10 favicons
     const favicons = useMemo(() => {

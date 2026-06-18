@@ -76,7 +76,7 @@ describe('AIToolsModal – Auto-Rename driven by the service worker', () => {
 
     test('clicking Run dispatches aiRun(auto-rename) with target uids', async () => {
         await renderOpenModal();
-        fireEvent.click(screen.getByText('Auto-name collection'));
+        fireEvent.click(screen.getByText('Auto rename all collections'));
         await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
 
         await act(async () => {
@@ -93,7 +93,7 @@ describe('AIToolsModal – Auto-Rename driven by the service worker', () => {
 
     test('selected scope limits the dispatched uids', async () => {
         await renderOpenModal({ scope: { type: 'selected', uids: ['c2'] } });
-        fireEvent.click(screen.getByText('Auto-name collection'));
+        fireEvent.click(screen.getByText('Auto rename all collections'));
         await waitFor(() => screen.getByRole('button', { name: /auto-rename 1/i }));
 
         await act(async () => {
@@ -108,7 +108,7 @@ describe('AIToolsModal – Auto-Rename driven by the service worker', () => {
 
     test('running aiTaskState change sets processing uids and renders results live', async () => {
         const store = await renderOpenModal();
-        fireEvent.click(screen.getByText('Auto-name collection'));
+        fireEvent.click(screen.getByText('Auto rename all collections'));
         await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
 
         await act(async () => {
@@ -131,7 +131,7 @@ describe('AIToolsModal – Auto-Rename driven by the service worker', () => {
 
     test('done aiTaskState change renders summary/results, clears atoms, fires toast once', async () => {
         const store = await renderOpenModal();
-        fireEvent.click(screen.getByText('Auto-name collection'));
+        fireEvent.click(screen.getByText('Auto rename all collections'));
         await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
 
         await act(async () => {
@@ -170,7 +170,7 @@ describe('AIToolsModal – Auto-Rename driven by the service worker', () => {
 
     test('cancel button sends aiCancel', async () => {
         await renderOpenModal();
-        fireEvent.click(screen.getByText('Auto-name collection'));
+        fireEvent.click(screen.getByText('Auto rename all collections'));
         await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
 
         await act(async () => {
@@ -192,7 +192,7 @@ describe('AIToolsModal – Auto-Rename driven by the service worker', () => {
 
     test('cancelled status shows the cancel note', async () => {
         await renderOpenModal();
-        fireEvent.click(screen.getByText('Auto-name collection'));
+        fireEvent.click(screen.getByText('Auto rename all collections'));
         await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
 
         await act(async () => {
@@ -210,7 +210,7 @@ describe('AIToolsModal – Auto-Rename driven by the service worker', () => {
 
     test('error status shows the error and no toast', async () => {
         await renderOpenModal();
-        fireEvent.click(screen.getByText('Auto-name collection'));
+        fireEvent.click(screen.getByText('Auto rename all collections'));
         await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
 
         await act(async () => {
@@ -229,7 +229,7 @@ describe('AIToolsModal – Auto-Rename driven by the service worker', () => {
     test('pre-flight failure shows error and does not dispatch aiRun', async () => {
         getAIAvailability.mockResolvedValue('downloadable');
         await renderOpenModal();
-        fireEvent.click(screen.getByText('Auto-name collection'));
+        fireEvent.click(screen.getByText('Auto rename all collections'));
         await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
 
         await act(async () => {
@@ -278,7 +278,7 @@ describe('AIToolsModal – Auto-Rename driven by the service worker', () => {
         });
 
         await renderOpenModal();
-        fireEvent.click(screen.getByText('Auto-name collection'));
+        fireEvent.click(screen.getByText('Auto rename all collections'));
 
         // The idle run button is shown — not the done summary — and no toast fires.
         await waitFor(() => expect(screen.getByRole('button', { name: /auto-rename/i })).toBeInTheDocument());
@@ -307,7 +307,7 @@ describe('AIToolsModal – Auto-Rename driven by the service worker', () => {
 
     const driveToDone = async (overrides = {}) => {
         await renderOpenModal();
-        fireEvent.click(screen.getByText('Auto-name collection'));
+        fireEvent.click(screen.getByText('Auto rename all collections'));
         await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
         await act(async () => { fireEvent.click(screen.getByRole('button', { name: /auto-rename/i })); });
         await fireStorageChange({

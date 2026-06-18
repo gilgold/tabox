@@ -23,7 +23,7 @@ function tabRowsForGroup(group, rec) {
 // the action buttons. Keyed by group id in the parent so showTabs resets when
 // the active group changes.
 function DuplicateGroupView({ group, rec, isWithin, nameOf, onAction }) {
-    const [showTabs, setShowTabs] = useState(false);
+    const [showTabs, setShowTabs] = useState(true);
     const rows = tabRowsForGroup(group, rec);
 
     return (
@@ -59,20 +59,46 @@ function DuplicateGroupView({ group, rec, isWithin, nameOf, onAction }) {
 
             {!isWithin && (
                 <div className="dup-sweep-actions">
-                    {group.collectionUids.map((uid) => (
-                        <button
-                            key={uid}
-                            type="button"
-                            className={`dup-pill dup-pill-keep${uid === rec.recommendedKeeperUid ? ' dup-pill-recommended' : ''}`}
-                            onClick={() => onAction('keep-one', uid)}
-                        >
-                            Keep in {nameOf(uid)}
-                        </button>
-                    ))}
-                    <button type="button" className="dup-pill dup-pill-extract" onClick={() => onAction('extract')}>
+                    {group.collectionUids.map((uid) => {
+                        const isRec = uid === rec.recommendedKeeperUid;
+                        const btn = (
+                            <button
+                                type="button"
+                                className={`dup-pill dup-pill-keep${isRec ? ' dup-pill-recommended' : ''}`}
+                                onClick={() => onAction('keep-one', uid)}
+                                data-tooltip-id="main-tooltip"
+                                data-tooltip-class-name="dup-action-tip"
+                                data-tooltip-content={`Keep these tabs only in “${nameOf(uid)}”\nand remove the duplicates elsewhere.`}
+                            >
+                                Keep in {nameOf(uid)}
+                            </button>
+                        );
+                        if (!isRec) return <React.Fragment key={uid}>{btn}</React.Fragment>;
+                        return (
+                            <div key={uid} className="dup-rec-wrap">
+                                {btn}
+                                <span className="dup-pill-badge">Recommended</span>
+                            </div>
+                        );
+                    })}
+                    <button
+                        type="button"
+                        className="dup-pill dup-pill-extract"
+                        onClick={() => onAction('extract')}
+                        data-tooltip-id="main-tooltip"
+                        data-tooltip-class-name="dup-action-tip"
+                        data-tooltip-content={'Move these tabs into a new collection\nand remove them from the others.'}
+                    >
                         Extract to new collection
                     </button>
-                    <button type="button" className="dup-pill dup-pill-discard" onClick={() => onAction('discard-all')}>
+                    <button
+                        type="button"
+                        className="dup-pill dup-pill-discard"
+                        onClick={() => onAction('discard-all')}
+                        data-tooltip-id="main-tooltip"
+                        data-tooltip-class-name="dup-action-tip"
+                        data-tooltip-content={'Remove these duplicate tabs\nfrom every collection.'}
+                    >
                         Discard from all collections
                     </button>
                 </div>
@@ -80,9 +106,19 @@ function DuplicateGroupView({ group, rec, isWithin, nameOf, onAction }) {
 
             {isWithin && (
                 <div className="dup-sweep-actions">
-                    <button type="button" className="dup-pill dup-pill-keep dup-pill-recommended" onClick={() => onAction('dedupe-within')}>
-                        Remove duplicates
-                    </button>
+                    <div className="dup-rec-wrap">
+                        <button
+                            type="button"
+                            className="dup-pill dup-pill-keep dup-pill-recommended"
+                            onClick={() => onAction('dedupe-within')}
+                            data-tooltip-id="main-tooltip"
+                            data-tooltip-class-name="dup-action-tip"
+                            data-tooltip-content={'Remove duplicate copies, keeping one\ncopy of each tab in this collection.'}
+                        >
+                            Remove duplicates
+                        </button>
+                        <span className="dup-pill-badge">Recommended</span>
+                    </div>
                 </div>
             )}
         </>

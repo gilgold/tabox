@@ -87,14 +87,14 @@ describe('AIToolsModal', () => {
 
     test('tool list renders from registry', async () => {
         await renderOpenModal();
-        expect(screen.getByText('Auto-name collection')).toBeInTheDocument();
+        expect(screen.getByText('Auto rename all collections')).toBeInTheDocument();
     });
 
     // ── 2. Idle panel shows count ─────────────────────────────────────────────
 
     test('idle panel shows nameable count (empty collection excluded)', async () => {
         await renderOpenModal();
-        fireEvent.click(screen.getByText('Auto-name collection'));
+        fireEvent.click(screen.getByText('Auto rename all collections'));
         // 2 nameable out of 3 loaded (C_EMPTY excluded) — button has the count
         await waitFor(() => expect(screen.getByRole('button', { name: /auto-rename 2/i })).toBeInTheDocument());
         // Description also mentions 2 collections
@@ -104,14 +104,14 @@ describe('AIToolsModal', () => {
     test('idle panel singular copy when 1 collection', async () => {
         loadAllCollections.mockResolvedValue([{ ...C1 }]);
         await renderOpenModal();
-        fireEvent.click(screen.getByText('Auto-name collection'));
+        fireEvent.click(screen.getByText('Auto rename all collections'));
         await waitFor(() => expect(screen.getByRole('button', { name: /auto-rename 1 collection$/i })).toBeInTheDocument());
     });
 
     test('action button disabled when no nameable collections', async () => {
         loadAllCollections.mockResolvedValue([{ ...C_EMPTY }]);
         await renderOpenModal();
-        fireEvent.click(screen.getByText('Auto-name collection'));
+        fireEvent.click(screen.getByText('Auto rename all collections'));
         await waitFor(() => expect(screen.getByRole('button', { name: /auto-rename/i })).toBeDisabled());
         expect(screen.getByText(/no collections with tabs/i)).toBeInTheDocument();
     });
@@ -120,7 +120,7 @@ describe('AIToolsModal', () => {
 
     test('run dispatches aiRun(auto-rename) with nameable targets; done change shows summary + toast', async () => {
         await renderOpenModal();
-        fireEvent.click(screen.getByText('Auto-name collection'));
+        fireEvent.click(screen.getByText('Auto rename all collections'));
         await waitFor(() => expect(screen.getByRole('button', { name: /auto-rename/i })).toBeInTheDocument());
 
         await act(async () => {
@@ -156,7 +156,7 @@ describe('AIToolsModal', () => {
 
     test('scope selected limits dispatched uids to the given uids', async () => {
         await renderOpenModal({ scope: { type: 'selected', uids: ['c2'] } });
-        fireEvent.click(screen.getByText('Auto-name collection'));
+        fireEvent.click(screen.getByText('Auto rename all collections'));
         await waitFor(() => expect(screen.getByRole('button', { name: /auto-rename 1/i })).toBeInTheDocument());
 
         await act(async () => {
@@ -168,7 +168,7 @@ describe('AIToolsModal', () => {
 
     test('selected scope message when no targets', async () => {
         await renderOpenModal({ scope: { type: 'selected', uids: ['c3'] } }); // c3 is empty
-        fireEvent.click(screen.getByText('Auto-name collection'));
+        fireEvent.click(screen.getByText('Auto rename all collections'));
         await waitFor(() => expect(screen.getByRole('button', { name: /auto-rename/i })).toBeDisabled());
         expect(screen.getByText(/none of the selected/i)).toBeInTheDocument();
     });
@@ -177,7 +177,7 @@ describe('AIToolsModal', () => {
 
     test('undo toast action sends aiUndo to the service worker', async () => {
         await renderOpenModal();
-        fireEvent.click(screen.getByText('Auto-name collection'));
+        fireEvent.click(screen.getByText('Auto rename all collections'));
         await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
 
         await act(async () => {
@@ -203,7 +203,7 @@ describe('AIToolsModal', () => {
     test('pre-flight failure shows error and does not dispatch aiRun', async () => {
         getAIAvailability.mockResolvedValue('downloadable');
         await renderOpenModal();
-        fireEvent.click(screen.getByText('Auto-name collection'));
+        fireEvent.click(screen.getByText('Auto rename all collections'));
         await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
 
         await act(async () => {
@@ -218,7 +218,7 @@ describe('AIToolsModal', () => {
 
     test('error status shows error and does not fire undo toast', async () => {
         await renderOpenModal();
-        fireEvent.click(screen.getByText('Auto-name collection'));
+        fireEvent.click(screen.getByText('Auto rename all collections'));
         await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
 
         await act(async () => {
@@ -237,7 +237,7 @@ describe('AIToolsModal', () => {
     // cancelled with partial results → toast still fires (SW applied them), cancel note shown
     test('cancelled with partial results: fires undo toast and shows cancel note', async () => {
         await renderOpenModal();
-        fireEvent.click(screen.getByText('Auto-name collection'));
+        fireEvent.click(screen.getByText('Auto rename all collections'));
         await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
 
         await act(async () => {
@@ -264,7 +264,7 @@ describe('AIToolsModal', () => {
 
     test('sets aiProcessingUids on run and drives current-uid from aiTaskState; clears on done', async () => {
         const store = await renderOpenModal();
-        fireEvent.click(screen.getByText('Auto-name collection'));
+        fireEvent.click(screen.getByText('Auto rename all collections'));
         await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
 
         await act(async () => {
@@ -325,7 +325,7 @@ describe('AIToolsModal', () => {
         getAIAvailability.mockReturnValue(availabilityPromise);
 
         await renderOpenModal();
-        fireEvent.click(screen.getByText('Auto-name collection'));
+        fireEvent.click(screen.getByText('Auto rename all collections'));
         await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
 
         // Click Run twice synchronously before availability resolves
