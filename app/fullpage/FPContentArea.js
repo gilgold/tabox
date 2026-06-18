@@ -63,8 +63,13 @@ import {
     MdDriveFileMoveOutline,
     MdOutlineHome,
     MdSortByAlpha,
+    MdCallSplit,
 } from 'react-icons/md';
 import { FaPlay, FaStar, FaRegStar } from 'react-icons/fa';
+import { useTaboxAIEnabled } from '../ai/useTaboxAIEnabled';
+import { isAISupported } from '../ai/aiClient';
+import { aiToolsModalOpenState, aiToolsScopeState, aiSplitTargetState } from '../atoms/aiState';
+import { SPLIT_MIN_TABS } from '../utils/sharedConstants';
 import { FaStop } from 'react-icons/fa6';
 import { CiExport } from 'react-icons/ci';
 import { PiGridNineFill } from 'react-icons/pi';
@@ -670,6 +675,18 @@ function FPContentArea({
     const setSelectedCurrentWindowId = useSetAtom(selectedCurrentWindowIdState);
     const setSelectedSessionEntryKey = useSetAtom(selectedSessionEntryKeyState);
     const setCollectionRevealBatch = useSetAtom(collectionRevealBatchState);
+
+    // AI: split-collection context-menu entry (mirrors the popup menu in
+    // contextMenuItems.js — the full-page menu is hand-rolled, so it's wired here).
+    const aiEnabled = useTaboxAIEnabled() && isAISupported();
+    const setAIToolsOpen = useSetAtom(aiToolsModalOpenState);
+    const setAIToolsScope = useSetAtom(aiToolsScopeState);
+    const setSplitTarget = useSetAtom(aiSplitTargetState);
+    const handleSplitCollection = useCallback((collection) => {
+        setAIToolsScope({ type: 'selected', uids: [collection.uid] });
+        setSplitTarget({ uid: collection.uid });
+        setAIToolsOpen(true);
+    }, [setAIToolsScope, setSplitTarget, setAIToolsOpen]);
 
     const dragSession = useAtomValue(dragSessionState);
 
@@ -3468,6 +3485,15 @@ function FPContentArea({
                         <MdContentCopy size={16} />
                         <span>Copy all URLs</span>
                     </button>
+                    {aiEnabled && (cardCtxMenu.collection.tabs?.length || 0) >= SPLIT_MIN_TABS && (
+                        <button
+                            className="fp-card-ctx-item"
+                            onClick={() => { const c = cardCtxMenu.collection; setCardCtxMenu(null); handleSplitCollection(c); }}
+                        >
+                            <MdCallSplit size={16} />
+                            <span>[AI] Split Collection</span>
+                        </button>
+                    )}
                     <div className="fp-card-ctx-divider" />
                     <button
                         className="fp-card-ctx-item fp-card-ctx-danger"
