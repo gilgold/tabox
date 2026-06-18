@@ -42,7 +42,11 @@
 }
 .split-card-more:hover { text-decoration: underline; }
 
+/* Footer stays pinned below the scroll: folder controls on the left, the
+   Cancel/Confirm actions on the right. */
+.split-footer { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex: none; padding-top: 8px; border-top: 1px solid var(--divider-color, rgba(0,0,0,0.1)); }
+.split-folder { display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; min-width: 0; }
 .split-folder-toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .split-folder-row { display: flex; align-items: center; gap: 6px; }
-.split-folder-name { flex: 1; padding: 6px 8px; border: 1px solid var(--border-color, #ddd); border-radius: 6px; background: transparent; color: inherit; }
-.split-actions { display: flex; justify-content: flex-end; gap: 8px; flex: none; padding-top: 4px; }
+.split-folder-name { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--border-color, #ddd); border-radius: 6px; background: transparent; color: inherit; }
+.split-actions { display: flex; justify-content: flex-end; gap: 8px; flex: none; align-items: center; }

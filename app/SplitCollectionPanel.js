@@ -154,57 +154,61 @@ function SplitCollectionPanel({
                             );
                         })}
                     </div>
-
-                    <label className="split-folder-toggle">
-                        <input
-                            type="checkbox"
-                            checked={groupIntoFolder}
-                            onChange={e => setGroupIntoFolder(e.target.checked)}
-                            aria-label="Group these into a folder"
-                        />
-                        Group these into a folder
-                    </label>
-
-                    {groupIntoFolder && (
-                        <div className="split-folder-row">
-                            <input
-                                type="text"
-                                className="split-folder-name"
-                                aria-label="Folder name"
-                                value={folderName}
-                                onChange={e => setFolderName(e.target.value)}
-                            />
-                            <AiSuggestNameButton
-                                suggest={() => suggestFolderName({
-                                    collections: groups.map((g, i) => ({
-                                        name: names[i] || g.name,
-                                        tabs: g.tabs,
-                                    })),
-                                })}
-                                onSuggested={setFolderName}
-                                label="Suggest folder name with AI"
-                            />
-                        </div>
-                    )}
                 </div>
 
-                <div className="split-actions">
-                    <button
-                        type="button"
-                        className="ai-tool-action-btn ai-tool-action-btn--cancel"
-                        onClick={onCancel}
-                        disabled={busy}
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        type="button"
-                        className="ai-tool-action-btn"
-                        onClick={handleConfirm}
-                        disabled={submitting || busy}
-                    >
-                        Confirm split
-                    </button>
+                <div className="split-footer">
+                    <div className="split-folder">
+                        <label className="split-folder-toggle">
+                            <input
+                                type="checkbox"
+                                checked={groupIntoFolder}
+                                onChange={e => setGroupIntoFolder(e.target.checked)}
+                                aria-label="Group these into a folder"
+                            />
+                            Group these into a folder
+                        </label>
+
+                        {groupIntoFolder && (
+                            <div className="split-folder-row">
+                                <input
+                                    type="text"
+                                    className="split-folder-name"
+                                    aria-label="Folder name"
+                                    value={folderName}
+                                    onChange={e => setFolderName(e.target.value)}
+                                />
+                                <AiSuggestNameButton
+                                    suggest={() => suggestFolderName({
+                                        collections: groups.map((g, i) => ({
+                                            name: names[i] || g.name,
+                                            tabs: g.tabs,
+                                        })),
+                                    })}
+                                    onSuggested={setFolderName}
+                                    label="Suggest folder name with AI"
+                                />
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="split-actions">
+                        <button
+                            type="button"
+                            className="ai-tool-action-btn ai-tool-action-btn--cancel"
+                            onClick={onCancel}
+                            disabled={busy}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            className="ai-tool-action-btn"
+                            onClick={handleConfirm}
+                            disabled={submitting || busy}
+                        >
+                            Confirm split
+                        </button>
+                    </div>
                 </div>
             </div>
         );
