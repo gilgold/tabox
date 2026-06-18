@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { MdFolder, MdExpandMore, MdChevronRight } from 'react-icons/md';
 import { SPLIT_MIN_TABS, FALLBACK_FAVICON } from './utils/sharedConstants';
 import SplitScanAnimation from './SplitScanAnimation';
 import AiSuggestNameButton from './AiSuggestNameButton';
@@ -27,6 +28,8 @@ function SplitCollectionPanel({
     const [submitting, setSubmitting] = useState(false);
     // Which result cards have their full tab list expanded (index → bool).
     const [expanded, setExpanded] = useState({});
+    // Which result cards are collapsed (header only). Default: all expanded.
+    const [collapsed, setCollapsed] = useState({});
 
     // Reset editable state whenever a new ok result arrives
     useEffect(() => {
@@ -36,6 +39,7 @@ function SplitCollectionPanel({
             setFolderName(results.name || '');
             setSubmitting(false);
             setExpanded({});
+            setCollapsed({});
         }
     }, [results]);
 
@@ -100,6 +104,9 @@ function SplitCollectionPanel({
         const toggleExpanded = (i) => {
             setExpanded(prev => ({ ...prev, [i]: !prev[i] }));
         };
+        const toggleCollapsed = (i) => {
+            setCollapsed(prev => ({ ...prev, [i]: !prev[i] }));
+        };
 
         return (
             <div className="split-panel split-panel--results">
@@ -112,43 +119,58 @@ function SplitCollectionPanel({
                         {groups.map((group, i) => {
                             const tabs = group.tabs || [];
                             const isExpanded = !!expanded[i];
+                            const isCollapsed = !!collapsed[i];
                             const shown = isExpanded ? tabs : tabs.slice(0, MAX_TABS_SHOWN);
                             const extra = tabs.length - shown.length;
                             return (
-                                <div key={i} className="split-card">
-                                    <div className="split-card-head">
+                                <div key={i} className={`split-card${isCollapsed ? '' : ' split-card--open'}`}>
+                                    <div
+                                        className="split-card-head"
+                                        onClick={() => toggleCollapsed(i)}
+                                        role="button"
+                                        aria-expanded={!isCollapsed}
+                                    >
+                                        <MdFolder className="split-card-folder" size={16} />
                                         <input
                                             type="text"
                                             className="split-card-name"
                                             aria-label={`Sub-collection ${i + 1} name`}
                                             value={names[i] !== undefined ? names[i] : group.name}
                                             onChange={e => handleNameChange(i, e.target.value)}
+                                            onClick={e => e.stopPropagation()}
                                         />
                                         <span className="split-card-count">{tabs.length} tabs</span>
+                                        {isCollapsed
+                                            ? <MdChevronRight className="split-card-chevron" size={18} />
+                                            : <MdExpandMore className="split-card-chevron" size={18} />}
                                     </div>
-                                    <ul className="split-card-tabs">
-                                        {shown.map((t, ti) => (
-                                            <li key={ti}>
-                                                <img
-                                                    src={t.favIconUrl || FALLBACK_FAVICON}
-                                                    alt=""
-                                                    width={14}
-                                                    height={14}
-                                                    onError={e => { e.currentTarget.src = FALLBACK_FAVICON; }}
-                                                />
-                                                <span>{t.title || t.url}</span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                    {(extra > 0 || isExpanded) && tabs.length > MAX_TABS_SHOWN && (
-                                        <button
-                                            type="button"
-                                            className="split-card-more"
-                                            onClick={() => toggleExpanded(i)}
-                                            aria-expanded={isExpanded}
-                                        >
-                                            {isExpanded ? 'Show less' : `+${extra} more`}
-                                        </button>
+                                    {!isCollapsed && (
+                                        <div className="split-card-body">
+                                            <ul className="split-card-tabs">
+                                                {shown.map((t, ti) => (
+                                                    <li key={ti}>
+                                                        <img
+                                                            src={t.favIconUrl || FALLBACK_FAVICON}
+                                                            alt=""
+                                                            width={14}
+                                                            height={14}
+                                                            onError={e => { e.currentTarget.src = FALLBACK_FAVICON; }}
+                                                        />
+                                                        <span>{t.title || t.url}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                            {tabs.length > MAX_TABS_SHOWN && (
+                                                <button
+                                                    type="button"
+                                                    className="split-card-more"
+                                                    onClick={() => toggleExpanded(i)}
+                                                    aria-expanded={isExpanded}
+                                                >
+                                                    {isExpanded ? 'Show less' : `+${extra} more`}
+                                                </button>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
                             );

@@ -19,19 +19,56 @@
 .split-candidate { display: flex; justify-content: space-between; width: 100%; padding: 8px 10px; border: 1px solid var(--border-color, #ddd); border-radius: 8px; background: transparent; cursor: pointer; transition: background 200ms; color: inherit; }
 .split-candidate:hover { background: var(--hover-bg, rgba(0,0,0,0.05)); }
 .split-candidate-count { opacity: 0.6; }
-.split-cards { display: flex; flex-direction: column; gap: 10px; }
-.split-card { border: 1px solid var(--border-color, #ddd); border-radius: 10px; padding: 10px; }
-.split-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.split-card-name { font-weight: 600; flex: 1; border: none; background: transparent; border-bottom: 1px dashed var(--border-color, #ccc); color: inherit; }
+.split-cards { display: flex; flex-direction: column; gap: 8px; }
+
+/* Option B: tinted header band + full-width tab rows, collapsible. */
+.split-card {
+    border: 1px solid var(--border-color, #ddd);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--card-bg, transparent);
+}
+.split-card-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    cursor: pointer;
+    background: linear-gradient(135deg, rgba(58, 99, 219, 0.10), rgba(91, 79, 214, 0.10));
+}
+.split-card--open .split-card-head { border-bottom: 1px solid var(--border-color, #ddd); }
+.split-card-folder { color: #5b4fd6; flex-shrink: 0; }
+.split-card-name {
+    flex: 1;
+    min-width: 0;
+    font-weight: 600;
+    font-size: 13px;
+    border: none;
+    background: transparent;
+    color: inherit;
+    padding: 2px 0;
+}
+.split-card-name:focus { outline: none; }
 .split-card-count { opacity: 0.6; font-size: 12px; white-space: nowrap; }
-.split-card-tabs li { display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 2px 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.split-card-chevron { color: var(--text-color, #888); opacity: 0.6; flex-shrink: 0; }
+
+.split-card-body { padding: 4px 0; }
+.split-card-tabs li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    padding: 6px 14px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
 .split-card-tabs li img { flex-shrink: 0; border-radius: 3px; }
 .split-card-tabs li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* +N more / Show less — a clickable toggle, not just a label. */
+/* +N more / Show less — a plain text link, no border or background. */
 .split-card-more {
-    margin-top: 4px;
-    padding: 2px 4px;
+    padding: 6px 14px;
     border: none;
     background: transparent;
     color: var(--accent-color, #5b4fd6);
