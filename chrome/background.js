@@ -18,6 +18,8 @@ try {
   importScripts('duplicate-detect.js');
   importScripts('duplicate-sweep.js');
   importScripts('ai-task-duplicate-sweep.js');
+  importScripts('split-collection.js');
+  importScripts('ai-task-split-collection.js');
 }
 catch (e) {
   console.error(e);
@@ -2048,6 +2050,18 @@ try {
 
     if (request.type === 'duplicateSweepDismiss') {
       const result = await globalThis.TaboxDuplicateSweep.dismissDuplicateSweep();
+      return Promise.resolve(result);
+    }
+
+    if (request.type === 'splitCollectionApply') {
+      const result = await globalThis.TaboxSplitCollection.applySplitCollectionPlan(request.payload || {});
+      await throttleSync(() => handleRemoteUpdate());
+      return Promise.resolve(result);
+    }
+
+    if (request.type === 'splitCollectionUndo') {
+      const result = await globalThis.TaboxSplitCollection.undoSplitCollection();
+      await throttleSync(() => handleRemoteUpdate());
       return Promise.resolve(result);
     }
 

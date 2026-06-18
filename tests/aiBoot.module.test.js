@@ -4,7 +4,7 @@ global.STORAGE_KEYS = { COLLECTIONS_INDEX:'collections_index', FOLDERS_INDEX:'fo
   LEGACY_TABS_ARRAY:'tabsArray', STORAGE_VERSION:'tabox_storage_version' };
 
 const AI_MODULES = ['ai-client','ai-planners','ai-storage','ai-registry','ai-engine',
-  'ai-task-auto-rename','ai-task-auto-arrange','ai-task-smart-organize'];
+  'ai-task-auto-rename','ai-task-auto-arrange','ai-task-smart-organize','ai-task-split-collection'];
 
 test('all SW plain-JS modules load and export without throwing', () => {
   require('../chrome/ai-registry.js'); // task modules need the registry global first
@@ -21,8 +21,8 @@ test('every task module self-registers into the registry', () => {
   // but globalThis.TaboxAIRegistry still points to the same registry object.
   // This ensures register() fires against the current (reset) registry even though
   // these modules were previously cached at the outer Jest module scope.
-  ['ai-task-auto-rename','ai-task-auto-arrange','ai-task-smart-organize'].forEach((m) => { jest.isolateModules(() => require(`../chrome/${m}.js`)); });
-  expect(registry.allTasks().map((t) => t.id).sort()).toEqual(['auto-arrange','auto-rename','smart-organize']);
+  ['ai-task-auto-rename','ai-task-auto-arrange','ai-task-smart-organize','ai-task-split-collection'].forEach((m) => { jest.isolateModules(() => require(`../chrome/${m}.js`)); });
+  expect(registry.allTasks().map((t) => t.id).sort()).toEqual(['auto-arrange','auto-rename','smart-organize','split-collection']);
 });
 
 test('AI globals do not collide with existing Tabox SW globals', () => {
