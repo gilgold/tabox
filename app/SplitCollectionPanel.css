@@ -15,11 +15,23 @@
     padding-right: 2px;
 }
 
-.split-candidate-list, .split-card-tabs { list-style: none; margin: 0; padding: 0; }
-.split-candidate { display: flex; justify-content: space-between; width: 100%; padding: 8px 10px; border: 1px solid var(--border-color, #ddd); border-radius: 8px; background: transparent; cursor: pointer; transition: background 200ms; color: inherit; }
-.split-candidate:hover { background: var(--hover-bg, rgba(0,0,0,0.05)); }
-.split-candidate-count { opacity: 0.6; }
+.split-card-tabs { list-style: none; margin: 0; padding: 0; }
 .split-cards { display: flex; flex-direction: column; gap: 8px; }
+
+/* Picker (collection chooser) reuses the result-card chrome. */
+.split-candidate-name { flex: 1; min-width: 0; font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.split-candidate-go {
+    flex-shrink: 0;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #fff;
+    background: linear-gradient(135deg, #3a63db 0%, #5b4fd6 100%);
+    cursor: pointer;
+}
+.split-candidate-go:hover { filter: brightness(1.05); }
 
 /* Option B: tinted header band + full-width tab rows, collapsible. */
 .split-card {

@@ -36,8 +36,15 @@ test('picker lists only collections at or above the threshold', () => {
 
 test('selecting a collection in the picker starts the scan', () => {
     const { onStartScan } = setup();
-    fireEvent.click(screen.getByText('Big'));
+    // The header toggles a tab preview; the explicit "Split" action starts the scan.
+    fireEvent.click(screen.getByText('Split'));
     expect(onStartScan).toHaveBeenCalledWith('big');
+});
+
+test('clicking a picker card header expands its tab preview without scanning', () => {
+    const { onStartScan } = setup();
+    fireEvent.click(screen.getByText('Big'));
+    expect(onStartScan).not.toHaveBeenCalled();
 });
 
 test('review state shows proposed sub-collections and a folder checkbox (default on)', () => {

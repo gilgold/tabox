@@ -30,6 +30,10 @@ function SplitCollectionPanel({
     const [expanded, setExpanded] = useState({});
     // Which result cards are collapsed (header only). Default: all expanded.
     const [collapsed, setCollapsed] = useState({});
+    // Picker (collection chooser): which candidate cards are expanded to preview
+    // their tabs (uid → bool). Default: all collapsed. Plus per-uid "show all".
+    const [pickerOpen, setPickerOpen] = useState({});
+    const [pickerShowAll, setPickerShowAll] = useState({});
 
     // Reset editable state whenever a new ok result arrives
     useEffect(() => {
@@ -250,27 +254,87 @@ function SplitCollectionPanel({
         .filter(c => c.tabs && c.tabs.length >= SPLIT_MIN_TABS)
         .sort((a, b) => b.tabs.length - a.tabs.length);
 
-    return (
-        <div className="split-panel">
-            <p className="split-panel-status">Pick a large collection to split (30+ tabs).</p>
-            {candidates.length === 0 ? (
+    const togglePicker = (uid) => {
+        setPickerOpen(prev => ({ ...prev, [uid]: !prev[uid] }));
+    };
+    const togglePickerShowAll = (uid) => {
+        setPickerShowAll(prev => ({ ...prev, [uid]: !prev[uid] }));
+    };
+
+    if (candidates.length === 0) {
+        return (
+            <div className="split-panel">
                 <p className="split-panel-status">No collections are large enough to split yet.</p>
-            ) : (
-                <ul className="split-candidate-list">
-                    {candidates.map(c => (
-                        <li key={c.uid}>
-                            <button
-                                type="button"
-                                className="split-candidate"
-                                onClick={() => onStartScan(c.uid)}
-                            >
-                                <span>{c.name}</span>
-                                <span className="split-candidate-count">{c.tabs.length} tabs</span>
-                            </button>
-                        </li>
-                    ))}
-                </ul>
-            )}
+            </div>
+        );
+    }
+
+    return (
+        <div className="split-panel split-panel--results">
+            <p className="split-panel-status">Pick a large collection to split (30+ tabs).</p>
+            <div className="split-scroll">
+                <div className="split-cards">
+                    {candidates.map(c => {
+                        const tabs = c.tabs || [];
+                        const open = !!pickerOpen[c.uid];
+                        const showAll = !!pickerShowAll[c.uid];
+                        const shown = showAll ? tabs : tabs.slice(0, MAX_TABS_SHOWN);
+                        const extra = tabs.length - shown.length;
+                        return (
+                            <div key={c.uid} className={`split-card${open ? ' split-card--open' : ''}`}>
+                                <div
+                                    className="split-card-head"
+                                    onClick={() => togglePicker(c.uid)}
+                                    role="button"
+                                    aria-expanded={open}
+                                >
+                                    <MdFolder className="split-card-folder" size={16} />
+                                    <span className="split-candidate-name">{c.name}</span>
+                                    <span className="split-card-count">{tabs.length} tabs</span>
+                                    <button
+                                        type="button"
+                                        className="split-candidate-go"
+                                        onClick={e => { e.stopPropagation(); onStartScan(c.uid); }}
+                                    >
+                                        Split
+                                    </button>
+                                    {open
+                                        ? <MdExpandMore className="split-card-chevron" size={18} />
+                                        : <MdChevronRight className="split-card-chevron" size={18} />}
+                                </div>
+                                {open && (
+                                    <div className="split-card-body">
+                                        <ul className="split-card-tabs">
+                                            {shown.map((t, ti) => (
+                                                <li key={ti}>
+                                                    <img
+                                                        src={t.favIconUrl || FALLBACK_FAVICON}
+                                                        alt=""
+                                                        width={14}
+                                                        height={14}
+                                                        onError={e => { e.currentTarget.src = FALLBACK_FAVICON; }}
+                                                    />
+                                                    <span>{t.title || t.url}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                        {tabs.length > MAX_TABS_SHOWN && (
+                                            <button
+                                                type="button"
+                                                className="split-card-more"
+                                                onClick={() => togglePickerShowAll(c.uid)}
+                                                aria-expanded={showAll}
+                                            >
+                                                {showAll ? 'Show less' : `+${extra} more`}
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
         </div>
     );
 }
