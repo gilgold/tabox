@@ -21,6 +21,9 @@ export const CURRENT_STORAGE_VERSION = 3;
 // Favicon shown when a tab has no favIconUrl or its favicon fails to load
 export const FALLBACK_FAVICON = './images/favicon-fallback.png';
 
+// A collection must have at least this many tabs to qualify for AI splitting.
+export const SPLIT_MIN_TABS = 30;
+
 // Simple UID generator (same logic throughout the app)
 export const generateUid = () => {
     return (crypto && crypto.randomUUID) ? 

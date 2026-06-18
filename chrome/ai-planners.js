@@ -364,6 +364,99 @@ function buildDeterministicDedupSuggestion(group, collectionNamesByUid = {}, kee
 }
 
 // ---------------------------------------------------------------------------
+// split-collection constants + builder + normalizer
+// ---------------------------------------------------------------------------
+const SPLIT_MIN_TABS = 30;        // keep in sync with app/utils/sharedConstants.js
+const SPLIT_MAX_GROUPS = 4;
+const SPLIT_MIN_GROUPS = 2;
+const SPLIT_NAME_MAX = 40;
+
+const SPLIT_SCHEMA = {
+    type: 'object',
+    properties: {
+        groups: {
+            type: 'array',
+            minItems: SPLIT_MIN_GROUPS,
+            maxItems: SPLIT_MAX_GROUPS,
+            items: {
+                type: 'object',
+                properties: {
+                    name: { type: 'string', maxLength: SPLIT_NAME_MAX },
+                    tabIndices: { type: 'array', items: { type: 'integer' } },
+                },
+                required: ['name', 'tabIndices'],
+                additionalProperties: false,
+            },
+        },
+    },
+    required: ['groups'],
+    additionalProperties: false,
+};
+
+function buildSplitPrompt({ name, tabs }) {
+    const tabLines = (tabs || []).map((tab, i) => {
+        const domain = domainOf(tab.url);
+        const title = (tab.title || domain || 'Untitled').slice(0, TITLE_TRUNC);
+        return `${i + 1}. ${title}${domain ? ` (${domain})` : ''}`;
+    });
+    return [
+        `Split the saved tab collection "${name || 'Untitled'}" into 2 to ${SPLIT_MAX_GROUPS} themed sub-collections.`,
+        'Each tab must go into exactly one sub-collection. Reference tabs by their number.',
+        'Give each sub-collection a short Title Case name (2-4 words), no quotes or emojis.',
+        'Aim for roughly 3 groups when the topics support it.',
+        '',
+        'Tabs (referenced by number):',
+        tabLines.join('\n'),
+        '',
+        'Respond with JSON: { "groups": [ { "name": "...", "tabIndices": [1,2,3] } ] }.',
+    ].join('\n');
+}
+
+/**
+ * Normalize/repair the raw model output for a split.
+ * Input indices are 1-based (as prompted); output tabIndices are 0-based into `tabs`.
+ * Guarantees a full partition: dedupe (first group wins), drop out-of-range,
+ * sweep leftovers into "Misc", clamp to SPLIT_MAX_GROUPS.
+ * @returns {{ ok: true, groups: Array<{name, tabIndices}> } | { ok: false, reason: string }}
+ */
+function normalizeSplitPlan(raw, tabs) {
+    const total = (tabs || []).length;
+    const placed = new Set();
+    let groups = [];
+
+    for (const g of (raw && raw.groups) || []) {
+        const tabIndices = (g.tabIndices || [])
+            .map((idx) => idx - 1)                       // 1-based → 0-based
+            .filter((i) => Number.isInteger(i) && i >= 0 && i < total && !placed.has(i));
+        if (tabIndices.length === 0) continue;
+        tabIndices.forEach((i) => placed.add(i));
+        groups.push({ name: (g.name || 'Group').trim().slice(0, SPLIT_NAME_MAX) || 'Group', tabIndices });
+    }
+
+    // Clamp to SPLIT_MAX_GROUPS by folding extras into the last kept group.
+    if (groups.length > SPLIT_MAX_GROUPS) {
+        const head = groups.slice(0, SPLIT_MAX_GROUPS - 1);
+        const tail = groups.slice(SPLIT_MAX_GROUPS - 1);
+        head.push({ name: tail[0].name, tabIndices: tail.flatMap((g) => g.tabIndices) });
+        groups = head;
+    }
+
+    // Sweep any unplaced tabs into a Misc bucket so coverage is total.
+    const leftover = [];
+    for (let i = 0; i < total; i += 1) if (!placed.has(i)) leftover.push(i);
+    if (leftover.length) {
+        const misc = groups.find((g) => g.name === 'Misc');
+        if (misc) misc.tabIndices.push(...leftover);
+        else groups.push({ name: 'Misc', tabIndices: leftover });
+    }
+
+    if (groups.length < SPLIT_MIN_GROUPS) {
+        return { ok: false, reason: 'too-few-groups' };
+    }
+    return { ok: true, groups };
+}
+
+// ---------------------------------------------------------------------------
 // Exports
 // ---------------------------------------------------------------------------
 
@@ -388,6 +481,13 @@ const taboxAIPlannersApi = {
     ORGANIZE_SCHEMA,
     buildOrganizePrompt,
     normalizeOrganizePlan,
+    // split-collection
+    SPLIT_MIN_TABS,
+    SPLIT_MAX_GROUPS,
+    SPLIT_MIN_GROUPS,
+    SPLIT_SCHEMA,
+    buildSplitPrompt,
+    normalizeSplitPlan,
     // duplicate-sweep
     DEDUP_NEW_NAME_MAX,
     DEDUP_MESSAGE_MAX,
