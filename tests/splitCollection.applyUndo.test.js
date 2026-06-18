@@ -42,6 +42,7 @@ test('applySplitCollectionPlan creates sub-collections in a folder and deletes t
     const res = await split.applySplitCollectionPlan({ uid, plan, folder: { name: 'Big One' } });
 
     expect(res.success).toBe(true);
+    expect(res.opId).toBeTruthy();
     expect(res.createdUids).toHaveLength(2);
     expect(res.folderUid).toBeTruthy();
 
@@ -76,6 +77,44 @@ test('undoSplitCollection restores the original and removes the new collections 
     expect(original.tabs).toHaveLength(tabs.length);
     const fIndex = (await local.get('folders_index')).folders_index;
     expect(fIndex[res.folderUid]).toBeUndefined();
+});
+
+test('undoSplitCollection with a wrong opId is superseded and destroys nothing', async () => {
+    const { uid } = await seedOriginal();
+    const res = await split.applySplitCollectionPlan({ uid, plan, folder: { name: 'Big One' } });
+
+    const bad = await split.undoSplitCollection({ opId: 'WRONG' });
+    expect(bad.success).toBe(false);
+    expect(bad.reason).toBe('superseded');
+
+    // Created subs still exist; original is NOT restored.
+    let cIndex = (await local.get('collections_index')).collections_index;
+    res.createdUids.forEach((u) => expect(cIndex[u]).toBeDefined());
+    expect(cIndex[uid]).toBeUndefined();
+
+    // The real opId still works and restores the original.
+    const good = await split.undoSplitCollection({ opId: res.opId });
+    expect(good.success).toBe(true);
+    cIndex = (await local.get('collections_index')).collections_index;
+    expect(cIndex[uid]).toBeDefined();
+    res.createdUids.forEach((u) => expect(cIndex[u]).toBeUndefined());
+});
+
+test('undo restores the original index entry verbatim (e.g. isFavorite)', async () => {
+    const { uid } = await seedOriginal();
+    // Seed an extra field on the original's index entry.
+    const idx = (await local.get('collections_index')).collections_index;
+    idx[uid].isFavorite = true;
+    idx[uid].favoriteOrder = 3;
+    await local.set({ collections_index: idx });
+
+    const res = await split.applySplitCollectionPlan({ uid, plan, folder: { name: 'Big One' } });
+    const undo = await split.undoSplitCollection({ opId: res.opId });
+    expect(undo.success).toBe(true);
+
+    const cIndex = (await local.get('collections_index')).collections_index;
+    expect(cIndex[uid].isFavorite).toBe(true);
+    expect(cIndex[uid].favoriteOrder).toBe(3);
 });
 
 test('apply aborts cleanly if the collection no longer exists', async () => {

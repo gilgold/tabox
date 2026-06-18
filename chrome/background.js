@@ -2060,7 +2060,7 @@ try {
     }
 
     if (request.type === 'splitCollectionUndo') {
-      const result = await globalThis.TaboxSplitCollection.undoSplitCollection();
+      const result = await globalThis.TaboxSplitCollection.undoSplitCollection({ opId: request.opId });
       await throttleSync(() => handleRemoteUpdate());
       return Promise.resolve(result);
     }

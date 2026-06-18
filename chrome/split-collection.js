@@ -9,10 +9,22 @@ const SPLIT_COLLECTION_UNDO_KEY = 'splitCollectionUndo';
 const local = (globalThis.browser || globalThis.chrome).storage.local;
 function S() { return globalThis.TaboxAIStorage; }
 
+function newOpId() {
+    return (globalThis.crypto && globalThis.crypto.randomUUID)
+        ? globalThis.crypto.randomUUID()
+        : Math.random().toString(36).slice(2);
+}
+
 async function applySplitCollectionPlan({ uid, plan, folder } = {}) {
     const recKey = `collection_${uid}`;
     const original = (await local.get(recKey))[recKey];
     if (!original) return { success: false, reason: 'missing' };
+
+    const opId = newOpId();
+    // Capture the original's existing index entry BEFORE any mutation so undo
+    // can restore it verbatim (preserving fields like isFavorite/favoriteOrder).
+    const indexBefore = await S().loadCollectionsIndexBG();
+    const originalIndexEntry = indexBefore[uid];
 
     const tabs = original.tabs || [];
     const specs = (plan.groups || []).map((g, i) => ({
@@ -37,8 +49,10 @@ async function applySplitCollectionPlan({ uid, plan, folder } = {}) {
     // Snapshot BEFORE deleting the original so undo can fully restore.
     await local.set({
         [SPLIT_COLLECTION_UNDO_KEY]: {
+            opId,
             createdAt: Date.now(),
             original,
+            originalIndexEntry,
             createdUids,
             folderUid,
         },
@@ -47,12 +61,18 @@ async function applySplitCollectionPlan({ uid, plan, folder } = {}) {
     await S().deleteCollectionBG(uid);
     if (folderUid) await S().updateFolderCountsBG([folderUid]);
 
-    return { success: true, createdUids, folderUid };
+    return { success: true, opId, createdUids, folderUid };
 }
 
-async function undoSplitCollection() {
+async function undoSplitCollection({ opId } = {}) {
     const snap = (await local.get(SPLIT_COLLECTION_UNDO_KEY))[SPLIT_COLLECTION_UNDO_KEY];
     if (!snap) return { success: false, reason: 'missing' };
+
+    // If the caller scopes the undo to a specific operation and the snapshot is
+    // for a different (newer) split, refuse — without destroying anything.
+    if (opId && snap.opId && opId !== snap.opId) {
+        return { success: false, reason: 'superseded' };
+    }
 
     for (const u of snap.createdUids || []) {
         try { await S().deleteCollectionBG(u); } catch (e) { console.error('split undo: delete sub failed', u, e); }
@@ -63,11 +83,13 @@ async function undoSplitCollection() {
     // Restore the original verbatim (exact uid/order/parentId/tabs).
     const o = snap.original;
     const index = await S().loadCollectionsIndexBG();
-    index[o.uid] = {
-        name: o.name, type: 'collection', tabCount: (o.tabs || []).length,
-        lastUpdated: Date.now(), lastOpened: o.lastOpened ?? null, createdOn: o.createdOn,
-        color: o.color, size: JSON.stringify(o).length, parentId: o.parentId ?? null, order: o.order,
-    };
+    index[o.uid] = snap.originalIndexEntry
+        ? snap.originalIndexEntry
+        : {
+            name: o.name, type: 'collection', tabCount: (o.tabs || []).length,
+            lastUpdated: Date.now(), lastOpened: o.lastOpened ?? null, createdOn: o.createdOn,
+            color: o.color, size: JSON.stringify(o).length, parentId: o.parentId ?? null, order: o.order,
+        };
     await local.set({ [`collection_${o.uid}`]: o, collections_index: index });
     if (o.parentId) { try { await S().updateFolderCountsBG([o.parentId]); } catch (_) { /* folder may be gone */ } }
     await local.remove(SPLIT_COLLECTION_UNDO_KEY);

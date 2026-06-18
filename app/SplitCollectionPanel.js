@@ -23,6 +23,8 @@ function SplitCollectionPanel({
     const [names, setNames] = useState([]);
     const [groupIntoFolder, setGroupIntoFolder] = useState(true);
     const [folderName, setFolderName] = useState('');
+    // UX guard: prevent the confirm button from being mashed while submitting.
+    const [submitting, setSubmitting] = useState(false);
 
     // Reset editable state whenever a new ok result arrives
     useEffect(() => {
@@ -30,6 +32,7 @@ function SplitCollectionPanel({
             setNames((results.groups || []).map(g => g.name));
             setGroupIntoFolder(true);
             setFolderName(results.name || '');
+            setSubmitting(false);
         }
     }, [results]);
 
@@ -76,6 +79,7 @@ function SplitCollectionPanel({
         };
 
         const handleConfirm = () => {
+            setSubmitting(true);
             onConfirm({
                 uid: results.uid,
                 plan: {
@@ -177,7 +181,7 @@ function SplitCollectionPanel({
                         type="button"
                         className="ai-tool-action-btn"
                         onClick={handleConfirm}
-                        disabled={busy}
+                        disabled={submitting || busy}
                     >
                         Confirm split
                     </button>

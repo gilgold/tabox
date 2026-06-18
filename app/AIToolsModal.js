@@ -103,6 +103,8 @@ function AIToolsModal({ updateRemoteData }) {
     const runStartedRef = useRef(false);
     // Once-guard: ensures the context-menu split route kicks off the scan only once per open.
     const splitScanStartedRef = useRef(false);
+    // Synchronous re-entry guard so a double-click can't apply the same split twice.
+    const splitApplyingRef = useRef(false);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -113,6 +115,7 @@ function AIToolsModal({ updateRemoteData }) {
         runTokenRef.current += 1;
         runStartedRef.current = false;
         splitScanStartedRef.current = false;
+        splitApplyingRef.current = false;
         // Clear AI processing atoms from any previous run
         setAiProcessingUids([]);
         setAiProcessingCurrentUid(null);
@@ -195,31 +198,38 @@ function AIToolsModal({ updateRemoteData }) {
     }, [dispatchAiRun]);
 
     const confirmSplit = useCallback(async (payload) => {
-        let res;
+        // Synchronous re-entry guard — a double-click can't apply the same split twice.
+        if (splitApplyingRef.current) return;
+        splitApplyingRef.current = true;
         try {
-            res = await browser.runtime.sendMessage({ type: 'splitCollectionApply', payload });
-        } catch (e) {
-            console.error('Split Collection: apply failed', e);
-            setError('Could not split the collection. Please try again.');
-            return;
+            let res;
+            try {
+                res = await browser.runtime.sendMessage({ type: 'splitCollectionApply', payload });
+            } catch (e) {
+                console.error('Split Collection: apply failed', e);
+                setError('Could not split the collection. Please try again.');
+                return;
+            }
+            if (res && res.success) {
+                const n = (payload.plan.groups || []).length;
+                showUndoToast(
+                    <BsStars />,
+                    `Split into ${n} collection${n === 1 ? '' : 's'}`,
+                    'Split Collection',
+                    () => browser.runtime.sendMessage({ type: 'splitCollectionUndo', opId: res.opId }),
+                    UNDO_TIME,
+                );
+                loadAllCollections().then(setCollections).catch(() => {});
+                if (typeof updateRemoteData === 'function') updateRemoteData();
+            }
+            // Leave the tool: clear target + task state and return to the hub.
+            setSplitTarget(null);
+            setAiTaskState(null);
+            await browser.storage.local.remove('aiTaskState').catch(() => {});
+            setActiveToolId(null);
+        } finally {
+            splitApplyingRef.current = false;
         }
-        if (res && res.success) {
-            const n = (payload.plan.groups || []).length;
-            showUndoToast(
-                <BsStars />,
-                `Split into ${n} collection${n === 1 ? '' : 's'}`,
-                'Split Collection',
-                () => browser.runtime.sendMessage({ type: 'splitCollectionUndo' }),
-                UNDO_TIME,
-            );
-            loadAllCollections().then(setCollections).catch(() => {});
-            if (typeof updateRemoteData === 'function') updateRemoteData();
-        }
-        // Leave the tool: clear target + task state and return to the hub.
-        setSplitTarget(null);
-        setAiTaskState(null);
-        await browser.storage.local.remove('aiTaskState').catch(() => {});
-        setActiveToolId(null);
     }, [updateRemoteData, setSplitTarget]);
 
     // Subscribe to aiTaskState: read once on open, then track storage changes so
