@@ -1,0 +1,15 @@
+/* Round purple/blue gradient frame holding the three AI sparkle stars.
+   Matches the toolbar AI button fill (AIButton.css). */
+.ai-stars-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, #3a63db 0%, #5b4fd6 100%);
+    box-shadow: 0 1px 3px rgba(58, 99, 219, 0.45);
+}
+
+.ai-stars-icon svg {
+    display: block;
+}
