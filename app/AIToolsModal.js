@@ -230,8 +230,16 @@ function AIToolsModal({ updateRemoteData }) {
                     () => browser.runtime.sendMessage({ type: 'splitCollectionUndo', opId: res.opId }),
                     UNDO_TIME,
                 );
-                loadAllCollections().then(setCollections).catch(() => {});
-                if (typeof updateRemoteData === 'function') updateRemoteData();
+                // Refresh from storage and push the fresh list through the App's
+                // updateRemoteData (it expects the full collections array — calling
+                // it empty would batch-write `undefined` and blank out the list).
+                try {
+                    const fresh = await loadAllCollections();
+                    setCollections(fresh);
+                    if (typeof updateRemoteData === 'function') await updateRemoteData(fresh);
+                } catch (refreshError) {
+                    console.error('Split Collection: refresh after apply failed', refreshError);
+                }
             }
             // Leave the tool: clear target + task state and return to the hub.
             setSplitTarget(null);

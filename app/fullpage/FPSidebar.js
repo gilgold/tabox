@@ -104,8 +104,8 @@ function SortableSidebarFolderItem({
 }
 
 function FPSidebar({
-    folders,
-    collections,
+    folders = [],
+    collections = [],
     sessionCount = 0,
     addCollection,
     addFolder,
