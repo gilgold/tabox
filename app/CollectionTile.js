@@ -9,7 +9,9 @@ import TimeAgo from 'javascript-time-ago';
 import { useSetAtom, useAtomValue } from 'jotai';
 import { highlightedCollectionUidState, deletingCollectionUidsState } from './atoms/animationsState';
 import { trackingStateVersion } from './atoms/globalAppSettingsState';
-import { aiProcessingUidsState, aiProcessingCurrentUidState } from './atoms/aiState';
+import { aiProcessingUidsState, aiProcessingCurrentUidState, aiSplitTargetState, aiToolsModalOpenState, aiToolsScopeState } from './atoms/aiState';
+import { useTaboxAIEnabled } from './ai/useTaboxAIEnabled';
+import { isAISupported } from './ai/aiClient';
 import './AIEffects.css';
 
 import { getColorValue } from './utils/colorMigration';
@@ -42,6 +44,18 @@ function CollectionTile(props) {
     // AI processing state
     const isAiProcessing = aiProcessingUids.includes(props.collection.uid);
     const isAiCurrent = aiProcessingCurrentUid === props.collection.uid;
+
+    // AI Split Collection
+    const setAIToolsOpen = useSetAtom(aiToolsModalOpenState);
+    const setAIToolsScope = useSetAtom(aiToolsScopeState);
+    const setSplitTarget = useSetAtom(aiSplitTargetState);
+    const aiEnabled = useTaboxAIEnabled() && isAISupported();
+
+    const _handleSplitCollection = () => {
+        setAIToolsScope({ type: 'selected', uids: [props.collection.uid] });
+        setSplitTarget({ uid: props.collection.uid });
+        setAIToolsOpen(true);
+    };
 
     // Use shared collection operations
     const {
@@ -337,6 +351,9 @@ function CollectionTile(props) {
                             onCopyUrls: _handleCopyUrls,
                             isFavorite: props.collection.isFavorite === true,
                             onToggleFavorite: _handleToggleFavorite,
+                            aiEnabled,
+                            tabCount,
+                            onSplitCollection: _handleSplitCollection,
                         })}
                         tooltip="Collection options"
                         tooltipPlace="right"

@@ -57,6 +57,14 @@ jest.mock('javascript-time-ago', () => {
     }));
 });
 
+jest.mock('../app/ai/useTaboxAIEnabled', () => ({
+    useTaboxAIEnabled: jest.fn(() => false),
+}));
+
+jest.mock('../app/ai/aiClient', () => ({
+    isAISupported: jest.fn(() => false),
+}));
+
 describe('CollectionTile', () => {
     const baseCollection = {
         uid: 'collection-1',

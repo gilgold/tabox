@@ -1,8 +1,9 @@
-import { MdDelete, MdOutlineRefresh } from 'react-icons/md';
+import { MdDelete, MdOutlineRefresh, MdCallSplit } from 'react-icons/md';
 import { CiExport } from 'react-icons/ci';
 import { FaStop } from 'react-icons/fa6';
 import { FaStar, FaRegStar } from 'react-icons/fa';
 import { MdContentCopy } from 'react-icons/md';
+import { SPLIT_MIN_TABS } from './sharedConstants';
 
 const ICON_SIZE = 16;
 
@@ -16,7 +17,10 @@ export const createCollectionMenuItems = ({
     onDuplicate,
     onCopyUrls,
     isFavorite = false,
-    onToggleFavorite
+    onToggleFavorite,
+    aiEnabled = false,
+    tabCount = 0,
+    onSplitCollection
 }) => [
     {
         id: 'update',
@@ -65,6 +69,14 @@ export const createCollectionMenuItems = ({
         action: onCopyUrls,
         className: '',
         condition: true
+    },
+    {
+        id: 'split-collection',
+        text: '[AI] Split Collection',
+        icon: <MdCallSplit size={ICON_SIZE} />,
+        action: onSplitCollection,
+        className: '',
+        condition: aiEnabled && tabCount >= SPLIT_MIN_TABS && typeof onSplitCollection === 'function'
     },
     {
         id: 'delete',
