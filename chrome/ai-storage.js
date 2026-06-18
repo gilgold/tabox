@@ -237,6 +237,39 @@ async function createCollectionBG({ name, tabs = [], color } = {}) {
     return record;
 }
 
+async function createCollectionsBG(specs) {
+    if (!Array.isArray(specs) || specs.length === 0) return [];
+    const now = Date.now();
+    const index = await loadCollectionsIndexBG();
+    let maxOrder = Object.values(index).reduce((m, e) => Math.max(m, (e && typeof e.order === 'number') ? e.order : 0), 0);
+    const writes = {};
+    const created = [];
+    for (const s of specs) {
+        if (!s || !s.name || typeof s.name !== 'string' || !s.name.trim()) {
+            throw new Error('createCollectionsBG: name is required');
+        }
+        const uid = newUid();
+        const tabs = Array.isArray(s.tabs) ? s.tabs : [];
+        const parentId = s.parentId ?? null;
+        const order = (typeof s.order === 'number') ? s.order : (maxOrder += 1);
+        const record = {
+            uid, name: s.name.trim(), type: 'collection', tabs,
+            color: s.color || 'var(--collection-default-color)',
+            createdOn: now, lastUpdated: now, lastOpened: null, chromeGroups: [], parentId, order,
+        };
+        index[uid] = {
+            name: record.name, type: 'collection', tabCount: tabs.length,
+            lastUpdated: now, lastOpened: null, createdOn: now, color: record.color,
+            size: JSON.stringify(record).length, parentId, order,
+        };
+        writes[`${KEYS.COLLECTION_PREFIX}${uid}`] = record;
+        created.push(record);
+    }
+    writes[KEYS.COLLECTIONS_INDEX] = index;
+    await local.set(writes);
+    return created;
+}
+
 async function deleteCollectionBG(uid) {
     const index = await loadCollectionsIndexBG();
     delete index[uid];
@@ -251,7 +284,7 @@ const aiStorageApi = {
     loadCollectionsIndexBG, loadFoldersIndexBG, renameCollectionsBG,
     moveCollectionsToFoldersBG, createFolderBG, createFoldersBG, deleteFolderBG, updateFolderCountsBG,
     removeTabsFromCollectionsBG, restoreTabsToCollectionsBG, setTabTitlesBG,
-    createCollectionBG, deleteCollectionBG,
+    createCollectionBG, createCollectionsBG, deleteCollectionBG,
 };
 /* istanbul ignore next */
 if (typeof globalThis !== 'undefined') globalThis.TaboxAIStorage = aiStorageApi;
