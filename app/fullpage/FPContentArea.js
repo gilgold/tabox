@@ -63,6 +63,7 @@ import {
     MdDriveFileMoveOutline,
     MdOutlineHome,
     MdSortByAlpha,
+    MdCallSplit,
 } from 'react-icons/md';
 import { FaPlay, FaStar, FaRegStar } from 'react-icons/fa';
 import { useTaboxAIEnabled } from '../ai/useTaboxAIEnabled';
@@ -3490,8 +3491,11 @@ function FPContentArea({
                             className="fp-card-ctx-item"
                             onClick={() => { const c = cardCtxMenu.collection; setCardCtxMenu(null); handleSplitCollection(c); }}
                         >
-                            <AiStarsIcon size={16} />
-                            <span>Split Collection</span>
+                            <MdCallSplit size={16} />
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                <AiStarsIcon size={14} />
+                                Split Collection
+                            </span>
                         </button>
                     )}
                     <div className="fp-card-ctx-divider" />

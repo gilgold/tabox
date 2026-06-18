@@ -1,4 +1,4 @@
-import { MdDelete, MdOutlineRefresh } from 'react-icons/md';
+import { MdDelete, MdOutlineRefresh, MdCallSplit } from 'react-icons/md';
 import { CiExport } from 'react-icons/ci';
 import { FaStop } from 'react-icons/fa6';
 import { FaStar, FaRegStar } from 'react-icons/fa';
@@ -73,8 +73,13 @@ export const createCollectionMenuItems = ({
     },
     {
         id: 'split-collection',
-        text: 'Split Collection',
-        icon: <AiStarsIcon size={ICON_SIZE} />,
+        text: (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <AiStarsIcon size={14} />
+                Split Collection
+            </span>
+        ),
+        icon: <MdCallSplit size={ICON_SIZE} />,
         action: onSplitCollection,
         className: '',
         condition: aiEnabled && tabCount >= SPLIT_MIN_TABS && typeof onSplitCollection === 'function'
