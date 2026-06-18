@@ -70,7 +70,7 @@ import { useTaboxAIEnabled } from '../ai/useTaboxAIEnabled';
 import { isAISupported } from '../ai/aiClient';
 import { aiToolsModalOpenState, aiToolsScopeState, aiSplitTargetState } from '../atoms/aiState';
 import { SPLIT_MIN_TABS } from '../utils/sharedConstants';
-import AiStarsIcon from '../AiStarsIcon';
+import AiBadge from '../AiBadge';
 import { FaStop } from 'react-icons/fa6';
 import { CiExport } from 'react-icons/ci';
 import { PiGridNineFill } from 'react-icons/pi';
@@ -3493,7 +3493,7 @@ function FPContentArea({
                         >
                             <MdCallSplit size={16} />
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                                <AiStarsIcon size={20} />
+                                <AiBadge />
                                 Split Collection
                             </span>
                         </button>

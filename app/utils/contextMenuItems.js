@@ -4,7 +4,7 @@ import { FaStop } from 'react-icons/fa6';
 import { FaStar, FaRegStar } from 'react-icons/fa';
 import { MdContentCopy } from 'react-icons/md';
 import { SPLIT_MIN_TABS } from './sharedConstants';
-import AiStarsIcon from '../AiStarsIcon';
+import AiBadge from '../AiBadge';
 
 const ICON_SIZE = 16;
 
@@ -75,7 +75,7 @@ export const createCollectionMenuItems = ({
         id: 'split-collection',
         text: (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                <AiStarsIcon size={20} />
+                <AiBadge />
                 Split Collection
             </span>
         ),
