@@ -14,7 +14,7 @@
 
 .split-scan-stage {
     position: relative;
-    width: 240px;
+    width: 300px;
     height: 132px;
 }
 
@@ -95,9 +95,9 @@
     0% { opacity: 0; transform: translateX(-50%) scale(1); }
     5% { opacity: 1; transform: translateX(-50%) scale(1); }
     14% { opacity: 1; transform: translateX(-50%) scale(1); }
-    30% { opacity: 1; transform: translateX(calc(-50% - 80px)) scale(1); }
-    46% { opacity: 1; transform: translateX(calc(-50% - 80px)) scale(1); }
-    52% { opacity: 0; transform: translateX(calc(-50% - 80px)) scale(1); }
+    30% { opacity: 1; transform: translateX(calc(-50% - 104px)) scale(1); }
+    46% { opacity: 1; transform: translateX(calc(-50% - 104px)) scale(1); }
+    52% { opacity: 0; transform: translateX(calc(-50% - 104px)) scale(1); }
     100% { opacity: 0; transform: translateX(-50%) scale(1); }
 }
 /* Frame appears only after the group has landed (~30%), behind the tabs. */
@@ -113,8 +113,8 @@
     0%, 48% { opacity: 0; transform: translateX(-50%) scale(1); }
     53% { opacity: 1; transform: translateX(-50%) scale(1); }
     62% { opacity: 1; transform: translateX(-50%) scale(1); }
-    78% { opacity: 1; transform: translateX(calc(-50% + 80px)) scale(1); }
-    94% { opacity: 1; transform: translateX(calc(-50% + 80px)) scale(1); }
+    78% { opacity: 1; transform: translateX(calc(-50% + 104px)) scale(1); }
+    94% { opacity: 1; transform: translateX(calc(-50% + 104px)) scale(1); }
     100% { opacity: 0; transform: translateX(-50%) scale(1); }
 }
 @keyframes sscFrameRight {
@@ -133,7 +133,7 @@
     }
     .ssc-fly--left,
     .ssc-fly--right { opacity: 1; }
-    .ssc-fly--left { transform: translateX(calc(-50% - 80px)); }
-    .ssc-fly--right { transform: translateX(calc(-50% + 80px)); }
+    .ssc-fly--left { transform: translateX(calc(-50% - 104px)); }
+    .ssc-fly--right { transform: translateX(calc(-50% + 104px)); }
     .ssc-frame { opacity: 1; }
 }
