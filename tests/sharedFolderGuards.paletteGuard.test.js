@@ -90,6 +90,32 @@ const buildLocalData = () => ({
     'folder_folder-1': { uid: 'folder-1', ...READ_ONLY_FOLDER },
 });
 
+// Positive-path counterpart (round 3 test gap): a folder the user CAN edit -
+// here, an unshared root folder - must not be blocked by the same guard.
+const EDITABLE_FOLDER = { name: 'Personal', order: 0 };
+const EDITABLE_COLLECTION = {
+    uid: 'collection-2',
+    name: 'Editable collection',
+    tabs: [],
+    chromeGroups: [],
+    parentId: 'folder-2',
+    order: 0,
+    lastUpdated: 10,
+    createdOn: 10,
+};
+
+const buildEditableLocalData = () => ({
+    tabox_storage_version: 3,
+    collections_index: {
+        'collection-2': { name: EDITABLE_COLLECTION.name, type: 'collection', parentId: 'folder-2', order: 0, lastUpdated: 10 },
+    },
+    'collection_collection-2': { ...EDITABLE_COLLECTION },
+    folders_index: {
+        'folder-2': { ...EDITABLE_FOLDER },
+    },
+    'folder_folder-2': { uid: 'folder-2', ...EDITABLE_FOLDER },
+});
+
 describe('command palette delete/move guards for read-only shared folders', () => {
     let browser;
 
@@ -147,5 +173,56 @@ describe('command palette delete/move guards for read-only shared folders', () =
 
         expect(folderOperations.removeCollectionFromFolder).not.toHaveBeenCalled();
         expect(store.get(noPermissionOpenState)).toBe(true);
+    });
+
+    // Positive-path gap (round 3): an editable folder must NOT trip the same guard.
+    test('does not block palette delete on a collection inside an editable folder', async () => {
+        browser = createBrowserHarness({ localData: buildEditableLocalData() });
+        global.browser = browser;
+        global.chrome = { runtime: browser.runtime };
+
+        const store = createStore();
+        render(
+            <Provider store={store}>
+                <App />
+            </Provider>
+        );
+        await waitFor(() => {
+            expect(latestFolders).toEqual(
+                expect.arrayContaining([expect.objectContaining({ uid: 'folder-2' })]),
+            );
+        });
+
+        await act(async () => {
+            await latestOnCollectionAction(EDITABLE_COLLECTION, 'delete');
+        });
+
+        expect(storageUtils.deleteSingleCollection).toHaveBeenCalledWith('collection-2');
+        expect(store.get(noPermissionOpenState)).toBe(false);
+    });
+
+    test('does not block palette move-to-root from an editable folder', async () => {
+        browser = createBrowserHarness({ localData: buildEditableLocalData() });
+        global.browser = browser;
+        global.chrome = { runtime: browser.runtime };
+
+        const store = createStore();
+        render(
+            <Provider store={store}>
+                <App />
+            </Provider>
+        );
+        await waitFor(() => {
+            expect(latestFolders).toEqual(
+                expect.arrayContaining([expect.objectContaining({ uid: 'folder-2' })]),
+            );
+        });
+
+        await act(async () => {
+            await latestOnCollectionAction(EDITABLE_COLLECTION, 'move', { targetFolderId: null });
+        });
+
+        expect(folderOperations.removeCollectionFromFolder).toHaveBeenCalledWith('collection-2');
+        expect(store.get(noPermissionOpenState)).toBe(false);
     });
 });

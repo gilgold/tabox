@@ -41,7 +41,7 @@ describe('folderOperations guard wiring', () => {
 
   const storageUtils = require('../app/utils/storageUtils');
   const sharedSync = require('../app/utils/sharedSync');
-  const { moveCollectionToFolder, removeCollectionFromFolder, updateFolderName } = require('../app/utils/folderOperations');
+  const { moveCollectionToFolder, removeCollectionFromFolder, updateFolderName, deleteFolder } = require('../app/utils/folderOperations');
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -148,6 +148,53 @@ describe('folderOperations guard wiring', () => {
       expect.objectContaining({ uid: 'folder-1', name: 'Renamed' }),
       true,
     );
+  });
+
+  // Fix round 3 (task-13-report.md "## Fix round 3"): deleteFolder had no
+  // permission check at all - a shared folder (owner or member) could be
+  // mass-deleted (collections moved/deleted) with zero guard. Members must use
+  // "Leave Shared Folder" and owners must "Stop Sharing" first; the popup UI
+  // already hides plain Delete for every shared folder via buildFolderMenuItems,
+  // so the data layer must refuse it too, for every role including the owner.
+  test('deleteFolder blocks (without writing) when the folder is shared and the caller is the owner', async () => {
+    storageUtils.loadSingleFolder.mockResolvedValue({
+      uid: 'folder-1',
+      name: 'Shared Folder',
+      shared: { folderId: 'folder-1', role: 'owner' },
+    });
+
+    const result = await deleteFolder('folder-1', true, false);
+
+    expect(result).toEqual({ blocked: true });
+    expect(storageUtils.loadCollectionsIndex).not.toHaveBeenCalled();
+    expect(storageUtils.deleteSingleFolder).not.toHaveBeenCalled();
+    expect(storageUtils.batchDeleteCollections).not.toHaveBeenCalled();
+    expect(storageUtils.batchUpdateCollections).not.toHaveBeenCalled();
+  });
+
+  test('deleteFolder blocks (without writing) when the folder is shared and the caller is a read-only member', async () => {
+    storageUtils.loadSingleFolder.mockResolvedValue({
+      uid: 'folder-1',
+      name: 'Shared Folder',
+      shared: { folderId: 'folder-1', role: 'read' },
+    });
+
+    const result = await deleteFolder('folder-1', true, true);
+
+    expect(result).toEqual({ blocked: true });
+    expect(storageUtils.deleteSingleFolder).not.toHaveBeenCalled();
+    expect(storageUtils.batchDeleteCollections).not.toHaveBeenCalled();
+  });
+
+  test('deleteFolder proceeds normally for an editable (non-shared) folder', async () => {
+    storageUtils.loadSingleFolder.mockResolvedValue({ uid: 'folder-1', name: 'Plain Folder' });
+    storageUtils.loadCollectionsIndex.mockResolvedValue({});
+    storageUtils.deleteSingleFolder.mockResolvedValue(true);
+
+    const result = await deleteFolder('folder-1', false, false, { skipSync: true });
+
+    expect(result).toEqual({ success: true, collectionsMovedToRoot: 0, collectionsDeleted: 0 });
+    expect(storageUtils.deleteSingleFolder).toHaveBeenCalledWith('folder-1');
   });
 });
 

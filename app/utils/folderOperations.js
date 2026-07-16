@@ -25,7 +25,7 @@ import {
 } from './storageUtils';
 import { triggerBackgroundSync } from './sharedSync';
 import { useTrackedSync } from '../useTrackedSync';
-import { canEditFolder } from './sharedFolderUtils';
+import { canEditFolder, isSharedFolder } from './sharedFolderUtils';
 
 // ========================================
 // FOLDER CRUD OPERATIONS
@@ -163,6 +163,17 @@ export const deleteFolder = async (folderId, force = false, deleteCollections = 
     try {
         if (!folderId) {
             throw new Error('Folder ID is required');
+        }
+
+        // Permission guard: a folder carrying a live `shared` marker can never be
+        // plain-deleted here, regardless of role - including the owner. Members
+        // must use "Leave Shared Folder" and owners must "Stop Sharing" first;
+        // the popup UI already hides plain Delete for every shared folder via
+        // buildFolderMenuItems, so this enforces the same rule at the data layer
+        // (which every caller - popup, full-page, command palette - goes through).
+        const folder = await loadSingleFolder(folderId);
+        if (isSharedFolder(folder)) {
+            return { blocked: true };
         }
 
         // Check if folder has collections

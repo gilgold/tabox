@@ -1,7 +1,7 @@
 /* global browser */
 import fs from 'fs';
 import path from 'path';
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { Provider, createStore } from 'jotai';
 import FPSidebar from '../app/fullpage/FPSidebar';
@@ -334,5 +334,85 @@ describe('FPSidebar folder reorder', () => {
         expect(compactRule).toMatch(/\.fp-sidebar \.fp-sidebar-save-section\s*{[^}]*padding:\s*48px 10px 12px/);
         expect(compactRule).toMatch(/\.fp-sidebar \.fp-sidebar-save-btn\s*{[^}]*width:\s*40px/);
         expect(compactRule).toMatch(/\.fp-sidebar \.fp-sidebar-save-btn\s*{[^}]*padding:\s*0/);
+    });
+});
+
+// Fix round 3 (task-13-report.md "## Fix round 3"): the sidebar folder context
+// menu had zero shared-folder gating - a read-only member (or the owner) could
+// see and click plain "Delete Folder" on a shared folder. It must instead show
+// the sharing-specific actions and never plain delete.
+describe('FPSidebar shared folder context menu', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        browser.windows.getAll.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+    });
+
+    test('shows Leave Shared Folder (and not Delete Folder) for a read-only shared folder', () => {
+        renderWithStore(
+            <FPSidebar
+                folders={[
+                    { uid: 'folder-1', name: 'Read Only Folder', color: 'blue', shared: { folderId: 'folder-1', role: 'read' } },
+                ]}
+                collections={[]}
+                addCollection={jest.fn()}
+                addFolder={jest.fn()}
+                onDataUpdate={jest.fn()}
+                updateFolders={jest.fn()}
+                triggerSync={jest.fn()}
+                triggerFolderLightningEffect={jest.fn()}
+            />,
+        );
+
+        fireEvent.contextMenu(screen.getByText('Read Only Folder').closest('button'));
+
+        expect(screen.getByText('Leave Shared Folder')).toBeInTheDocument();
+        expect(screen.queryByText('Delete Folder')).not.toBeInTheDocument();
+    });
+
+    test('shows Manage Sharing and Stop Sharing (and not Delete Folder) for a folder the user owns and shares', () => {
+        renderWithStore(
+            <FPSidebar
+                folders={[
+                    { uid: 'folder-1', name: 'Owned Shared Folder', color: 'blue', shared: { folderId: 'folder-1', role: 'owner', members: [] } },
+                ]}
+                collections={[]}
+                addCollection={jest.fn()}
+                addFolder={jest.fn()}
+                onDataUpdate={jest.fn()}
+                updateFolders={jest.fn()}
+                triggerSync={jest.fn()}
+                triggerFolderLightningEffect={jest.fn()}
+            />,
+        );
+
+        fireEvent.contextMenu(screen.getByText('Owned Shared Folder').closest('button'));
+
+        expect(screen.getByText('Manage Sharing…')).toBeInTheDocument();
+        expect(screen.getByText('Stop Sharing (keep my copy)')).toBeInTheDocument();
+        expect(screen.queryByText('Delete Folder')).not.toBeInTheDocument();
+        expect(screen.queryByText('Leave Shared Folder')).not.toBeInTheDocument();
+    });
+
+    test('shows plain Delete Folder for a non-shared, editable folder', () => {
+        renderWithStore(
+            <FPSidebar
+                folders={[
+                    { uid: 'folder-1', name: 'Plain Folder', color: 'blue' },
+                ]}
+                collections={[]}
+                addCollection={jest.fn()}
+                addFolder={jest.fn()}
+                onDataUpdate={jest.fn()}
+                updateFolders={jest.fn()}
+                triggerSync={jest.fn()}
+                triggerFolderLightningEffect={jest.fn()}
+            />,
+        );
+
+        fireEvent.contextMenu(screen.getByText('Plain Folder').closest('button'));
+
+        expect(screen.getByText('Delete Folder')).toBeInTheDocument();
+        expect(screen.queryByText('Leave Shared Folder')).not.toBeInTheDocument();
+        expect(screen.queryByText('Manage Sharing…')).not.toBeInTheDocument();
     });
 });

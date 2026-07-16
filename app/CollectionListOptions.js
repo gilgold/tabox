@@ -116,11 +116,12 @@ export function CollectionListOptions(props) {
 
     const handleSort = async (sortBy, ascending = sortAscending) => {
         if (!settingsData || settingsData.length === 0) return;
-        
+
         // CRITICAL: Load ALL collections from storage to ensure we clear order from all of them
         // This includes collections in folders, not just root-level collections
-        const { loadAllCollections, batchUpdateCollections } = await import('./utils/storageUtils');
-        
+        const { loadAllCollections, loadAllFolders, batchUpdateCollections } = await import('./utils/storageUtils');
+        const { isReadOnlySharedFolder } = await import('./utils/sharedFolderUtils');
+
         // Map sort type to storage field name
         const sortFieldMap = {
             'DATE': 'lastUpdated',
@@ -129,25 +130,41 @@ export function CollectionListOptions(props) {
         };
         const sortByField = sortFieldMap[sortBy] || 'lastUpdated';
         const sortOrder = ascending ? 'asc' : 'desc';
-        
+
+        // Read-only shared folders are never touched by a global sort - their
+        // manual order was set by the folder owner, not this user. Collections
+        // that live inside one are excluded from the clearing batch entirely so
+        // their `order` field stays exactly as-is.
+        const allFolders = props.folders && props.folders.length > 0
+            ? props.folders
+            : await loadAllFolders();
+        const readOnlyFolderUids = new Set(
+            allFolders.filter(isReadOnlySharedFolder).map((folder) => folder.uid)
+        );
+        const isReadOnlyShared = (collection) => Boolean(collection.parentId) && readOnlyFolderUids.has(collection.parentId);
+
         // Load all collections WITHOUT sort params first to get them all (order might affect sorting)
-        const allCollectionsFromStorage = await loadAllCollections({ 
+        const allCollectionsFromStorage = await loadAllCollections({
             metadataOnly: false,
             sortBy: sortByField,
             sortOrder: sortOrder
         });
-        
-        // Set order to null for ALL collections (including those in folders)
-        // This explicitly signals to batchUpdateCollections to clear the order field
-        // which allows user-selected sorting to take precedence over manual drag-and-drop ordering
-        const allCollectionsWithClearedOrder = allCollectionsFromStorage.map(collection => ({
-            ...collection,
-            order: null  // Explicitly set to null to clear manual ordering
-        }));
-        
-        // Save ALL collections with order=null to storage (will remove order field from index and collection data)
-        await batchUpdateCollections(allCollectionsWithClearedOrder);
-        
+
+        // Set order to null for every collection we're allowed to write to
+        // (including those in folders). This explicitly signals to
+        // batchUpdateCollections to clear the order field, which allows
+        // user-selected sorting to take precedence over manual drag-and-drop
+        // ordering. Collections inside a read-only shared folder are excluded.
+        const collectionsToClear = allCollectionsFromStorage
+            .filter((collection) => !isReadOnlyShared(collection))
+            .map(collection => ({
+                ...collection,
+                order: null  // Explicitly set to null to clear manual ordering
+            }));
+
+        // Save the writable collections with order=null to storage (will remove order field from index and collection data)
+        await batchUpdateCollections(collectionsToClear);
+
         // Reload collections with the sort preferences to ensure they're in the correct order
         // This ensures that after clearing order fields, collections are sorted by the user's preference
         const reloadedCollections = await loadAllCollections({
@@ -155,15 +172,18 @@ export function CollectionListOptions(props) {
             sortBy: sortByField,
             sortOrder: sortOrder
         });
-        
-        // Update UI with reloaded collections (they should already be sorted correctly)
+
+        // Update UI with reloaded collections (they should already be sorted correctly).
+        // Read-only shared collections are passed through unchanged so their order
+        // field is never stripped, even in the data handed to updateRemoteData.
         const cleanedData = reloadedCollections.map((collection) => {
+            if (isReadOnlyShared(collection)) return collection;
             const rest = { ...collection };
             delete rest.order;
             return rest;
         });
         await props.updateRemoteData(cleanedData);
-        
+
         // Save both sort type AND direction
         await browser.storage.local.set({ currentSortValue: sortBy, currentSortAscending: ascending });
     };

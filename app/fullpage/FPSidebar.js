@@ -8,6 +8,8 @@ import { sidebarNavigationState, sidebarCollapsedState } from '../atoms/fullpage
 import { commandPaletteOpenState } from '../atoms/commandPaletteState';
 import { searchState } from '../atoms/globalAppSettingsState';
 import { draggingCollectionState } from '../atoms/animationsState';
+import { noPermissionOpenState, shareFolderModalState } from '../atoms/sharedFoldersState';
+import { isProState } from '../atoms/premiumState';
 import { downloadTextFile } from '../utils';
 import { loadAllCollections } from '../utils/storageUtils';
 import { getColorValue } from '../utils/colorMigration';
@@ -17,6 +19,7 @@ import { useTrackedSync } from '../useTrackedSync';
 import { buildFolderUrlList, getCollectionUrls, copyToClipboard } from '../utils/index';
 import { reorderSidebarFolders } from './sidebarFolderReorder';
 import { dndPointerSensorOptions } from '../utils/dndShared';
+import { buildFolderMenuItems } from '../utils/folderMenuItems';
 import {
     duplicateFolder,
     deleteFolder,
@@ -36,11 +39,24 @@ import {
     MdSearch,
     MdOpenInBrowser,
     MdStar,
+    MdPersonAdd,
+    MdLinkOff,
+    MdLogout,
 } from 'react-icons/md';
 import { CiExport } from 'react-icons/ci';
 import { HiCollection } from 'react-icons/hi';
 import FPBadge from './FPBadge';
 import './FPSidebar.css';
+
+// Icons for the share/unshare/leave menu entries buildFolderMenuItems adds
+// (kept icon-free so it stays unit-testable); rendered here alongside the
+// hand-rolled fp-sidebar-ctx-item buttons.
+const FOLDER_MENU_ICONS = {
+    share: <MdPersonAdd size={16} />,
+    unshare: <MdLinkOff size={16} />,
+    'leave-shared': <MdLogout size={16} />,
+    delete: <MdDelete size={16} />,
+};
 
 const CreateFolderModal = lazy(() => import('../CreateFolderModal'));
 const FolderDeleteConfirmModal = lazy(() => import('../FolderDeleteConfirmModal'));
@@ -118,6 +134,9 @@ function FPSidebar({
     const [collapsed, setCollapsed] = useAtom(sidebarCollapsedState);
     const setSearch = useSetAtom(searchState);
     const setCommandPaletteOpen = useSetAtom(commandPaletteOpenState);
+    const setNoPermissionOpen = useSetAtom(noPermissionOpenState);
+    const setShareFolderModal = useSetAtom(shareFolderModalState);
+    const isPro = useAtomValue(isProState);
     const runTrackedSync = useTrackedSync();
     const isMac = useMemo(() => navigator.platform?.toUpperCase().includes('MAC'), []);
 
@@ -433,6 +452,39 @@ function FPSidebar({
         }
     }, [ctxMenu, closeCtxMenu]);
 
+    const handleCtxShare = useCallback(() => {
+        if (!ctxMenu) return;
+        const folder = ctxMenu.folder;
+        closeCtxMenu();
+        setShareFolderModal(folder);
+    }, [ctxMenu, closeCtxMenu, setShareFolderModal]);
+
+    const handleCtxLeaveShared = useCallback(async () => {
+        if (!ctxMenu) return;
+        const folder = ctxMenu.folder;
+        closeCtxMenu();
+        try {
+            await browser.runtime.sendMessage({ type: 'sharedLeaveFolder', folderId: folder.uid });
+            showInfoToast(`You left "${folder.name}". A local copy was kept.`);
+            if (onDataUpdate) await onDataUpdate();
+        } catch {
+            showErrorToast('Could not leave this folder. Please try again.');
+        }
+    }, [ctxMenu, closeCtxMenu, onDataUpdate]);
+
+    const handleCtxUnshare = useCallback(async () => {
+        if (!ctxMenu) return;
+        const folder = ctxMenu.folder;
+        closeCtxMenu();
+        try {
+            await browser.runtime.sendMessage({ type: 'sharedUnshareFolder', folderId: folder.uid });
+            showInfoToast(`"${folder.name}" is no longer shared.`);
+            if (onDataUpdate) await onDataUpdate();
+        } catch {
+            showErrorToast('Could not stop sharing this folder. Please try again.');
+        }
+    }, [ctxMenu, closeCtxMenu, onDataUpdate]);
+
     const handleCtxDelete = useCallback(async () => {
         if (!ctxMenu) return;
         const folder = ctxMenu.folder;
@@ -447,11 +499,13 @@ function FPSidebar({
                 showSuccessToast('Folder deleted');
                 if (onDataUpdate) await onDataUpdate();
                 await runTrackedSync();
+            } else if (result.blocked) {
+                setNoPermissionOpen(true);
             } else {
                 showErrorToast('Failed to delete folder');
             }
         }
-    }, [ctxMenu, closeCtxMenu, folderCounts, navigation, setNavigation, onDataUpdate, runTrackedSync]);
+    }, [ctxMenu, closeCtxMenu, folderCounts, navigation, setNavigation, onDataUpdate, runTrackedSync, setNoPermissionOpen]);
 
     const handleDeleteConfirm = useCallback(async (deleteCollections) => {
         if (!deleteModal) return;
@@ -466,10 +520,12 @@ function FPSidebar({
             showSuccessToast(msg);
             if (onDataUpdate) await onDataUpdate();
             await runTrackedSync();
+        } else if (result.blocked) {
+            setNoPermissionOpen(true);
         } else {
             showErrorToast('Failed to delete folder');
         }
-    }, [deleteModal, navigation, setNavigation, onDataUpdate, runTrackedSync]);
+    }, [deleteModal, navigation, setNavigation, onDataUpdate, runTrackedSync, setNoPermissionOpen]);
 
     const navItems = [
         { key: 'all', label: 'All Collections', count: allCount, icon: HiCollection },
@@ -695,26 +751,36 @@ function FPSidebar({
                 className="fp-sidebar-ctx-menu"
                 style={{ top: ctxMenu.y, left: ctxMenu.x }}
             >
-                <button className="fp-sidebar-ctx-item" onClick={handleCtxOpenAll}>
-                    <MdOpenInBrowser size={16} /> <span>Open All Collections</span>
-                </button>
-                <div className="fp-sidebar-ctx-divider" />
-                <button className="fp-sidebar-ctx-item" onClick={handleCtxEdit}>
-                    <MdEdit size={16} /> <span>Edit Folder</span>
-                </button>
-                <button className="fp-sidebar-ctx-item" onClick={handleCtxExport}>
-                    <CiExport size={16} /> <span>Export Folder</span>
-                </button>
-                <button className="fp-sidebar-ctx-item" onClick={handleCtxDuplicate}>
-                    <MdContentCopy size={16} /> <span>Duplicate Folder</span>
-                </button>
-                <button className="fp-sidebar-ctx-item" onClick={handleCtxCopyUrls}>
-                    <MdContentCopy size={16} /> <span>Copy all URLs in folder</span>
-                </button>
-                <div className="fp-sidebar-ctx-divider" />
-                <button className="fp-sidebar-ctx-item fp-sidebar-ctx-danger" onClick={handleCtxDelete}>
-                    <MdDelete size={16} /> <span>Delete Folder</span>
-                </button>
+                {buildFolderMenuItems({
+                    folder: ctxMenu.folder,
+                    onShare: handleCtxShare,
+                    onDelete: handleCtxDelete,
+                    onLeave: handleCtxLeaveShared,
+                    onUnshare: handleCtxUnshare,
+                    isPro,
+                    existingItems: [
+                        { id: 'open-all', text: 'Open All Collections', icon: <MdOpenInBrowser size={16} />, action: handleCtxOpenAll, condition: true },
+                        { id: 'edit', text: 'Edit Folder', icon: <MdEdit size={16} />, action: handleCtxEdit, condition: true },
+                        { id: 'export', text: 'Export Folder', icon: <CiExport size={16} />, action: handleCtxExport, condition: true },
+                        { id: 'duplicate', text: 'Duplicate Folder', icon: <MdContentCopy size={16} />, action: handleCtxDuplicate, condition: true },
+                        { id: 'copy-folder-urls', text: 'Copy all URLs in folder', icon: <MdContentCopy size={16} />, action: handleCtxCopyUrls, condition: true },
+                    ],
+                }).map((item, index, items) => {
+                    const isGroupBStart = item.id === 'open-all';
+                    const groupCIds = ['unshare', 'leave-shared', 'delete'];
+                    const isGroupCStart = groupCIds.includes(item.id) && !groupCIds.includes(items[index - 1]?.id);
+                    return (
+                        <React.Fragment key={item.id}>
+                            {(isGroupBStart || isGroupCStart) && index > 0 && <div className="fp-sidebar-ctx-divider" />}
+                            <button
+                                className={`fp-sidebar-ctx-item ${item.className === 'danger' ? 'fp-sidebar-ctx-danger' : ''}`.trim()}
+                                onClick={item.action}
+                            >
+                                {item.icon || FOLDER_MENU_ICONS[item.id]} <span>{item.text}</span>
+                            </button>
+                        </React.Fragment>
+                    );
+                })}
             </div>,
             document.body
         )}
