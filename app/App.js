@@ -64,6 +64,7 @@ import useOrphanRecovery from './useOrphanRecovery';
 import OrphanRecoveryModal from './OrphanRecoveryModal';
 import { OrphanRecoveryContext } from './OrphanRecoveryContext';
 import AIToolsModal from './AIToolsModal';
+import { usePremiumEntitlement } from './usePremiumEntitlement';
 
 // Migration system imports - wrapped in try/catch for compatibility
 const PERF_NAMESPACE = 'tabox:popup';
@@ -947,6 +948,8 @@ function App({ mode = 'popup' }) {
     const fallback = setTimeout(() => setOrphanScanReady(true), 2000);
     return () => clearTimeout(fallback);
   }, [migrationChecked, dataLoaded]);
+
+  usePremiumEntitlement();
 
   const orphanRecovery = useOrphanRecovery(orphanScanReady, {
     onRecovered: async (count) => {
