@@ -58,6 +58,19 @@ describe('GET /entitlement', () => {
     expect(body.token.split('.')).toHaveLength(3);
     expect(typeof body.checkedAt).toBe('string');
   });
+
+  it('returns entitled=false (not a 500) for a corrupt KV record', async () => {
+    mockGoogleOk();
+    const kv = { get: vi.fn(async () => 'corrupt{{'), put: vi.fn() };
+    const res = await worker.fetch(
+      new Request('https://x/entitlement', { headers: { Authorization: 'Bearer tok' } }),
+      { ...ENV_BASE, ENTITLEMENTS: kv }
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.entitled).toBe(false);
+    expect(body.token).toBeNull();
+  });
 });
 
 describe('POST /webhooks/paddle', () => {

@@ -18,7 +18,14 @@ async function handleEntitlement(request, env) {
   if (!identity) return json({ error: 'invalid_token' }, 401);
 
   const raw = await env.ENTITLEMENTS.get(`ent:${identity.googleId}`);
-  const record = raw ? JSON.parse(raw) : null;
+  let record = null;
+  if (raw) {
+    try {
+      record = JSON.parse(raw);
+    } catch {
+      record = null;
+    }
+  }
   const decision = decideEntitlement(record);
   const token = decision.entitled
     ? await signEntitlementToken({ sub: identity.googleId, ent: decision.status, plan: decision.plan }, env.JWT_SECRET)
@@ -37,6 +44,7 @@ async function handlePaddleWebhook(request, env) {
     event = JSON.parse(rawBody);
   } catch {
     // Validly signed but unprocessable payload — acknowledge so Paddle stops retrying.
+    console.warn('paddle webhook: unparseable signed body');
     return json({ ok: true });
   }
   const update = extractEntitlementUpdate(event, { monthly: env.PRICE_MONTHLY, annual: env.PRICE_ANNUAL });
