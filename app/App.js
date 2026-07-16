@@ -70,6 +70,7 @@ import { usePremiumEntitlement } from './usePremiumEntitlement';
 import NoPermissionModal from './NoPermissionModal';
 import { noPermissionOpenState } from './atoms/sharedFoldersState';
 import { guardFolderEdit } from './utils/sharedFolderUtils';
+import ShareFolderModal from './ShareFolderModal';
 
 // Migration system imports - wrapped in try/catch for compatibility
 const PERF_NAMESPACE = 'tabox:popup';
@@ -2054,6 +2055,7 @@ function App({ mode = 'popup' }) {
   const tabSwitcherEl = <TabSwitcher />;
   const aiToolsModalEl = <AIToolsModal updateRemoteData={updateRemoteData} />;
   const manageSubscriptionModalEl = <ManageSubscriptionModal />;
+  const shareFolderModalEl = <ShareFolderModal />;
   const noPermissionModalEl = <NoPermissionModal />;
 
   if (isFullPage) {
@@ -2072,6 +2074,7 @@ function App({ mode = 'popup' }) {
         {tabSwitcherEl}
         {aiToolsModalEl}
         {manageSubscriptionModalEl}
+        {shareFolderModalEl}
         {noPermissionModalEl}
         <FPLayout
           folders={displayFolders}
@@ -2119,6 +2122,7 @@ function App({ mode = 'popup' }) {
       {tabSwitcherEl}
       {aiToolsModalEl}
       {manageSubscriptionModalEl}
+      {shareFolderModalEl}
       {noPermissionModalEl}
       <div className={`App${isFullPage ? ' fullpage' : ''}`}>
       <Header

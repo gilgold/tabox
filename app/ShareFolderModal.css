@@ -1,0 +1,323 @@
+.share-folder-modal {
+    width: 420px;
+    max-width: 90vw;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(
+        145deg,
+        rgba(255, 255, 255, 0.95) 0%,
+        rgba(255, 255, 255, 0.9) 100%
+    );
+    backdrop-filter: blur(40px) saturate(200%) brightness(110%);
+    -webkit-backdrop-filter: blur(40px) saturate(200%) brightness(110%);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow:
+        0 20px 40px rgba(0, 0, 0, 0.1),
+        0 8px 16px rgba(0, 0, 0, 0.05),
+        inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    color: var(--text-color);
+    overflow: visible;
+}
+
+[data-theme="dark"] .share-folder-modal {
+    background: linear-gradient(
+        145deg,
+        rgba(23, 23, 23, 0.95) 0%,
+        rgba(38, 38, 38, 0.9) 100%
+    );
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow:
+        0 20px 40px rgba(0, 0, 0, 0.4),
+        0 8px 16px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.share-modal-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 16px 16px 12px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="dark"] .share-modal-header {
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+.share-modal-header h3 {
+    flex: 1;
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-color);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.share-modal-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    border-radius: 6px;
+}
+
+.share-modal-close:hover {
+    background: var(--setting-row-hover-bg-color, rgba(0, 0, 0, 0.06));
+}
+
+.share-upgrade {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 32px 24px;
+    text-align: center;
+    color: var(--text-color);
+}
+
+.share-upgrade svg {
+    color: #7c3aed;
+}
+
+.share-upgrade p {
+    margin: 0;
+    font-size: 13px;
+    opacity: 0.85;
+}
+
+.share-upgrade button {
+    border: none;
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    cursor: pointer;
+    background: linear-gradient(135deg, #7c3aed 0%, #2563eb 100%);
+}
+
+.share-invite-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 16px 16px 0;
+}
+
+.share-email-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+}
+
+.share-invite-row input[type='email'] {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--setting-row-border-color, rgba(0, 0, 0, 0.15));
+    background: var(--input-bg-color, #f5f9fb);
+    color: var(--text-color);
+    font-size: 13px;
+    outline: none;
+}
+
+.share-invite-row input[type='email']:focus {
+    border-color: var(--primary-color);
+}
+
+.share-invite-row select {
+    flex: 0 0 auto;
+    padding: 8px 8px;
+    border-radius: 8px;
+    border: 1px solid var(--setting-row-border-color, rgba(0, 0, 0, 0.15));
+    background: var(--input-bg-color, #f5f9fb);
+    color: var(--text-color);
+    font-size: 12px;
+}
+
+.share-submit {
+    flex: 0 0 auto;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    cursor: pointer;
+    background: var(--primary-color);
+}
+
+.share-submit:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+.share-suggestions {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    z-index: 10;
+    margin: 0;
+    padding: 4px;
+    list-style: none;
+    max-height: 160px;
+    overflow-y: auto;
+    background: var(--bg-color, #fff);
+    border: 1px solid var(--setting-row-border-color, rgba(0, 0, 0, 0.15));
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.share-suggestions li {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-color);
+}
+
+.share-suggestions li:hover {
+    background: var(--setting-row-hover-bg-color, rgba(0, 0, 0, 0.06));
+}
+
+.share-suggestion-name {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.share-suggestion-email {
+    opacity: 0.7;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.share-save-contact {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px 0;
+    font-size: 12px;
+    color: var(--text-color);
+    cursor: pointer;
+}
+
+.share-contact-name {
+    margin: 8px 16px 0;
+    box-sizing: border-box;
+    width: calc(100% - 32px);
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--setting-row-border-color, rgba(0, 0, 0, 0.15));
+    background: var(--input-bg-color, #f5f9fb);
+    color: var(--text-color);
+    font-size: 13px;
+    outline: none;
+}
+
+.share-hint {
+    margin: 10px 16px 0;
+    font-size: 11px;
+    opacity: 0.65;
+    color: var(--text-color);
+}
+
+.share-members {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px 16px 16px;
+    margin-top: 10px;
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="dark"] .share-members {
+    border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+.share-members h4 {
+    margin: 0 0 4px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    opacity: 0.7;
+    color: var(--text-color);
+}
+
+.share-member-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+}
+
+.share-member-email {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    color: var(--text-color);
+}
+
+.share-member-status {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+.share-member-status.status-active {
+    color: #15803d;
+    background: rgba(34, 197, 94, 0.15);
+}
+
+.share-member-status.status-invited {
+    color: #b45309;
+    background: rgba(245, 158, 11, 0.15);
+}
+
+.share-member-status.status-declined {
+    color: #b91c1c;
+    background: rgba(239, 68, 68, 0.15);
+}
+
+.share-member-row select {
+    padding: 5px 6px;
+    border-radius: 6px;
+    border: 1px solid var(--setting-row-border-color, rgba(0, 0, 0, 0.15));
+    background: var(--input-bg-color, #f5f9fb);
+    color: var(--text-color);
+    font-size: 11px;
+}
+
+.share-member-row button {
+    border: 1px solid var(--setting-row-border-color, rgba(0, 0, 0, 0.15));
+    background: transparent;
+    color: var(--text-color);
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.share-member-row button:hover {
+    background: var(--setting-row-hover-bg-color, rgba(0, 0, 0, 0.06));
+}
