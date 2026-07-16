@@ -137,4 +137,70 @@ export async function respondInvite(db, identity, folderId, accept, nowMs) {
   };
 }
 
+async function bumpRevision(db, folderId, identity, nowMs) {
+  await db.prepare('UPDATE shared_folders SET revision = revision + 1, updated_at = ?, updated_by = ? WHERE id = ?')
+    .bind(nowMs, identity.email.toLowerCase(), folderId).run();
+  const row = await db.prepare('SELECT revision FROM shared_folders WHERE id = ?').bind(folderId).first();
+  return row.revision;
+}
+
+export async function getFolderDelta(db, identity, folderId, sinceRev = 0) {
+  const access = await requireFolderAccess(db, identity, folderId, 'read');
+  if (access.ok === false) return access;
+  const { folder, role } = access;
+  const { results } = await db.prepare(
+    'SELECT uid, data, rev, deleted, updated_by, updated_at FROM shared_collections WHERE folder_id = ? AND rev > ? ORDER BY rev'
+  ).bind(folderId, Number(sinceRev) || 0).all();
+  return {
+    ok: true,
+    data: {
+      revision: folder.revision,
+      role,
+      folder: { name: folder.name, color: folder.color, updatedBy: folder.updated_by },
+      members: await membersOf(db, folderId),
+      collections: results.map((r) => ({
+        uid: r.uid, data: r.data == null || r.deleted ? null : JSON.parse(r.data),
+        rev: r.rev, deleted: r.deleted, updatedBy: r.updated_by, updatedAt: r.updated_at,
+      })),
+    },
+  };
+}
+
+export async function putCollection(db, identity, folderId, uid, { data, baseRev }, nowMs) {
+  const access = await requireFolderAccess(db, identity, folderId, 'write');
+  if (access.ok === false) return access;
+  if (JSON.stringify(data ?? null).length > MAX_COLLECTION_BYTES) return err(413, 'collection_too_large');
+  const row = await db.prepare('SELECT rev FROM shared_collections WHERE folder_id = ? AND uid = ?').bind(folderId, uid).first();
+  if (row && Number.isFinite(Number(baseRev)) && row.rev > Number(baseRev)) return err(409, 'conflict');
+  const revision = await bumpRevision(db, folderId, identity, nowMs);
+  await db.prepare(
+    `INSERT INTO shared_collections (folder_id, uid, data, rev, deleted, updated_at, updated_by) VALUES (?,?,?,?,0,?,?)
+     ON CONFLICT(folder_id, uid) DO UPDATE SET data = excluded.data, rev = excluded.rev, deleted = 0,
+       updated_at = excluded.updated_at, updated_by = excluded.updated_by`
+  ).bind(folderId, uid, JSON.stringify(data ?? null), revision, nowMs, identity.email.toLowerCase()).run();
+  return { ok: true, data: { revision } };
+}
+
+export async function deleteCollection(db, identity, folderId, uid, nowMs) {
+  const access = await requireFolderAccess(db, identity, folderId, 'write');
+  if (access.ok === false) return access;
+  const revision = await bumpRevision(db, folderId, identity, nowMs);
+  await db.prepare(
+    `INSERT INTO shared_collections (folder_id, uid, data, rev, deleted, updated_at, updated_by) VALUES (?,?,NULL,?,1,?,?)
+     ON CONFLICT(folder_id, uid) DO UPDATE SET data = NULL, rev = excluded.rev, deleted = 1,
+       updated_at = excluded.updated_at, updated_by = excluded.updated_by`
+  ).bind(folderId, uid, revision, nowMs, identity.email.toLowerCase()).run();
+  return { ok: true, data: { revision } };
+}
+
+export async function updateFolderMeta(db, identity, folderId, { name, color }, nowMs) {
+  const access = await requireFolderAccess(db, identity, folderId, 'write');
+  if (access.ok === false) return access;
+  const f = access.folder;
+  await db.prepare('UPDATE shared_folders SET name = ?, color = ? WHERE id = ?')
+    .bind(name ?? f.name, color === undefined ? f.color : color, folderId).run();
+  const revision = await bumpRevision(db, folderId, identity, nowMs);
+  return { ok: true, data: { revision } };
+}
+
 export { ROLES };
