@@ -218,7 +218,7 @@ async function applyDeltaLocally(folder, delta, myEmail) {
           }
         }
       } else if (isOther) {
-        const record = { ...row.data, uid: row.uid, parentId: folderId, lastUpdated: row.updatedAt };
+        const record = { ...sanitizeRemoteCollection(row.data), uid: row.uid, parentId: folderId, lastUpdated: row.updatedAt };
         updates[`collection_${row.uid}`] = record;
         index[row.uid] = { uid: row.uid, name: record.name, parentId: folderId, lastUpdated: row.updatedAt };
         appliedUids.add(row.uid);
@@ -234,7 +234,7 @@ async function applyDeltaLocally(folder, delta, myEmail) {
     const updatedShared = { ...localFolder.shared, role: delta.role, members: delta.members };
     updates[`folder_${folderId}`] = {
       ...localFolder,
-      name: delta.folder.name,
+      name: String(delta.folder.name ?? localFolder.name).slice(0, 200) || localFolder.name,
       color: delta.folder.color ?? localFolder.color,
       shared: updatedShared,
     };
@@ -345,7 +345,7 @@ async function respondToInvite({ folderId, accept }) {
     const shared = { folderId: folder.folderId, role: folder.role, ownerEmail: folder.ownerEmail, members: folder.members };
     const folderRecord = {
       uid: folder.folderId,
-      name: folder.name,
+      name: String(folder.name ?? 'Untitled').slice(0, 200) || 'Untitled',
       type: 'folder',
       color: folder.color,
       collapsed: false,
@@ -356,11 +356,9 @@ async function respondToInvite({ folderId, accept }) {
       shared,
     };
     updates[`folder_${folder.folderId}`] = folderRecord;
-    fIndex[folder.folderId] = { uid: folder.folderId, name: folder.name, type: 'folder', color: folder.color, shared };
+    fIndex[folder.folderId] = { uid: folder.folderId, name: folderRecord.name, type: 'folder', color: folder.color, shared };
     for (const c of collections) {
-      // Task 12b sanitizes this shape (sanitizeRemoteCollection) right after this
-      // task lands — deliberately unsanitized here per Task 12's scope.
-      const record = { ...c.data, uid: c.uid, parentId: folder.folderId, lastUpdated: now };
+      const record = { ...sanitizeRemoteCollection(c.data), uid: c.uid, parentId: folder.folderId, lastUpdated: now };
       updates[`collection_${c.uid}`] = record;
       cIndex[c.uid] = { uid: c.uid, name: record.name, parentId: folder.folderId, lastUpdated: now };
     }
@@ -582,6 +580,24 @@ async function handleSharedMessage(request) {
   }
 }
 
+const ALLOWED_TAB_SCHEMES = ['http:', 'https:', 'about:', 'chrome:'];
+const COLLECTION_FIELDS = ['name', 'tabs', 'chromeGroups', 'color', 'createdOn', 'lastUpdated', 'window', 'lastOpened', 'isFavorite', 'favoriteOrder', 'order'];
+
+function sanitizeRemoteCollection(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return { name: 'Untitled', tabs: [] };
+  const clean = {};
+  for (const field of COLLECTION_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(data, field)) clean[field] = data[field];
+  }
+  clean.name = String(clean.name ?? 'Untitled').slice(0, 500) || 'Untitled';
+  clean.tabs = Array.isArray(clean.tabs)
+    ? clean.tabs.filter((tab) => {
+        try { return ALLOWED_TAB_SCHEMES.includes(new URL(tab.url).protocol); } catch { return false; }
+      })
+    : [];
+  return clean;
+}
+
 const sharedFoldersApi = {
   SHARED_SYNC_STATE_KEY,
   SHARED_PENDING_INVITES_KEY,
@@ -596,6 +612,7 @@ const sharedFoldersApi = {
   syncSharedFolders,
   pollInvites,
   handleSharedMessage,
+  sanitizeRemoteCollection,
 };
 
 if (typeof globalThis !== 'undefined') {
