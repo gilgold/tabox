@@ -7,19 +7,17 @@ const MIGRATION = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'mig
 
 function convertSqlParameters(sql, bound) {
   // Check if SQL uses numbered parameters (?1, ?2, etc.)
-  const hasNumberedParams = /\?\d+/.test(sql);
+  const numberedParamMatches = [...sql.matchAll(/\?(\d+)/g)];
 
-  if (hasNumberedParams) {
-    // Convert ?1, ?2, etc. to $1, $2 for better-sqlite3
+  if (numberedParamMatches.length > 0) {
+    // Build a map of DISTINCT referenced numbered parameters: {1: bound[0], 2: bound[1], ...}
+    const referencedNumbers = new Set(numberedParamMatches.map(m => parseInt(m[1], 10)));
     const paramMap = {};
-    let converted = sql;
-    let paramIndex = 1;
-    for (const arg of bound) {
-      converted = converted.replace(new RegExp(`\\?${paramIndex}`, 'g'), `$${paramIndex}`);
-      paramMap[paramIndex] = arg;
-      paramIndex++;
+    for (const num of referencedNumbers) {
+      paramMap[String(num)] = bound[num - 1];
     }
-    return { sql: converted, params: paramMap };
+    // Pass the ORIGINAL sql (no rewrite) with the object; better-sqlite3 binds ?N directly
+    return { sql, params: paramMap };
   } else {
     // Use positional parameters (spread args)
     return { sql, params: bound };
