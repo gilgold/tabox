@@ -188,67 +188,84 @@ async function applyEntitlement(env, googleId, record) {
   }
 }
 
-async function handleShared(request, env, url) {
-  const identity = await authenticate(request, env);
-  if (!identity) return json({ error: 'invalid_token' }, 401);
-  if (!identity.email) return json({ error: 'email_unavailable' }, 403);
-  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) {
-    const len = Number(request.headers.get('content-length') || 0);
-    if (len > MAX_BODY_BYTES) return json({ error: 'payload_too_large' }, 413);
-    const isInvite = request.method === 'POST' && url.pathname.endsWith('/invites');
-    const allowed = isInvite
-      ? await checkRateLimit(env, identity.googleId, 'invites', 30, 3600, Date.now())
-      : await checkRateLimit(env, identity.googleId, 'writes', 120, 60, Date.now());
-    if (!allowed) return json({ error: 'rate_limited' }, 429);
-  }
-  const db = env.SHARED_DB;
-  const now = Date.now();
-  const seg = url.pathname.split('/').filter(Boolean); // ['shared', ...]
-  const method = request.method;
-  const body = async () => { try { return await request.json(); } catch { return {}; } };
-  const out = (r) => (r.ok === false ? json({ error: r.error }, r.status) : json(r.data, 200));
+// Sentinel thrown by body() when the real request text exceeds MAX_BODY_BYTES;
+// caught by handleShared's error boundary below and mapped to a 413 response.
+class PayloadTooLargeError extends Error {}
 
-  if (seg[1] === 'invites') {
-    if (method === 'GET' && seg.length === 2) return out(await listInvites(db, identity));
-    if (method === 'POST' && seg.length === 4 && seg[3] === 'respond') {
-      const { accept } = await body();
-      return out(await respondInvite(db, identity, seg[2], accept === true, now));
+async function handleShared(request, env, url) {
+  try {
+    const identity = await authenticate(request, env);
+    if (!identity) return json({ error: 'invalid_token' }, 401);
+    if (!identity.email) return json({ error: 'email_unavailable' }, 403);
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) {
+      // Fast path: reject on the declared size before doing any work. This is
+      // trust-but-verify — body() below re-checks the real byte count, since
+      // chunked/dishonest requests can omit or fake content-length.
+      const len = Number(request.headers.get('content-length') || 0);
+      if (len > MAX_BODY_BYTES) return json({ error: 'payload_too_large' }, 413);
+      const isInvite = request.method === 'POST' && url.pathname.endsWith('/invites');
+      const allowed = isInvite
+        ? await checkRateLimit(env, identity.googleId, 'invites', 30, 3600, Date.now())
+        : await checkRateLimit(env, identity.googleId, 'writes', 120, 60, Date.now());
+      if (!allowed) return json({ error: 'rate_limited' }, 429);
+    }
+    const db = env.SHARED_DB;
+    const now = Date.now();
+    const seg = url.pathname.split('/').filter(Boolean); // ['shared', ...]
+    const method = request.method;
+    const body = async () => {
+      const text = await request.text();
+      if (text.length > MAX_BODY_BYTES) throw new PayloadTooLargeError();
+      try { return JSON.parse(text); } catch { return {}; }
+    };
+    const out = (r) => (r.ok === false ? json({ error: r.error }, r.status) : json(r.data, 200));
+
+    if (seg[1] === 'invites') {
+      if (method === 'GET' && seg.length === 2) return out(await listInvites(db, identity));
+      if (method === 'POST' && seg.length === 4 && seg[3] === 'respond') {
+        const { accept } = await body();
+        return out(await respondInvite(db, identity, seg[2], accept === true, now));
+      }
+      return json({ error: 'not_found' }, 404);
+    }
+    if (seg[1] !== 'folders') return json({ error: 'not_found' }, 404);
+
+    if (seg.length === 2) {
+      if (method === 'GET') return out(await listSharedFolders(db, identity));
+      if (method === 'POST') {
+        if (!(await isProUser(env, identity.googleId))) return json({ error: 'pro_required' }, 403);
+        return out(await createSharedFolder(db, identity, await body(), now));
+      }
+    }
+    const folderId = decodeURIComponent(seg[2] || '');
+    if (seg.length === 3) {
+      if (method === 'GET') return out(await getFolderDelta(db, identity, folderId, url.searchParams.get('sinceRev')));
+      if (method === 'PATCH') return out(await updateFolderMeta(db, identity, folderId, await body(), now));
+      if (method === 'DELETE') return out(await deleteSharedFolder(db, identity, folderId));
+    }
+    if (seg.length === 4 && seg[3] === 'invites' && method === 'POST') {
+      if (!(await isProUser(env, identity.googleId))) return json({ error: 'pro_required' }, 403);
+      return out(await inviteMember(db, identity, folderId, await body(), now));
+    }
+    if (seg.length === 4 && seg[3] === 'members' && method === 'GET') {
+      return out(await getMembers(db, identity, folderId));
+    }
+    if (seg.length === 5 && seg[3] === 'members') {
+      const email = decodeURIComponent(seg[4]);
+      if (method === 'PATCH') return out(await updateMemberRole(db, identity, folderId, email, (await body()).role, now));
+      if (method === 'DELETE') return out(await removeMember(db, identity, folderId, email, now));
+    }
+    if (seg.length === 5 && seg[3] === 'collections') {
+      const uid = decodeURIComponent(seg[4]);
+      if (method === 'PUT') return out(await putCollection(db, identity, folderId, uid, await body(), now));
+      if (method === 'DELETE') return out(await deleteCollection(db, identity, folderId, uid, now));
     }
     return json({ error: 'not_found' }, 404);
+  } catch (err) {
+    if (err instanceof PayloadTooLargeError) return json({ error: 'payload_too_large' }, 413);
+    console.error('handleShared error:', err);
+    return json({ error: 'internal_error' }, 500);
   }
-  if (seg[1] !== 'folders') return json({ error: 'not_found' }, 404);
-
-  if (seg.length === 2) {
-    if (method === 'GET') return out(await listSharedFolders(db, identity));
-    if (method === 'POST') {
-      if (!(await isProUser(env, identity.googleId))) return json({ error: 'pro_required' }, 403);
-      return out(await createSharedFolder(db, identity, await body(), now));
-    }
-  }
-  const folderId = decodeURIComponent(seg[2] || '');
-  if (seg.length === 3) {
-    if (method === 'GET') return out(await getFolderDelta(db, identity, folderId, url.searchParams.get('sinceRev')));
-    if (method === 'PATCH') return out(await updateFolderMeta(db, identity, folderId, await body(), now));
-    if (method === 'DELETE') return out(await deleteSharedFolder(db, identity, folderId));
-  }
-  if (seg.length === 4 && seg[3] === 'invites' && method === 'POST') {
-    if (!(await isProUser(env, identity.googleId))) return json({ error: 'pro_required' }, 403);
-    return out(await inviteMember(db, identity, folderId, await body(), now));
-  }
-  if (seg.length === 4 && seg[3] === 'members' && method === 'GET') {
-    return out(await getMembers(db, identity, folderId));
-  }
-  if (seg.length === 5 && seg[3] === 'members') {
-    const email = decodeURIComponent(seg[4]);
-    if (method === 'PATCH') return out(await updateMemberRole(db, identity, folderId, email, (await body()).role, now));
-    if (method === 'DELETE') return out(await removeMember(db, identity, folderId, email, now));
-  }
-  if (seg.length === 5 && seg[3] === 'collections') {
-    const uid = decodeURIComponent(seg[4]);
-    if (method === 'PUT') return out(await putCollection(db, identity, folderId, uid, await body(), now));
-    if (method === 'DELETE') return out(await deleteCollection(db, identity, folderId, uid, now));
-  }
-  return json({ error: 'not_found' }, 404);
 }
 
 export default {

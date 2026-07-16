@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import worker from '../src/index.js';
 import { makeDB } from './helpers/d1Mock.js';
 
@@ -57,10 +57,14 @@ describe('/shared routes', () => {
     expect(members.members[0]).toMatchObject({ email: 'guest@x.com', status: 'active' });
   });
 
-  it('unauthenticated -> 401; unknown path -> 404', async () => {
+  it('unauthenticated -> 401; authenticated unknown path -> 404', async () => {
     mockGoogle({});
-    const res = await worker.fetch(req('GET', '/shared/folders', 'bad'), env({}, db));
-    expect(res.status).toBe(401);
+    const unauth = await worker.fetch(req('GET', '/shared/folders', 'bad'), env({}, db));
+    expect(unauth.status).toBe(401);
+
+    mockGoogle({ 't-owner': { googleId: 'g-owner', email: 'owner@x.com' } });
+    const unknown = await worker.fetch(req('GET', '/shared/unknown', 't-owner'), env({}, db));
+    expect(unknown.status).toBe(404);
   });
 
   it('OPTIONS preflight advertises PUT/PATCH/DELETE', async () => {
@@ -68,5 +72,69 @@ describe('/shared routes', () => {
     expect(res.headers.get('Access-Control-Allow-Methods')).toContain('PUT');
     expect(res.headers.get('Access-Control-Allow-Methods')).toContain('DELETE');
     expect(res.headers.get('Access-Control-Allow-Methods')).toContain('PATCH');
+  });
+
+  describe('body-size guard', () => {
+    it('413 payload_too_large when Content-Length header exceeds 1MB', async () => {
+      const e = env({ 'ent:g-owner': PRO_RECORD }, db);
+      const res = await worker.fetch(new Request('https://api/shared/folders', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer t-owner', 'Content-Length': String(2_000_000) },
+        body: JSON.stringify({ folderId: 'f1', name: 'T', collections: [] }),
+      }), e);
+      expect(res.status).toBe(413);
+      expect(await res.json()).toEqual({ error: 'payload_too_large' });
+    });
+
+    it('413 payload_too_large when the real body text exceeds 1MB despite an absent/fake Content-Length', async () => {
+      const e = env({ 'ent:g-owner': PRO_RECORD }, db);
+      const oversized = 'x'.repeat(1_048_577);
+      const request = new Request('https://api/shared/folders', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer t-owner' },
+        body: oversized,
+      });
+      // Requests built from a string body don't populate a Content-Length header
+      // (verified: request.headers.get('content-length') is null here), so this
+      // exercises the real-byte-count guard inside body(), not the header fast path.
+      expect(request.headers.get('content-length')).toBeNull();
+      const res = await worker.fetch(request, e);
+      expect(res.status).toBe(413);
+      expect(await res.json()).toEqual({ error: 'payload_too_large' });
+    });
+  });
+
+  describe('rate limiting', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('429 rate_limited when the writes bucket is already at the limit', async () => {
+      const fixedNow = Date.parse('2026-01-01T00:00:00Z');
+      vi.useFakeTimers();
+      vi.setSystemTime(fixedNow);
+      const windowStart = Math.floor(fixedNow / 1000 / 60);
+      const e = env({ 'ent:g-owner': PRO_RECORD, [`rl:g-owner:writes:${windowStart}`]: 120 }, db);
+      const res = await worker.fetch(req('POST', '/shared/folders', 't-owner', { folderId: 'f1', name: 'T', collections: [] }), e);
+      expect(res.status).toBe(429);
+      expect(await res.json()).toEqual({ error: 'rate_limited' });
+    });
+  });
+
+  describe('internal error boundary', () => {
+    it('500 internal_error (with CORS header) when stored collection data is corrupted JSON', async () => {
+      const nowMs = Date.now();
+      db._raw.prepare(
+        'INSERT INTO shared_folders (id, owner_google_id, owner_email, name, color, revision, created_at, updated_at, updated_by) VALUES (?,?,?,?,?,?,?,?,?)'
+      ).run('f-corrupt', 'g-owner', 'owner@x.com', 'Corrupt', null, 1, nowMs, nowMs, 'owner@x.com');
+      db._raw.prepare(
+        'INSERT INTO shared_collections (folder_id, uid, data, rev, deleted, updated_at, updated_by) VALUES (?,?,?,?,?,?,?)'
+      ).run('f-corrupt', 'c1', '{not valid json', 1, 0, nowMs, 'owner@x.com');
+
+      const res = await worker.fetch(req('GET', '/shared/folders/f-corrupt', 't-owner'), env({}, db));
+      expect(res.status).toBe(500);
+      expect(await res.json()).toEqual({ error: 'internal_error' });
+      expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    });
   });
 });
