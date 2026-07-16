@@ -59,7 +59,8 @@
    "unlimitedStorage",
    "contextMenus",
    "system.display",
-   "alarms"
+   "alarms",
+   "notifications"
   ],
   "host_permissions": [
     "https://www.googleapis.com/",

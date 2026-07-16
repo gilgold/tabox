@@ -258,17 +258,122 @@ async function applyDeltaLocally(folder, delta, myEmail) {
   });
 }
 
-// Placeholder stub — Task 11/12 replaces this body with the real invite-response
-// implementation. Once implemented, an accepted invite gains the caller its first
-// shared folder, so that success path should also call
-// `if (typeof ensureSharedSyncAlarm === 'function') await ensureSharedSyncAlarm();`
-// (same guarded call used by sharedCreateShare above and unmarkLocalFolderShared).
-async function respondToInvite() {
-  return { ok: false, error: 'not_implemented' };
-}
-// Task 12 replaces this stub with the real invite-poll implementation.
+// Task 12: polls the server for pending invites addressed to the signed-in user,
+// persists them under SHARED_PENDING_INVITES_KEY, and fires ONE Chrome notification
+// per newly-seen folderId (dedup'd via the stored notifiedFolderIds list, so a
+// re-poll of the same still-pending invite never re-notifies). The network fetch
+// happens outside the storage lock (it touches no local storage); only the
+// get-then-set of the pending-invites record is serialized through
+// withStorageLock, consistent with every other aggregate-key mutation in this file.
 async function pollInvites() {
-  return { ok: false, error: 'not_implemented' };
+  const res = await sharedApiFetch('/shared/invites');
+  if (!res.ok) return res;
+  const invites = res.data.invites || [];
+  return withStorageLock(async () => {
+    const { [SHARED_PENDING_INVITES_KEY]: prev = { invites: [], notifiedFolderIds: [] } } =
+      await browser.storage.local.get(SHARED_PENDING_INVITES_KEY);
+    const notifiedFolderIds = [...(prev.notifiedFolderIds || [])];
+    for (const inv of invites) {
+      if (!notifiedFolderIds.includes(inv.folderId)) {
+        notifiedFolderIds.push(inv.folderId);
+        try {
+          await browser.notifications.create(`shared-invite-${inv.folderId}`, {
+            type: 'basic',
+            iconUrl: 'images/icon128.png',
+            title: 'Tabox — shared folder invite',
+            message: `${inv.ownerEmail} wants to share the folder "${inv.folderName}" with you`,
+          });
+        } catch { /* notifications may be unavailable; the in-app banner still shows */ }
+      }
+    }
+    await browser.storage.local.set({ [SHARED_PENDING_INVITES_KEY]: { invites, notifiedFolderIds } });
+  }).then(() => ({ ok: true, data: { invites } }));
+}
+
+// Task 12: responds to a pending invite. Declining (or a 404 — the invite is
+// already gone server-side, e.g. revoked/expired) just drops it from the local
+// pending list. Accepting materializes the shared folder + its collections as
+// LOCAL records in one atomic storage.local.set (folder_<id>, collection_<uid>
+// per collection, both indexes rewritten), seeds this folder's sync-state
+// watermark so the next background sync cycle pulls only what's changed since,
+// then removes the now-resolved invite from the pending list. This is the
+// caller's first shared folder if it had none before, so on success it also
+// ensures the background sync alarm exists — mirroring the exact guarded-call
+// pattern already used by handleSharedMessage's sharedCreateShare case and by
+// unmarkLocalFolderShared (`typeof ensureSharedSyncAlarm === 'function'`):
+// shared-folders.js is loaded via importScripts AFTER background.js in the real
+// service worker, so the bare identifier resolves there but is safely absent
+// (typeof-guarded, no ReferenceError) when this module is required standalone
+// under Jest.
+async function respondToInvite({ folderId, accept }) {
+  const res = await sharedApiFetch(`/shared/invites/${folderId}/respond`, { method: 'POST', body: { accept } });
+
+  const removePending = () => withStorageLock(async () => {
+    const { [SHARED_PENDING_INVITES_KEY]: prev = { invites: [], notifiedFolderIds: [] } } =
+      await browser.storage.local.get(SHARED_PENDING_INVITES_KEY);
+    await browser.storage.local.set({
+      [SHARED_PENDING_INVITES_KEY]: { ...prev, invites: (prev.invites || []).filter((i) => i.folderId !== folderId) },
+    });
+  });
+
+  if (!res.ok) {
+    if (res.status === 404) await removePending();
+    return res;
+  }
+  if (!res.data.accepted) {
+    await removePending();
+    return res;
+  }
+
+  const { folder, collections } = res.data;
+  const now = Date.now();
+
+  // One atomic set: folder_<id> + collection_<uid> per collection + both
+  // indexes rewritten. Overwrites any stale local copy of this folder/its
+  // collections wholesale (e.g. re-accepting after a prior partial accept) —
+  // the whole record is server-authoritative here, so a clean overwrite is
+  // correct and keeps both indexes consistent with what was just written.
+  await withStorageLock(async () => {
+    const got = await browser.storage.local.get(['folders_index', 'collections_index']);
+    const fIndex = got.folders_index || {};
+    const cIndex = got.collections_index || {};
+    const updates = {};
+    const shared = { folderId: folder.folderId, role: folder.role, ownerEmail: folder.ownerEmail, members: folder.members };
+    const folderRecord = {
+      uid: folder.folderId,
+      name: folder.name,
+      type: 'folder',
+      color: folder.color,
+      collapsed: false,
+      order: 999999,
+      collectionCount: collections.length,
+      createdOn: now,
+      lastUpdated: now,
+      shared,
+    };
+    updates[`folder_${folder.folderId}`] = folderRecord;
+    fIndex[folder.folderId] = { uid: folder.folderId, name: folder.name, type: 'folder', color: folder.color, shared };
+    for (const c of collections) {
+      // Task 12b sanitizes this shape (sanitizeRemoteCollection) right after this
+      // task lands — deliberately unsanitized here per Task 12's scope.
+      const record = { ...c.data, uid: c.uid, parentId: folder.folderId, lastUpdated: now };
+      updates[`collection_${c.uid}`] = record;
+      cIndex[c.uid] = { uid: c.uid, name: record.name, parentId: folder.folderId, lastUpdated: now };
+    }
+    updates.folders_index = fIndex;
+    updates.collections_index = cIndex;
+    await browser.storage.local.set(updates); // one atomic set
+  });
+
+  // Separate, sequential lock acquisitions (setFolderSyncState and
+  // removePending each acquire/release their own) — never nested inside the
+  // block above, which would deadlock.
+  await setFolderSyncState(folder.folderId, { lastRev: folder.revision, lastSyncedAt: now, knownUids: collections.map((c) => c.uid) });
+  await removePending();
+
+  if (typeof ensureSharedSyncAlarm === 'function') await ensureSharedSyncAlarm();
+
+  return { ok: true, data: { folderId: folder.folderId } };
 }
 
 // Task 10 review fix: re-entrancy guard. The 5-minute alarm and a popup-triggered
