@@ -30,6 +30,8 @@ module.exports = [
       "v4/**",
       // Scratch/repro scripts (e.g. Playwright repros), not shipped source.
       "output/**",
+      // Wix site code (Velo $w globals, Wix-hosted) — not extension source.
+      "site/**",
       ".yarn/**",
       "node_modules/**",
       "coverage/**",
