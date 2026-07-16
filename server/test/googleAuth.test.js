@@ -34,4 +34,14 @@ describe('verifyGoogleToken', () => {
       .mockResolvedValueOnce(okJson({ user: {} }));
     expect(await verifyGoogleToken('tok', CLIENT_ID, fetchImpl)).toBeNull();
   });
+
+  it('resolves null when fetch rejects (network error)', async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(new Error('network'));
+    await expect(verifyGoogleToken('tok', CLIENT_ID, fetchImpl)).resolves.toBeNull();
+  });
+
+  it('resolves null when tokeninfo body is malformed (json() rejects)', async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce({ ok: true, json: async () => { throw new Error('bad json'); } });
+    await expect(verifyGoogleToken('tok', CLIENT_ID, fetchImpl)).resolves.toBeNull();
+  });
 });
