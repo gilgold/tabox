@@ -43,7 +43,15 @@ async function openProCheckout() {
 
 async function handleProAlarm(alarmName) {
   if (alarmName === PRO_ENTITLEMENT_ALARM) {
-    await refreshProEntitlement();
+    const { [PRO_ENTITLEMENT_KEY]: cached, [PRO_CHECKOUT_PENDING_KEY]: pendingUntil } =
+      await browser.storage.local.get([PRO_ENTITLEMENT_KEY, PRO_CHECKOUT_PENDING_KEY]);
+    const checkoutPending = pendingUntil && Date.now() < pendingUntil;
+    // Mirrors the popup hook's `cached &&` guard (app/usePremiumEntitlement.js):
+    // never hit the Worker for a user with no cached entitlement and no pending
+    // checkout — that would call it for every free/signed-out install, daily.
+    if (cached || checkoutPending) {
+      await refreshProEntitlement();
+    }
     return true;
   }
   if (alarmName === PRO_CHECKOUT_POLL_ALARM) {

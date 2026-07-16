@@ -85,4 +85,20 @@ describe('handleProAlarm', () => {
     const { handleProAlarm } = load();
     expect(await handleProAlarm('background-sync')).toBe(false);
   });
+
+  it('skips the Worker for pro-entitlement-refresh when there is no cached entitlement and no pending checkout', async () => {
+    STORAGE.googleRefreshToken = 'rt';
+    const { handleProAlarm, PRO_ENTITLEMENT_ALARM } = load();
+    expect(await handleProAlarm(PRO_ENTITLEMENT_ALARM)).toBe(true);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('refreshes on pro-entitlement-refresh when a cached entitlement record exists', async () => {
+    STORAGE.googleRefreshToken = 'rt';
+    STORAGE.premiumEntitlement = { entitled: true, status: 'active', plan: 'monthly', refreshedAt: new Date().toISOString() };
+    global.fetch.mockResolvedValue({ ok: true, json: async () => ({ entitled: true, status: 'active', plan: 'monthly', expiresAt: null, token: 'jwt' }) });
+    const { handleProAlarm, PRO_ENTITLEMENT_ALARM } = load();
+    expect(await handleProAlarm(PRO_ENTITLEMENT_ALARM)).toBe(true);
+    expect(global.fetch).toHaveBeenCalled();
+  });
 });
