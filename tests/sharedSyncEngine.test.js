@@ -1,5 +1,5 @@
 import { browser } from '../static/globals';
-import { syncSharedFolders, SHARED_EVENTS_KEY, SHARED_SYNC_STATE_KEY } from '../chrome/shared-folders';
+import { syncSharedFolders, handleSharedMessage, SHARED_EVENTS_KEY, SHARED_SYNC_STATE_KEY } from '../chrome/shared-folders';
 import * as bgUtils from '../chrome/background-utils';
 
 jest.mock('../chrome/background-utils', () => ({
@@ -88,4 +88,31 @@ test('403 on pull converts the folder to a local unshared folder and records a r
   const store = await browser.storage.local.get(['folder_f1', SHARED_EVENTS_KEY]);
   expect(store.folder_f1.shared).toBeUndefined();
   expect(store[SHARED_EVENTS_KEY][0]).toMatchObject({ kind: 'revoked', folderId: 'f1' });
+});
+
+// Task 15 review: the popup previously drained shared_folder_events with a plain
+// storage.local.get followed by a separate storage.local.set([]) - a read-then-clear
+// that can race a concurrent event append and silently drop it. sharedDrainEvents reads
+// and resets the key under the SAME withStorageLock acquisition, so the two are atomic
+// from the caller's point of view.
+describe('sharedDrainEvents', () => {
+  test('(d) returns the current events and clears the key atomically - a second sequential drain returns []', async () => {
+    const events = [
+      { folderId: 'f1', folderName: 'Team', actorEmail: 'o@x.com', kind: 'updated', collectionName: 'A', at: 1 },
+      { folderId: 'f1', folderName: 'Team', actorEmail: 'o@x.com', kind: 'deleted', collectionName: null, at: 2 },
+    ];
+    await browser.storage.local.set({ [SHARED_EVENTS_KEY]: events });
+
+    const first = await handleSharedMessage({ type: 'sharedDrainEvents' });
+    expect(first).toEqual({ ok: true, data: { events } });
+    expect((await browser.storage.local.get(SHARED_EVENTS_KEY))[SHARED_EVENTS_KEY]).toEqual([]);
+
+    const second = await handleSharedMessage({ type: 'sharedDrainEvents' });
+    expect(second).toEqual({ ok: true, data: { events: [] } });
+  });
+
+  test('drains an empty/missing events key as []', async () => {
+    const res = await handleSharedMessage({ type: 'sharedDrainEvents' });
+    expect(res).toEqual({ ok: true, data: { events: [] } });
+  });
 });

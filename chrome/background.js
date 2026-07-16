@@ -300,19 +300,38 @@ async function createEmergencySelectionBackup(reason) {
 
 async function overwriteBackupSelection(payload = {}) {
   const selectedCollections = Array.isArray(payload.collections) ? payload.collections : [];
-  // Backups are plain snapshots of local storage, so a folder that was shared (Task 8)
-  // when the backup was taken still carries its `shared` marker. Restoring that marker
-  // verbatim would resurrect stale worker-owned state (wrong folderId/role/members, or a
-  // share that no longer exists) - strip it from every restored folder before it's saved.
-  const selectedFolders = (Array.isArray(payload.folders) ? payload.folders : []).map((folder) => {
-    if (!folder || !folder.shared) return folder;
-    const { shared, ...rest } = folder;
-    return rest;
-  });
   // Full-backup restores ask to mirror the backup exactly: folders that aren't part
   // of the backup must be removed. Selective (pick-items) restores leave them alone.
   const pruneMissingFolders = payload.pruneMissingFolders === true;
   const currentFolders = await loadAllFoldersBG();
+  const currentFoldersByUid = new Map(currentFolders.map((folder) => [folder.uid, folder]));
+  // Task 9/15 review: a folder is "live shared" when its CURRENT stored record (not
+  // the backup's) carries the Task 8 `shared` marker - mirrors shared-folders.js's
+  // isSharedFolderRecord.
+  const isLiveShared = (folder) => Boolean(folder && folder.shared && folder.shared.folderId);
+
+  // Backups are plain snapshots of local storage, so a folder that was shared (Task 8)
+  // when the backup was taken still carries its `shared` marker. Restoring that marker
+  // verbatim would resurrect stale worker-owned state (wrong folderId/role/members, or a
+  // share that no longer exists) - strip it from every restored folder before it's saved.
+  //
+  // EXCEPTION (Task 9/15 review): if the folder is CURRENTLY live-shared in local
+  // storage, a routine auto-backup taken while it was shared must not silently unshare
+  // it on restore - the next Drive sync would then upload it (the exact leak this
+  // whole guard exists to prevent). The current marker wins over the backup's
+  // absence-of-marker in that case. Folders that are NOT currently shared keep the
+  // strip: a backup must never resurrect stale shared state for a folder that has
+  // since been unshared.
+  const selectedFolders = (Array.isArray(payload.folders) ? payload.folders : []).map((folder) => {
+    if (!folder) return folder;
+    const currentFolder = currentFoldersByUid.get(folder.uid);
+    if (isLiveShared(currentFolder)) {
+      return { ...folder, shared: currentFolder.shared };
+    }
+    if (!folder.shared) return folder;
+    const { shared, ...rest } = folder;
+    return rest;
+  });
   const currentCollections = await loadAllCollectionsBG(true);
 
   await createEmergencySelectionBackup('Before selective overwrite restore');
@@ -364,7 +383,10 @@ async function overwriteBackupSelection(payload = {}) {
 
   let removedFolders = 0;
   if (pruneMissingFolders) {
-    const foldersToRemove = currentFolders.filter((folder) => !selectedFolderIds.has(folder.uid));
+    // Task 9/15 review: shared folders are owned by the worker, not the backup - never
+    // delete a folder that's currently live-shared just because the backup (which
+    // intentionally excludes shared folders/collections - see Task 9) doesn't have it.
+    const foldersToRemove = currentFolders.filter((folder) => !selectedFolderIds.has(folder.uid) && !isLiveShared(folder));
     if (foldersToRemove.length > 0) {
       const removeFolderIds = new Set(foldersToRemove.map((folder) => folder.uid));
       // Re-home any collection still pointing at a folder we're about to remove so we

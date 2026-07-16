@@ -10,7 +10,9 @@
 const sharedFoldersBgUtils = typeof require === 'function'
   ? require('./background-utils')
   : globalThis.TaboxBackgroundUtils;
-const { getAuthToken } = sharedFoldersBgUtils;
+const { getAuthToken, STORAGE_KEYS: sharedFoldersStorageKeys } = sharedFoldersBgUtils;
+const { DELETED_COLLECTION_TOMBSTONES: DELETED_COLLECTION_TOMBSTONES_KEY, DELETED_FOLDER_TOMBSTONES: DELETED_FOLDER_TOMBSTONES_KEY } =
+  sharedFoldersStorageKeys;
 
 // pro-config.js only exposes PRO_API_BASE via module.exports (no globalThis
 // hook) — in the browser it's picked up as a bare global, exactly like
@@ -109,7 +111,10 @@ async function markLocalFolderShared(folderId, shared) {
 async function unmarkLocalFolderShared(folderId) {
   await withStorageLock(async () => {
     const key = `folder_${folderId}`;
-    const got = await browser.storage.local.get([key, 'folders_index', SHARED_SYNC_STATE_KEY]);
+    const got = await browser.storage.local.get([
+      key, 'folders_index', SHARED_SYNC_STATE_KEY,
+      DELETED_COLLECTION_TOMBSTONES_KEY, DELETED_FOLDER_TOMBSTONES_KEY,
+    ]);
     if (!got[key]) return;
     const { shared, ...rest } = got[key];
     const index = got.folders_index || {};
@@ -121,8 +126,30 @@ async function unmarkLocalFolderShared(folderId) {
     // clearFolderSyncState helper) so this whole operation is ONE lock
     // acquisition — nesting withStorageLock calls would deadlock.
     const state = got[SHARED_SYNC_STATE_KEY] || {};
+    const folderState = state[folderId];
     delete state[folderId];
-    await browser.storage.local.set({ [key]: rest, folders_index: index, [SHARED_SYNC_STATE_KEY]: state });
+
+    // Task 9/15 review: shared_sync_state[folderId].knownUids is what
+    // prepareSyncDataForUpload consults to keep a shared folder's tombstones out of the
+    // Drive payload even after they're deleted-then-recreated locally. Once we clear
+    // that state above, any tombstone left over from BEFORE this folder was shared (or
+    // from a collection deleted while it was shared) would no longer be suppressed and
+    // would leak into the next Drive upload. Purge them here, before the state is gone,
+    // so this folder/its collections start "clean" as plain local data again.
+    const collectionTombstones = { ...(got[DELETED_COLLECTION_TOMBSTONES_KEY] || {}) };
+    for (const uid of (folderState?.knownUids || [])) {
+      delete collectionTombstones[uid];
+    }
+    const folderTombstones = { ...(got[DELETED_FOLDER_TOMBSTONES_KEY] || {}) };
+    delete folderTombstones[folderId];
+
+    await browser.storage.local.set({
+      [key]: rest,
+      folders_index: index,
+      [SHARED_SYNC_STATE_KEY]: state,
+      [DELETED_COLLECTION_TOMBSTONES_KEY]: collectionTombstones,
+      [DELETED_FOLDER_TOMBSTONES_KEY]: folderTombstones,
+    });
   });
   // The extension may have just lost its last shared folder (or gained back
   // sign-in state elsewhere) — let background.js decide whether the sync alarm
@@ -366,6 +393,15 @@ async function handleSharedMessage(request) {
       return respondToInvite(request);
     case 'sharedSyncNow':
       return syncSharedFolders();
+    case 'sharedDrainEvents':
+      // Task 15 review: read-then-clear must be atomic so a popup drain can never race
+      // another writer appending a new event between the read and the clear (which would
+      // silently drop it). Locked read + reset-to-[] + return, all in one acquisition.
+      return withStorageLock(async () => {
+        const { [SHARED_EVENTS_KEY]: events = [] } = await browser.storage.local.get(SHARED_EVENTS_KEY);
+        await browser.storage.local.set({ [SHARED_EVENTS_KEY]: [] });
+        return { ok: true, data: { events } };
+      });
     default:
       return null;
   }
