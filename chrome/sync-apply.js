@@ -48,12 +48,35 @@ const normalizeFolder = (folder, index, collections, now) => {
     };
 };
 
+// Task 9: shared folders (Task 8) are owned by the Cloudflare Worker, never by Google
+// Drive. Mirrors chrome/shared-folders.js's isSharedFolderRecord - duplicated in place
+// rather than required, because this file is loaded earliest in background.js's
+// importScripts chain (before shared-folders.js) and is held to a 100% coverage bar;
+// a cross-module require would need an untestable environment-detection branch for no
+// real benefit over this one-line predicate.
+function isSharedFolderRecord(folder) {
+    return Boolean(folder && folder.shared && folder.shared.folderId);
+}
+
 function buildIndexedSyncPayload({ currentStorage = {}, syncData = {}, now = Date.now() }) {
-    let collections = Array.isArray(syncData.tabsArray)
-        ? syncData.tabsArray.map((collection, index) => normalizeCollection(collection, index, now))
+    // Compute the LOCAL shared-folder/collection uids up front so pulled Drive data can
+    // never create, update, or delete a shared folder (or a collection living inside
+    // one) - regardless of what a foreign/legacy device may have uploaded.
+    const localCollectionIndex = currentStorage[STORAGE_KEYS.COLLECTIONS_INDEX] || {};
+    const localFolderIndex = currentStorage[STORAGE_KEYS.FOLDERS_INDEX] || {};
+    const localSharedFolderUids = new Set(
+        Object.keys(localFolderIndex).filter((uid) => isSharedFolderRecord(localFolderIndex[uid]))
+    );
+    const localSharedCollectionUids = new Set(
+        Object.keys(localCollectionIndex).filter((uid) => localSharedFolderUids.has(localCollectionIndex[uid].parentId))
+    );
+
+    const rawIncomingCollections = Array.isArray(syncData.tabsArray)
+        ? syncData.tabsArray.filter((collection) =>
+            !localSharedCollectionUids.has(collection.uid) && !localSharedFolderUids.has(collection.parentId))
         : [];
-    let folders = Array.isArray(syncData.foldersArray)
-        ? syncData.foldersArray.map((folder, index) => normalizeFolder(folder, index, collections, now))
+    const rawIncomingFolders = Array.isArray(syncData.foldersArray)
+        ? syncData.foldersArray.filter((folder) => !localSharedFolderUids.has(folder.uid))
         : [];
 
     // Defense-in-depth: a completely empty incoming snapshot must never wipe existing
@@ -61,22 +84,35 @@ function buildIndexedSyncPayload({ currentStorage = {}, syncData = {}, now = Dat
     // otherwise delete every collection. When the snapshot is empty but local storage has
     // data, preserve the local set instead of applying the deletion. A snapshot with any
     // collections/folders is treated as authoritative (legitimate deletions still apply).
-    const localCollectionIndex = currentStorage[STORAGE_KEYS.COLLECTIONS_INDEX] || {};
-    const localFolderIndex = currentStorage[STORAGE_KEYS.FOLDERS_INDEX] || {};
-    const incomingIsEmpty = collections.length === 0 && folders.length === 0;
+    const incomingIsEmpty = rawIncomingCollections.length === 0 && rawIncomingFolders.length === 0;
     const localHasData = Object.keys(localCollectionIndex).length > 0
         || Object.keys(localFolderIndex).length > 0;
 
+    let rawCollections;
+    let rawFolders;
+
     if (incomingIsEmpty && localHasData) {
-        collections = Object.keys(localCollectionIndex)
+        rawCollections = Object.keys(localCollectionIndex)
             .map((uid) => currentStorage[`${STORAGE_KEYS.COLLECTION_PREFIX}${uid}`])
-            .filter(Boolean)
-            .map((collection, index) => normalizeCollection(collection, index, now));
-        folders = Object.keys(localFolderIndex)
+            .filter(Boolean);
+        rawFolders = Object.keys(localFolderIndex)
             .map((uid) => currentStorage[`${STORAGE_KEYS.FOLDER_PREFIX}${uid}`])
-            .filter(Boolean)
-            .map((folder, index) => normalizeFolder(folder, index, collections, now));
+            .filter(Boolean);
+    } else {
+        // Shared folders/collections were excluded from the incoming set above - reinstate
+        // the local records verbatim so a pull can never delete or overwrite them.
+        const localSharedCollections = Array.from(localSharedCollectionUids)
+            .map((uid) => currentStorage[`${STORAGE_KEYS.COLLECTION_PREFIX}${uid}`])
+            .filter(Boolean);
+        const localSharedFolders = Array.from(localSharedFolderUids)
+            .map((uid) => currentStorage[`${STORAGE_KEYS.FOLDER_PREFIX}${uid}`])
+            .filter(Boolean);
+        rawCollections = rawIncomingCollections.concat(localSharedCollections);
+        rawFolders = rawIncomingFolders.concat(localSharedFolders);
     }
+
+    let collections = rawCollections.map((collection, index) => normalizeCollection(collection, index, now));
+    let folders = rawFolders.map((folder, index) => normalizeFolder(folder, index, collections, now));
 
     const collectionsIndex = collections.reduce((index, collection) => {
         index[collection.uid] = {
@@ -117,7 +153,7 @@ function buildIndexedSyncPayload({ currentStorage = {}, syncData = {}, now = Dat
         .map((uid) => `${STORAGE_KEYS.FOLDER_PREFIX}${uid}`);
     const deletedCollections = Array.isArray(syncData.deletedCollections)
         ? syncData.deletedCollections.reduce((entries, tombstone) => {
-            if (!tombstone?.uid || !Number.isFinite(tombstone.lastUpdated)) {
+            if (!tombstone?.uid || !Number.isFinite(tombstone.lastUpdated) || localSharedCollectionUids.has(tombstone.uid)) {
                 return entries;
             }
 
@@ -127,7 +163,7 @@ function buildIndexedSyncPayload({ currentStorage = {}, syncData = {}, now = Dat
         : {};
     const deletedFolders = Array.isArray(syncData.deletedFolders)
         ? syncData.deletedFolders.reduce((entries, tombstone) => {
-            if (!tombstone?.uid || !Number.isFinite(tombstone.lastUpdated)) {
+            if (!tombstone?.uid || !Number.isFinite(tombstone.lastUpdated) || localSharedFolderUids.has(tombstone.uid)) {
                 return entries;
             }
 
@@ -263,6 +299,7 @@ async function applySyncSnapshotAtomically({ storageArea, syncData, now = Date.n
 
 const syncApplyApi = {
     STORAGE_KEYS,
+    isSharedFolderRecord,
     buildIndexedSyncPayload,
     isSyncManagedKey,
     applySyncSnapshotAtomically

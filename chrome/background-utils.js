@@ -2412,6 +2412,37 @@ const loadCollectionsByUids = async (uids) => {
     }
 };
 
+// Task 9: shared folders/collections (Task 8) are owned by the Cloudflare Worker, never
+// by Google Drive. This is the single chokepoint every upload path funnels through
+// (full-sync, incremental, and _createNewSyncFile all call prepareSyncDataForUpload), so
+// filtering here guarantees shared data can never leave in a sync payload. Lazily
+// required (not at module top-level) because chrome/shared-folders.js requires this very
+// module back (for getAuthToken) - a top-level require here would create a load-order
+// cycle both in the classic-script (importScripts) world and in Jest/CommonJS.
+const excludeSharedFromSyncData = async ({ tabsArray = [], foldersArray = [], deletedCollections = [], deletedFolders = [] }) => {
+    /* istanbul ignore next */
+    const sharedFoldersHelpers = typeof require === 'function'
+        ? require('./shared-folders.js')
+        : globalThis.TaboxSharedFolders;
+    const partitionSharedUids = sharedFoldersHelpers && sharedFoldersHelpers.partitionSharedUids;
+    if (typeof partitionSharedUids !== 'function') {
+        return { tabsArray, foldersArray, deletedCollections, deletedFolders };
+    }
+
+    const { sharedFolderUids, sharedCollectionUids } = partitionSharedUids(foldersArray, tabsArray);
+    const { shared_sync_state: sharedSyncState = {} } = await browser.storage.local.get('shared_sync_state');
+    const everSharedUids = new Set(Object.values(sharedSyncState).flatMap((state) => state.knownUids || []));
+
+    return {
+        tabsArray: tabsArray.filter((collection) => !sharedCollectionUids.has(collection.uid)),
+        foldersArray: foldersArray.filter((folder) => !sharedFolderUids.has(folder.uid)),
+        deletedCollections: deletedCollections.filter((tombstone) =>
+            !sharedCollectionUids.has(tombstone.uid) && !everSharedUids.has(tombstone.uid)),
+        deletedFolders: deletedFolders.filter((tombstone) =>
+            !sharedFolderUids.has(tombstone.uid) && !(tombstone.uid in sharedSyncState)),
+    };
+};
+
 // Enhanced data preparation for upload with version info.
 // Sync still emits full 4.0 snapshots by default; incremental sync remains off until the
 // wire contract is upgraded end-to-end for partial updates.
@@ -2460,23 +2491,27 @@ const prepareSyncDataForUpload = async (collections, useIncrementalSync = false)
                 }
 
                 const normalizedTabsArray = (tabsArray || []).map((collection) => normalizeCollectionRecordBG(collection));
-                
+                const filteredIncremental = await excludeSharedFromSyncData({
+                    tabsArray: normalizedTabsArray,
+                    foldersArray
+                });
+
                 // Mark this as incremental sync data
                 const syncData = {
                     timestamp: Date.now(),
-                    tabsArray: normalizedTabsArray,
-                    foldersArray: foldersArray,
+                    tabsArray: filteredIncremental.tabsArray,
+                    foldersArray: filteredIncremental.foldersArray,
                     syncVersion: SYNC_VERSION,
                     storageVersion: 3,
-                    extensionVersion: (typeof chrome !== 'undefined' && chrome.runtime) ? 
+                    extensionVersion: (typeof chrome !== 'undefined' && chrome.runtime) ?
                         chrome.runtime.getManifest().version : '4.0',
                     isIncrementalSync: true,
                     lastSyncTimestamp: lastSyncTimestamp,
-                    changedCollectionCount: normalizedTabsArray.length,
-                    changedFolderCount: foldersArray.length
+                    changedCollectionCount: filteredIncremental.tabsArray.length,
+                    changedFolderCount: filteredIncremental.foldersArray.length
                 };
-                
-                
+
+
                 return syncData;
             } else {
                 // First sync, do full sync
@@ -2501,32 +2536,48 @@ const prepareSyncDataForUpload = async (collections, useIncrementalSync = false)
             lastUpdated
         }));
 
+        const filteredFullSync = await excludeSharedFromSyncData({
+            tabsArray: normalizedTabsArray,
+            foldersArray,
+            deletedCollections,
+            deletedFolders
+        });
+
         // v4.0 enhanced sync format with version detection and folders support
         const syncData = {
             timestamp: Date.now(),
-            tabsArray: normalizedTabsArray,
-            foldersArray: foldersArray,
-            deletedCollections,
-            deletedFolders,
+            tabsArray: filteredFullSync.tabsArray,
+            foldersArray: filteredFullSync.foldersArray,
+            deletedCollections: filteredFullSync.deletedCollections,
+            deletedFolders: filteredFullSync.deletedFolders,
             syncVersion: SYNC_VERSION,
             storageVersion: 3,
-            extensionVersion: (typeof chrome !== 'undefined' && chrome.runtime) ? 
+            extensionVersion: (typeof chrome !== 'undefined' && chrome.runtime) ?
                 chrome.runtime.getManifest().version : '4.0',
             isIncrementalSync: false
         };
-        
-        console.log('📤 prepareSyncDataForUpload: Preparing sync data with', normalizedTabsArray.length, 'collections and', foldersArray.length, 'folders');
-        console.log('📤 prepareSyncDataForUpload: Folder order:', foldersArray.map(f => ({ name: f.name, order: f.order })));
-        console.log('📤 prepareSyncDataForUpload: Collection order:', normalizedTabsArray.map(c => ({ name: c.name, order: c.order, parentId: c.parentId })));
-        
+
+        console.log('📤 prepareSyncDataForUpload: Preparing sync data with', filteredFullSync.tabsArray.length, 'collections and', filteredFullSync.foldersArray.length, 'folders');
+        console.log('📤 prepareSyncDataForUpload: Folder order:', filteredFullSync.foldersArray.map(f => ({ name: f.name, order: f.order })));
+        console.log('📤 prepareSyncDataForUpload: Collection order:', filteredFullSync.tabsArray.map(c => ({ name: c.name, order: c.order, parentId: c.parentId })));
+
         return syncData;
-        
+
     } catch (error) {
         console.error('❌ Error preparing sync data:', error);
-        // Fallback to legacy format for compatibility
+        // Fallback to legacy format for compatibility. Still keep shared collections out
+        // of this last-resort payload; if the filter itself throws, fall through with the
+        // unfiltered legacy data rather than letting an already-failing path throw again.
+        const fallbackTabsArray = (collections || []).map((collection) => normalizeCollectionRecordBG(collection));
+        let safeTabsArray = fallbackTabsArray;
+        try {
+            safeTabsArray = (await excludeSharedFromSyncData({ tabsArray: fallbackTabsArray, foldersArray: [] })).tabsArray;
+        } catch {
+            // best effort only - see comment above
+        }
         return {
             timestamp: Date.now(),
-            tabsArray: (collections || []).map((collection) => normalizeCollectionRecordBG(collection)),
+            tabsArray: safeTabsArray,
             foldersArray: [],
             syncVersion: SYNC_VERSION,
             storageVersion: 3,

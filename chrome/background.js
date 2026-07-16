@@ -275,7 +275,15 @@ async function createEmergencySelectionBackup(reason) {
 
 async function overwriteBackupSelection(payload = {}) {
   const selectedCollections = Array.isArray(payload.collections) ? payload.collections : [];
-  const selectedFolders = Array.isArray(payload.folders) ? payload.folders : [];
+  // Backups are plain snapshots of local storage, so a folder that was shared (Task 8)
+  // when the backup was taken still carries its `shared` marker. Restoring that marker
+  // verbatim would resurrect stale worker-owned state (wrong folderId/role/members, or a
+  // share that no longer exists) - strip it from every restored folder before it's saved.
+  const selectedFolders = (Array.isArray(payload.folders) ? payload.folders : []).map((folder) => {
+    if (!folder || !folder.shared) return folder;
+    const { shared, ...rest } = folder;
+    return rest;
+  });
   // Full-backup restores ask to mirror the backup exactly: folders that aren't part
   // of the backup must be removed. Selective (pick-items) restores leave them alone.
   const pruneMissingFolders = payload.pruneMissingFolders === true;
@@ -1169,7 +1177,11 @@ const handleFullExportImportBG = async (exportData) => {
                     name: uniqueName,
                     lastUpdated: Date.now()
                 };
-                
+                // Shared folders (Task 8) are owned by the Cloudflare Worker for their
+                // original uid/members. An imported copy gets a brand new uid and is never
+                // automatically shared, so any carried-over marker must be dropped.
+                delete importedFolder.shared;
+
                 await saveSingleFolderBG(importedFolder);
                 importedFolders.push(importedFolder);
                 
@@ -1250,7 +1262,11 @@ const handleFolderImportBG = async (folderData) => {
             name: uniqueFolderName,
             lastUpdated: Date.now()
         };
-        
+        // Shared folders (Task 8) are owned by the Cloudflare Worker for their original
+        // uid/members. An imported copy gets a brand new uid and is never automatically
+        // shared, so any carried-over marker must be dropped.
+        delete importedFolder.shared;
+
         await saveSingleFolderBG(importedFolder);
 
         // Import collections in the folder

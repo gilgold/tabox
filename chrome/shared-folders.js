@@ -23,6 +23,22 @@ const SHARED_SYNC_STATE_KEY = 'shared_sync_state';
 const SHARED_PENDING_INVITES_KEY = 'shared_pending_invites';
 const SHARED_EVENTS_KEY = 'shared_folder_events';
 
+// Task 9: shared folders/collections must never enter the Google Drive sync payload.
+// isSharedFolderRecord identifies a folder carrying the Task 8 `shared` marker;
+// partitionSharedUids derives the shared folder/collection uid sets from a snapshot's
+// foldersArray/collectionsArray so callers (prepareSyncDataForUpload) can filter them out.
+function isSharedFolderRecord(folder) {
+  return Boolean(folder && folder.shared && folder.shared.folderId);
+}
+
+function partitionSharedUids(foldersArray = [], collectionsArray = []) {
+  const sharedFolderUids = new Set((foldersArray || []).filter(isSharedFolderRecord).map((f) => f.uid));
+  const sharedCollectionUids = new Set(
+    (collectionsArray || []).filter((c) => c && sharedFolderUids.has(c.parentId)).map((c) => c.uid)
+  );
+  return { sharedFolderUids, sharedCollectionUids };
+}
+
 async function sharedApiFetch(path, { method = 'GET', body } = {}) {
   const token = await getAuthToken();
   if (!token) return { ok: false, status: 0, error: 'not_signed_in' };
@@ -162,6 +178,8 @@ const sharedFoldersApi = {
   SHARED_SYNC_STATE_KEY,
   SHARED_PENDING_INVITES_KEY,
   SHARED_EVENTS_KEY,
+  isSharedFolderRecord,
+  partitionSharedUids,
   sharedApiFetch,
   setFolderSyncState,
   clearFolderSyncState,
