@@ -17,8 +17,16 @@ describe('isEntitled', () => {
     expect(isEntitled(record(REFRESH_INTERVAL_MS / HOUR * HOUR + 71 * HOUR), NOW)).toBe(true); // 24h + 71h old
   });
 
+  it('true at exactly the refresh-by + grace boundary (96h)', () => {
+    expect(isEntitled(record(REFRESH_INTERVAL_MS + OFFLINE_GRACE_MS), NOW)).toBe(true);
+  });
+
   it('false once grace is exhausted (24h refresh-by + 72h grace)', () => {
     expect(isEntitled(record(REFRESH_INTERVAL_MS + OFFLINE_GRACE_MS + 1), NOW)).toBe(false);
+  });
+
+  it('keys off entitled + refreshedAt only, ignoring status', () => {
+    expect(isEntitled({ entitled: true, status: 'canceled', refreshedAt: new Date(NOW - 1 * HOUR).toISOString() }, NOW)).toBe(true);
   });
 });
 
@@ -27,5 +35,10 @@ describe('isStale', () => {
     expect(isStale(null, NOW)).toBe(true);
     expect(isStale(record(25 * HOUR), NOW)).toBe(true);
     expect(isStale(record(1 * HOUR), NOW)).toBe(false);
+  });
+
+  it('false at exactly the refresh interval (24h), true just past it', () => {
+    expect(isStale(record(REFRESH_INTERVAL_MS), NOW)).toBe(false);
+    expect(isStale(record(REFRESH_INTERVAL_MS + 1), NOW)).toBe(true);
   });
 });
