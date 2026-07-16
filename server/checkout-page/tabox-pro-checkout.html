@@ -12,48 +12,70 @@
 </div>
 <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
 <script>
-  var PADDLE_ENV = 'production'; // 'sandbox' while testing
-  var TOKENS = {
-    production: 'REPLACE_WITH_LIVE_CLIENT_SIDE_TOKEN',
-    sandbox: 'REPLACE_WITH_SANDBOX_CLIENT_SIDE_TOKEN'
-  };
-  var PRICES = {
-    production: { monthly: 'pri_01kxk6xwxdgmtr2eat3xqacs3z', annual: 'pri_01kxk6xx37e1h9pdjvmvy457br' },
-    sandbox:    { monthly: 'pri_01kxmrtyxwk2x1qt6kxvbc57m1', annual: 'pri_01kxmrtz4894fc464tm48qjmvy' }
-  };
-
-  if (PADDLE_ENV === 'sandbox') Paddle.Environment.set('sandbox');
-  Paddle.Initialize({ token: TOKENS[PADDLE_ENV] });
-
   var params = new URLSearchParams(window.location.search);
-  var googleId = params.get('uid') || '';
-  var email = params.get('email') || '';
-  var selectedPlan = 'monthly';
+  var isSuccess = params.get('success') === '1';
 
-  function selectPlan(plan) {
-    selectedPlan = plan;
-    document.getElementById('plan-monthly').classList.toggle('active', plan === 'monthly');
-    document.getElementById('plan-annual').classList.toggle('active', plan === 'annual');
-  }
-  document.getElementById('plan-monthly').addEventListener('click', function () { selectPlan('monthly'); });
-  document.getElementById('plan-annual').addEventListener('click', function () { selectPlan('annual'); });
-
-  document.getElementById('start-trial').addEventListener('click', function () {
-    if (!googleId) {
-      alert('Please start the upgrade from the Tabox extension so we can link your account.');
-      return;
-    }
-    Paddle.Checkout.open({
-      items: [{ priceId: PRICES[PADDLE_ENV][selectedPlan], quantity: 1 }],
-      customer: email ? { email: email } : undefined,
-      customData: { googleId: googleId },
-      settings: { displayMode: 'overlay', successUrl: window.location.origin + '/pro?success=1' }
-    });
-  });
-
-  if (params.get('success') === '1') {
+  // Render the success message first, before any Paddle usage below, and skip
+  // all the checkout wiring in that case — the plan toggle / start-trial
+  // elements are about to be replaced out of the DOM, so nothing below should
+  // touch them. If the Paddle CDN script (loaded above) was blocked by an ad
+  // blocker, the Paddle.* calls further down may throw — but a returning,
+  // already-paying user must still see their confirmation regardless.
+  if (isSuccess) {
     document.getElementById('tabox-pro-checkout').innerHTML =
       '<h3>You\'re in! 🎉</h3><p>Return to the Tabox extension — Pro unlocks automatically within a minute.</p>';
+  } else {
+    var PADDLE_ENV = 'production'; // 'sandbox' while testing
+    var TOKENS = {
+      production: 'REPLACE_WITH_LIVE_CLIENT_SIDE_TOKEN',
+      sandbox: 'REPLACE_WITH_SANDBOX_CLIENT_SIDE_TOKEN'
+    };
+    var PRICES = {
+      production: { monthly: 'pri_01kxk6xwxdgmtr2eat3xqacs3z', annual: 'pri_01kxk6xx37e1h9pdjvmvy457br' },
+      sandbox:    { monthly: 'pri_01kxmrtyxwk2x1qt6kxvbc57m1', annual: 'pri_01kxmrtz4894fc464tm48qjmvy' }
+    };
+
+    var paddleAvailable = typeof Paddle !== 'undefined';
+    if (paddleAvailable) {
+      if (PADDLE_ENV === 'sandbox') Paddle.Environment.set('sandbox');
+      Paddle.Initialize({ token: TOKENS[PADDLE_ENV] });
+    }
+
+    var googleId = params.get('uid') || '';
+    var email = params.get('email') || '';
+    var selectedPlan = 'monthly';
+
+    function selectPlan(plan) {
+      selectedPlan = plan;
+      document.getElementById('plan-monthly').classList.toggle('active', plan === 'monthly');
+      document.getElementById('plan-annual').classList.toggle('active', plan === 'annual');
+    }
+    document.getElementById('plan-monthly').addEventListener('click', function () { selectPlan('monthly'); });
+    document.getElementById('plan-annual').addEventListener('click', function () { selectPlan('annual'); });
+
+    if (!paddleAvailable) {
+      // Blocked CDN script (ad blocker etc.) — disable checkout and tell the
+      // user how to fix it, instead of silently doing nothing on click.
+      var startTrialBtn = document.getElementById('start-trial');
+      startTrialBtn.disabled = true;
+      var fallback = document.createElement('p');
+      fallback.className = 'paddle-blocked-message';
+      fallback.textContent = "Checkout couldn't load — disable your ad blocker for cdn.paddle.com and reload.";
+      startTrialBtn.insertAdjacentElement('afterend', fallback);
+    } else {
+      document.getElementById('start-trial').addEventListener('click', function () {
+        if (!googleId) {
+          alert('Please start the upgrade from the Tabox extension so we can link your account.');
+          return;
+        }
+        Paddle.Checkout.open({
+          items: [{ priceId: PRICES[PADDLE_ENV][selectedPlan], quantity: 1 }],
+          customer: email ? { email: email } : undefined,
+          customData: { googleId: googleId },
+          settings: { displayMode: 'overlay', successUrl: window.location.origin + '/pro?success=1' }
+        });
+      });
+    }
   }
 </script>
 <style>
@@ -62,5 +84,7 @@
   .plan-btn { padding: 8px 14px; border-radius: 8px; border: 1px solid #ccc; background: #fff; cursor: pointer; }
   .plan-btn.active { border-color: #6a5acd; background: #f0edff; }
   #start-trial { padding: 10px 24px; border: none; border-radius: 8px; background: #6a5acd; color: #fff; font-weight: 600; cursor: pointer; }
+  #start-trial:disabled { background: #b7b3d9; cursor: not-allowed; }
   .fine-print { font-size: 12px; opacity: 0.7; }
+  .paddle-blocked-message { color: #b3261e; font-size: 13px; margin-top: 8px; }
 </style>
