@@ -9,6 +9,7 @@ try {
   importScripts('background-utils.js');
   importScripts('pro-config.js');
   importScripts('pro-entitlement.js');
+  importScripts('shared-folders.js');
   importScripts('ai-client.js');
   importScripts('ai-planners.js');
   importScripts('ai-storage.js');
@@ -1448,6 +1449,11 @@ const handleSingleCollectionImportBG = async (collection) => {
 
 try {
   browser.runtime.onMessage.addListener(async (request) => {
+    if (request.type && request.type.startsWith('shared')) {
+      const handled = await handleSharedMessage(request);
+      if (handled !== null) return handled;
+    }
+
     if (request.type === 'getProEntitlement') {
       const { premiumEntitlement } = await browser.storage.local.get('premiumEntitlement');
       return Promise.resolve(premiumEntitlement || null);
