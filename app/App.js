@@ -67,6 +67,9 @@ import AIToolsModal from './AIToolsModal';
 import ManageSubscriptionModal from './ManageSubscriptionModal';
 import { manageSubscriptionOpenState } from './atoms/premiumState';
 import { usePremiumEntitlement } from './usePremiumEntitlement';
+import NoPermissionModal from './NoPermissionModal';
+import { noPermissionOpenState } from './atoms/sharedFoldersState';
+import { guardFolderEdit } from './utils/sharedFolderUtils';
 
 // Migration system imports - wrapped in try/catch for compatibility
 const PERF_NAMESPACE = 'tabox:popup';
@@ -256,6 +259,7 @@ function App({ mode = 'popup' }) {
   const setAiToolsModalOpen = useSetAtom(aiToolsModalOpenState);
   const setAiToolsInitialTool = useSetAtom(aiToolsInitialToolState);
   const setManageSubscriptionOpen = useSetAtom(manageSubscriptionOpenState);
+  const setNoPermissionOpen = useSetAtom(noPermissionOpenState);
   const setTabSwitcherOpen = useSetAtom(tabSwitcherOpenState);
   const setSidebarNavigation = useSetAtom(sidebarNavigationState);
   const search = useAtomValue(searchState);
@@ -751,7 +755,16 @@ function App({ mode = 'popup' }) {
 
   // Updated to use new storage system
   const updateCollection = async (newCollection, isManualUpdate = false) => {
-    
+    // Opening/focus-tracking updates (lastOpened only) are marked with
+    // __skipFolderGuard and must never be blocked (reading is never blocked).
+    if (newCollection?.__skipFolderGuard) {
+      newCollection = { ...newCollection };
+      delete newCollection.__skipFolderGuard;
+    } else {
+      const parentFolder = foldersData.find(f => f.uid === newCollection?.parentId);
+      if (!guardFolderEdit(parentFolder, () => setNoPermissionOpen(true))) return;
+    }
+
     try {
       // Use new single collection update for better performance
       const success = await saveSingleCollection(newCollection, true); // Force timestamp update for user changes
@@ -819,6 +832,9 @@ function App({ mode = 'popup' }) {
 
   // Updated to use new storage system
   const addCollection = async (newCollection, skipContextMenuUpdate = false, skipStateUpdate = false) => {
+    const parentFolder = foldersData.find(f => f.uid === newCollection?.parentId);
+    if (!guardFolderEdit(parentFolder, () => setNoPermissionOpen(true))) return;
+
     try {
       // Use new single collection save for better performance
       const success = await saveSingleCollection(newCollection, true); // Force timestamp update for new collections
@@ -1955,10 +1971,12 @@ function App({ mode = 'popup' }) {
         } else {
           success = await moveCollectionToFolder(collection.uid, targetFolderId);
         }
-        if (success) {
+        if (success === true) {
           await refreshDataAfterFolderOperation();
           const targetName = targetFolderId === null ? 'root' : (folderNameMap[targetFolderId] || 'folder');
           showSuccessToast(`Moved "${collection.name}" to ${targetName}`);
+        } else if (success && success.blocked) {
+          setNoPermissionOpen(true);
         } else {
           showErrorToast('Failed to move collection');
         }
@@ -2036,6 +2054,7 @@ function App({ mode = 'popup' }) {
   const tabSwitcherEl = <TabSwitcher />;
   const aiToolsModalEl = <AIToolsModal updateRemoteData={updateRemoteData} />;
   const manageSubscriptionModalEl = <ManageSubscriptionModal />;
+  const noPermissionModalEl = <NoPermissionModal />;
 
   if (isFullPage) {
     return <>
@@ -2053,6 +2072,7 @@ function App({ mode = 'popup' }) {
         {tabSwitcherEl}
         {aiToolsModalEl}
         {manageSubscriptionModalEl}
+        {noPermissionModalEl}
         <FPLayout
           folders={displayFolders}
           collections={collectionsToShow}
@@ -2099,6 +2119,7 @@ function App({ mode = 'popup' }) {
       {tabSwitcherEl}
       {aiToolsModalEl}
       {manageSubscriptionModalEl}
+      {noPermissionModalEl}
       <div className={`App${isFullPage ? ' fullpage' : ''}`}>
       <Header
         isFullPage={isFullPage}

@@ -36,6 +36,8 @@ import {
 import useCollectionItemCrossDrag from './useCollectionItemCrossDrag';
 import { persistCollectionLayoutChanges } from './utils/sharedCollectionSync';
 import { dndPointerSensorOptions } from './utils/dndShared';
+import { noPermissionOpenState } from './atoms/sharedFoldersState';
+import { guardFolderEdit } from './utils/sharedFolderUtils';
 
 const reindexCollectionSiblings = (collections, parentId) => (
     collections.map((collection, order) => ({
@@ -122,7 +124,8 @@ function CollectionList({
     const [isPanelOpen, setIsPanelOpen] = useState(false);
     const setDetailPanelOpen = useSetAtom(detailPanelOpenState);
     const setSelectedCollectionUid = useSetAtom(selectedCollectionUidState);
-    
+    const setNoPermissionOpen = useSetAtom(noPermissionOpenState);
+
     // Refs to always have latest collections/folders data (avoids stale closure in event handlers)
     const collectionsRef = useRef(collections);
     const foldersRef = useRef(folders);
@@ -655,7 +658,16 @@ function CollectionList({
                 setActiveFolder(null);
                 return;
             }
-            
+
+            const targetFolderForGuard = folders.find(f => f.uid === targetItem.uid);
+            const sourceFolderForGuard = draggedItem.parentId ? folders.find(f => f.uid === draggedItem.parentId) : null;
+            if (!guardFolderEdit(targetFolderForGuard, () => setNoPermissionOpen(true)) ||
+                !guardFolderEdit(sourceFolderForGuard, () => setNoPermissionOpen(true))) {
+                setActiveCollection(null);
+                setActiveFolder(null);
+                return;
+            }
+
             const success = await moveCollectionToFolder(draggedItem.uid, targetItem.uid);
             
             if (success) {
@@ -750,6 +762,12 @@ function CollectionList({
                 }
             } else if (!draggedItem.parentId && targetItem.parentId) {
                 // Moving root collection to a folder
+                const targetFolderForGuard = folders.find(f => f.uid === targetItem.parentId);
+                if (!guardFolderEdit(targetFolderForGuard, () => setNoPermissionOpen(true))) {
+                    setActiveCollection(null);
+                    setActiveFolder(null);
+                    return;
+                }
 
                 await moveCollectionToFolder(draggedItem.uid, targetItem.parentId);
                 
@@ -818,6 +836,14 @@ function CollectionList({
                 }
             } else if (draggedItem.parentId && targetItem.parentId && draggedItem.parentId !== targetItem.parentId) {
                 // Moving collection from one folder to another folder (dropped on collection in target folder)
+                const sourceFolderForGuard = folders.find(f => f.uid === draggedItem.parentId);
+                const targetFolderForGuard = folders.find(f => f.uid === targetItem.parentId);
+                if (!guardFolderEdit(sourceFolderForGuard, () => setNoPermissionOpen(true)) ||
+                    !guardFolderEdit(targetFolderForGuard, () => setNoPermissionOpen(true))) {
+                    setActiveCollection(null);
+                    setActiveFolder(null);
+                    return;
+                }
                 try {
                     await moveCollectionToFolder(draggedItem.uid, targetItem.parentId);
                     

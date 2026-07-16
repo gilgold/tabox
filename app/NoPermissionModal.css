@@ -1,0 +1,56 @@
+.no-permission-modal {
+    max-width: 360px;
+}
+
+.no-permission-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 16px 16px 0;
+    color: var(--text-color);
+}
+
+.no-permission-header svg {
+    color: #d97706;
+    flex-shrink: 0;
+}
+
+.no-permission-header h3 {
+    flex: 1;
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-color);
+}
+
+.no-permission-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+}
+
+.no-permission-modal p {
+    margin: 12px 16px 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-color);
+}
+
+.no-permission-ok {
+    display: block;
+    margin: 16px;
+    margin-top: 20px;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 6px;
+    background: var(--primary-color);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}

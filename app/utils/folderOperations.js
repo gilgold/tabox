@@ -25,6 +25,7 @@ import {
 } from './storageUtils';
 import { triggerBackgroundSync } from './sharedSync';
 import { useTrackedSync } from '../useTrackedSync';
+import { canEditFolder } from './sharedFolderUtils';
 
 // ========================================
 // FOLDER CRUD OPERATIONS
@@ -119,6 +120,11 @@ export const updateFolderDetails = async (folderId, updates = {}) => {
         const folder = await loadSingleFolder(folderId);
         if (!folder) {
             throw new Error(`Folder ${folderId} not found`);
+        }
+
+        // Permission guard: read-only shared folders cannot be renamed/recolored.
+        if (!canEditFolder(folder)) {
+            return false;
         }
 
         const nextName = updates.name !== undefined ? updates.name.trim() : folder.name;
@@ -358,6 +364,14 @@ export const moveCollectionToFolder = async (collectionId, folderId) => {
         }
 
         const oldParentId = collection.parentId;
+
+        // Permission guard: block moves touching a read-only shared folder
+        // (either end) without writing anything.
+        const sourceFolder = oldParentId ? await loadSingleFolder(oldParentId) : null;
+        if (!canEditFolder(folder) || !canEditFolder(sourceFolder)) {
+            return { blocked: true };
+        }
+
         collection.parentId = folderId;
         collection.lastUpdated = Date.now();
 

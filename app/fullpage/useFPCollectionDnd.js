@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import { useSetAtom } from 'jotai';
 import {
     pointerWithin,
     closestCorners,
@@ -20,6 +21,8 @@ import {
     resolveCollectionDropTarget,
 } from '../utils/collectionSectionDragEngine';
 import { resolveGroupedSectionTarget } from './groupedSectionHitTest';
+import { noPermissionOpenState } from '../atoms/sharedFoldersState';
+import { guardFolderEdit } from '../utils/sharedFolderUtils';
 
 const getDragOverlayCenter = () => {
     if (typeof document === 'undefined') {
@@ -110,6 +113,20 @@ export function useFPCollectionDnd({
     const lastMeaningfulDropTargetRef = useRef(null);
     const activeDragRectRef = useRef(null);
     const lastSidebarHoverRef = useRef(null);
+    const setNoPermissionOpen = useSetAtom(noPermissionOpenState);
+
+    // Permission guard: block a drop when any affected folder (source or
+    // target) is a read-only share.
+    const guardAffectedFolders = (affectedParentIds) => {
+        for (const parentId of affectedParentIds) {
+            if (!parentId) continue;
+            const folder = folders.find((f) => f.uid === parentId);
+            if (!guardFolderEdit(folder, () => setNoPermissionOpen(true))) {
+                return false;
+            }
+        }
+        return true;
+    };
 
     // DnD
     const sensors = useSensors(
@@ -463,7 +480,12 @@ export function useFPCollectionDnd({
                 });
 
                 if (nextCollections) {
-                    await persistCollectionChanges(nextCollections, getAffectedCollectionParentIds(sidebarOperation));
+                    const affectedParentIds = getAffectedCollectionParentIds(sidebarOperation);
+                    if (!guardAffectedFolders(affectedParentIds)) {
+                        resetDragState();
+                        return;
+                    }
+                    await persistCollectionChanges(nextCollections, affectedParentIds);
                     setHighlightedCollectionUid(draggedCollection.uid);
                     if (targetParentId && triggerFolderLightningEffect) {
                         triggerFolderLightningEffect(targetParentId);
@@ -500,7 +522,12 @@ export function useFPCollectionDnd({
         });
 
         if (nextCollections) {
-            await persistCollectionChanges(nextCollections, getAffectedCollectionParentIds(operation));
+            const affectedParentIds = getAffectedCollectionParentIds(operation);
+            if (!guardAffectedFolders(affectedParentIds)) {
+                resetDragState();
+                return;
+            }
+            await persistCollectionChanges(nextCollections, affectedParentIds);
             setHighlightedCollectionUid(draggedCollection.uid);
             if (
                 finalPreviewTarget.parentId &&

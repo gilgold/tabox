@@ -1,4 +1,5 @@
 import React from 'react';
+import { useSetAtom } from 'jotai';
 import { FaTrash, FaRegCheckCircle } from 'react-icons/fa';
 import { downloadTextFile, getCurrentTabsAndGroups, generateCopyName, applyUid } from './utils';
 import { showUndoToast, showInfoToast } from './toastHelpers';
@@ -7,6 +8,8 @@ import { browser } from '../static/globals';
 import TaboxCollection from './model/TaboxCollection';
 import { loadAllCollections, deleteSingleCollection, updateFolderCollectionCount } from './utils/storageUtils';
 import { getNextFavoriteOrder } from './utils/favoritesUtils';
+import { noPermissionOpenState } from './atoms/sharedFoldersState';
+import { canEditFolder, guardFolderEdit } from './utils/sharedFolderUtils';
 
 export const openCollectionTabs = async ({
     collectionToOpen,
@@ -129,9 +132,12 @@ export const openCollectionTabs = async ({
     }
 
     if (openedCollectionToTrack && updateCollection) {
+        // Opening a collection is never blocked by folder permissions (read-only
+        // members can always open); this only bumps a local, unsynced timestamp.
         await updateCollection({
             ...openedCollectionToTrack,
-            lastOpened: Date.now()
+            lastOpened: Date.now(),
+            __skipFolderGuard: true
         });
     }
 
@@ -147,15 +153,27 @@ export function useCollectionOperations({
     isExpanded,
     setDeletingCollectionUids,
     addCollection,
-    onDataUpdate
+    onDataUpdate,
+    folders = []
 }) {
+    const setNoPermissionOpen = useSetAtom(noPermissionOpenState);
+
+    // Undo restores collections by uid; skip any whose parent folder is now a
+    // read-only share so an undo can't bypass the permission guard.
+    const filterRestorableCollections = (collectionsToRestore) => (
+        collectionsToRestore.filter((c) => canEditFolder(folders.find((f) => f.uid === c.parentId)))
+    );
+
     const _handleDelete = async () => {
+        const parentFolder = folders.find((f) => f.uid === collection.parentId);
+        if (!guardFolderEdit(parentFolder, () => setNoPermissionOpen(true))) return;
+
         // 🚀 NEW: Load current collections from NEW STORAGE for undo
         const previousCollections = await loadAllCollections();
-        
+
         // Store parentId before deletion for folder count update
         const parentFolderId = collection.parentId;
-        
+
         // Add to deleting set to trigger animation
         if (setDeletingCollectionUids) {
             setDeletingCollectionUids(prev => new Set([...prev, collection.uid]));
@@ -200,8 +218,9 @@ export function useCollectionOperations({
             'Collection deleted successfully',
             collection.name,
             async () => {
-                // Undo delete by restoring previous collections
-                await updateRemoteData(previousCollections);
+                // Undo delete by restoring previous collections, skipping any
+                // that now live in a read-only shared folder.
+                await updateRemoteData(filterRestorableCollections(previousCollections));
                 if (onDataUpdate) {
                     await onDataUpdate();
                 }
@@ -318,8 +337,9 @@ export function useCollectionOperations({
             `Collection updated ${chkEnableAutoUpdate && chkManualUpdateLinkCollection ? 'and linked to window' : ''} successfully`,
             collection.name,
             async () => {
-                // Undo update by restoring previous collections
-                await updateRemoteData(previousCollections);
+                // Undo update by restoring previous collections, skipping any
+                // that now live in a read-only shared folder.
+                await updateRemoteData(filterRestorableCollections(previousCollections));
                 if (onDataUpdate) {
                     await onDataUpdate();
                 }
@@ -359,10 +379,12 @@ export function useCollectionOperations({
         };
         browser.runtime.sendMessage(msg);
         
-        // Track that this collection was opened (auto-focus counts as opened)
+        // Track that this collection was opened (auto-focus counts as opened).
+        // Opening is never blocked by folder permissions, so skip the guard.
         const updatedCollection = {
             ...collection,
-            lastOpened: Date.now()
+            lastOpened: Date.now(),
+            __skipFolderGuard: true
         };
         await updateCollection(updatedCollection); // No lightning effect for auto-focus tracking
     };
