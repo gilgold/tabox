@@ -1,6 +1,7 @@
 <!-- Tabox Pro checkout embed. Paste into a Wix "Custom Code" / embed element on tabox.co/pro.
-     Fill PADDLE_ENV_TOKEN with the client-side token from Paddle dashboard
-     (Developer Tools > Authentication > Client-side tokens): live_... for production. -->
+     Fill TOKENS with the client-side tokens from each environment's Paddle dashboard
+     (Developer Tools > Authentication > Client-side tokens): live_... for production,
+     test_... for sandbox. -->
 <div id="tabox-pro-checkout">
   <div class="plan-toggle">
     <button id="plan-monthly" class="plan-btn active">Monthly — $5.99/mo</button>
@@ -12,14 +13,17 @@
 <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
 <script>
   var PADDLE_ENV = 'production'; // 'sandbox' while testing
-  var PADDLE_ENV_TOKEN = 'REPLACE_WITH_CLIENT_SIDE_TOKEN';
+  var TOKENS = {
+    production: 'REPLACE_WITH_LIVE_CLIENT_SIDE_TOKEN',
+    sandbox: 'REPLACE_WITH_SANDBOX_CLIENT_SIDE_TOKEN'
+  };
   var PRICES = {
     production: { monthly: 'pri_01kxk6xwxdgmtr2eat3xqacs3z', annual: 'pri_01kxk6xx37e1h9pdjvmvy457br' },
     sandbox:    { monthly: 'pri_01kxmrtyxwk2x1qt6kxvbc57m1', annual: 'pri_01kxmrtz4894fc464tm48qjmvy' }
   };
 
   if (PADDLE_ENV === 'sandbox') Paddle.Environment.set('sandbox');
-  Paddle.Initialize({ token: PADDLE_ENV_TOKEN });
+  Paddle.Initialize({ token: TOKENS[PADDLE_ENV] });
 
   var params = new URLSearchParams(window.location.search);
   var googleId = params.get('uid') || '';
