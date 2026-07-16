@@ -237,6 +237,35 @@ describe('doSyncSharedFolders invite polling (Task 12 wiring)', () => {
   });
 });
 
+// Sanitization: folder-name truncation must happen consistently in the folder
+// record, folders_index entry, and event folderName fields. If delta.folder.name
+// exceeds 200 chars, all three must be truncated to 200.
+describe('applyDeltaLocally folder-name truncation', () => {
+  test('truncates oversized folder name to 200 chars in folder record, index, and event fields', async () => {
+    await seedLocal();
+    const longName = 'x'.repeat(500);
+    global.fetch.mockResolvedValue(deltaResponse({
+      folder: { name: longName, color: null, updatedBy: 'o@x.com' },
+      collections: [],
+    }));
+    await syncSharedFolders();
+    const store = await browser.storage.local.get(['folder_f1', 'folders_index', SHARED_EVENTS_KEY]);
+    // Folder record name is truncated
+    expect(store.folder_f1.name).toHaveLength(200);
+    expect(store.folder_f1.name).toBe('x'.repeat(200));
+    // Folders index entry name is also truncated (not raw delta.folder.name)
+    expect(store.folders_index.f1.name).toHaveLength(200);
+    expect(store.folders_index.f1.name).toBe('x'.repeat(200));
+    // All folderName values in events are also truncated to 200 chars max
+    const eventsWithFolderName = store[SHARED_EVENTS_KEY].filter((e) => e.folderName);
+    eventsWithFolderName.forEach((event) => {
+      expect(event.folderName.length).toBeLessThanOrEqual(200);
+    });
+    // At least one event should carry the renamed folder
+    expect(eventsWithFolderName.length).toBeGreaterThan(0);
+  });
+});
+
 // Task 15 review: the popup previously drained shared_folder_events with a plain
 // storage.local.get followed by a separate storage.local.set([]) - a read-then-clear
 // that can race a concurrent event append and silently drop it. sharedDrainEvents reads

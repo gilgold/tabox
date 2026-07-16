@@ -203,6 +203,10 @@ async function applyDeltaLocally(folder, delta, myEmail) {
     const appliedUids = new Set();
     const normalizedMyEmail = (myEmail || '').toLowerCase();
 
+    // Compute sanitized folder name once, use everywhere (folder record, index, events)
+    const localFolder = got[`folder_${folderId}`] || folder;
+    const safeFolderName = String(delta.folder.name ?? localFolder.name).slice(0, 200) || localFolder.name;
+
     for (const row of delta.collections || []) {
       const isOther = Boolean(row.updatedBy) && row.updatedBy.toLowerCase() !== normalizedMyEmail;
       if (row.deleted) {
@@ -212,7 +216,7 @@ async function applyDeltaLocally(folder, delta, myEmail) {
           appliedUids.add(row.uid);
           if (isOther) {
             events.push({
-              folderId, folderName: delta.folder.name, actorEmail: row.updatedBy,
+              folderId, folderName: safeFolderName, actorEmail: row.updatedBy,
               kind: 'deleted', collectionName: null, at: row.updatedAt,
             });
           }
@@ -223,30 +227,29 @@ async function applyDeltaLocally(folder, delta, myEmail) {
         index[row.uid] = { uid: row.uid, name: record.name, parentId: folderId, lastUpdated: row.updatedAt };
         appliedUids.add(row.uid);
         events.push({
-          folderId, folderName: delta.folder.name, actorEmail: row.updatedBy,
+          folderId, folderName: safeFolderName, actorEmail: row.updatedBy,
           kind: 'updated', collectionName: record.name, at: row.updatedAt,
         });
       }
     }
 
     // Folder meta + role + members refresh on every pull, regardless of who last touched it.
-    const localFolder = got[`folder_${folderId}`] || folder;
     const updatedShared = { ...localFolder.shared, role: delta.role, members: delta.members };
     updates[`folder_${folderId}`] = {
       ...localFolder,
-      name: String(delta.folder.name ?? localFolder.name).slice(0, 200) || localFolder.name,
+      name: safeFolderName,
       color: delta.folder.color ?? localFolder.color,
       shared: updatedShared,
     };
     if (delta.folder.name !== localFolder.name && delta.folder.updatedBy && delta.folder.updatedBy.toLowerCase() !== normalizedMyEmail) {
       events.push({
-        folderId, folderName: delta.folder.name, actorEmail: delta.folder.updatedBy,
+        folderId, folderName: safeFolderName, actorEmail: delta.folder.updatedBy,
         kind: 'renamed', collectionName: null, at: Date.now(),
       });
     }
 
     const fIndex = { ...(got.folders_index || {}) };
-    if (fIndex[folderId]) fIndex[folderId] = { ...fIndex[folderId], name: delta.folder.name, shared: updatedShared };
+    if (fIndex[folderId]) fIndex[folderId] = { ...fIndex[folderId], name: safeFolderName, shared: updatedShared };
     updates.collections_index = index;
     updates.folders_index = fIndex;
     if (events.length) {
@@ -621,6 +624,20 @@ function sanitizeRemoteCollection(data) {
   clean.tabs = Array.isArray(clean.tabs)
     ? clean.tabs.filter((tab) => {
         try { return ALLOWED_TAB_SCHEMES.includes(new URL(tab.url).protocol); } catch { return false; }
+      })
+      .map((tab) => {
+        // Shallow-copy tab and sanitize favIconUrl: drop if not http(s)
+        const sanitized = { ...tab };
+        if (sanitized.favIconUrl) {
+          try {
+            const protocol = new URL(sanitized.favIconUrl).protocol;
+            if (!['http:', 'https:'].includes(protocol)) delete sanitized.favIconUrl;
+          } catch {
+            // Invalid URL — drop the favIconUrl
+            delete sanitized.favIconUrl;
+          }
+        }
+        return sanitized;
       })
     : [];
   return clean;
