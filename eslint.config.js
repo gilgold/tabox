@@ -35,6 +35,8 @@ module.exports = [
       "coverage/**",
       "stats.json",
       "**/*.min.js",
+      // Standalone server package (Cloudflare Worker) with its own ESLint.
+      "server/**",
     ],
   },
 

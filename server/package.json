@@ -1,0 +1,14 @@
+{
+  "name": "tabox-entitlement-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.0",
+    "wrangler": "^4.0.0"
+  }
+}

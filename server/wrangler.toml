@@ -1,0 +1,14 @@
+name = "tabox-api"
+main = "src/index.js"
+compatibility_date = "2026-07-01"
+
+kv_namespaces = [
+  { binding = "ENTITLEMENTS", id = "REPLACE_AFTER_CF_SIGNUP" }
+]
+
+[vars]
+GOOGLE_CLIENT_ID = "701423091804-t6v1r6mkl4jdptge49gb7sfstj4holfr.apps.googleusercontent.com"
+PRICE_MONTHLY = "pri_01kxk6xwxdgmtr2eat3xqacs3z"
+PRICE_ANNUAL = "pri_01kxk6xx37e1h9pdjvmvy457br"
+
+# Secrets (set via `wrangler secret put`): PADDLE_WEBHOOK_SECRET, JWT_SECRET
