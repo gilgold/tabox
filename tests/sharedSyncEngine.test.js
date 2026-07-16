@@ -177,9 +177,13 @@ describe('syncSharedFolders echo-push / watermark / re-entrancy fixes', () => {
     now.mockRestore();
   });
 
-  test('two concurrent syncSharedFolders() calls coalesce into a single execution (pull fetched once, not twice)', async () => {
+  test('two concurrent syncSharedFolders() calls coalesce into a single execution (pull fetched once, invites polled once)', async () => {
     await seedLocal();
     global.fetch.mockImplementation(async (url, opts = {}) => {
+      // Task 12 wiring: doSyncSharedFolders() now also polls /shared/invites at
+      // the end of its cycle - distinguish it by URL rather than lumping every
+      // GET into the folder-delta response.
+      if (url.includes('/shared/invites')) return { ok: true, status: 200, json: async () => ({ invites: [] }) };
       if (!opts.method || opts.method === 'GET') return deltaResponse({ collections: [] });
       return { ok: true, status: 200, json: async () => ({ revision: 3 }) };
     });
@@ -196,7 +200,40 @@ describe('syncSharedFolders echo-push / watermark / re-entrancy fixes', () => {
 
     const [r1, r2] = await Promise.all([first, second]);
     expect(r1).toEqual(r2);
-    expect(global.fetch).toHaveBeenCalledTimes(1); // only one pull round-trip happened, not two
+
+    // Coalescing property: only one pull round-trip happened across both calls, not two.
+    // (Matched on the sinceRev query param so this can't accidentally also match a
+    // /shared/folders/f1/collections/<uid> push URL.)
+    const pullCalls = global.fetch.mock.calls.filter(([url]) => url.includes('/shared/folders/f1?sinceRev='));
+    expect(pullCalls.length).toBe(1);
+    // Coalescing property, invite side: exactly one /shared/invites GET across
+    // both calls too - the second caller coalesced onto the first run's single
+    // end-of-cycle poll rather than triggering its own.
+    const invitesCalls = global.fetch.mock.calls.filter(([url]) => url.includes('/shared/invites'));
+    expect(invitesCalls.length).toBe(1);
+  });
+});
+
+// Task 12 wiring: doSyncSharedFolders() must poll invites at the end of EVERY
+// cycle, even for a signed-in user with zero locally-shared folders - that's
+// exactly the state of an invitee who hasn't accepted anything yet.
+describe('doSyncSharedFolders invite polling (Task 12 wiring)', () => {
+  test('signed-in user with zero shared folders still polls invites and does not error', async () => {
+    await browser.storage.local.set({
+      googleUser: { emailAddress: 'me@x.com', permissionId: 'g-me' },
+      folders_index: {},
+    });
+    global.fetch.mockImplementation(async (url) => {
+      if (url.includes('/shared/invites')) return { ok: true, status: 200, json: async () => ({ invites: [] }) };
+      throw new Error(`unexpected fetch in zero-shared-folders test: ${url}`);
+    });
+
+    const res = await syncSharedFolders();
+
+    expect(res.ok).toBe(true);
+    expect(res.data).toEqual({ pulled: 0, pushed: 0, revoked: 0 });
+    const invitesCalls = global.fetch.mock.calls.filter(([url]) => url.includes('/shared/invites'));
+    expect(invitesCalls.length).toBe(1);
   });
 });
 

@@ -138,18 +138,21 @@ async function ensureBackgroundSyncAlarm() {
   return true;
 }
 
-// Task 10: the shared-folders background sync alarm. Only created when there is
-// at least one locally-shared folder AND the user is signed in to Google (the
-// shared-folders API piggybacks on the same OAuth token as Drive sync) — cleared
-// otherwise, mirroring ensureBackgroundSyncAlarm's create/clear shape above.
+// Task 10: the shared-folders background sync alarm. Task 12 wiring: created for
+// every user signed in to Google (the shared-folders API piggybacks on the same
+// OAuth token as Drive sync) — regardless of whether they currently have any
+// locally-shared folders. doSyncSharedFolders() now always polls for pending
+// invites at the end of its cycle (chrome/shared-folders.js), so an invitee who
+// hasn't accepted anything yet still needs this alarm running to learn about
+// invites. Cleared when signed out, mirroring ensureBackgroundSyncAlarm's
+// create/clear shape above.
 async function ensureSharedSyncAlarm() {
-  const { folders_index: index = {}, googleRefreshToken } = await browser.storage.local.get(['folders_index', 'googleRefreshToken']);
-  const hasSharedFolder = Object.values(index || {}).some((folder) => folder?.shared?.folderId);
+  const { googleRefreshToken } = await browser.storage.local.get('googleRefreshToken');
 
   const alarms = await browser.alarms.getAll();
   const existingAlarm = alarms.find(alarm => alarm.name === SHARED_SYNC_ALARM);
 
-  if (hasSharedFolder && googleRefreshToken) {
+  if (googleRefreshToken) {
     if (!existingAlarm) {
       browser.alarms.create(SHARED_SYNC_ALARM, {
         delayInMinutes: 1,

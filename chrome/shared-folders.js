@@ -151,9 +151,11 @@ async function unmarkLocalFolderShared(folderId) {
       [DELETED_FOLDER_TOMBSTONES_KEY]: folderTombstones,
     });
   });
-  // The extension may have just lost its last shared folder (or gained back
-  // sign-in state elsewhere) — let background.js decide whether the sync alarm
-  // still needs to exist. Guarded because shared-folders.js is also loaded
+  // Task 12 wiring: the alarm now gates purely on sign-in state (googleRefreshToken),
+  // not on shared-folder count — signed-in users keep polling invites every 5 minutes
+  // even with zero shared folders — so losing this folder no longer changes whether
+  // the alarm should exist. Kept as a harmless idempotent safety net in case sign-in
+  // state also changed elsewhere. Guarded because shared-folders.js is also loaded
   // standalone under Jest, where background.js's alarm helper isn't defined.
   if (typeof ensureSharedSyncAlarm === 'function') await ensureSharedSyncAlarm();
 }
@@ -296,15 +298,17 @@ async function pollInvites() {
 // LOCAL records in one atomic storage.local.set (folder_<id>, collection_<uid>
 // per collection, both indexes rewritten), seeds this folder's sync-state
 // watermark so the next background sync cycle pulls only what's changed since,
-// then removes the now-resolved invite from the pending list. This is the
-// caller's first shared folder if it had none before, so on success it also
+// then removes the now-resolved invite from the pending list. On success it also
 // ensures the background sync alarm exists — mirroring the exact guarded-call
 // pattern already used by handleSharedMessage's sharedCreateShare case and by
-// unmarkLocalFolderShared (`typeof ensureSharedSyncAlarm === 'function'`):
-// shared-folders.js is loaded via importScripts AFTER background.js in the real
-// service worker, so the bare identifier resolves there but is safely absent
-// (typeof-guarded, no ReferenceError) when this module is required standalone
-// under Jest.
+// unmarkLocalFolderShared (`typeof ensureSharedSyncAlarm === 'function'`). Task 12
+// wiring: the alarm now gates purely on sign-in state, so the caller was almost
+// certainly already polling (an invite only reaches them signed in); this call is
+// a harmless idempotent no-op in that case, and still matters for the moment
+// sign-in state changed out from under them. shared-folders.js is loaded via
+// importScripts AFTER background.js in the real service worker, so the bare
+// identifier resolves there but is safely absent (typeof-guarded, no
+// ReferenceError) when this module is required standalone under Jest.
 async function respondToInvite({ folderId, accept }) {
   const res = await sharedApiFetch(`/shared/invites/${folderId}/respond`, { method: 'POST', body: { accept } });
 
@@ -484,6 +488,19 @@ async function doSyncSharedFolders() {
     }
   }
 
+  // Task 12 wiring: poll for pending invites at the end of EVERY cycle, even
+  // when `folders` above was empty — that's exactly the state of an invitee
+  // who hasn't accepted anything yet, and they still need their invites
+  // checked every 5 minutes. pollInvites() already returns an { ok: false, ... }
+  // tuple (never throws) for network/auth failures, but it's wrapped here too
+  // so that an unexpected rejection (e.g. a storage.local call throwing) can
+  // never crash a sync cycle that already successfully pulled/pushed above.
+  try {
+    await pollInvites();
+  } catch {
+    // Invite polling must never abort/crash the sync cycle.
+  }
+
   return { ok: true, data: { pulled, pushed, revoked } };
 }
 
@@ -505,10 +522,11 @@ async function handleSharedMessage(request) {
       await setFolderSyncState(folder.uid, {
         lastRev: created.data.revision, lastSyncedAt: Date.now(), knownUids: collections.map((c) => c.uid),
       });
-      // The extension may have just gained its first shared folder — let
-      // background.js's alarm helper decide whether the sync alarm needs
-      // creating. Guarded: not defined when shared-folders.js loads standalone
-      // under Jest.
+      // Task 12 wiring: the alarm now gates purely on sign-in state, not on
+      // shared-folder count, so creating a share no longer changes whether it
+      // should exist (a signed-in owner was already being polled). Kept as a
+      // harmless idempotent call. Guarded: not defined when shared-folders.js
+      // loads standalone under Jest.
       if (typeof ensureSharedSyncAlarm === 'function') await ensureSharedSyncAlarm();
       return { ok: true, data: { members } };
     }
