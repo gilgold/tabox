@@ -262,11 +262,13 @@ async function applyDeltaLocally(folder, delta, myEmail) {
 
 // Task 12: polls the server for pending invites addressed to the signed-in user,
 // persists them under SHARED_PENDING_INVITES_KEY, and fires ONE Chrome notification
-// per newly-seen folderId (dedup'd via the stored notifiedFolderIds list, so a
-// re-poll of the same still-pending invite never re-notifies). The network fetch
-// happens outside the storage lock (it touches no local storage); only the
-// get-then-set of the pending-invites record is serialized through
-// withStorageLock, consistent with every other aggregate-key mutation in this file.
+// per newly-seen folderId. After fetching the current invites, prune notifiedFolderIds
+// to ONLY ids present in the current server invite list (intersection), then notify for
+// ids in the list but not in the pruned set. Result: invite disappears (declined/
+// accepted/expired) → id drops out → future re-invite notifies afresh. The network
+// fetch happens outside the storage lock (it touches no local storage); only the
+// get-then-set of the pending-invites record is serialized through withStorageLock,
+// consistent with every other aggregate-key mutation in this file.
 async function pollInvites() {
   const res = await sharedApiFetch('/shared/invites');
   if (!res.ok) return res;
@@ -274,14 +276,20 @@ async function pollInvites() {
   return withStorageLock(async () => {
     const { [SHARED_PENDING_INVITES_KEY]: prev = { invites: [], notifiedFolderIds: [] } } =
       await browser.storage.local.get(SHARED_PENDING_INVITES_KEY);
-    const notifiedFolderIds = [...(prev.notifiedFolderIds || [])];
+
+    // Prune notifiedFolderIds to only include ids present in current server invites (intersection)
+    const currentFolderIds = new Set(invites.map((inv) => inv.folderId));
+    const prunedNotifiedIds = new Set((prev.notifiedFolderIds || []).filter((id) => currentFolderIds.has(id)));
+
+    const notifiedFolderIds = Array.from(prunedNotifiedIds);
     for (const inv of invites) {
-      if (!notifiedFolderIds.includes(inv.folderId)) {
+      if (!prunedNotifiedIds.has(inv.folderId)) {
         notifiedFolderIds.push(inv.folderId);
+        prunedNotifiedIds.add(inv.folderId);
         try {
           await browser.notifications.create(`shared-invite-${inv.folderId}`, {
             type: 'basic',
-            iconUrl: 'images/icon128.png',
+            iconUrl: 'icons/icon128.png',
             title: 'Tabox — shared folder invite',
             message: `${inv.ownerEmail} wants to share the folder "${inv.folderName}" with you`,
           });
@@ -316,7 +324,11 @@ async function respondToInvite({ folderId, accept }) {
     const { [SHARED_PENDING_INVITES_KEY]: prev = { invites: [], notifiedFolderIds: [] } } =
       await browser.storage.local.get(SHARED_PENDING_INVITES_KEY);
     await browser.storage.local.set({
-      [SHARED_PENDING_INVITES_KEY]: { ...prev, invites: (prev.invites || []).filter((i) => i.folderId !== folderId) },
+      [SHARED_PENDING_INVITES_KEY]: {
+        ...prev,
+        invites: (prev.invites || []).filter((i) => i.folderId !== folderId),
+        notifiedFolderIds: (prev.notifiedFolderIds || []).filter((id) => id !== folderId),
+      },
     });
   });
 
@@ -337,11 +349,26 @@ async function respondToInvite({ folderId, accept }) {
   // collections wholesale (e.g. re-accepting after a prior partial accept) —
   // the whole record is server-authoritative here, so a clean overwrite is
   // correct and keeps both indexes consistent with what was just written.
+  // Also removes any stale local collection records (parentId === folderId,
+  // uid NOT in fresh server response) so collectionCount and the index never drift.
   await withStorageLock(async () => {
     const got = await browser.storage.local.get(['folders_index', 'collections_index']);
     const fIndex = got.folders_index || {};
-    const cIndex = got.collections_index || {};
+    const cIndex = { ...(got.collections_index || {}) };
     const updates = {};
+    const removals = [];
+
+    // Identify fresh collections from the server response
+    const freshCollectionUids = new Set(collections.map((c) => c.uid));
+
+    // Find and remove stale local collections (parentId matches this folder, but uid not in fresh response)
+    for (const uid of Object.keys(cIndex)) {
+      if (cIndex[uid].parentId === folder.folderId && !freshCollectionUids.has(uid)) {
+        delete cIndex[uid];
+        removals.push(`collection_${uid}`);
+      }
+    }
+
     const shared = { folderId: folder.folderId, role: folder.role, ownerEmail: folder.ownerEmail, members: folder.members };
     const folderRecord = {
       uid: folder.folderId,
@@ -365,6 +392,7 @@ async function respondToInvite({ folderId, accept }) {
     updates.folders_index = fIndex;
     updates.collections_index = cIndex;
     await browser.storage.local.set(updates); // one atomic set
+    if (removals.length) await browser.storage.local.remove(removals);
   });
 
   // Separate, sequential lock acquisitions (setFolderSyncState and

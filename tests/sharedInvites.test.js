@@ -58,6 +58,52 @@ test('pollInvites stores invites and notifies once per folder', async () => {
   const { [SHARED_PENDING_INVITES_KEY]: stored } = await browser.storage.local.get(SHARED_PENDING_INVITES_KEY);
   expect(stored.invites).toEqual([invite]);
   expect(browser.notifications.create).toHaveBeenCalledTimes(1);
+  // Verify icon path is correct
+  expect(browser.notifications.create).toHaveBeenCalledWith(
+    expect.any(String),
+    expect.objectContaining({ iconUrl: 'icons/icon128.png' })
+  );
+});
+
+test('declined-then-re-invited folder notifies a second time', async () => {
+  const invite = { folderId: 'f1', folderName: 'Team', ownerEmail: 'o@x.com', role: 'read', invitedAt: 1 };
+
+  // First poll: notify on new invite
+  global.fetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ invites: [invite] }) });
+  await pollInvites();
+  expect(browser.notifications.create).toHaveBeenCalledTimes(1);
+
+  // Simulate user declining the invite
+  global.fetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ accepted: false }) });
+  await respondToInvite({ folderId: 'f1', accept: false });
+
+  // Second poll: no invites, notifiedFolderIds should be pruned (f1 drops out)
+  global.fetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ invites: [] }) });
+  await pollInvites();
+  let { [SHARED_PENDING_INVITES_KEY]: stored } = await browser.storage.local.get(SHARED_PENDING_INVITES_KEY);
+  expect(stored.notifiedFolderIds).not.toContain('f1');
+
+  // Third poll: f1 is re-invited, should notify again
+  global.fetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ invites: [invite] }) });
+  await pollInvites();
+  expect(browser.notifications.create).toHaveBeenCalledTimes(2);
+
+  stored = await browser.storage.local.get(SHARED_PENDING_INVITES_KEY);
+  expect(stored[SHARED_PENDING_INVITES_KEY].notifiedFolderIds).toContain('f1');
+});
+
+test('still-open invite across two polls notifies once', async () => {
+  const invite = { folderId: 'f1', folderName: 'Team', ownerEmail: 'o@x.com', role: 'read', invitedAt: 1 };
+
+  // First poll: notify on new invite
+  global.fetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ invites: [invite] }) });
+  await pollInvites();
+  expect(browser.notifications.create).toHaveBeenCalledTimes(1);
+
+  // Second poll: same invite still pending, should not re-notify (f1 stays in intersection)
+  global.fetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ invites: [invite] }) });
+  await pollInvites();
+  expect(browser.notifications.create).toHaveBeenCalledTimes(1); // still only 1, not 2
 });
 
 test('accepting materializes folder + collections locally in one set and seeds sync state', async () => {
@@ -126,4 +172,43 @@ test('accepting overwrites an existing local folder/collection cleanly (indexes 
   // folder entry is untouched.
   expect(Object.keys(store.folders_index).sort()).toEqual(['f1', 'other']);
   expect(Object.keys(store.collections_index)).toEqual(['c1']);
+});
+
+test('re-accept with shrunken collection set removes stale local collection records', async () => {
+  // Set up: folder f1 has collections c1, c2, c3 locally
+  await browser.storage.local.set({
+    folder_f1: { uid: 'f1', name: 'Team', type: 'folder', color: '#f00', shared: { folderId: 'f1', role: 'write' } },
+    folders_index: { f1: { uid: 'f1', name: 'Team' } },
+    collection_c1: { uid: 'c1', name: 'A', parentId: 'f1', tabs: [] },
+    collection_c2: { uid: 'c2', name: 'B', parentId: 'f1', tabs: [] },
+    collection_c3: { uid: 'c3', name: 'C', parentId: 'f1', tabs: [] },
+    collections_index: {
+      c1: { uid: 'c1', name: 'A', parentId: 'f1' },
+      c2: { uid: 'c2', name: 'B', parentId: 'f1' },
+      c3: { uid: 'c3', name: 'C', parentId: 'f1' },
+    },
+  });
+
+  // Server now only has c1 and c2 (c3 was deleted)
+  global.fetch.mockResolvedValue({
+    ok: true, status: 200,
+    json: async () => ({
+      accepted: true,
+      folder: { folderId: 'f1', name: 'Team', color: '#f00', revision: 10, role: 'write', ownerEmail: 'o@x.com', members: [] },
+      collections: [
+        { uid: 'c1', data: { name: 'A (updated)', tabs: [] } },
+        { uid: 'c2', data: { name: 'B (updated)', tabs: [] } },
+      ],
+    }),
+  });
+
+  await respondToInvite({ folderId: 'f1', accept: true });
+
+  // Verify: c3 was removed from storage and index, c1/c2 remain
+  const store = await browser.storage.local.get(['collection_c1', 'collection_c2', 'collection_c3', 'collections_index']);
+  expect(store.collection_c1).toBeDefined();
+  expect(store.collection_c2).toBeDefined();
+  expect(store.collection_c3).toBeUndefined(); // stale collection removed
+  expect(Object.keys(store.collections_index).sort()).toEqual(['c1', 'c2']); // c3 removed from index
+  expect(store.collections_index.c3).toBeUndefined();
 });
