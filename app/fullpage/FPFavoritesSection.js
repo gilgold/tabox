@@ -63,6 +63,7 @@ function FPFavoritesSection({
     trackedCollectionUids,
     disableDrag = false,
     search,
+    folders,
 }) {
     const favorites = useMemo(() => getFavoriteCollections(collections), [collections]);
     const sensors = useSensors(useSensor(PointerSensor, dndPointerSensorOptions));
@@ -90,6 +91,7 @@ function FPFavoritesSection({
         addCollection,
         onDataUpdate,
         onCardContextMenu,
+        folders,
     };
 
     if (favorites.length === 0) {

@@ -426,6 +426,14 @@ export const removeCollectionFromFolder = async (collectionId) => {
             return true;
         }
 
+        // Permission guard: removing a collection from its folder edits that
+        // folder's contents, so a read-only shared source folder blocks it too -
+        // mirrors moveCollectionToFolder's internal check.
+        const sourceFolder = await loadSingleFolder(oldParentId);
+        if (!canEditFolder(sourceFolder)) {
+            return { blocked: true };
+        }
+
         collection.parentId = null;
         collection.lastUpdated = Date.now();
 

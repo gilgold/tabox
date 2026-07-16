@@ -41,7 +41,7 @@ describe('folderOperations guard wiring', () => {
 
   const storageUtils = require('../app/utils/storageUtils');
   const sharedSync = require('../app/utils/sharedSync');
-  const { moveCollectionToFolder, updateFolderName } = require('../app/utils/folderOperations');
+  const { moveCollectionToFolder, removeCollectionFromFolder, updateFolderName } = require('../app/utils/folderOperations');
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -88,6 +88,35 @@ describe('folderOperations guard wiring', () => {
     expect(result).toBe(true);
     expect(storageUtils.saveSingleCollection).toHaveBeenCalledWith(
       expect.objectContaining({ uid: 'collection-1', parentId: 'folder-target' }),
+      true,
+    );
+  });
+
+  test('removeCollectionFromFolder blocks (without writing) when the source folder is read-only shared', async () => {
+    storageUtils.loadSingleCollection.mockResolvedValue({ uid: 'collection-1', parentId: 'folder-source' });
+    storageUtils.loadSingleFolder.mockResolvedValue({
+      uid: 'folder-source',
+      shared: { folderId: 'folder-source', role: 'read' },
+    });
+
+    const result = await removeCollectionFromFolder('collection-1');
+
+    expect(result).toEqual({ blocked: true });
+    expect(storageUtils.saveSingleCollection).not.toHaveBeenCalled();
+  });
+
+  test('removeCollectionFromFolder proceeds normally when the source folder is writable', async () => {
+    storageUtils.loadSingleCollection.mockResolvedValue({ uid: 'collection-1', parentId: 'folder-source' });
+    storageUtils.loadSingleFolder.mockResolvedValue({
+      uid: 'folder-source',
+      shared: { folderId: 'folder-source', role: 'write' },
+    });
+
+    const result = await removeCollectionFromFolder('collection-1');
+
+    expect(result).toBe(true);
+    expect(storageUtils.saveSingleCollection).toHaveBeenCalledWith(
+      expect.objectContaining({ uid: 'collection-1', parentId: null }),
       true,
     );
   });

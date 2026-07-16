@@ -734,14 +734,21 @@ function CollectionList({
                     restoreScrollPosition(); // Maintain scroll position after reorder
                 }
             } else if (draggedItem.parentId && targetItem.parentId && draggedItem.parentId === targetItem.parentId) {
-                // Both in same folder - allow reordering within folder
+                // Both in same folder - allow reordering within folder.
+                // Reordering still edits the (possibly shared) folder's
+                // contents/order, so guard it before touching storage.
+                const sourceFolderForGuard = folders.find(f => f.uid === draggedItem.parentId);
+                if (!guardFolderEdit(sourceFolderForGuard, () => setNoPermissionOpen(true))) {
+                    setActiveCollection(null);
+                    setActiveFolder(null);
+                    return;
+                }
 
-                
                 const folderCollections = collections.filter(c => c.parentId === draggedItem.parentId);
                 const oldIndex = folderCollections.findIndex(c => c.uid === draggedItem.uid);
                 const newIndex = folderCollections.findIndex(c => c.uid === targetItem.uid);
-            
-                
+
+
                 if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
                     const reorderedFolderCollections = reindexCollectionSiblings(
                         arrayMove(folderCollections, oldIndex, newIndex),

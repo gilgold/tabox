@@ -2057,6 +2057,12 @@ function App({ mode = 'popup' }) {
       case 'move': {
         const { moveCollectionToFolder, removeCollectionFromFolder } = await import('./utils/folderOperations');
         const targetFolderId = payload?.targetFolderId;
+        const sourceFolder = collection.parentId ? foldersData.find(f => f.uid === collection.parentId) : null;
+        const targetFolder = targetFolderId ? foldersData.find(f => f.uid === targetFolderId) : null;
+        if (!guardFolderEdit(sourceFolder, () => setNoPermissionOpen(true)) ||
+            !guardFolderEdit(targetFolder, () => setNoPermissionOpen(true))) {
+          break;
+        }
         let success;
         if (targetFolderId === null) {
           success = await removeCollectionFromFolder(collection.uid);
@@ -2101,6 +2107,8 @@ function App({ mode = 'popup' }) {
         break;
       }
       case 'delete': {
+        const parentFolder = collection.parentId ? foldersData.find(f => f.uid === collection.parentId) : null;
+        if (!guardFolderEdit(parentFolder, () => setNoPermissionOpen(true))) break;
         const { deleteSingleCollection, updateFolderCollectionCount } = await import('./utils/storageUtils');
         const parentFolderId = collection.parentId;
         await deleteSingleCollection(collection.uid);
@@ -2114,7 +2122,7 @@ function App({ mode = 'popup' }) {
         break;
       }
     }
-  }, [addCollection, updateCollection, updateRemoteData, refreshDataAfterFolderOperation, folderNameMap]);
+  }, [addCollection, updateCollection, updateRemoteData, refreshDataAfterFolderOperation, folderNameMap, foldersData, setNoPermissionOpen]);
 
   const tooltipPortal = ReactDOM.createPortal(
     <Tooltip

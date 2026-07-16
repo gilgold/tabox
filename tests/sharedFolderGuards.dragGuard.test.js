@@ -93,6 +93,7 @@ jest.mock('../app/utils/sharedCollectionSync', () => ({
 }));
 
 const { removeCollectionFromFolder } = require('../app/utils/folderOperations');
+const { persistCollectionLayoutChanges } = require('../app/utils/sharedCollectionSync');
 
 const READ_ONLY_FOLDER = { uid: 'folder-1', name: 'Research', shared: { folderId: 'folder-1', role: 'read' } };
 const WRITABLE_FOLDER = { uid: 'folder-1', name: 'Research', shared: { folderId: 'folder-1', role: 'write' } };
@@ -174,6 +175,83 @@ describe('CollectionList blocks dragging a collection out of a read-only shared 
         });
 
         expect(removeCollectionFromFolder).toHaveBeenCalledWith('collection-1');
+        expect(store.get(noPermissionOpenState)).toBe(false);
+    });
+});
+
+describe('CollectionList blocks reordering collections within a read-only shared folder', () => {
+    beforeEach(() => {
+        latestDragEndHandler = null;
+        mockClosestCorners.mockReset();
+        mockClosestCorners.mockReturnValue([]);
+        mockPointerWithin.mockReset();
+        mockPointerWithin.mockReturnValue([]);
+        jest.clearAllMocks();
+    });
+
+    test('blocks the same-folder reorder, opens the no-permission modal, and never persists when the folder is read-only shared', async () => {
+        const updateRemoteData = jest.fn(async () => true);
+        const store = createStore();
+
+        render(
+            <Provider store={store}>
+                <CollectionList
+                    collections={[
+                        { uid: 'collection-1', name: 'Shared Child One', parentId: 'folder-1', order: 0, lastUpdated: 10 },
+                        { uid: 'collection-2', name: 'Shared Child Two', parentId: 'folder-1', order: 1, lastUpdated: 20 },
+                    ]}
+                    folders={[READ_ONLY_FOLDER]}
+                    viewMode="list"
+                    updateRemoteData={updateRemoteData}
+                    updateCollection={jest.fn()}
+                    removeCollection={jest.fn()}
+                    onDataUpdate={jest.fn()}
+                />
+            </Provider>,
+        );
+
+        expect(latestDragEndHandler).toEqual(expect.any(Function));
+
+        await act(async () => {
+            await latestDragEndHandler({
+                active: { id: 'collection-1' },
+                over: { id: 'collection-2' },
+            });
+        });
+
+        expect(persistCollectionLayoutChanges).not.toHaveBeenCalled();
+        expect(updateRemoteData).not.toHaveBeenCalled();
+        expect(store.get(noPermissionOpenState)).toBe(true);
+    });
+
+    test('allows the same-folder reorder when the folder is writable', async () => {
+        const store = createStore();
+
+        render(
+            <Provider store={store}>
+                <CollectionList
+                    collections={[
+                        { uid: 'collection-1', name: 'Writable Child One', parentId: 'folder-1', order: 0, lastUpdated: 10 },
+                        { uid: 'collection-2', name: 'Writable Child Two', parentId: 'folder-1', order: 1, lastUpdated: 20 },
+                    ]}
+                    folders={[WRITABLE_FOLDER]}
+                    viewMode="list"
+                    updateRemoteData={jest.fn()}
+                    updateCollection={jest.fn()}
+                    removeCollection={jest.fn()}
+                    onDataUpdate={jest.fn()}
+                />
+            </Provider>,
+        );
+
+        await act(async () => {
+            await latestDragEndHandler({
+                active: { id: 'collection-1' },
+                over: { id: 'collection-2' },
+            });
+        });
+
+        expect(persistCollectionLayoutChanges).toHaveBeenCalled();
         expect(store.get(noPermissionOpenState)).toBe(false);
     });
 });

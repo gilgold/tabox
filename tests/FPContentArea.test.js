@@ -52,6 +52,7 @@ import FPContentArea from '../app/fullpage/FPContentArea';
 import { collectionRevealBatchState, highlightedCollectionUidState } from '../app/atoms/animationsState';
 import { sidebarNavigationState } from '../app/atoms/fullpageState';
 import { searchState } from '../app/atoms/globalAppSettingsState';
+import { noPermissionOpenState } from '../app/atoms/sharedFoldersState';
 import { CURRENT_WINDOWS_ACCENT_COLOR } from '../app/fullpage/fpAccentColors';
 import {
     loadAllCollections,
@@ -60,6 +61,7 @@ import {
 } from '../app/utils/storageUtils';
 import { openCollectionsInSequence } from '../app/utils/collectionBulkActions';
 
+let mockLatestCardFoldersByUid = {};
 jest.mock('../app/fullpage/FPCollectionCard', () => function MockFPCollectionCard({
     collection,
     onSelect,
@@ -68,7 +70,9 @@ jest.mock('../app/fullpage/FPCollectionCard', () => function MockFPCollectionCar
     onToggleBulkSelected,
     onCardContextMenu,
     isInteractionActive,
+    folders,
 }) {
+    mockLatestCardFoldersByUid[collection.uid] = folders;
     return (
         <div
             className={`fp-card ${isBulkSelected ? 'fp-card-bulk-selected' : ''} ${isInteractionActive ? 'fp-card-interaction-active' : ''}`}
@@ -1993,6 +1997,64 @@ describe('FPContentArea grouped all collections view', () => {
         await waitFor(() => {
             expect(screen.queryByText('1 selected')).not.toBeInTheDocument();
         });
+    });
+
+    test('blocks bulk delete when the selection includes a collection inside a read-only shared folder', async () => {
+        const updateRemoteData = jest.fn();
+
+        loadAllCollections.mockResolvedValue([
+            { uid: 'bulk-delete-shared', name: 'Shared Delete Target', parentId: 'folder-1', order: 0, lastUpdated: 10, tabs: [] },
+        ]);
+
+        const { store } = renderWithStore(
+            <FPContentArea
+                {...baseProps}
+                updateRemoteData={updateRemoteData}
+                collections={[
+                    { uid: 'bulk-delete-shared', name: 'Shared Delete Target', parentId: 'folder-1', order: 0, lastUpdated: 10, tabs: [] },
+                ]}
+                folders={[
+                    { uid: 'folder-1', name: 'Read Only Folder', collapsed: false, color: 'blue', shared: { folderId: 'folder-1', role: 'read' } },
+                ]}
+            />,
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Shared Delete Target')).toBeInTheDocument();
+        });
+
+        fireEvent.click(screen.getByRole('button', { name: 'toggle-collection-bulk-delete-shared' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Confirm Bulk Delete' }));
+
+        await waitFor(() => {
+            expect(store.get(noPermissionOpenState)).toBe(true);
+        });
+        expect(batchDeleteCollections).not.toHaveBeenCalled();
+        expect(updateRemoteData).not.toHaveBeenCalled();
+    });
+
+    test('threads the live folders array down to each collection card instead of leaving it to the per-card self-fetch fallback', async () => {
+        mockLatestCardFoldersByUid = {};
+        const sharedFolders = [
+            { uid: 'folder-1', name: 'Folder One', collapsed: false, color: 'blue' },
+        ];
+
+        renderWithStore(
+            <FPContentArea
+                {...baseProps}
+                collections={[
+                    { uid: 'wired-card', name: 'Wired Card', parentId: 'folder-1', order: 0, lastUpdated: 10, tabs: [] },
+                ]}
+                folders={sharedFolders}
+            />,
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Wired Card')).toBeInTheDocument();
+        });
+
+        expect(mockLatestCardFoldersByUid['wired-card']).toBe(sharedFolders);
     });
 
     test('shows a bulk action bar for selected single-tab sessions and combines them for save', async () => {

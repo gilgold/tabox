@@ -16,6 +16,8 @@ import {
     highlightedCollectionUidState,
 } from '../atoms/animationsState';
 import { sidebarNavigationState } from '../atoms/fullpageState';
+import { noPermissionOpenState } from '../atoms/sharedFoldersState';
+import { guardFolderEdit } from '../utils/sharedFolderUtils';
 import ColorPicker from '../ColorPicker';
 import {
     DndContext,
@@ -620,6 +622,7 @@ const MemoizedSortableFPCard = React.memo(SortableFPCard, (prev, next) => {
         prev.viewMode === next.viewMode &&
         prev.folderName === next.folderName &&
         prev.folderColor === next.folderColor &&
+        prev.folders === next.folders &&
         prev.onSelect === next.onSelect &&
         prev.onCardContextMenu === next.onCardContextMenu &&
         prev.isInteractionActive === next.isInteractionActive &&
@@ -677,6 +680,7 @@ function FPContentArea({
     const setSelectedCurrentWindowId = useSetAtom(selectedCurrentWindowIdState);
     const setSelectedSessionEntryKey = useSetAtom(selectedSessionEntryKeyState);
     const setCollectionRevealBatch = useSetAtom(collectionRevealBatchState);
+    const setNoPermissionOpen = useSetAtom(noPermissionOpenState);
 
     // AI: split-collection context-menu entry (mirrors the popup menu in
     // contextMenuItems.js — the full-page menu is hand-rolled, so it's wired here).
@@ -1002,6 +1006,23 @@ function FPContentArea({
     }, [folders]);
 
     const folderUidSet = useMemo(() => new Set(folders.map(folder => folder.uid)), [folders]);
+
+    const folderByUid = useMemo(() => {
+        const map = new Map();
+        folders.forEach((folder) => map.set(folder.uid, folder));
+        return map;
+    }, [folders]);
+
+    // Guard a bulk write against every folder it touches (source folders of the
+    // affected collections, plus a move's target folder). Mirrors guardFolderEdit
+    // but fans out over a set of folder ids - opens the no-permission modal and
+    // returns false as soon as any touched folder is read-only shared.
+    const guardBulkFolderEdit = useCallback((folderIds) => {
+        const uniqueFolderIds = [...new Set([...folderIds].filter(Boolean))];
+        return uniqueFolderIds.every((folderId) => (
+            guardFolderEdit(folderByUid.get(folderId), () => setNoPermissionOpen(true))
+        ));
+    }, [folderByUid, setNoPermissionOpen]);
 
     const activeFolder = useMemo(
         () => folders.find((folder) => folder.uid === sidebarNavigation) || null,
@@ -2142,6 +2163,11 @@ function FPContentArea({
             return;
         }
 
+        const affectedFolderIds = recoloredCollections.map((collection) => collection.parentId);
+        if (!guardBulkFolderEdit(affectedFolderIds)) {
+            return;
+        }
+
         const nextCollections = allCollections.map((collection) => (
             selectedIdSet.has(collection.uid)
                 ? {
@@ -2158,7 +2184,7 @@ function FPContentArea({
         }
 
         showSuccessToast(`Updated color for ${recoloredCollections.length} collection${recoloredCollections.length !== 1 ? 's' : ''}`);
-    }, [loadSelectedCollectionSnapshot, onDataUpdate, updateRemoteData]);
+    }, [guardBulkFolderEdit, loadSelectedCollectionSnapshot, onDataUpdate, updateRemoteData]);
 
     const handleOpenBulkMoveModal = useCallback(() => {
         if (!hasSelectedCollections || folders.length === 0) {
@@ -2181,6 +2207,12 @@ function FPContentArea({
 
         const movedCollections = selectedCollections.filter((collection) => collection.parentId !== targetFolderId);
         if (movedCollections.length === 0) {
+            setIsBulkMoveModalOpen(false);
+            return;
+        }
+
+        const touchedFolderIds = [targetFolderId, ...movedCollections.map((collection) => collection.parentId)];
+        if (!guardBulkFolderEdit(touchedFolderIds)) {
             setIsBulkMoveModalOpen(false);
             return;
         }
@@ -2209,12 +2241,17 @@ function FPContentArea({
         setIsBulkMoveModalOpen(false);
         const targetFolderName = folders.find((folder) => folder.uid === targetFolderId)?.name || 'folder';
         showSuccessToast(`Moved ${movedCollections.length} collection${movedCollections.length !== 1 ? 's' : ''} to ${targetFolderName}`);
-    }, [folders, loadSelectedCollectionSnapshot, onDataUpdate, updateRemoteData]);
+    }, [folders, guardBulkFolderEdit, loadSelectedCollectionSnapshot, onDataUpdate, updateRemoteData]);
 
     const handleBulkRemoveFromFolder = useCallback(async () => {
         const { selectedIdSet, allCollections, selectedCollections } = await loadSelectedCollectionSnapshot();
         const removableCollections = selectedCollections.filter((collection) => !!collection.parentId);
         if (removableCollections.length === 0) {
+            return;
+        }
+
+        const affectedFolderIds = removableCollections.map((collection) => collection.parentId);
+        if (!guardBulkFolderEdit(affectedFolderIds)) {
             return;
         }
 
@@ -2228,16 +2265,14 @@ function FPContentArea({
                 : collection
         ));
 
-        const affectedFolderIds = new Set(removableCollections.map((collection) => collection.parentId).filter(Boolean));
-
         await updateRemoteData(nextCollections);
-        await Promise.all([...affectedFolderIds].map((folderId) => updateFolderCollectionCount(folderId)));
+        await Promise.all([...new Set(affectedFolderIds.filter(Boolean))].map((folderId) => updateFolderCollectionCount(folderId)));
         if (onDataUpdate) {
             await onDataUpdate();
         }
 
         showSuccessToast(`Removed ${removableCollections.length} collection${removableCollections.length !== 1 ? 's' : ''} from folder${removableCollections.length !== 1 ? 's' : ''}`);
-    }, [loadSelectedCollectionSnapshot, onDataUpdate, updateRemoteData]);
+    }, [guardBulkFolderEdit, loadSelectedCollectionSnapshot, onDataUpdate, updateRemoteData]);
 
     const handleOpenBulkDeleteModal = useCallback(() => {
         if (!hasSelectedCollections) {
@@ -2254,6 +2289,12 @@ function FPContentArea({
             return;
         }
 
+        const affectedFolderIds = selectedCollections.map((collection) => collection.parentId);
+        if (!guardBulkFolderEdit(affectedFolderIds)) {
+            setIsBulkDeleteModalOpen(false);
+            return;
+        }
+
         const success = await batchDeleteCollections(selectedIds);
         if (!success) {
             showErrorToast('Failed to delete collections');
@@ -2261,10 +2302,9 @@ function FPContentArea({
         }
 
         const remainingCollections = allCollections.filter((collection) => !selectedIdSet.has(collection.uid));
-        const affectedFolderIds = new Set(selectedCollections.map((collection) => collection.parentId).filter(Boolean));
 
         await updateRemoteData(remainingCollections);
-        await Promise.all([...affectedFolderIds].map((folderId) => updateFolderCollectionCount(folderId)));
+        await Promise.all([...new Set(affectedFolderIds.filter(Boolean))].map((folderId) => updateFolderCollectionCount(folderId)));
 
         clearSelectedCollections();
         setIsBulkDeleteModalOpen(false);
@@ -2273,7 +2313,7 @@ function FPContentArea({
         }
 
         showSuccessToast(`Deleted ${selectedCollections.length} collection${selectedCollections.length !== 1 ? 's' : ''}`);
-    }, [batchDeleteCollections, clearSelectedCollections, loadSelectedCollectionSnapshot, onDataUpdate, updateRemoteData]);
+    }, [batchDeleteCollections, clearSelectedCollections, guardBulkFolderEdit, loadSelectedCollectionSnapshot, onDataUpdate, updateRemoteData]);
 
     const clearSelectedTabSessions = useCallback(() => {
         setSelectedTabSessionEntryKeys((previous) => (previous.size > 0 ? new Set() : previous));
@@ -2961,6 +3001,7 @@ function FPContentArea({
                     isBulkSelected={selectedCollectionUids.has(collection.uid)}
                     onToggleBulkSelected={handleToggleCollectionSelection}
                     bulkSelectionAccentColor={bulkSelectionAccentColor}
+                    folders={folders}
                 />,
             );
 
@@ -3255,6 +3296,7 @@ function FPContentArea({
                             onSelect={handleSelectCollection}
                             onCardContextMenu={hasSelectedCollections ? undefined : handleCardContextMenu}
                             trackedCollectionUids={trackedCollectionUids}
+                            folders={folders}
                         />
                     ) : hasRenderableCollections ? (
                         <DndContext
@@ -3291,6 +3333,7 @@ function FPContentArea({
                                             onDataUpdate={onDataUpdate}
                                             isAutoUpdate={trackedCollectionUids?.has(activeCollection.uid) === true}
                                             viewMode={viewMode}
+                                            folders={folders}
                                         />
                                     </div>
                                 ) : null}

@@ -4,7 +4,9 @@ import '@testing-library/jest-dom';
 import FPFavoritesSection from '../app/fullpage/FPFavoritesSection';
 import { renderWithProviders } from './helpers/renderWithProviders';
 
-jest.mock('../app/fullpage/FPCollectionCard', () => function MockFPCollectionCard({ collection }) {
+let mockLatestCardFoldersByUid = {};
+jest.mock('../app/fullpage/FPCollectionCard', () => function MockFPCollectionCard({ collection, folders }) {
+    mockLatestCardFoldersByUid[collection.uid] = folders;
     return <div data-testid="fav-card">{collection.name}</div>;
 });
 
