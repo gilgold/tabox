@@ -77,4 +77,64 @@ export async function requireFolderAccess(db, identity, folderId, minRole) {
   return { folder, role };
 }
 
+export async function inviteMember(db, identity, folderId, { email, role }, nowMs) {
+  const access = await requireFolderAccess(db, identity, folderId, 'owner');
+  if (access.ok === false) return access;
+  if (!ROLES.includes(role)) return err(400, 'invalid_role');
+  const target = String(email || '').trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(target)) return err(400, 'invalid_email');
+  if (target === identity.email.toLowerCase()) return err(400, 'cannot_invite_self');
+  const { results } = await db.prepare(
+    "SELECT COUNT(*) AS n FROM shared_members WHERE folder_id = ? AND status != 'declined'"
+  ).bind(folderId).all();
+  const existing = await db.prepare('SELECT status FROM shared_members WHERE folder_id = ? AND email = ?').bind(folderId, target).first();
+  if (!existing || existing.status === 'declined') {
+    if (results[0].n >= MAX_MEMBERS_PER_FOLDER) return err(409, 'member_limit');
+  }
+  await db.prepare(
+    `INSERT INTO shared_members (folder_id, email, role, status, invited_at) VALUES (?,?,?,'invited',?)
+     ON CONFLICT(folder_id, email) DO UPDATE SET role = excluded.role,
+       status = CASE WHEN shared_members.status = 'active' THEN 'active' ELSE 'invited' END,
+       invited_at = excluded.invited_at, responded_at = NULL`
+  ).bind(folderId, target, role, nowMs).run();
+  return { ok: true, data: { members: await membersOf(db, folderId) } };
+}
+
+export async function listInvites(db, identity) {
+  const { results } = await db.prepare(
+    `SELECT m.folder_id AS folderId, f.name AS folderName, f.owner_email AS ownerEmail, m.role, m.invited_at AS invitedAt
+       FROM shared_members m JOIN shared_folders f ON f.id = m.folder_id
+      WHERE m.email = ? AND m.status = 'invited' ORDER BY m.invited_at`
+  ).bind(identity.email.toLowerCase()).all();
+  return { ok: true, data: { invites: results } };
+}
+
+export async function respondInvite(db, identity, folderId, accept, nowMs) {
+  const email = identity.email.toLowerCase();
+  const invite = await db.prepare(
+    "SELECT * FROM shared_members WHERE folder_id = ? AND email = ? AND status = 'invited'"
+  ).bind(folderId, email).first();
+  if (!invite) return err(404, 'not_found');
+  const status = accept ? 'active' : 'declined';
+  await db.prepare(
+    'UPDATE shared_members SET status = ?, google_id = ?, responded_at = ? WHERE folder_id = ? AND email = ?'
+  ).bind(status, identity.googleId, nowMs, folderId, email).run();
+  if (!accept) return { ok: true, data: { accepted: false } };
+  const f = await db.prepare('SELECT * FROM shared_folders WHERE id = ?').bind(folderId).first();
+  const { results } = await db.prepare(
+    'SELECT uid, data FROM shared_collections WHERE folder_id = ? AND deleted = 0'
+  ).bind(folderId).all();
+  return {
+    ok: true,
+    data: {
+      accepted: true,
+      folder: {
+        folderId: f.id, name: f.name, color: f.color, revision: f.revision,
+        role: invite.role, ownerEmail: f.owner_email, members: await membersOf(db, folderId),
+      },
+      collections: results.map((r) => ({ uid: r.uid, data: JSON.parse(r.data) })),
+    },
+  };
+}
+
 export { ROLES };
