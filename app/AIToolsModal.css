@@ -180,6 +180,7 @@ html.performance-mode .ai-hero-card { animation: none !important; }
 .ai-tools-modal--fullpage .ai-tools-grid { display: contents; }
 
 .ai-tool-card {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -193,6 +194,14 @@ html.performance-mode .ai-hero-card { animation: none !important; }
     text-align: center;
     color: var(--text-color);
     transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ai-tool-lock {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    font-size: 14px;
+    opacity: 0.7;
 }
 
 .ai-tool-card:hover {

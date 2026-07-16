@@ -1,0 +1,84 @@
+/** @jest-environment jsdom */
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import '@testing-library/jest-dom';
+import { Provider, createStore } from 'jotai';
+
+jest.mock('../app/ai/aiClient', () => ({
+    getAIAvailability: jest.fn(),
+    isAISupported: jest.fn().mockReturnValue(true),
+}));
+jest.mock('../app/utils/storageUtils', () => ({
+    ...jest.requireActual('../app/utils/storageUtils'),
+    loadAllCollections: jest.fn(),
+    loadAllFolders: jest.fn().mockResolvedValue([]),
+}));
+jest.mock('../app/toastHelpers', () => ({
+    showUndoToast: jest.fn(),
+    showSuccessToast: jest.fn(),
+}));
+jest.mock('../app/ai/useSmartOrganizeUndo', () => ({
+    useSmartOrganizeUndo: () => ({ snapshot: null, undo: jest.fn(), dismiss: jest.fn() }),
+}));
+jest.mock('../app/ai/useAutoArrangeUndo', () => ({
+    useAutoArrangeUndo: () => ({ snapshot: null, undo: jest.fn(), dismiss: jest.fn() }),
+}));
+
+import { loadAllCollections } from '../app/utils/storageUtils';
+import { getAIAvailability } from '../app/ai/aiClient';
+import { browser } from '../static/globals';
+import AIToolsModal from '../app/AIToolsModal';
+import { aiToolsModalOpenState } from '../app/atoms/aiState';
+import { premiumEntitlementState } from '../app/atoms/premiumState';
+
+const PRO = { entitled: true, status: 'active', plan: 'monthly', refreshedAt: new Date().toISOString() };
+
+function renderModal({ premium = null } = {}) {
+    const store = createStore();
+    store.set(aiToolsModalOpenState, true);
+    store.set(premiumEntitlementState, premium);
+    render(<Provider store={store}><AIToolsModal /></Provider>);
+    return store;
+}
+
+describe('AIToolsModal premium gating', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        loadAllCollections.mockResolvedValue([]);
+        getAIAvailability.mockResolvedValue('available');
+        browser.runtime.sendMessage = jest.fn().mockImplementation((msg) => {
+            if (msg.type === 'aiGetState') return Promise.resolve(null);
+            return Promise.resolve({});
+        });
+        browser.storage.onChanged.addListener = jest.fn();
+        browser.storage.onChanged.removeListener = jest.fn();
+        browser.storage.local.get = jest.fn().mockResolvedValue({});
+    });
+
+    it('shows lock badges on premium tools for free users', () => {
+        renderModal();
+        expect(screen.getAllByTestId('ai-tool-lock').length).toBeGreaterThan(0);
+    });
+
+    it('clicking a locked tool shows the upsell instead of the tool', () => {
+        renderModal();
+        fireEvent.click(screen.getByText('Auto rename collections'));
+        expect(screen.getByRole('heading', { name: /Tabox Pro/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /upgrade/i })).toBeInTheDocument();
+    });
+
+    it('upgrade button sends openProCheckout when signed in', async () => {
+        browser.storage.local.get.mockResolvedValue({ googleUser: { permissionId: 'g-1' } });
+        renderModal();
+        fireEvent.click(screen.getByText('Auto rename collections'));
+        await waitFor(() => expect(screen.getByRole('button', { name: /upgrade/i })).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: /upgrade/i }));
+        await waitFor(() =>
+            expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'openProCheckout' })
+        );
+    });
+
+    it('shows no locks and opens tools normally for Pro users', () => {
+        renderModal({ premium: PRO });
+        expect(screen.queryAllByTestId('ai-tool-lock')).toHaveLength(0);
+    });
+});

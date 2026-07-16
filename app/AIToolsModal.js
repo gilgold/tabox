@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Modal from 'react-modal';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { MdClose, MdArrowBack, MdUndo } from 'react-icons/md';
+import { MdClose, MdArrowBack, MdUndo, MdLock } from 'react-icons/md';
 import { BsStars } from 'react-icons/bs';
 import { aiToolsModalOpenState, aiToolsScopeState, aiProcessingUidsState, aiProcessingCurrentUidState, aiSplitTargetState, aiToolsInitialToolState } from './atoms/aiState';
 import { viewContextState } from './atoms/globalAppSettingsState';
+import { isProState, premiumEntitlementState } from './atoms/premiumState';
+import TaboxProUpsell from './TaboxProUpsell';
 import { AI_TOOLS } from './ai/aiTasks';
 import { getAIAvailability } from './ai/aiClient';
 import { readWindowStructure } from './ai/readWindowStructure';
@@ -49,6 +51,23 @@ function AIToolsModal({ updateRemoteData }) {
     const [initialTool, setInitialTool] = useAtom(aiToolsInitialToolState);
     const [activeToolId, setActiveToolId] = useState(null);
     const [collections, setCollections] = useState([]);
+
+    // Tabox Pro gating — AI tools are premium; free users see lock badges +
+    // an upsell panel instead of the tool. isSignedIn gates the upsell CTA
+    // (upgrade vs sign-in-first) and is loaded once on open.
+    const isPro = useAtomValue(isProState);
+    const setPremiumEntitlement = useSetAtom(premiumEntitlementState);
+    const isToolLocked = (tool) => Boolean(tool && tool.premium && !isPro);
+    // Optimistic default (assume signed-in) so the upsell shows the "Upgrade"
+    // CTA immediately on click, before the async storage read resolves; it
+    // flips to the "Sign in" CTA once we confirm the user is actually signed out.
+    const [isSignedIn, setIsSignedIn] = useState(true);
+    useEffect(() => {
+        if (!isOpen) return;
+        browser.storage.local.get('googleUser').then(({ googleUser }) => {
+            setIsSignedIn(Boolean(googleUser));
+        }).catch(() => setIsSignedIn(false));
+    }, [isOpen]);
     // Panel state machine: idle | running | done
     const [panelStatus, setPanelStatus] = useState('idle');
     const [renameResults, setRenameResults] = useState([]); // live list of {uid, oldName, newName} | {uid, reason}
@@ -859,6 +878,7 @@ function AIToolsModal({ updateRemoteData }) {
                             const ToolIcon = tool.icon;
                             return (
                                 <button key={tool.id} type="button" className="ai-hero-card" onClick={() => setActiveToolId(tool.id)}>
+                                    {isToolLocked(tool) && <MdLock className="ai-tool-lock" data-testid="ai-tool-lock" />}
                                     {tool.id === 'smart-organize'
                                         ? <SmartGroupingToolIcon className="ai-hero-icon" />
                                         : <ToolIcon size={40} className="ai-hero-icon" />}
@@ -888,6 +908,7 @@ function AIToolsModal({ updateRemoteData }) {
                                         data-tooltip-html={tooltipHtml}
                                         data-tooltip-place="bottom"
                                     >
+                                        {isToolLocked(tool) && <MdLock className="ai-tool-lock" data-testid="ai-tool-lock" />}
                                         {tool.id === 'auto-rename'
                                             ? <RenameToolIcon className="ai-tool-card-icon" />
                                             : tool.id === 'auto-arrange-folders'
@@ -905,6 +926,20 @@ function AIToolsModal({ updateRemoteData }) {
                     </div>
                 )}
 
+                {activeToolId && isToolLocked(AI_TOOLS.find((t) => t.id === activeToolId)) && (
+                    <TaboxProUpsell
+                        isSignedIn={isSignedIn}
+                        onUpgrade={() => browser.runtime.sendMessage({ type: 'openProCheckout' })}
+                        onSignIn={async () => {
+                            await browser.runtime.sendMessage({ type: 'login' });
+                            browser.runtime.sendMessage({ type: 'refreshProEntitlement' });
+                        }}
+                        onEntitlementRefreshed={setPremiumEntitlement}
+                    />
+                )}
+
+                {activeToolId && !isToolLocked(AI_TOOLS.find((t) => t.id === activeToolId)) && (
+                    <>
                 {activeToolId === 'smart-organize' && (
                     <div className="ai-tool-panel">
                         {/* Full-page window picker */}
@@ -1330,6 +1365,8 @@ function AIToolsModal({ updateRemoteData }) {
                             onCancel={() => { setSplitTarget(null); setAiTaskState(null); setActiveToolId(null); }}
                         />
                     </div>
+                )}
+                    </>
                 )}
 
                 <p className="ai-tools-disclaimer">AI makes mistakes. Always review suggestions before applying them.</p>

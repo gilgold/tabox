@@ -18,6 +18,9 @@ import { act, render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { Provider, createStore } from 'jotai';
 import AIToolsModal from '../app/AIToolsModal';
 import { aiToolsModalOpenState, aiToolsScopeState } from '../app/atoms/aiState';
+import { premiumEntitlementState } from '../app/atoms/premiumState';
+
+const PRO = { entitled: true, status: 'active', plan: 'monthly', refreshedAt: new Date().toISOString() };
 import { loadAllCollections } from '../app/utils/storageUtils';
 import { showUndoToast } from '../app/toastHelpers';
 import { browser } from '../static/globals';
@@ -47,6 +50,7 @@ function renderModal() {
     const store = createStore();
     store.set(aiToolsModalOpenState, true);
     store.set(aiToolsScopeState, { type: 'all' });
+    store.set(premiumEntitlementState, PRO);
     return render(
         <Provider store={store}>
             <AIToolsModal updateRemoteData={jest.fn()} />

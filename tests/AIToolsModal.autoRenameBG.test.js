@@ -3,6 +3,9 @@ import { act, render, screen, fireEvent, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom';
 import { Provider, createStore } from 'jotai';
 import { aiToolsModalOpenState, aiToolsScopeState, aiProcessingUidsState, aiProcessingCurrentUidState } from '../app/atoms/aiState';
+import { premiumEntitlementState } from '../app/atoms/premiumState';
+
+const PRO = { entitled: true, status: 'active', plan: 'monthly', refreshedAt: new Date().toISOString() };
 
 jest.mock('../app/ai/aiClient', () => ({
     getAIAvailability: jest.fn(),
@@ -48,6 +51,7 @@ const renderOpenModal = async ({ updateRemoteData = jest.fn(), scope = { type: '
     const store = createStore();
     store.set(aiToolsModalOpenState, true);
     store.set(aiToolsScopeState, scope);
+    store.set(premiumEntitlementState, PRO);
     await act(async () => {
         render(
             <Provider store={store}>

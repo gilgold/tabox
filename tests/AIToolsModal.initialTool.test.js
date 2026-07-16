@@ -7,6 +7,9 @@ import {
     aiToolsScopeState,
     aiToolsInitialToolState,
 } from '../app/atoms/aiState';
+import { premiumEntitlementState } from '../app/atoms/premiumState';
+
+const PRO = { entitled: true, status: 'active', plan: 'monthly', refreshedAt: new Date().toISOString() };
 
 jest.mock('../app/ai/aiClient', () => ({
     getAIAvailability: jest.fn(),
@@ -51,6 +54,7 @@ describe('AIToolsModal initial tool routing', () => {
         store.set(aiToolsModalOpenState, true);
         store.set(aiToolsScopeState, { type: 'all' });
         store.set(aiToolsInitialToolState, 'auto-arrange-folders');
+        store.set(premiumEntitlementState, PRO);
 
         await act(async () => {
             render(

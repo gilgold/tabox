@@ -3,6 +3,9 @@ import { act, render, screen, fireEvent, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom';
 import { Provider, createStore } from 'jotai';
 import { aiToolsModalOpenState } from '../app/atoms/aiState';
+import { premiumEntitlementState } from '../app/atoms/premiumState';
+
+const PRO = { entitled: true, status: 'active', plan: 'monthly', refreshedAt: new Date().toISOString() };
 
 jest.mock('../app/utils/storageUtils', () => ({ loadAllCollections: jest.fn().mockResolvedValue([]) }));
 jest.mock('../app/ai/readWindowStructure', () => ({ readWindowStructure: jest.fn().mockResolvedValue({ ungroupedTabs: [], existingGroups: [], eligibleCount: 0 }) }));
@@ -47,6 +50,7 @@ beforeEach(() => {
 const openModal = async () => {
     const store = createStore();
     store.set(aiToolsModalOpenState, true);
+    store.set(premiumEntitlementState, PRO);
     await act(async () => {
         render(<Provider store={store}><AIToolsModal updateRemoteData={jest.fn()} /></Provider>);
     });
@@ -158,6 +162,7 @@ describe('Smart Organize panel (popup)', () => {
 
         const store = createStore();
         store.set(aiToolsModalOpenState, true);
+        store.set(premiumEntitlementState, PRO);
         await act(async () => {
             render(<Provider store={store}><AIToolsModal updateRemoteData={updateRemoteData} /></Provider>);
         });
