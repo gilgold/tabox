@@ -7,6 +7,8 @@ try {
   importScripts('sync-apply.js');
   importScripts('sync-throttle.js');
   importScripts('background-utils.js');
+  importScripts('pro-config.js');
+  importScripts('pro-entitlement.js');
   importScripts('ai-client.js');
   importScripts('ai-planners.js');
   importScripts('ai-storage.js');
@@ -1446,6 +1448,19 @@ const handleSingleCollectionImportBG = async (collection) => {
 
 try {
   browser.runtime.onMessage.addListener(async (request) => {
+    if (request.type === 'getProEntitlement') {
+      const { premiumEntitlement } = await browser.storage.local.get('premiumEntitlement');
+      return Promise.resolve(premiumEntitlement || null);
+    }
+
+    if (request.type === 'refreshProEntitlement') {
+      return refreshProEntitlement();
+    }
+
+    if (request.type === 'openProCheckout') {
+      return openProCheckout();
+    }
+
     if (request.type === 'checkSyncStatus') {
       try {
         const {
@@ -2296,7 +2311,8 @@ try {
   await handleBadge();
   await handleAutoBackupAlarm();
   await ensureBackgroundSyncAlarm();
-  
+  if (typeof ensureProEntitlementAlarm === 'function') await ensureProEntitlementAlarm();
+
   // Clean up large backups on startup (after 5 seconds to not block initialization)
   setTimeout(async () => {
     try {
@@ -2312,6 +2328,7 @@ try {
     await applyToolbarLaunchBehavior();
     await handleAutoBackupAlarm();
     await ensureBackgroundSyncAlarm();
+    if (typeof ensureProEntitlementAlarm === 'function') await ensureProEntitlementAlarm();
   });
 
   const handleAutoBackup = async () => {
@@ -2360,6 +2377,8 @@ try {
   }
 
   browser.alarms.onAlarm.addListener(async (alarm) => {
+    if (typeof handleProAlarm === 'function' && await handleProAlarm(alarm.name)) return;
+
     if (alarm.name === AUTO_BACKUP_ALARM) {
       await handleAutoBackup();
       return;
