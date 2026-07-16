@@ -1,0 +1,8 @@
+.folder-shared-badge {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 6px;
+    opacity: 0.75;
+    color: var(--text-secondary-color);
+    flex-shrink: 0;
+}

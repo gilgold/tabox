@@ -33,7 +33,7 @@ import { browser } from '../static/globals';
 import { filterByColors } from './utils/colorMigration';
 import TimeAgo from 'javascript-time-ago';
 import en from 'javascript-time-ago/locale/en';
-import { showSuccessToast, showErrorToast, setToastViewContext } from './toastHelpers';
+import { showSuccessToast, showErrorToast, showInfoToast, setToastViewContext } from './toastHelpers';
 import { Tooltip } from 'react-tooltip';
 import { CollectionListOptions } from './CollectionListOptions';
 
@@ -68,9 +68,10 @@ import ManageSubscriptionModal from './ManageSubscriptionModal';
 import { manageSubscriptionOpenState } from './atoms/premiumState';
 import { usePremiumEntitlement } from './usePremiumEntitlement';
 import NoPermissionModal from './NoPermissionModal';
-import { noPermissionOpenState } from './atoms/sharedFoldersState';
+import { noPermissionOpenState, pendingInvitesState } from './atoms/sharedFoldersState';
 import { guardFolderEdit } from './utils/sharedFolderUtils';
 import ShareFolderModal from './ShareFolderModal';
+import SharedInviteBanner from './SharedInviteBanner';
 
 // Migration system imports - wrapped in try/catch for compatibility
 const PERF_NAMESPACE = 'tabox:popup';
@@ -166,6 +167,9 @@ const INITIAL_COLLECTION_BATCH_SIZE = 20;
 const HYDRATION_BATCH_SIZE = 50;
 const MIGRATION_SESSION_KEY = 'tabox:migrationChecked';
 const SYNC_SESSION_STATE_KEY = 'syncSessionState';
+const SHARED_PENDING_INVITES_KEY = 'shared_pending_invites';
+const SHARED_EVENTS_KEY = 'shared_folder_events';
+const SHARED_SYNC_INTERVAL_MS = 15000;
 const DEFAULT_SYNC_SESSION_STATE = {
   isEnabled: false,
   status: 'disabled',
@@ -251,7 +255,7 @@ function App({ mode = 'popup' }) {
   const setHighlightedCollectionUid = useSetAtom(highlightedCollectionUidState);
   const [themeMode, setThemeMode] = useAtom(themeState);
   const [isLoggedIn, setIsLoggedIn] = useAtom(isLoggedInState);
-  const [, setSyncSessionState] = useAtom(syncSessionStateState);
+  const [syncSessionState, setSyncSessionState] = useAtom(syncSessionStateState);
   const setSyncInProgress = useSetAtom(syncInProgressState);
   const setLastSyncTime = useSetAtom(lastSyncTimeState);
   const setViewContext = useSetAtom(viewContextState);
@@ -261,6 +265,7 @@ function App({ mode = 'popup' }) {
   const setAiToolsInitialTool = useSetAtom(aiToolsInitialToolState);
   const setManageSubscriptionOpen = useSetAtom(manageSubscriptionOpenState);
   const setNoPermissionOpen = useSetAtom(noPermissionOpenState);
+  const setPendingInvites = useSetAtom(pendingInvitesState);
   const setTabSwitcherOpen = useSetAtom(tabSwitcherOpenState);
   const setSidebarNavigation = useSetAtom(sidebarNavigationState);
   const search = useAtomValue(searchState);
@@ -955,6 +960,12 @@ function App({ mode = 'popup' }) {
   const refreshDataAfterFolderOperation = async () => {
     await reloadCollectionsAndFoldersFromStorage({ updateSyncTime: true });
   };
+
+  // Stable ref to the latest refresh callback above (it's redefined every
+  // render), so the mount-only shared-folder effects below can call the
+  // current version without needing to resubscribe their listeners/timers.
+  const refreshDataAfterFolderOperationRef = useRef(refreshDataAfterFolderOperation);
+  refreshDataAfterFolderOperationRef.current = refreshDataAfterFolderOperation;
 
   // Enable orphan detection once migration has been checked — NOT on dataLoaded,
   // which never flips on some paths (e.g. the full-page view hydrated via sync).
@@ -1789,6 +1800,86 @@ function App({ mode = 'popup' }) {
     };
   }, [applyCollectionUpdates]);
 
+  // Shared folders: keep pendingInvitesState (the invite banner) in sync with
+  // storage — load it once on mount, then follow storage.onChanged so an
+  // invite that lands while this view is open shows up without a reload.
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadPendingInvites = async () => {
+      const { [SHARED_PENDING_INVITES_KEY]: invites } = await browser.storage.local.get(SHARED_PENDING_INVITES_KEY);
+      if (isMounted) {
+        setPendingInvites(invites || []);
+      }
+    };
+    loadPendingInvites();
+
+    const handlePendingInvitesChange = (changes, areaName) => {
+      if (areaName === 'local' && changes[SHARED_PENDING_INVITES_KEY]) {
+        setPendingInvites(changes[SHARED_PENDING_INVITES_KEY].newValue || []);
+      }
+    };
+    browser.storage.onChanged.addListener(handlePendingInvitesChange);
+
+    return () => {
+      isMounted = false;
+      browser.storage.onChanged.removeListener(handlePendingInvitesChange);
+    };
+  }, [setPendingInvites]);
+
+  // Shared folders: drain background-queued change events (revoked/deleted/
+  // renamed/updated) into info toasts, then refresh so pulled changes render.
+  useEffect(() => {
+    const drainSharedFolderEvents = async () => {
+      const { [SHARED_EVENTS_KEY]: events = [] } = await browser.storage.local.get(SHARED_EVENTS_KEY);
+      if (!events.length) {
+        return;
+      }
+      await browser.storage.local.set({ [SHARED_EVENTS_KEY]: [] });
+      for (const e of events.slice(-3)) {
+        if (e.kind === 'revoked') {
+          showInfoToast(`Your access to "${e.folderName}" ended. A local copy was kept.`);
+        } else if (e.kind === 'deleted') {
+          showInfoToast(`${e.actorEmail} removed a collection from "${e.folderName}"`);
+        } else if (e.kind === 'renamed') {
+          showInfoToast(`${e.actorEmail} renamed a shared folder to "${e.folderName}"`);
+        } else {
+          showInfoToast(`${e.actorEmail} updated "${e.collectionName}" in ${e.folderName}`);
+        }
+      }
+      await refreshDataAfterFolderOperationRef.current?.();
+    };
+    drainSharedFolderEvents();
+
+    const handleSharedEventsChange = (changes, areaName) => {
+      if (areaName === 'local' && changes[SHARED_EVENTS_KEY]?.newValue?.length) {
+        drainSharedFolderEvents();
+      }
+    };
+    browser.storage.onChanged.addListener(handleSharedEventsChange);
+
+    return () => {
+      browser.storage.onChanged.removeListener(handleSharedEventsChange);
+    };
+  }, []);
+
+  // Shared folders: popup-only near-real-time sync trigger. The popup has no
+  // long-lived background alarm of its own, so nudge the background sync
+  // engine on open and every 15s while it stays open (signed-in users only).
+  useEffect(() => {
+    if (isFullPage || !syncSessionState.hasRefreshToken) {
+      return undefined;
+    }
+
+    const triggerSharedSync = () => {
+      browser.runtime.sendMessage({ type: 'sharedSyncNow' }).catch(() => {});
+    };
+    triggerSharedSync();
+    const intervalId = setInterval(triggerSharedSync, SHARED_SYNC_INTERVAL_MS);
+
+    return () => clearInterval(intervalId);
+  }, [isFullPage, syncSessionState.hasRefreshToken]);
+
   // Check if any filters are currently active
   const hasActiveFilters = useMemo(() => {
     const hasSearch = search && search.trim() !== '';
@@ -2076,6 +2167,7 @@ function App({ mode = 'popup' }) {
         {manageSubscriptionModalEl}
         {shareFolderModalEl}
         {noPermissionModalEl}
+        <SharedInviteBanner onAccepted={refreshDataAfterFolderOperation} />
         <FPLayout
           folders={displayFolders}
           collections={collectionsToShow}
@@ -2133,6 +2225,7 @@ function App({ mode = 'popup' }) {
         addCollection={addCollection}
         logout={logout} />
       <div className={`main-content-wrapper${isFullPage && isPanelOpen ? ' panel-open' : ''}`}>
+                <SharedInviteBanner onAccepted={refreshDataAfterFolderOperation} />
                 <AddNewTextbox addCollection={addCollection} addFolder={addFolder} updateRemoteData={updateRemoteData} onDataUpdate={refreshDataAfterFolderOperation} />
         <CollectionListOptions
           key={`${sortValue}-select`}

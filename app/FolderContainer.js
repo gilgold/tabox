@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { MdExpandMore, MdExpandLess, MdFolder, MdFolderOpen, MdDragIndicator, MdDelete, MdPlayArrow, MdContentCopy } from 'react-icons/md';
+import { MdExpandMore, MdExpandLess, MdFolder, MdFolderOpen, MdDragIndicator, MdDelete, MdPlayArrow, MdContentCopy, MdPeopleAlt, MdPersonAdd, MdLinkOff, MdLogout } from 'react-icons/md';
 import { CiExport } from 'react-icons/ci';
 import { FaStop } from 'react-icons/fa6';
 import { AutoSaveTextbox } from './AutoSaveTextbox';
@@ -11,12 +11,26 @@ import { useFolderOperations, duplicateFolder } from './utils/folderOperations';
 import { loadCollectionsIndex } from './utils/storageUtils';
 import { downloadTextFile } from './utils';
 import { buildFolderUrlList, getCollectionUrls, copyToClipboard } from './utils/index';
+import { buildFolderMenuItems } from './utils/folderMenuItems';
+import { isSharedFolder } from './utils/sharedFolderUtils';
 import { showSuccessToast, showErrorToast, showInfoToast } from './toastHelpers';
 import { browser } from '../static/globals';
 import { useDndContext } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { useAtomValue } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { trackingStateVersion } from './atoms/globalAppSettingsState';
+import { shareFolderModalState } from './atoms/sharedFoldersState';
+import { isProState } from './atoms/premiumState';
+import './FolderContainer.css';
+
+// Icons for the menu items the pure builder adds (kept icon-free so it stays
+// unit-testable); FolderContainer attaches the visuals here.
+const FOLDER_MENU_ICONS = {
+    share: <MdPersonAdd size={16} />,
+    unshare: <MdLinkOff size={16} />,
+    'leave-shared': <MdLogout size={16} />,
+    delete: <MdDelete size={16} />,
+};
 
 // Lazy load rarely-used modal
 const FolderDeleteConfirmModal = lazy(() => import('./FolderDeleteConfirmModal'));
@@ -39,7 +53,12 @@ function FolderContainer({
     const { active } = useDndContext(); // Get current drag state
     const isMountedRef = useRef(true);
     const headerRef = useRef(null);
-    
+
+    // Shared folders: opens the Share/Manage-sharing modal; isPro only drives
+    // the (currently inert) proBadge hint on the builder's "share" item.
+    const setShareFolderModal = useSetAtom(shareFolderModalState);
+    const isPro = useAtomValue(isProState);
+
     // Sync local state with folder prop changes
     useEffect(() => {
         if (isMountedRef.current) {
@@ -728,6 +747,79 @@ function FolderContainer({
         }
     };
 
+    const handleShareClick = () => setShareFolderModal(folder);
+
+    const handleLeaveShared = async () => {
+        try {
+            await browser.runtime.sendMessage({ type: 'sharedLeaveFolder', folderId: folder.uid });
+            showInfoToast(`You left "${folder.name}". A local copy was kept.`);
+            await onDataUpdate?.();
+        } catch (error) {
+            console.error('Error leaving shared folder:', error);
+            showErrorToast('Could not leave this folder. Please try again.');
+        }
+    };
+
+    const handleUnshare = async () => {
+        try {
+            await browser.runtime.sendMessage({ type: 'sharedUnshareFolder', folderId: folder.uid });
+            showInfoToast(`"${folder.name}" is no longer shared.`);
+            await onDataUpdate?.();
+        } catch (error) {
+            console.error('Error unsharing folder:', error);
+            showErrorToast('Could not stop sharing this folder. Please try again.');
+        }
+    };
+
+    // Existing (non-shared-specific) menu entries, in the exact ContextMenu
+    // item shape. The old inline "delete" entry is intentionally omitted here —
+    // buildFolderMenuItems supplies delete/share/unshare/leave-shared based on
+    // the folder's shared-permission state.
+    const existingFolderMenuItems = [
+        {
+            id: 'export',
+            text: 'Export Folder',
+            icon: <CiExport size={16} />,
+            action: handleExportFolder,
+            className: '',
+            condition: true
+        },
+        {
+            id: 'duplicate',
+            text: 'Duplicate Folder',
+            icon: <MdContentCopy size={16} />,
+            action: handleDuplicateFolder,
+            className: '',
+            condition: true
+        },
+        {
+            id: 'copy-folder-urls',
+            text: 'Copy all URLs in folder',
+            icon: <MdContentCopy size={16} />,
+            action: handleCopyFolderUrls,
+            className: '',
+            condition: true
+        },
+        {
+            id: 'stop-tracking-folder',
+            text: 'Stop Auto Tracking Folder',
+            icon: <FaStop size={16} />,
+            action: handleStopTrackingFolder,
+            className: '',
+            condition: hasTrackedCollections
+        }
+    ];
+
+    const folderMenuItems = buildFolderMenuItems({
+        folder,
+        onShare: handleShareClick,
+        onDelete: handleDeleteFolderClick,
+        onLeave: handleLeaveShared,
+        onUnshare: handleUnshare,
+        isPro,
+        existingItems: existingFolderMenuItems
+    }).map((item) => ({ ...item, icon: item.icon || FOLDER_MENU_ICONS[item.id] }));
+
     return (
         <>
             <div 
@@ -825,6 +917,17 @@ function FolderContainer({
                                     </span>
                                 </div>
                             )}
+                            {isSharedFolder(folder) && (
+                                <span
+                                    className="folder-shared-badge"
+                                    data-tooltip-id="main-tooltip"
+                                    data-tooltip-content={folder.shared.role === 'owner'
+                                        ? `Shared by you · ${(folder.shared.members || []).length} member(s)`
+                                        : `Shared by ${folder.shared.ownerEmail}${folder.shared.role === 'read' ? ' · view only' : ''}`}
+                                >
+                                    <MdPeopleAlt size={13} />
+                                </span>
+                            )}
                             <span style={folderStatsStyle} className="folder-stats-text">
                                 {collectionCount} collection{collectionCount !== 1 ? 's' : ''}
                             </span>
@@ -875,48 +978,7 @@ function FolderContainer({
                         size="small"
                     />
                     <ContextMenu
-                        menuItems={[
-                            {
-                                id: 'export',
-                                text: 'Export Folder',
-                                icon: <CiExport size={16} />,
-                                action: handleExportFolder,
-                                className: '',
-                                condition: true
-                            },
-                            {
-                                id: 'duplicate',
-                                text: 'Duplicate Folder',
-                                icon: <MdContentCopy size={16} />,
-                                action: handleDuplicateFolder,
-                                className: '',
-                                condition: true
-                            },
-                            {
-                                id: 'copy-folder-urls',
-                                text: 'Copy all URLs in folder',
-                                icon: <MdContentCopy size={16} />,
-                                action: handleCopyFolderUrls,
-                                className: '',
-                                condition: true
-                            },
-                            {
-                                id: 'stop-tracking-folder',
-                                text: 'Stop Auto Tracking Folder',
-                                icon: <FaStop size={16} />,
-                                action: handleStopTrackingFolder,
-                                className: '',
-                                condition: hasTrackedCollections
-                            },
-                            {
-                                id: 'delete',
-                                text: 'Delete Folder',
-                                icon: <MdDelete size={16} />,
-                                action: handleDeleteFolderClick,
-                                className: 'danger',
-                                condition: true
-                            }
-                        ]}
+                        menuItems={folderMenuItems}
                         tooltip="Folder options"
                         triggerRef={headerRef}
                     />
