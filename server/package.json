@@ -11,5 +11,6 @@
     "better-sqlite3": "^12.11.1",
     "vitest": "^3.0.0",
     "wrangler": "^4.0.0"
-  }
+  },
+  "packageManager": "yarn@4.12.0"
 }
