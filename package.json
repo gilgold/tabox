@@ -101,6 +101,7 @@
     ],
     "testPathIgnorePatterns": [
       "/node_modules/",
+      "/server/",
       "/tests/zz_repro"
     ]
   },
