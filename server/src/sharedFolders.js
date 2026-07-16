@@ -203,4 +203,39 @@ export async function updateFolderMeta(db, identity, folderId, { name, color }, 
   return { ok: true, data: { revision } };
 }
 
+export async function updateMemberRole(db, identity, folderId, email, role, nowMs) {
+  const access = await requireFolderAccess(db, identity, folderId, 'owner');
+  if (access.ok === false) return access;
+  if (!ROLES.includes(role)) return err(400, 'invalid_role');
+  const res = await db.prepare('UPDATE shared_members SET role = ? WHERE folder_id = ? AND email = ?')
+    .bind(role, folderId, String(email).toLowerCase()).run();
+  if (res.meta.changes === 0) return err(404, 'not_found');
+  await bumpRevision(db, folderId, identity, nowMs);
+  return { ok: true, data: { members: await membersOf(db, folderId) } };
+}
+
+export async function removeMember(db, identity, folderId, email, nowMs) {
+  const target = String(email).toLowerCase();
+  const isSelf = target === identity.email.toLowerCase();
+  const access = await requireFolderAccess(db, identity, folderId, isSelf ? 'read' : 'owner');
+  if (access.ok === false) return access;
+  const res = await db.prepare('DELETE FROM shared_members WHERE folder_id = ? AND email = ?').bind(folderId, target).run();
+  if (res.meta.changes === 0) return err(404, 'not_found');
+  await bumpRevision(db, folderId, identity, nowMs);
+  return { ok: true, data: { members: await membersOf(db, folderId) } };
+}
+
+export async function deleteSharedFolder(db, identity, folderId) {
+  const access = await requireFolderAccess(db, identity, folderId, 'owner');
+  if (access.ok === false) return access;
+  await db.prepare('DELETE FROM shared_folders WHERE id = ?').bind(folderId).run();
+  return { ok: true, data: { deleted: true } };
+}
+
+export async function getMembers(db, identity, folderId) {
+  const access = await requireFolderAccess(db, identity, folderId, 'read');
+  if (access.ok === false) return access;
+  return { ok: true, data: { members: await membersOf(db, folderId), role: access.role } };
+}
+
 export { ROLES };
