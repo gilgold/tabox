@@ -1461,6 +1461,11 @@ try {
       return openProCheckout();
     }
 
+    if (request.type === 'proGetSubscription' || request.type === 'proCancelSubscription' ||
+        request.type === 'proResumeSubscription' || request.type === 'proChangePlan') {
+      return handleProSubscriptionMessage(request);
+    }
+
     if (request.type === 'checkSyncStatus') {
       try {
         const {

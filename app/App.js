@@ -64,6 +64,8 @@ import useOrphanRecovery from './useOrphanRecovery';
 import OrphanRecoveryModal from './OrphanRecoveryModal';
 import { OrphanRecoveryContext } from './OrphanRecoveryContext';
 import AIToolsModal from './AIToolsModal';
+import ManageSubscriptionModal from './ManageSubscriptionModal';
+import { manageSubscriptionOpenState } from './atoms/premiumState';
 import { usePremiumEntitlement } from './usePremiumEntitlement';
 
 // Migration system imports - wrapped in try/catch for compatibility
@@ -253,6 +255,7 @@ function App({ mode = 'popup' }) {
   const setCommandPaletteOpen = useSetAtom(commandPaletteOpenState);
   const setAiToolsModalOpen = useSetAtom(aiToolsModalOpenState);
   const setAiToolsInitialTool = useSetAtom(aiToolsInitialToolState);
+  const setManageSubscriptionOpen = useSetAtom(manageSubscriptionOpenState);
   const setTabSwitcherOpen = useSetAtom(tabSwitcherOpenState);
   const setSidebarNavigation = useSetAtom(sidebarNavigationState);
   const search = useAtomValue(searchState);
@@ -1922,6 +1925,10 @@ function App({ mode = 'popup' }) {
     setAiToolsModalOpen(true);
   }, [setAiToolsInitialTool, setAiToolsModalOpen]);
 
+  const cmdManageSubscription = useCallback(() => {
+    setManageSubscriptionOpen(true);
+  }, [setManageSubscriptionOpen]);
+
   const cmdCollectionAction = useCallback(async (collection, actionId, payload) => {
     switch (actionId) {
       case 'open': {
@@ -2022,11 +2029,13 @@ function App({ mode = 'popup' }) {
       onRestoreSession={cmdRestoreSession}
       onCollectionAction={cmdCollectionAction}
       onOpenAiTool={cmdOpenAiTool}
+      onManageSubscription={cmdManageSubscription}
     />
   );
 
   const tabSwitcherEl = <TabSwitcher />;
   const aiToolsModalEl = <AIToolsModal updateRemoteData={updateRemoteData} />;
+  const manageSubscriptionModalEl = <ManageSubscriptionModal />;
 
   if (isFullPage) {
     return <>
@@ -2043,6 +2052,7 @@ function App({ mode = 'popup' }) {
         {commandPaletteEl}
         {tabSwitcherEl}
         {aiToolsModalEl}
+        {manageSubscriptionModalEl}
         <FPLayout
           folders={displayFolders}
           collections={collectionsToShow}
@@ -2088,6 +2098,7 @@ function App({ mode = 'popup' }) {
       {commandPaletteEl}
       {tabSwitcherEl}
       {aiToolsModalEl}
+      {manageSubscriptionModalEl}
       <div className={`App${isFullPage ? ' fullpage' : ''}`}>
       <Header
         isFullPage={isFullPage}

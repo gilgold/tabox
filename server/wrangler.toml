@@ -10,8 +10,9 @@ kv_namespaces = [
 GOOGLE_CLIENT_ID = "701423091804-t6v1r6mkl4jdptge49gb7sfstj4holfr.apps.googleusercontent.com"
 PRICE_MONTHLY = "pri_01kxk6xwxdgmtr2eat3xqacs3z"
 PRICE_ANNUAL = "pri_01kxk6xx37e1h9pdjvmvy457br"
+PADDLE_API_BASE = "https://api.paddle.com"
 
-# Secrets (set via `wrangler secret put`): PADDLE_WEBHOOK_SECRET, JWT_SECRET
+# Secrets (set via `wrangler secret put`): PADDLE_WEBHOOK_SECRET, JWT_SECRET, PADDLE_API_KEY
 # Sandbox environment: deploy with `wrangler deploy --env sandbox`;
 # secrets set per-env via `wrangler secret put <NAME> --env sandbox`.
 
@@ -25,3 +26,4 @@ kv_namespaces = [
 GOOGLE_CLIENT_ID = "701423091804-t6v1r6mkl4jdptge49gb7sfstj4holfr.apps.googleusercontent.com"
 PRICE_MONTHLY = "pri_01kxmrtyxwk2x1qt6kxvbc57m1"
 PRICE_ANNUAL = "pri_01kxmrtz4894fc464tm48qjmvy"
+PADDLE_API_BASE = "https://sandbox-api.paddle.com"

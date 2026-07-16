@@ -117,6 +117,23 @@ describe('SettingsMenu', () => {
         expect(document.querySelector('.fp-settings-item-control .switch--manual-animation')).toBeInTheDocument();
     });
 
+    test('promotes Tabox Pro to the first category with animated gradient styling', () => {
+        const { container } = renderSettingsMenu({ variant: 'fullpage' });
+
+        openSettings(container);
+
+        const settingsNav = screen.getByLabelText('Settings categories');
+        const firstCategory = settingsNav.querySelector('.fp-settings-sidebar-item');
+        const proGradientRule = settingsCss.match(/html\.fullpage-mode \.fp-settings-sidebar-item\.tabox-pro-option > span\s*{[^}]+}/)?.[0] || '';
+
+        expect(firstCategory).toHaveTextContent('Tabox Pro');
+        expect(firstCategory).toHaveClass('tabox-pro-option');
+        expect(proGradientRule).toContain('background-clip: text');
+        expect(proGradientRule).toContain('color: transparent');
+        expect(proGradientRule).toContain('animation: tabox-pro-gradient');
+        expect(settingsCss).toContain('@keyframes tabox-pro-gradient');
+    });
+
     test('switches the active full-page category and keeps the matching settings ids', async () => {
         const { container } = renderSettingsMenu({ variant: 'fullpage', isLoggedIn: true });
 
@@ -209,6 +226,9 @@ describe('SettingsMenu', () => {
         expect(document.querySelector('.custom-drawer.open')).toBeInTheDocument();
         expect(document.querySelector('.fp-settings-modal-shell')).not.toBeInTheDocument();
         expect(document.querySelector('.custom-drawer .switch--manual-animation')).not.toBeInTheDocument();
+        const firstPopupCategory = document.querySelector('.settings-section .settings-collapsible-header');
+        expect(firstPopupCategory).toHaveTextContent('Tabox Pro');
+        expect(firstPopupCategory).toHaveClass('tabox-pro-option');
         expect(screen.getByText('When editing collections')).toBeInTheDocument();
         expect(screen.getByText('Backup & Restore')).toBeInTheDocument();
     });

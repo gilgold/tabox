@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { useAtom, useAtomValue } from 'jotai';
 import { commandPaletteOpenState } from './atoms/commandPaletteState';
 import { themeState, viewContextState } from './atoms/globalAppSettingsState';
+import { isProState } from './atoms/premiumState';
 import { getColorValue } from './utils/colorMigration';
 import { escapeRegex, highlightText } from './utils/searchUtils';
 import { browser } from '../static/globals';
@@ -22,6 +23,7 @@ import {
     MdArrowBack,
     MdFolder,
     MdOutlineHome,
+    MdWorkspacePremium,
 } from 'react-icons/md';
 import { CiExport } from 'react-icons/ci';
 import { AI_TOOLS } from './ai/aiTasks';
@@ -33,6 +35,7 @@ const EXTENSION_ACTIONS = [
     { id: 'export-all', label: 'Export All Collections & Folders', keywords: 'export download backup save', icon: MdFileDownload },
     { id: 'open-fullpage', label: 'Open in Full Page', keywords: 'fullpage full page expand tab window big', icon: MdOpenInNew },
     { id: 'restore-session', label: 'Restore Recently Closed', fullpageLabel: 'Browse Recently Closed', keywords: 'restore recently closed recover previous history browse', icon: MdHistory },
+    { id: 'manage-subscription', label: 'Manage Subscription', keywords: 'subscription manage billing plan cancel switch monthly annual yearly pro payment upgrade downgrade', icon: MdWorkspacePremium, proOnly: true },
 ];
 
 const SETTINGS_TOGGLES = [
@@ -104,10 +107,12 @@ function CommandPalette({
     onRestoreSession,
     onCollectionAction,
     onOpenAiTool,
+    onManageSubscription,
 }) {
     const [isOpen, setIsOpen] = useAtom(commandPaletteOpenState);
     const [, setThemeMode] = useAtom(themeState);
     const viewContext = useAtomValue(viewContextState);
+    const isPro = useAtomValue(isProState);
     const isFullPage = viewContext === 'fullpage';
     const [query, setQuery] = useState('');
     const [selectedIndex, setSelectedIndex] = useState(0);
@@ -245,6 +250,7 @@ function CommandPalette({
 
         EXTENSION_ACTIONS.forEach(action => {
             if (isFullPage && action.id === 'open-fullpage') return;
+            if (action.proOnly && !isPro) return;
             if (q) {
                 const haystack = `${action.label} ${action.keywords}`.toLowerCase();
                 if (!haystack.includes(q.toLowerCase())) return;
@@ -287,7 +293,7 @@ function CommandPalette({
         }
 
         return items;
-    }, [query, collections, folderNameMap, activeCollection, isFullPage, settingValues]);
+    }, [query, collections, folderNameMap, activeCollection, isFullPage, settingValues, isPro]);
 
     const subActions = useMemo(() => {
         if (!activeCollection || renameMode || folderPickMode) return [];
@@ -347,8 +353,9 @@ function CommandPalette({
             case 'export-all': onExportAll?.(); break;
             case 'open-fullpage': onOpenFullPage?.(); break;
             case 'restore-session': onRestoreSession?.(); break;
+            case 'manage-subscription': onManageSubscription?.(); break;
         }
-    }, [close, onCreateFolder, onImport, onExportAll, onOpenFullPage, onRestoreSession]);
+    }, [close, onCreateFolder, onImport, onExportAll, onOpenFullPage, onRestoreSession, onManageSubscription]);
 
     const toggleSetting = useCallback(async (settingKey) => {
         const newVal = !settingValues[settingKey];

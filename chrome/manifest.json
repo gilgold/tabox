@@ -63,7 +63,9 @@
   ],
   "host_permissions": [
     "https://www.googleapis.com/",
-    "https://oauth2.googleapis.com/"
+    "https://oauth2.googleapis.com/",
+    "https://tabox-api.gilgold13.workers.dev/",
+    "https://tabox-api-sandbox.gilgold13.workers.dev/"
   ],
   "web_accessible_resources": [{
     "resources": ["api-keys.json"],

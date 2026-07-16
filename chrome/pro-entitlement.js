@@ -31,6 +31,67 @@ async function refreshProEntitlement() {
   return record;
 }
 
+// Authenticated call to the Worker's subscription-management routes.
+// Returns { ok: true, data } or { ok: false, error, detail? } — never throws,
+// so popup callers can render errors without try/catch plumbing.
+async function proSubscriptionRequest(path, { method = 'GET', body } = {}) {
+  let accessToken;
+  try {
+    accessToken = await getAuthToken();
+  } catch {
+    accessToken = null;
+  }
+  if (!accessToken) return { ok: false, error: 'not_signed_in' };
+  let response;
+  try {
+    response = await fetch(`${PRO_API_BASE}${path}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    return { ok: false, error: 'network_error' };
+  }
+  let data = null;
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+  if (!response.ok) {
+    return { ok: false, error: (data && data.error) || `http_${response.status}`, detail: data && data.detail };
+  }
+  return { ok: true, data };
+}
+
+async function handleProSubscriptionMessage(request) {
+  if (request.type === 'proGetSubscription') {
+    return proSubscriptionRequest('/subscription');
+  }
+  if (request.type === 'proCancelSubscription') {
+    const result = await proSubscriptionRequest('/subscription/cancel', { method: 'POST' });
+    if (result.ok) await refreshProEntitlement();
+    return result;
+  }
+  if (request.type === 'proResumeSubscription') {
+    const result = await proSubscriptionRequest('/subscription/resume', { method: 'POST' });
+    if (result.ok) await refreshProEntitlement();
+    return result;
+  }
+  if (request.type === 'proChangePlan') {
+    const result = await proSubscriptionRequest('/subscription/change-plan', {
+      method: 'POST',
+      body: { plan: request.plan, preview: !!request.preview },
+    });
+    if (result.ok && !request.preview) await refreshProEntitlement();
+    return result;
+  }
+  return undefined;
+}
+
 async function openProCheckout() {
   const { googleUser } = await browser.storage.local.get('googleUser');
   if (!googleUser || !googleUser.permissionId) return false;
@@ -76,6 +137,8 @@ async function ensureProEntitlementAlarm() {
 if (typeof module !== 'undefined') {
   module.exports = {
     refreshProEntitlement,
+    proSubscriptionRequest,
+    handleProSubscriptionMessage,
     openProCheckout,
     handleProAlarm,
     ensureProEntitlementAlarm,

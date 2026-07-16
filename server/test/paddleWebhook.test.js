@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { verifyPaddleSignature, extractEntitlementUpdate, shouldApply } from '../src/paddleWebhook.js';
+import { verifyPaddleSignature, buildSubscriptionRecord, extractTransactionLink, shouldApply } from '../src/paddleWebhook.js';
 
 const SECRET = 'whsec_test';
 async function sign(body, ts) {
@@ -45,17 +45,18 @@ const subEvent = (overrides = {}) => ({
     id: 'sub_1',
     status: 'active',
     customer_id: 'ctm_1',
-    custom_data: { googleId: 'g-123' },
+    // NOTE: Paddle subscription webhooks do NOT carry the checkout's custom_data —
+    // googleId is learned separately from transaction events (extractTransactionLink).
     current_billing_period: { ends_at: '2026-08-16T10:00:00Z' },
     items: [{ price: { id: 'pri_m' } }],
     ...overrides,
   },
 });
 
-describe('extractEntitlementUpdate', () => {
-  it('maps a subscription event to a KV record', () => {
-    expect(extractEntitlementUpdate(subEvent(), PRICES)).toEqual({
-      googleId: 'g-123',
+describe('buildSubscriptionRecord', () => {
+  it('builds a KV record keyed by subscription_id (no googleId on the event)', () => {
+    expect(buildSubscriptionRecord(subEvent(), PRICES)).toEqual({
+      subscription_id: 'sub_1',
       record: {
         status: 'active', plan: 'monthly',
         current_period_end: '2026-08-16T10:00:00Z',
@@ -66,13 +67,38 @@ describe('extractEntitlementUpdate', () => {
   });
 
   it('maps annual price id and unknown price to plan null', () => {
-    expect(extractEntitlementUpdate(subEvent({ items: [{ price: { id: 'pri_a' } }] }), PRICES).record.plan).toBe('annual');
-    expect(extractEntitlementUpdate(subEvent({ items: [{ price: { id: 'pri_x' } }] }), PRICES).record.plan).toBeNull();
+    expect(buildSubscriptionRecord(subEvent({ items: [{ price: { id: 'pri_a' } }] }), PRICES).record.plan).toBe('annual');
+    expect(buildSubscriptionRecord(subEvent({ items: [{ price: { id: 'pri_x' } }] }), PRICES).record.plan).toBeNull();
   });
 
-  it('ignores non-subscription events and events without googleId', () => {
-    expect(extractEntitlementUpdate({ event_type: 'transaction.completed', data: {} }, PRICES)).toBeNull();
-    expect(extractEntitlementUpdate(subEvent({ custom_data: {} }), PRICES)).toBeNull();
+  it('ignores non-subscription events and events without a subscription id', () => {
+    expect(buildSubscriptionRecord({ event_type: 'transaction.completed', data: { id: 'txn_1' } }, PRICES)).toBeNull();
+    expect(buildSubscriptionRecord(subEvent({ id: undefined }), PRICES)).toBeNull();
+  });
+});
+
+describe('extractTransactionLink', () => {
+  const txnEvent = (overrides = {}) => ({
+    event_id: 'evt_2',
+    event_type: 'transaction.completed',
+    occurred_at: '2026-07-16T10:00:01Z',
+    data: {
+      id: 'txn_1',
+      subscription_id: 'sub_1',
+      custom_data: { googleId: 'g-123' },
+      ...overrides,
+    },
+  });
+
+  it('links googleId to subscription_id from a transaction event', () => {
+    expect(extractTransactionLink(txnEvent())).toEqual({ googleId: 'g-123', subscription_id: 'sub_1' });
+    expect(extractTransactionLink(txnEvent({ event_type: 'transaction.paid' }))).toEqual({ googleId: 'g-123', subscription_id: 'sub_1' });
+  });
+
+  it('ignores non-transaction events and transactions missing googleId or subscription_id', () => {
+    expect(extractTransactionLink({ event_type: 'subscription.created', data: {} })).toBeNull();
+    expect(extractTransactionLink(txnEvent({ custom_data: {} }))).toBeNull();
+    expect(extractTransactionLink(txnEvent({ subscription_id: null }))).toBeNull();
   });
 });
 

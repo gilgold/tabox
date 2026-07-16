@@ -24,15 +24,18 @@ export async function verifyPaddleSignature(rawBody, signatureHeader, secret, no
   return timingSafeEqualHex(hex, h1);
 }
 
-export function extractEntitlementUpdate(event, priceMap) {
+// Build the entitlement record from a subscription.* event. Paddle subscription
+// webhooks carry the lifecycle status but NOT the checkout's custom_data, so this
+// yields no googleId — it's keyed by subscription_id and linked to a Google user
+// via a transaction.* event (see extractTransactionLink).
+export function buildSubscriptionRecord(event, priceMap) {
   if (!event || typeof event.event_type !== 'string' || !event.event_type.startsWith('subscription.')) return null;
   const sub = event.data;
-  const googleId = sub && sub.custom_data && sub.custom_data.googleId;
-  if (!googleId) return null;
+  if (!sub || !sub.id) return null;
   const priceId = (sub.items && sub.items[0] && sub.items[0].price && sub.items[0].price.id) || null;
   const plan = priceId === priceMap.monthly ? 'monthly' : priceId === priceMap.annual ? 'annual' : null;
   return {
-    googleId,
+    subscription_id: sub.id,
     record: {
       status: sub.status,
       plan,
@@ -42,6 +45,18 @@ export function extractEntitlementUpdate(event, priceMap) {
       occurred_at: event.occurred_at,
     },
   };
+}
+
+// A transaction.* event carries the checkout's custom_data (hence googleId) and,
+// once a subscription exists, its subscription_id — the link the subscription
+// events lack.
+export function extractTransactionLink(event) {
+  if (!event || typeof event.event_type !== 'string' || !event.event_type.startsWith('transaction.')) return null;
+  const t = event.data;
+  const googleId = t && t.custom_data && t.custom_data.googleId;
+  const subscription_id = t && t.subscription_id;
+  if (!googleId || !subscription_id) return null;
+  return { googleId, subscription_id };
 }
 
 export function shouldApply(existing, incoming) {

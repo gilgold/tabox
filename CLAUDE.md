@@ -125,3 +125,8 @@ webpack.js            # Webpack config
 - Webpack splits vendor chunks (React, UI libs, dnd-kit)
 - Release builds strip `console.log` via Terser
 - After any code change, always run `yarn prod` before considering the work complete
+
+## Git & Registry Rules
+
+- **Git identity**: this project must use the **gilgold** GitHub account — never **gil-wix**. Before ANY git action (commit, push, PR via `gh`), verify `git config user.name` / `user.email` and `gh auth status` resolve to gilgold; fix the repo-local config / `gh auth switch` first if not.
+- **npm registry**: this machine installs through the Wix internal npm registry, but Wix registry URLs must NEVER reach the remote. Before any push, check staged changes (`yarn.lock`, `.npmrc`, `.yarnrc.yml`) for Wix registry hostnames (e.g. `wixpress`) and replace them with public npm registry URLs (`registry.npmjs.org` / `registry.yarnpkg.com`).

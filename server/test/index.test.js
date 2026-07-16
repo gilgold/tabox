@@ -74,35 +74,72 @@ describe('GET /entitlement', () => {
 });
 
 describe('POST /webhooks/paddle', () => {
-  const event = {
+  // Paddle subscription webhooks do NOT carry the checkout's custom_data, so the
+  // subscription event alone cannot identify the Google user. googleId arrives on
+  // a separate transaction.* event; entitlement resolves once both are seen, in
+  // either order.
+  const subEvent = {
     event_id: 'evt_1', event_type: 'subscription.created', occurred_at: '2026-07-16T10:00:00Z',
     data: {
       id: 'sub_1', status: 'trialing', customer_id: 'ctm_1',
-      custom_data: { googleId: 'g-123' },
       current_billing_period: { ends_at: '2026-07-23T10:00:00Z' },
       items: [{ price: { id: 'pri_m' } }],
     },
   };
+  const txnEvent = {
+    event_id: 'evt_2', event_type: 'transaction.completed', occurred_at: '2026-07-16T10:00:01Z',
+    data: { id: 'txn_1', subscription_id: 'sub_1', custom_data: { googleId: 'g-123' } },
+  };
+
+  async function post(event, kv) {
+    const body = JSON.stringify(event);
+    const ts = Math.floor(Date.now() / 1000);
+    const h1 = await signWebhook(body, ENV_BASE.PADDLE_WEBHOOK_SECRET, ts);
+    return worker.fetch(
+      new Request('https://x/webhooks/paddle', { method: 'POST', body, headers: { 'Paddle-Signature': `ts=${ts};h1=${h1}` } }),
+      { ...ENV_BASE, ENTITLEMENTS: kv }
+    );
+  }
 
   it('401s on bad signature', async () => {
     const res = await worker.fetch(
-      new Request('https://x/webhooks/paddle', { method: 'POST', body: JSON.stringify(event), headers: { 'Paddle-Signature': 'ts=1;h1=bad' } }),
+      new Request('https://x/webhooks/paddle', { method: 'POST', body: JSON.stringify(subEvent), headers: { 'Paddle-Signature': 'ts=1;h1=bad' } }),
       { ...ENV_BASE, ENTITLEMENTS: makeKV() }
     );
     expect(res.status).toBe(401);
   });
 
-  it('upserts KV on a valid signed subscription event', async () => {
-    const body = JSON.stringify(event);
-    const ts = Math.floor(Date.now() / 1000);
-    const h1 = await signWebhook(body, ENV_BASE.PADDLE_WEBHOOK_SECRET, ts);
+  it('does not grant entitlement from a subscription event alone (no googleId yet)', async () => {
     const kv = makeKV();
-    const res = await worker.fetch(
-      new Request('https://x/webhooks/paddle', { method: 'POST', body, headers: { 'Paddle-Signature': `ts=${ts};h1=${h1}` } }),
-      { ...ENV_BASE, ENTITLEMENTS: kv }
-    );
+    const res = await post(subEvent, kv);
     expect(res.status).toBe(200);
+    expect(kv._store['ent:g-123']).toBeUndefined();
+  });
+
+  it('resolves entitlement when the transaction event arrives after the subscription event', async () => {
+    const kv = makeKV();
+    await post(subEvent, kv);      // stashed, pending googleId
+    await post(txnEvent, kv);      // supplies googleId -> flush
     expect(kv._store['ent:g-123']).toMatchObject({ status: 'trialing', plan: 'monthly', subscription_id: 'sub_1' });
+  });
+
+  it('resolves entitlement when the transaction event arrives before the subscription event', async () => {
+    const kv = makeKV();
+    await post(txnEvent, kv);      // maps sub_1 -> g-123
+    await post(subEvent, kv);      // map exists -> apply directly
+    expect(kv._store['ent:g-123']).toMatchObject({ status: 'trialing', plan: 'monthly', subscription_id: 'sub_1' });
+  });
+
+  it('applies later subscription lifecycle events (e.g. cancellation) once linked', async () => {
+    const kv = makeKV();
+    await post(txnEvent, kv);
+    await post(subEvent, kv);
+    const canceled = {
+      event_id: 'evt_3', event_type: 'subscription.canceled', occurred_at: '2026-07-20T10:00:00Z',
+      data: { id: 'sub_1', status: 'canceled', customer_id: 'ctm_1', items: [{ price: { id: 'pri_m' } }] },
+    };
+    await post(canceled, kv);
+    expect(kv._store['ent:g-123'].status).toBe('canceled');
   });
 
   it('returns 200 without writing KV for a validly-signed malformed body', async () => {
@@ -119,18 +156,28 @@ describe('POST /webhooks/paddle', () => {
     expect(kv.put).not.toHaveBeenCalled();
   });
 
-  it('ignores stale out-of-order events', async () => {
-    const stale = { ...event, occurred_at: '2026-07-16T08:00:00Z' };
-    const body = JSON.stringify(stale);
-    const ts = Math.floor(Date.now() / 1000);
-    const h1 = await signWebhook(body, ENV_BASE.PADDLE_WEBHOOK_SECRET, ts);
-    const kv = makeKV({ 'ent:g-123': { status: 'active', occurred_at: '2026-07-16T09:00:00Z' } });
-    const res = await worker.fetch(
-      new Request('https://x/webhooks/paddle', { method: 'POST', body, headers: { 'Paddle-Signature': `ts=${ts};h1=${h1}` } }),
-      { ...ENV_BASE, ENTITLEMENTS: kv }
-    );
+  it('ignores stale out-of-order events for an already-linked subscription', async () => {
+    const stale = { ...subEvent, occurred_at: '2026-07-16T08:00:00Z' };
+    const kv = makeKV({
+      'map:sub_1': { googleId: 'g-123' },
+      'ent:g-123': { status: 'active', occurred_at: '2026-07-16T09:00:00Z' },
+    });
+    const res = await post(stale, kv);
     expect(res.status).toBe(200);
     expect(kv._store['ent:g-123'].status).toBe('active');
+  });
+});
+
+describe('CORS preflight', () => {
+  it('answers OPTIONS with 204 and the headers a Bearer GET needs', async () => {
+    const res = await worker.fetch(
+      new Request('https://x/entitlement', { method: 'OPTIONS' }),
+      { ...ENV_BASE, ENTITLEMENTS: makeKV() }
+    );
+    expect(res.status).toBe(204);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    expect(res.headers.get('Access-Control-Allow-Methods')).toContain('GET');
+    expect(res.headers.get('Access-Control-Allow-Headers')).toContain('Authorization');
   });
 });
 

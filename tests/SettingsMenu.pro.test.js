@@ -4,7 +4,7 @@ import '@testing-library/jest-dom';
 import { Provider, createStore } from 'jotai';
 import { browser } from '../static/globals';
 import SettingsMenu from '../app/SettingsMenu';
-import { premiumEntitlementState } from '../app/atoms/premiumState';
+import { premiumEntitlementState, manageSubscriptionOpenState } from '../app/atoms/premiumState';
 
 // AIEnableModal is lazily imported by SettingsMenu — mock its deps to keep
 // this test focused and fast (mirrors SettingsMenuTaboxAI.test.js).
@@ -21,13 +21,17 @@ jest.mock('../app/OrphanRecoveryContext', () => ({
     useOrphanRecoveryContext: () => ({}),
 }));
 
-const renderSettingsMenu = (premium = null) => {
+const renderSettingsMenu = (premium = null, variant = 'popup') => {
     const store = createStore();
     store.set(premiumEntitlementState, premium);
 
     const view = render(
         <Provider store={store}>
-            <SettingsMenu updateRemoteData={jest.fn()} applyDataFromServer={jest.fn()} />
+            <SettingsMenu
+                variant={variant}
+                updateRemoteData={jest.fn()}
+                applyDataFromServer={jest.fn()}
+            />
         </Provider>,
     );
 
@@ -76,6 +80,73 @@ describe('SettingsMenu — Tabox Pro section', () => {
         expect(screen.getByText(/trial/i)).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /manage subscription/i })).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /upgrade/i })).not.toBeInTheDocument();
+    });
+
+    test('renders the current plan as read-only plan details in the full-page view', () => {
+        const { container } = renderSettingsMenu(null, 'fullpage');
+
+        openSettings(container);
+        fireEvent.click(screen.getByRole('button', { name: 'Tabox Pro' }));
+
+        const planStatus = screen.getByText('Free plan');
+        const planDetails = planStatus.closest('.fp-settings-plan-details');
+
+        expect(planDetails).toBeInTheDocument();
+        expect(planDetails).toHaveTextContent('Current plan');
+        expect(planStatus.closest('button')).toBeNull();
+        expect(planDetails).not.toHaveClass('fp-settings-item-card');
+    });
+
+    test('Manage subscription opens the shared modal via the atom', () => {
+        const { container, store } = renderSettingsMenu({
+            entitled: true,
+            status: 'active',
+            plan: 'monthly',
+            refreshedAt: new Date().toISOString(),
+        });
+
+        openSettings(container);
+        fireEvent.click(screen.getByRole('button', { name: /manage subscription/i }));
+
+        expect(store.get(manageSubscriptionOpenState)).toBe(true);
+    });
+
+    test('shows subscription controls inside the full-page settings modal', async () => {
+        browser.runtime.sendMessage.mockImplementation(async (message) => {
+            if (message.type === 'proGetSubscription') {
+                return {
+                    ok: true,
+                    data: {
+                        plan: 'monthly',
+                        status: 'active',
+                        next_billed_at: '2026-08-01T00:00:00Z',
+                        current_period_end: '2026-08-01T00:00:00Z',
+                        scheduled_change: null,
+                    },
+                };
+            }
+            return {};
+        });
+
+        const { container, store } = renderSettingsMenu({
+            entitled: true,
+            status: 'active',
+            plan: 'monthly',
+            refreshedAt: new Date().toISOString(),
+        }, 'fullpage');
+
+        openSettings(container);
+        fireEvent.click(screen.getByRole('button', { name: 'Tabox Pro' }));
+        fireEvent.click(screen.getByRole('button', { name: /manage subscription/i }));
+
+        const planDetails = await screen.findByText('Tabox Pro — monthly');
+        expect(document.querySelector('.fp-settings-modal-shell')).toBeInTheDocument();
+        expect(document.querySelector('.fp-settings-main-content')).toContainElement(planDetails);
+        expect(screen.getByRole('button', { name: /back to plan overview/i })).toBeInTheDocument();
+        const switchButton = screen.getByRole('button', { name: /switch to annual billing/i });
+        const cancelButton = screen.getByRole('button', { name: /^cancel subscription$/i });
+        expect(switchButton.closest('.manage-sub-plan-actions')).toContainElement(cancelButton);
+        expect(store.get(manageSubscriptionOpenState)).toBe(false);
     });
 
     test('signed-out free user: Upgrade click signs in then retries checkout', async () => {

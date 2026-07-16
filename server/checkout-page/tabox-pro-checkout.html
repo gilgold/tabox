@@ -47,6 +47,9 @@
       production: { monthly: 'pri_01kxk6xwxdgmtr2eat3xqacs3z', annual: 'pri_01kxk6xx37e1h9pdjvmvy457br' },
       sandbox:    { monthly: 'pri_01kxmrtyxwk2x1qt6kxvbc57m1', annual: 'pri_01kxmrtz4894fc464tm48qjmvy' }
     };
+    // Post-payment redirect. Production is the Wix page at /pro; sandbox is the
+    // locally-served file itself (there is no /pro route on localhost).
+    var SUCCESS_PATHS = { production: '/pro', sandbox: '/sandbox-checkout.html' };
 
     var paddleAvailable = typeof Paddle !== 'undefined';
     if (paddleAvailable) {
@@ -85,7 +88,7 @@
           items: [{ priceId: PRICES[PADDLE_ENV][selectedPlan], quantity: 1 }],
           customer: email ? { email: email } : undefined,
           customData: { googleId: googleId },
-          settings: { displayMode: 'overlay', successUrl: window.location.origin + '/pro?success=1' }
+          settings: { displayMode: 'overlay', successUrl: window.location.origin + SUCCESS_PATHS[PADDLE_ENV] + '?success=1' }
         });
       });
     }

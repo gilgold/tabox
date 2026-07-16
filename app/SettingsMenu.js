@@ -5,13 +5,14 @@ import './SettingsMenu.css';
 import Switch from './Switch';
 import { ToastViewport } from './ToastViewport';
 import { themeState, isLoggedInState, listKeyState } from './atoms/globalAppSettingsState';
-import { premiumEntitlementState, isProState } from './atoms/premiumState';
+import { premiumEntitlementState, isProState, manageSubscriptionOpenState } from './atoms/premiumState';
 import { useAtomValue, useSetAtom, useAtom } from 'jotai';
 import { browser } from '../static/globals';
 import { showUndoToast, setToastViewContext } from './toastHelpers';
 import { UNDO_TIME } from './constants';
 import { downloadTextFile } from './utils';
 import SyncDebugRecoveryPanel from './SyncDebugRecoveryPanel';
+import { ManageSubscriptionControls } from './ManageSubscriptionModal';
 import { useOrphanRecoveryContext } from './OrphanRecoveryContext';
 import { buildOrphanRecoveryMenuItem } from './orphanRecoveryMenuItem';
 import { loadBrowserSessions, subscribeToBrowserSessions } from './utils/browserSessions';
@@ -21,10 +22,6 @@ import { MdOutlineSyncAlt, MdSettingsBackupRestore, MdClose, MdExpandMore, MdExp
 import { FaRegCheckCircle } from 'react-icons/fa';
 import { IoMoon, IoSunny } from 'react-icons/io5';
 import { BsStars } from 'react-icons/bs';
-
-// TODO(Task 15): replace with the real customer portal URL from the Paddle
-// dashboard (Checkout → Customer portal) before release.
-const PRO_PORTAL_URL = 'https://customer-portal.paddle.com';
 
 const SyncDebugModal = lazy(() => import('./SyncDebugModal').then((module) => ({ default: module.SyncDebugModal })));
 const AIEnableModal = lazy(() => import('./AIEnableModal'));
@@ -43,6 +40,7 @@ export default function SettingsMenu(props) {
     const [sessionList, setSessionList] = useState([]);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [activeCategory, setActiveCategory] = useState('general');
+    const [showSubscriptionControls, setShowSubscriptionControls] = useState(false);
     const isMountedRef = useRef(true);
     const [expandedSections, setExpandedSections] = useState({
         general: true,
@@ -60,12 +58,14 @@ export default function SettingsMenu(props) {
     const orphanRecovery = useOrphanRecoveryContext() || {};
     const premium = useAtomValue(premiumEntitlementState);
     const isPro = useAtomValue(isProState);
+    const setManageSubscriptionOpen = useSetAtom(manageSubscriptionOpenState);
 
     const closeMenu = () => setIsDrawerOpen(false);
 
     const openMenu = () => {
         if (isFullPageVariant) {
             setActiveCategory('general');
+            setShowSubscriptionControls(false);
         }
         setIsDrawerOpen(true);
     };
@@ -298,7 +298,14 @@ export default function SettingsMenu(props) {
                     key: 'pro-manage',
                     title: 'Manage subscription',
                     description: 'Update payment details, change plan, or cancel your subscription.',
-                    onClick: () => window.open(PRO_PORTAL_URL, '_blank'),
+                    onClick: () => {
+                        if (isFullPageVariant) {
+                            setShowSubscriptionControls(true);
+                            return;
+                        }
+                        setManageSubscriptionOpen(true);
+                        closeMenu();
+                    },
                     content: (
                         <>
                             <MdWorkspacePremium size="14" style={{ marginRight: '8px' }} />
@@ -329,6 +336,7 @@ export default function SettingsMenu(props) {
     };
 
     const commonSettingsSections = [
+        proSection,
         {
             key: 'general',
             title: 'General Settings',
@@ -548,7 +556,6 @@ export default function SettingsMenu(props) {
                 },
             ],
         },
-        proSection,
     ];
 
     const orphanRecoveryItem = buildOrphanRecoveryMenuItem(orphanRecovery, { onActivate: closeMenu });
@@ -683,6 +690,25 @@ export default function SettingsMenu(props) {
     };
 
     const renderFullPageItem = (item) => {
+        if (item.variant === 'status') {
+            return (
+                <section
+                    key={item.key}
+                    className={`fp-settings-plan-details${isPro ? ' is-pro' : ''}`}
+                    aria-label={item.title}
+                >
+                    <div className="fp-settings-plan-icon" aria-hidden="true">
+                        <MdWorkspacePremium />
+                    </div>
+                    <div className="fp-settings-plan-copy">
+                        <span className="fp-settings-plan-label">{item.title}</span>
+                        <strong className="fp-settings-plan-name">{item.content}</strong>
+                        <p>{item.description}</p>
+                    </div>
+                </section>
+            );
+        }
+
         if (item.type === 'button') {
             return (
                 <div key={item.key} className="fp-settings-item-card fp-settings-item-card-action">
@@ -750,7 +776,10 @@ export default function SettingsMenu(props) {
 
                                     return (
                                         <div key={section.key} className="settings-section">
-                                            <h3 className="settings-collapsible-header" onClick={() => toggleSection(section.key)}>
+                                            <h3
+                                                className={`settings-collapsible-header${section.key === 'tabox-pro' ? ' tabox-pro-option' : ''}`}
+                                                onClick={() => toggleSection(section.key)}
+                                            >
                                                 <div className="header-content">
                                                     <SectionIcon />
                                                     <span>{section.title}</span>
@@ -802,7 +831,7 @@ export default function SettingsMenu(props) {
                                         <button
                                             key={section.key}
                                             type="button"
-                                            className={`fp-settings-sidebar-item ${isActive ? 'active' : ''}`}
+                                            className={`fp-settings-sidebar-item${section.key === 'tabox-pro' ? ' tabox-pro-option' : ''}${isActive ? ' active' : ''}`}
                                             onClick={() => setActiveCategory(section.key)}
                                         >
                                             <SectionIcon className="fp-settings-sidebar-item-icon" />
@@ -829,7 +858,14 @@ export default function SettingsMenu(props) {
                             </div>
 
                             <div className="fp-settings-main-content">
-                                {typeof activeSection.renderFullPageContent === 'function'
+                                {activeSection.key === 'tabox-pro' && showSubscriptionControls
+                                    ? (
+                                        <ManageSubscriptionControls
+                                            active={isDrawerOpen}
+                                            onBack={() => setShowSubscriptionControls(false)}
+                                        />
+                                    )
+                                    : typeof activeSection.renderFullPageContent === 'function'
                                     ? activeSection.renderFullPageContent()
                                     : visibleItemsForSection(activeSection).map(renderFullPageItem)}
                             </div>

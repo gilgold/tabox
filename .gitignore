@@ -49,3 +49,4 @@ site/pricing/pricing.html
 # Local env files (API tokens) — never commit
 .env.local
 .env*.local
+server/.wrangler/
