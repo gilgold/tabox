@@ -181,6 +181,14 @@ async function loadLocalSharedFolders() {
 // (deletions) sequence is wrapped in a single lock acquisition so it can never
 // interleave with another writer (e.g. a concurrent sharedSyncNow on a different
 // folder still touches the same collections_index/folders_index/events keys).
+//
+// Task 10 review (echo-push fix): returns the Set of collection uids it actually
+// applied to local storage this cycle (upserts AND deletions). Every applied row's
+// local lastUpdated is now newer than the stale pre-pull sync watermark, so the
+// caller (syncSharedFolders' push phase) MUST exclude this set from whatever it
+// considers "dirty" — otherwise a collection just pulled from another user gets
+// immediately re-PUT to the server, reattributing updated_by/bumping revision and
+// ping-ponging forever between writers.
 async function applyDeltaLocally(folder, delta, myEmail) {
   return withStorageLock(async () => {
     const folderId = folder.uid;
@@ -190,6 +198,7 @@ async function applyDeltaLocally(folder, delta, myEmail) {
     const updates = {};
     const removals = [];
     const events = [];
+    const appliedUids = new Set();
     const normalizedMyEmail = (myEmail || '').toLowerCase();
 
     for (const row of delta.collections || []) {
@@ -198,6 +207,7 @@ async function applyDeltaLocally(folder, delta, myEmail) {
         if (index[row.uid]) {
           delete index[row.uid];
           removals.push(`collection_${row.uid}`);
+          appliedUids.add(row.uid);
           if (isOther) {
             events.push({
               folderId, folderName: delta.folder.name, actorEmail: row.updatedBy,
@@ -209,6 +219,7 @@ async function applyDeltaLocally(folder, delta, myEmail) {
         const record = { ...row.data, uid: row.uid, parentId: folderId, lastUpdated: row.updatedAt };
         updates[`collection_${row.uid}`] = record;
         index[row.uid] = { uid: row.uid, name: record.name, parentId: folderId, lastUpdated: row.updatedAt };
+        appliedUids.add(row.uid);
         events.push({
           folderId, folderName: delta.folder.name, actorEmail: row.updatedBy,
           kind: 'updated', collectionName: record.name, at: row.updatedAt,
@@ -243,6 +254,7 @@ async function applyDeltaLocally(folder, delta, myEmail) {
 
     await browser.storage.local.set(updates); // ONE atomic set for upserts + meta refresh
     if (removals.length) await browser.storage.local.remove(removals); // deletions
+    return appliedUids;
   });
 }
 
@@ -259,6 +271,25 @@ async function pollInvites() {
   return { ok: false, error: 'not_implemented' };
 }
 
+// Task 10 review fix: re-entrancy guard. The 5-minute alarm and a popup-triggered
+// `sharedSyncNow` can fire concurrently; without this, two overlapping runs would
+// each pull/push independently, double-pushing dirty collections and racing each
+// other's sync-state writes. If a run is already in flight, coalesce onto it —
+// return the SAME promise rather than starting (or queueing) a second run.
+// Deliberately NOT declared `async function`: an async wrapper would allocate a
+// fresh Promise on every call (even one that just returns another promise), so
+// two overlapping callers would each get a distinct-but-equivalent promise
+// instead of the literal same one. Returning the raw promise here preserves
+// reference identity, which is what callers rely on to detect coalescing.
+let sharedSyncInFlight = null;
+function syncSharedFolders() {
+  if (sharedSyncInFlight) return sharedSyncInFlight;
+  sharedSyncInFlight = doSyncSharedFolders().finally(() => {
+    sharedSyncInFlight = null;
+  });
+  return sharedSyncInFlight;
+}
+
 // Task 10: background sync engine. For every locally-shared folder: pull the
 // server's delta since our last known revision and apply it, then (write/owner
 // roles only) push locally-dirty collections and local deletions back. A pull
@@ -266,7 +297,7 @@ async function pollInvites() {
 // was deleted) — convert the folder back to a plain local folder and record a
 // 'revoked' event for Task 15's toasts. Network/auth errors on pull just skip
 // that folder for this cycle; the next alarm tick tries again.
-async function syncSharedFolders() {
+async function doSyncSharedFolders() {
   const { googleUser } = await browser.storage.local.get('googleUser');
   const myEmail = (googleUser?.emailAddress || '').toLowerCase();
   const folders = await loadLocalSharedFolders();
@@ -278,6 +309,17 @@ async function syncSharedFolders() {
     const folderId = folder.uid;
     const state = (await getSyncState())[folderId] || { lastRev: 0, lastSyncedAt: 0, knownUids: [] };
 
+    // Review fix (lost-dirty window): capture the watermark timestamp AND the
+    // collections_index snapshot used for dirty computation BEFORE any network
+    // I/O this cycle (pull or push). We store THIS timestamp as the new
+    // lastSyncedAt (not Date.now() after the round-trip completes), so a local
+    // edit that lands while the network call is in flight — timestamped after
+    // this watermark — is never misclassified as "already synced": it simply
+    // stays dirty and gets picked up next cycle instead of being silently and
+    // permanently skipped.
+    const cycleStartTs = Date.now();
+    const { collections_index: preCycleIndex = {} } = await browser.storage.local.get('collections_index');
+
     // PULL
     const pull = await sharedApiFetch(`/shared/folders/${folderId}?sinceRev=${state.lastRev}`);
     if (!pull.ok) {
@@ -288,7 +330,7 @@ async function syncSharedFolders() {
       }
       continue; // network/auth errors: try again next cycle
     }
-    await applyDeltaLocally(folder, pull.data, myEmail);
+    const appliedUids = await applyDeltaLocally(folder, pull.data, myEmail);
     pulled += (pull.data.collections || []).length;
     let lastRev = pull.data.revision;
 
@@ -296,7 +338,13 @@ async function syncSharedFolders() {
     if (pull.data.role !== 'read') {
       const { collections_index: cIndex = {} } = await browser.storage.local.get('collections_index');
       const currentUids = Object.keys(cIndex).filter((uid) => cIndex[uid].parentId === folderId);
-      const dirty = currentUids.filter((uid) => (cIndex[uid].lastUpdated || 0) > state.lastSyncedAt);
+      // Echo-push fix: judge "dirty" against the PRE-network snapshot (edits made
+      // locally before this cycle's round-trip started) and explicitly exclude
+      // anything applyDeltaLocally just applied this cycle — a row pulled from
+      // another user must never be re-PUT in the same cycle it was pulled.
+      const dirty = currentUids.filter((uid) =>
+        !appliedUids.has(uid) && (preCycleIndex[uid]?.lastUpdated || 0) > state.lastSyncedAt
+      );
       const recs = await browser.storage.local.get(dirty.map((u) => `collection_${u}`));
       for (const uid of dirty) {
         const rec = recs[`collection_${uid}`];
@@ -314,16 +362,20 @@ async function syncSharedFolders() {
         // our local edit is still newer after that, we simply re-push it then).
         // Never throw: one folder's conflict must not abort the rest of the loop.
       }
-      for (const uid of state.knownUids.filter((u) => !currentUids.includes(u))) {
+      // Same echo-push exclusion applies to deletions: a uid the pull itself just
+      // removed locally (appliedUids) is already reflected server-side — don't
+      // issue a redundant DELETE for it.
+      const goneUids = state.knownUids.filter((u) => !currentUids.includes(u) && !appliedUids.has(u));
+      for (const uid of goneUids) {
         const r = await sharedApiFetch(`/shared/folders/${folderId}/collections/${uid}`, { method: 'DELETE' });
         if (r.ok) {
           lastRev = r.data.revision;
           pushed += 1;
         }
       }
-      await setFolderSyncState(folderId, { lastRev, lastSyncedAt: Date.now(), knownUids: currentUids });
+      await setFolderSyncState(folderId, { lastRev, lastSyncedAt: cycleStartTs, knownUids: currentUids });
     } else {
-      await setFolderSyncState(folderId, { lastRev, lastSyncedAt: Date.now(), knownUids: state.knownUids });
+      await setFolderSyncState(folderId, { lastRev, lastSyncedAt: cycleStartTs, knownUids: state.knownUids });
     }
   }
 
