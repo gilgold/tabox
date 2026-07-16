@@ -34,12 +34,14 @@ export default function ShareFolderModal() {
 
     useEffect(() => { setMembers(folder?.shared?.members || []); setEmail(''); }, [folder]);
     useEffect(() => {
+        let live = true;
         // Local member cache can be stale — refresh statuses from the server when the owner opens the modal
         if (folder?.shared?.role === 'owner') {
             browser.runtime.sendMessage({ type: 'sharedGetMembers', folderId: folder.uid })
-                .then((res) => { if (res?.ok) setMembers(res.data.members || []); })
+                .then((res) => { if (live && res?.ok) setMembers(res.data.members || []); })
                 .catch(() => {});
         }
+        return () => { live = false; };
     }, [folder]);
     useEffect(() => {
         let live = true;
@@ -63,10 +65,12 @@ export default function ShareFolderModal() {
                 const index = await loadCollectionsIndex();
                 const uids = Object.keys(index).filter((uid) => index[uid].parentId === folder.uid);
                 const records = await loadMultipleCollections(uids);
-                const collections = uids.map((uid) => {
-                    const { parentId, ...data } = records[uid];
-                    return { uid, data };
-                });
+                const collections = uids
+                    .filter((uid) => records[uid])
+                    .map((uid) => {
+                        const { parentId, ...data } = records[uid];
+                        return { uid, data };
+                    });
                 res = await send({
                     type: 'sharedCreateShare',
                     folder: { uid: folder.uid, name: folder.name, color: folder.color },
@@ -92,29 +96,44 @@ export default function ShareFolderModal() {
     };
 
     const handleRoleChange = async (memberEmail, newRole) => {
-        const res = await send({ type: 'sharedUpdateMemberRole', folderId: folder.uid, email: memberEmail, role: newRole });
-        if (res?.ok) {
-            setMembers((m) => m.map((x) => (x.email === memberEmail ? { ...x, role: newRole } : x)));
-        } else {
-            showErrorToast(ERROR_TEXT[res?.error] || 'Could not change the permission.');
+        setBusy(true);
+        try {
+            const res = await send({ type: 'sharedUpdateMemberRole', folderId: folder.uid, email: memberEmail, role: newRole });
+            if (res?.ok) {
+                setMembers((m) => m.map((x) => (x.email === memberEmail ? { ...x, role: newRole } : x)));
+            } else {
+                showErrorToast(ERROR_TEXT[res?.error] || 'Could not change the permission.');
+            }
+        } finally {
+            setBusy(false);
         }
     };
     const handleRevoke = async (memberEmail) => {
-        const res = await send({ type: 'sharedRemoveMember', folderId: folder.uid, email: memberEmail });
-        if (res?.ok) {
-            setMembers((m) => m.filter((x) => x.email !== memberEmail));
-            showSuccessToast(`Removed ${memberEmail}`);
-        } else {
-            showErrorToast(ERROR_TEXT[res?.error] || 'Could not remove this member.');
+        setBusy(true);
+        try {
+            const res = await send({ type: 'sharedRemoveMember', folderId: folder.uid, email: memberEmail });
+            if (res?.ok) {
+                setMembers((m) => m.filter((x) => x.email !== memberEmail));
+                showSuccessToast(`Removed ${memberEmail}`);
+            } else {
+                showErrorToast(ERROR_TEXT[res?.error] || 'Could not remove this member.');
+            }
+        } finally {
+            setBusy(false);
         }
     };
     const handleReinvite = async (member) => {
-        const res = await send({ type: 'sharedInvite', folderId: folder.uid, email: member.email, role: member.role });
-        if (res?.ok) {
-            setMembers(res.data.members || members);
-            showSuccessToast(`Invite re-sent to ${member.email}`);
-        } else {
-            showErrorToast(ERROR_TEXT[res?.error] || 'Could not send the invite.');
+        setBusy(true);
+        try {
+            const res = await send({ type: 'sharedInvite', folderId: folder.uid, email: member.email, role: member.role });
+            if (res?.ok) {
+                setMembers(res.data.members || members);
+                showSuccessToast(`Invite re-sent to ${member.email}`);
+            } else {
+                showErrorToast(ERROR_TEXT[res?.error] || 'Could not send the invite.');
+            }
+        } finally {
+            setBusy(false);
         }
     };
 
@@ -182,7 +201,7 @@ export default function ShareFolderModal() {
                         />
                     )}
                     <p className="share-hint">Invitees must sign in to Tabox with this exact Google email.</p>
-                    {members.length > 0 && (
+                    {(!folder.shared || folder.shared.role === 'owner') && members.length > 0 && (
                         <div className="share-members">
                             <h4>People with access</h4>
                             {members.map((m) => (
@@ -194,6 +213,7 @@ export default function ShareFolderModal() {
                                             value={m.role}
                                             onChange={(e) => handleRoleChange(m.email, e.target.value)}
                                             aria-label={`Permission for ${m.email}`}
+                                            disabled={busy}
                                         >
                                             <option value="read">Can view</option>
                                             <option value="write">Can edit</option>
@@ -202,6 +222,7 @@ export default function ShareFolderModal() {
                                         <button
                                             className="share-reinvite"
                                             onClick={() => handleReinvite(m)}
+                                            disabled={busy}
                                             data-tooltip-id="main-tooltip"
                                             data-tooltip-content="Send this person a new invite"
                                         >
@@ -210,6 +231,7 @@ export default function ShareFolderModal() {
                                     )}
                                     <button
                                         onClick={() => handleRevoke(m.email)}
+                                        disabled={busy}
                                         data-tooltip-id="main-tooltip"
                                         data-tooltip-content={m.status === 'declined' ? 'Remove from this list' : 'Remove this person’s access'}
                                     >
