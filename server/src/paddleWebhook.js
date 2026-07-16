@@ -1,5 +1,14 @@
 const SIGNATURE_TOLERANCE_S = 900; // 15 min
 
+// Constant-time hex comparison (no Node crypto in Cloudflare Workers).
+// Length mismatch returns early, but equal-length inputs are always scanned fully.
+function timingSafeEqualHex(a, b) {
+  if (typeof b !== 'string' || a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
 export async function verifyPaddleSignature(rawBody, signatureHeader, secret, nowMs = Date.now()) {
   if (!signatureHeader || typeof signatureHeader !== 'string') return false;
   const parts = Object.fromEntries(
@@ -12,7 +21,7 @@ export async function verifyPaddleSignature(rawBody, signatureHeader, secret, no
   const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   const sig = await crypto.subtle.sign('HMAC', key, enc.encode(`${ts}:${rawBody}`));
   const hex = [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, '0')).join('');
-  return hex === h1;
+  return timingSafeEqualHex(hex, h1);
 }
 
 export function extractEntitlementUpdate(event, priceMap) {
@@ -36,6 +45,8 @@ export function extractEntitlementUpdate(event, priceMap) {
 }
 
 export function shouldApply(existing, incoming) {
+  const incomingTs = Date.parse(incoming && incoming.occurred_at);
+  if (Number.isNaN(incomingTs)) return false; // drop events without a valid occurred_at
   if (!existing || !existing.occurred_at) return true;
-  return Date.parse(incoming.occurred_at) >= Date.parse(existing.occurred_at);
+  return incomingTs >= Date.parse(existing.occurred_at);
 }

@@ -27,6 +27,13 @@ describe('verifyPaddleSignature', () => {
     expect(await verifyPaddleSignature('{"a":1}', null, SECRET)).toBe(false);
     expect(await verifyPaddleSignature('{"a":1}', 'garbage', SECRET)).toBe(false);
   });
+
+  it('rejects a truncated (length-mismatched) h1', async () => {
+    const body = '{"a":1}';
+    const ts = Math.floor(Date.now() / 1000);
+    const h1 = await sign(body, ts);
+    expect(await verifyPaddleSignature(body, `ts=${ts};h1=${h1.slice(0, -2)}`, SECRET)).toBe(false);
+  });
 });
 
 const PRICES = { monthly: 'pri_m', annual: 'pri_a' };
@@ -78,5 +85,10 @@ describe('shouldApply', () => {
   });
   it('skips out-of-order (older) events', () => {
     expect(shouldApply({ occurred_at: '2026-07-16T11:00:00Z' }, { occurred_at: '2026-07-16T10:00:00Z' })).toBe(false);
+  });
+  it('drops incoming events with missing or unparseable occurred_at', () => {
+    expect(shouldApply(null, {})).toBe(false);
+    expect(shouldApply(null, { occurred_at: 'not-a-date' })).toBe(false);
+    expect(shouldApply({ occurred_at: '2026-07-16T10:00:00Z' }, { occurred_at: 'not-a-date' })).toBe(false);
   });
 });
