@@ -311,7 +311,13 @@ export default function SettingsMenu(props) {
                     key: 'pro-upgrade',
                     title: 'Upgrade to Tabox Pro',
                     description: 'Unlock premium features with a free 7-day trial.',
-                    onClick: () => browser.runtime.sendMessage({ type: 'openProCheckout' }),
+                    onClick: async () => {
+                        const ok = await browser.runtime.sendMessage({ type: 'openProCheckout' });
+                        if (!ok) {
+                            const loggedIn = await browser.runtime.sendMessage({ type: 'login' });
+                            if (loggedIn) await browser.runtime.sendMessage({ type: 'openProCheckout' });
+                        }
+                    },
                     content: (
                         <>
                             <MdWorkspacePremium size="14" style={{ marginRight: '8px' }} />

@@ -77,4 +77,29 @@ describe('SettingsMenu — Tabox Pro section', () => {
         expect(screen.getByRole('button', { name: /manage subscription/i })).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /upgrade/i })).not.toBeInTheDocument();
     });
+
+    test('signed-out free user: Upgrade click signs in then retries checkout', async () => {
+        browser.runtime.sendMessage.mockImplementation((msg) => {
+            if (msg.type === 'openProCheckout') {
+                return browser.runtime.sendMessage.mock.calls.filter((c) => c[0].type === 'openProCheckout').length === 1
+                    ? Promise.resolve(false)
+                    : Promise.resolve(true);
+            }
+            if (msg.type === 'login') return Promise.resolve(true);
+            return Promise.resolve({});
+        });
+
+        const { container } = renderSettingsMenu(null);
+        openSettings(container);
+
+        const upgradeButton = screen.getByRole('button', { name: /upgrade/i });
+        fireEvent.click(upgradeButton);
+
+        await screen.findByText('Tabox Pro');
+        expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'openProCheckout' });
+        expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'login' });
+        expect(
+            browser.runtime.sendMessage.mock.calls.filter((c) => c[0].type === 'openProCheckout').length,
+        ).toBeGreaterThanOrEqual(2);
+    });
 });

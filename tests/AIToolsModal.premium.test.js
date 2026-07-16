@@ -81,4 +81,35 @@ describe('AIToolsModal premium gating', () => {
         renderModal({ premium: PRO });
         expect(screen.queryAllByTestId('ai-tool-lock')).toHaveLength(0);
     });
+
+    it('signed-out upsell: sign-in click applies the login + entitlement result without remounting the modal', async () => {
+        browser.storage.local.get.mockResolvedValue({}); // no googleUser -> signed out
+        let loggedIn = false;
+        browser.runtime.sendMessage = jest.fn().mockImplementation((msg) => {
+            if (msg.type === 'aiGetState') return Promise.resolve(null);
+            if (msg.type === 'login') {
+                loggedIn = true;
+                return Promise.resolve(true);
+            }
+            // TaboxProUpsell also fires an (unrelated) refresh on mount while
+            // optimistically-signed-in; only report entitled after the explicit
+            // sign-in flow has actually logged in, so the test isolates the fix.
+            if (msg.type === 'refreshProEntitlement') return Promise.resolve(loggedIn ? PRO : { entitled: false, status: 'none', refreshedAt: new Date().toISOString() });
+            return Promise.resolve({});
+        });
+
+        const store = renderModal();
+        fireEvent.click(screen.getByText('Auto rename collections'));
+
+        const signInButton = await screen.findByRole('button', { name: /sign in with google/i });
+        fireEvent.click(signInButton);
+
+        // Sign-in + entitlement refresh resolve -> premiumEntitlementState is
+        // populated (previously discarded) and the modal itself (still the same
+        // instance — no remount) unlocks the tool instead of dead-ending on the
+        // sign-in CTA.
+        await waitFor(() => expect(store.get(premiumEntitlementState)).toEqual(PRO));
+        expect(document.querySelector('.ai-tools-modal')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /sign in with google/i })).not.toBeInTheDocument();
+    });
 });

@@ -931,8 +931,11 @@ function AIToolsModal({ updateRemoteData }) {
                         isSignedIn={isSignedIn}
                         onUpgrade={() => browser.runtime.sendMessage({ type: 'openProCheckout' })}
                         onSignIn={async () => {
-                            await browser.runtime.sendMessage({ type: 'login' });
-                            browser.runtime.sendMessage({ type: 'refreshProEntitlement' });
+                            const loggedIn = await browser.runtime.sendMessage({ type: 'login' });
+                            if (!loggedIn) return;
+                            setIsSignedIn(true);
+                            const entitlement = await browser.runtime.sendMessage({ type: 'refreshProEntitlement' });
+                            if (entitlement) setPremiumEntitlement(entitlement);
                         }}
                         onEntitlementRefreshed={setPremiumEntitlement}
                     />
