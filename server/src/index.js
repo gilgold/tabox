@@ -15,6 +15,7 @@ import {
   isProUser, createSharedFolder, listSharedFolders, inviteMember, listInvites, respondInvite,
   getFolderDelta, putCollection, deleteCollection, updateFolderMeta,
   updateMemberRole, removeMember, deleteSharedFolder, getMembers,
+  checkRateLimit, MAX_BODY_BYTES,
 } from './sharedFolders.js';
 
 const json = (body, status = 200) =>
@@ -191,6 +192,15 @@ async function handleShared(request, env, url) {
   const identity = await authenticate(request, env);
   if (!identity) return json({ error: 'invalid_token' }, 401);
   if (!identity.email) return json({ error: 'email_unavailable' }, 403);
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) {
+    const len = Number(request.headers.get('content-length') || 0);
+    if (len > MAX_BODY_BYTES) return json({ error: 'payload_too_large' }, 413);
+    const isInvite = request.method === 'POST' && url.pathname.endsWith('/invites');
+    const allowed = isInvite
+      ? await checkRateLimit(env, identity.googleId, 'invites', 30, 3600, Date.now())
+      : await checkRateLimit(env, identity.googleId, 'writes', 120, 60, Date.now());
+    if (!allowed) return json({ error: 'rate_limited' }, 429);
+  }
   const db = env.SHARED_DB;
   const now = Date.now();
   const seg = url.pathname.split('/').filter(Boolean); // ['shared', ...]

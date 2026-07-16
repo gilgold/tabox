@@ -18,6 +18,10 @@ function tooLarge(collections) {
 
 export async function createSharedFolder(db, identity, { folderId, name, color = null, collections = [] }, nowMs) {
   if (!folderId || !name) return err(400, 'invalid_request');
+  if (name.length > MAX_NAME_LENGTH) return err(400, 'invalid_request');
+  if (collections.length > MAX_COLLECTIONS_PER_FOLDER) return err(413, 'too_many_collections');
+  const owned = await db.prepare('SELECT COUNT(*) AS n FROM shared_folders WHERE owner_google_id = ?').bind(identity.googleId).first();
+  if (owned.n >= MAX_FOLDERS_PER_OWNER) return err(409, 'folder_limit');
   if (tooLarge(collections)) return err(413, 'collection_too_large');
   const existing = await db.prepare('SELECT id FROM shared_folders WHERE id = ?').bind(folderId).first();
   if (existing) return err(409, 'already_shared');
@@ -172,6 +176,10 @@ export async function putCollection(db, identity, folderId, uid, { data, baseRev
   if (JSON.stringify(data ?? null).length > MAX_COLLECTION_BYTES) return err(413, 'collection_too_large');
   const row = await db.prepare('SELECT rev FROM shared_collections WHERE folder_id = ? AND uid = ?').bind(folderId, uid).first();
   if (row && Number.isFinite(Number(baseRev)) && row.rev > Number(baseRev)) return err(409, 'conflict');
+  if (!row) {
+    const count = await db.prepare('SELECT COUNT(*) AS n FROM shared_collections WHERE folder_id = ? AND deleted = 0').bind(folderId).first();
+    if (count.n >= MAX_COLLECTIONS_PER_FOLDER) return err(413, 'too_many_collections');
+  }
   const revision = await bumpRevision(db, folderId, identity, nowMs);
   await db.prepare(
     `INSERT INTO shared_collections (folder_id, uid, data, rev, deleted, updated_at, updated_by) VALUES (?,?,?,?,0,?,?)
@@ -196,6 +204,7 @@ export async function deleteCollection(db, identity, folderId, uid, nowMs) {
 export async function updateFolderMeta(db, identity, folderId, { name, color }, nowMs) {
   const access = await requireFolderAccess(db, identity, folderId, 'write');
   if (access.ok === false) return access;
+  if (name != null && name.length > MAX_NAME_LENGTH) return err(400, 'invalid_request');
   const f = access.folder;
   await db.prepare('UPDATE shared_folders SET name = ?, color = ? WHERE id = ?')
     .bind(name ?? f.name, color === undefined ? f.color : color, folderId).run();
@@ -239,3 +248,17 @@ export async function getMembers(db, identity, folderId) {
 }
 
 export { ROLES };
+
+export const MAX_COLLECTIONS_PER_FOLDER = 500;
+export const MAX_FOLDERS_PER_OWNER = 50;
+export const MAX_NAME_LENGTH = 200;
+export const MAX_BODY_BYTES = 1_048_576;
+
+export async function checkRateLimit(env, googleId, bucket, limit, windowSecs, nowMs) {
+  const windowStart = Math.floor(nowMs / 1000 / windowSecs);
+  const key = `rl:${googleId}:${bucket}:${windowStart}`;
+  const current = Number((await env.ENTITLEMENTS.get(key)) || 0);
+  if (current >= limit) return false;
+  await env.ENTITLEMENTS.put(key, String(current + 1), { expirationTtl: Math.max(60, windowSecs * 2) });
+  return true;
+}
