@@ -11,6 +11,11 @@ import {
   toPreviewDto,
   planFromPriceId,
 } from './subscriptionManagement.js';
+import {
+  isProUser, createSharedFolder, listSharedFolders, inviteMember, listInvites, respondInvite,
+  getFolderDelta, putCollection, deleteCollection, updateFolderMeta,
+  updateMemberRole, removeMember, deleteSharedFolder, getMembers,
+} from './sharedFolders.js';
 
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -182,6 +187,60 @@ async function applyEntitlement(env, googleId, record) {
   }
 }
 
+async function handleShared(request, env, url) {
+  const identity = await authenticate(request, env);
+  if (!identity) return json({ error: 'invalid_token' }, 401);
+  if (!identity.email) return json({ error: 'email_unavailable' }, 403);
+  const db = env.SHARED_DB;
+  const now = Date.now();
+  const seg = url.pathname.split('/').filter(Boolean); // ['shared', ...]
+  const method = request.method;
+  const body = async () => { try { return await request.json(); } catch { return {}; } };
+  const out = (r) => (r.ok === false ? json({ error: r.error }, r.status) : json(r.data, 200));
+
+  if (seg[1] === 'invites') {
+    if (method === 'GET' && seg.length === 2) return out(await listInvites(db, identity));
+    if (method === 'POST' && seg.length === 4 && seg[3] === 'respond') {
+      const { accept } = await body();
+      return out(await respondInvite(db, identity, seg[2], accept === true, now));
+    }
+    return json({ error: 'not_found' }, 404);
+  }
+  if (seg[1] !== 'folders') return json({ error: 'not_found' }, 404);
+
+  if (seg.length === 2) {
+    if (method === 'GET') return out(await listSharedFolders(db, identity));
+    if (method === 'POST') {
+      if (!(await isProUser(env, identity.googleId))) return json({ error: 'pro_required' }, 403);
+      return out(await createSharedFolder(db, identity, await body(), now));
+    }
+  }
+  const folderId = decodeURIComponent(seg[2] || '');
+  if (seg.length === 3) {
+    if (method === 'GET') return out(await getFolderDelta(db, identity, folderId, url.searchParams.get('sinceRev')));
+    if (method === 'PATCH') return out(await updateFolderMeta(db, identity, folderId, await body(), now));
+    if (method === 'DELETE') return out(await deleteSharedFolder(db, identity, folderId));
+  }
+  if (seg.length === 4 && seg[3] === 'invites' && method === 'POST') {
+    if (!(await isProUser(env, identity.googleId))) return json({ error: 'pro_required' }, 403);
+    return out(await inviteMember(db, identity, folderId, await body(), now));
+  }
+  if (seg.length === 4 && seg[3] === 'members' && method === 'GET') {
+    return out(await getMembers(db, identity, folderId));
+  }
+  if (seg.length === 5 && seg[3] === 'members') {
+    const email = decodeURIComponent(seg[4]);
+    if (method === 'PATCH') return out(await updateMemberRole(db, identity, folderId, email, (await body()).role, now));
+    if (method === 'DELETE') return out(await removeMember(db, identity, folderId, email, now));
+  }
+  if (seg.length === 5 && seg[3] === 'collections') {
+    const uid = decodeURIComponent(seg[4]);
+    if (method === 'PUT') return out(await putCollection(db, identity, folderId, uid, await body(), now));
+    if (method === 'DELETE') return out(await deleteCollection(db, identity, folderId, uid, now));
+  }
+  return json({ error: 'not_found' }, 404);
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -192,7 +251,7 @@ export default {
         status: 204,
         headers: {
           'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
           'Access-Control-Allow-Headers': 'Authorization, Content-Type',
           'Access-Control-Max-Age': '86400',
         },
@@ -203,6 +262,7 @@ export default {
     if (request.method === 'POST' && url.pathname === '/subscription/cancel') return handleCancelSubscription(request, env);
     if (request.method === 'POST' && url.pathname === '/subscription/resume') return handleResumeSubscription(request, env);
     if (request.method === 'POST' && url.pathname === '/subscription/change-plan') return handleChangePlan(request, env);
+    if (url.pathname.startsWith('/shared/')) return handleShared(request, env, url);
     if (request.method === 'POST' && url.pathname === '/webhooks/paddle') return handlePaddleWebhook(request, env);
     return json({ error: 'not_found' }, 404);
   },
