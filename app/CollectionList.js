@@ -73,7 +73,8 @@ const areCollectionItemPropsEqual = (prev, next) => {
         prev.lightningEffect === next.lightningEffect &&
         prev.search === next.search &&
         prev.isInFolder === next.isInFolder &&
-        prev.onSelect === next.onSelect
+        prev.onSelect === next.onSelect &&
+        prev.folders === next.folders
     );
 };
 
@@ -91,7 +92,8 @@ const areCollectionTilePropsEqual = (prev, next) => {
         prev.isInFolder === next.isInFolder &&
         prev.search === next.search &&
         prev.onSelect === next.onSelect &&
-        prev.folderName === next.folderName
+        prev.folderName === next.folderName &&
+        prev.folders === next.folders
     );
 };
 
@@ -780,8 +782,17 @@ function CollectionList({
                     props.triggerSync();
                 }
             } else if (draggedItem.parentId && !targetItem.parentId) {
-                // Moving folder collection to root with proper positioning
-                
+                // Moving folder collection to root with proper positioning.
+                // This removes the collection from its (possibly shared)
+                // source folder's contents, which is an edit of that folder
+                // for a read-only member — guard it before touching storage.
+                const sourceFolderForGuard = folders.find(f => f.uid === draggedItem.parentId);
+                if (!guardFolderEdit(sourceFolderForGuard, () => setNoPermissionOpen(true))) {
+                    setActiveCollection(null);
+                    setActiveFolder(null);
+                    return;
+                }
+
                 try {
                     // Step 1: Remove from folder first to update storage
                     await removeCollectionFromFolder(draggedItem.uid);
@@ -909,6 +920,7 @@ function CollectionList({
             updateCollection={props.updateCollection}
             removeCollection={props.removeCollection}
             updateRemoteData={props.updateRemoteData}
+            folders={folders}
             addCollection={addCollection}
             onDataUpdate={props.onDataUpdate}
             renderInline={isFullPage}
@@ -964,6 +976,7 @@ function CollectionList({
                                                     search={search}
                                                     onSelect={handleSelectCollection}
                                                     folderName={isFullPage && collection.parentId ? folderNameMap[collection.parentId] : undefined}
+                                                    folders={folders}
                                                 />
                                             ) : (
                                                 <MemoizedSortableCollectionItem
@@ -982,6 +995,7 @@ function CollectionList({
                                                     isInFolder={false}
                                                     search={search}
                                                     onSelect={handleSelectCollection}
+                                                    folders={folders}
                                                 />
                                             )
                                         )}
@@ -1037,6 +1051,7 @@ function CollectionList({
                                                                         isInFolder={true}
                                                                         search={search}
                                                                         onSelect={handleSelectCollection}
+                                                                        folders={folders}
                                                                     />
                                                                 ) : (
                                                                     <MemoizedSortableCollectionItem
@@ -1055,6 +1070,7 @@ function CollectionList({
                                                                         isInFolder={true}
                                                                         search={search}
                                                                         onSelect={handleSelectCollection}
+                                                                        folders={folders}
                                                                     />
                                                                 )
                                                             )}
@@ -1092,6 +1108,7 @@ function CollectionList({
                                                             isInFolder={false}
                                                             search={search}
                                                             onSelect={handleSelectCollection}
+                                                            folders={folders}
                                                         />
                                                     ) : (
                                                         <MemoizedSortableCollectionItem
@@ -1110,6 +1127,7 @@ function CollectionList({
                                                             isInFolder={false}
                                                             search={search}
                                                             onSelect={handleSelectCollection}
+                                                            folders={folders}
                                                         />
                                                     )
                                                 )}
@@ -1131,6 +1149,7 @@ function CollectionList({
                                     updateCollection={props.updateCollection}
                                     removeCollection={props.removeCollection}
                                     collection={activeCollection}
+                                    folders={folders}
                                 />
                             ) : (
                                 <SortableCollectionItem
@@ -1144,6 +1163,7 @@ function CollectionList({
                                     updateCollection={props.updateCollection}
                                     removeCollection={props.removeCollection}
                                     collection={activeCollection}
+                                    folders={folders}
                                 />
                             )
                         ) : activeFolder ? (

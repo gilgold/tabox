@@ -9,6 +9,7 @@ import { selectedCollectionUidState } from '../atoms/globalAppSettingsState';
 import { aiProcessingUidsState, aiProcessingCurrentUidState } from '../atoms/aiState';
 import '../AIEffects.css';
 import { getColorValue, normalizeColorKey } from '../utils/colorMigration';
+import { loadAllFolders } from '../utils/storageUtils';
 import ColorPicker from '../ColorPicker';
 import { useCollectionOperations } from '../useCollectionOperations';
 import DroppableCollection from '../DroppableCollection';
@@ -33,6 +34,7 @@ function FPCollectionCard({
     search,
     folderName,
     folderColor,
+    folders,
     dragAttributes,
     dragListeners,
     enableDropZone = true,
@@ -61,6 +63,29 @@ function FPCollectionCard({
     const [isLocalInteractionActive, setIsLocalInteractionActive] = useState(false);
     const shouldShowInteractionState = isInteractionActive || isLocalInteractionActive;
 
+    // The fullpage card tree above this component doesn't thread the live
+    // `folders` array down to individual cards yet, so the read-only-shared
+    // folder delete guard (see useCollectionOperations) would otherwise have
+    // nothing to check against. Self-fetch as a fallback; a caller that does
+    // pass `folders` directly is preferred and skips this fetch entirely.
+    const [selfFetchedFolders, setSelfFetchedFolders] = useState([]);
+    useEffect(() => {
+        if (folders) {
+            return undefined;
+        }
+
+        let cancelled = false;
+        loadAllFolders().then((loaded) => {
+            if (!cancelled) {
+                setSelfFetchedFolders(loaded);
+            }
+        }).catch(() => {});
+
+        return () => { cancelled = true; };
+    }, [folders, collection.parentId]);
+
+    const resolvedFolders = folders || selfFetchedFolders;
+
     const {
         _handleDelete,
         _handleDuplicate,
@@ -79,6 +104,7 @@ function FPCollectionCard({
         setDeletingCollectionUids,
         addCollection,
         onDataUpdate,
+        folders: resolvedFolders,
     });
 
     useEffect(() => {

@@ -36,7 +36,8 @@ function CollectionDetailPanel({
     addCollection,
     onDataUpdate,
     index = 0,
-    renderInline = false
+    renderInline = false,
+    folders = []
 }) {
     const [isAnimatingOut, setIsAnimatingOut] = useState(false);
     const [collectionName, setCollectionName] = useState(collection?.name || '');
@@ -74,7 +75,8 @@ function CollectionDetailPanel({
         index,
         setDeletingCollectionUids,
         addCollection,
-        onDataUpdate
+        onDataUpdate,
+        folders
     });
 
     const isAIEnabled = useTaboxAIEnabled();

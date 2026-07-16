@@ -75,7 +75,8 @@ function CollectionTile(props) {
         index: props.index,
         setDeletingCollectionUids,
         addCollection: props.addCollection,
-        onDataUpdate: props.onDataUpdate
+        onDataUpdate: props.onDataUpdate,
+        folders: props.folders
     });
 
     // Copy all collection URLs to the clipboard

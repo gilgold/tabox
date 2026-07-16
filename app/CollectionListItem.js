@@ -81,7 +81,8 @@ function CollectionListItem(props) {
         index: props.index,
         setDeletingCollectionUids,
         addCollection: props.addCollection,
-        onDataUpdate: props.onDataUpdate
+        onDataUpdate: props.onDataUpdate,
+        folders: props.folders
     });
 
     // Cleanup on unmount
