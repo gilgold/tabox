@@ -32,7 +32,13 @@ async function handlePaddleWebhook(request, env) {
   const valid = await verifyPaddleSignature(rawBody, signature, env.PADDLE_WEBHOOK_SECRET);
   if (!valid) return json({ error: 'invalid_signature' }, 401);
 
-  const event = JSON.parse(rawBody);
+  let event;
+  try {
+    event = JSON.parse(rawBody);
+  } catch {
+    // Validly signed but unprocessable payload — acknowledge so Paddle stops retrying.
+    return json({ ok: true });
+  }
   const update = extractEntitlementUpdate(event, { monthly: env.PRICE_MONTHLY, annual: env.PRICE_ANNUAL });
   if (update) {
     const key = `ent:${update.googleId}`;

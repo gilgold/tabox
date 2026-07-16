@@ -92,6 +92,20 @@ describe('POST /webhooks/paddle', () => {
     expect(kv._store['ent:g-123']).toMatchObject({ status: 'trialing', plan: 'monthly', subscription_id: 'sub_1' });
   });
 
+  it('returns 200 without writing KV for a validly-signed malformed body', async () => {
+    const body = 'not-json{{';
+    const ts = Math.floor(Date.now() / 1000);
+    const h1 = await signWebhook(body, ENV_BASE.PADDLE_WEBHOOK_SECRET, ts);
+    const kv = makeKV();
+    const res = await worker.fetch(
+      new Request('https://x/webhooks/paddle', { method: 'POST', body, headers: { 'Paddle-Signature': `ts=${ts};h1=${h1}` } }),
+      { ...ENV_BASE, ENTITLEMENTS: kv }
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
   it('ignores stale out-of-order events', async () => {
     const stale = { ...event, occurred_at: '2026-07-16T08:00:00Z' };
     const body = JSON.stringify(stale);
