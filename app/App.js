@@ -1829,25 +1829,30 @@ function App({ mode = 'popup' }) {
 
   // Shared folders: drain background-queued change events (revoked/deleted/
   // renamed/updated) into info toasts, then refresh so pulled changes render.
+  // Uses sharedDrainEvents message for atomic read+clear under mutex.
   useEffect(() => {
     const drainSharedFolderEvents = async () => {
-      const { [SHARED_EVENTS_KEY]: events = [] } = await browser.storage.local.get(SHARED_EVENTS_KEY);
-      if (!events.length) {
-        return;
-      }
-      await browser.storage.local.set({ [SHARED_EVENTS_KEY]: [] });
-      for (const e of events.slice(-3)) {
-        if (e.kind === 'revoked') {
-          showInfoToast(`Your access to "${e.folderName}" ended. A local copy was kept.`);
-        } else if (e.kind === 'deleted') {
-          showInfoToast(`${e.actorEmail} removed a collection from "${e.folderName}"`);
-        } else if (e.kind === 'renamed') {
-          showInfoToast(`${e.actorEmail} renamed a shared folder to "${e.folderName}"`);
-        } else {
-          showInfoToast(`${e.actorEmail} updated "${e.collectionName}" in ${e.folderName}`);
+      try {
+        const res = await browser.runtime.sendMessage({ type: 'sharedDrainEvents' });
+        const events = res?.ok ? res.data.events : [];
+        if (!events.length) {
+          return;
         }
+        for (const e of events.slice(-3)) {
+          if (e.kind === 'revoked') {
+            showInfoToast(`Your access to "${e.folderName}" ended. A local copy was kept.`);
+          } else if (e.kind === 'deleted') {
+            showInfoToast(`${e.actorEmail} removed a collection from "${e.folderName}"`);
+          } else if (e.kind === 'renamed') {
+            showInfoToast(`${e.actorEmail} renamed a shared folder to "${e.folderName}"`);
+          } else {
+            showInfoToast(`${e.actorEmail} updated "${e.collectionName}" in ${e.folderName}`);
+          }
+        }
+        await refreshDataAfterFolderOperationRef.current?.();
+      } catch (error) {
+        console.warn('Failed to drain shared folder events:', error);
       }
-      await refreshDataAfterFolderOperationRef.current?.();
     };
     drainSharedFolderEvents();
 
