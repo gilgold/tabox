@@ -69,6 +69,8 @@ const AUTO_BACKUP_ALARM = 'auto-backup-alarm';
 const BACKGROUND_SYNC_ALARM = 'background-sync-alarm';
 const BACKGROUND_SYNC_PERIOD_MINUTES = 6 * 60;
 const TOOLBAR_FULLPAGE_SETTING_KEY = 'chkToolbarIconOpensFullPage';
+const SHARED_SYNC_ALARM = 'shared-folders-sync';
+const SHARED_SYNC_PERIOD_MINUTES = 5;
 
 async function updateSharedSyncSessionState(overrides = {}) {
   const { googleUser, googleRefreshToken } = await browser.storage.local.get(['googleUser', 'googleRefreshToken']);
@@ -134,6 +136,29 @@ async function ensureBackgroundSyncAlarm() {
   }
 
   return true;
+}
+
+// Task 10: the shared-folders background sync alarm. Only created when there is
+// at least one locally-shared folder AND the user is signed in to Google (the
+// shared-folders API piggybacks on the same OAuth token as Drive sync) — cleared
+// otherwise, mirroring ensureBackgroundSyncAlarm's create/clear shape above.
+async function ensureSharedSyncAlarm() {
+  const { folders_index: index = {}, googleRefreshToken } = await browser.storage.local.get(['folders_index', 'googleRefreshToken']);
+  const hasSharedFolder = Object.values(index || {}).some((folder) => folder?.shared?.folderId);
+
+  const alarms = await browser.alarms.getAll();
+  const existingAlarm = alarms.find(alarm => alarm.name === SHARED_SYNC_ALARM);
+
+  if (hasSharedFolder && googleRefreshToken) {
+    if (!existingAlarm) {
+      browser.alarms.create(SHARED_SYNC_ALARM, {
+        delayInMinutes: 1,
+        periodInMinutes: SHARED_SYNC_PERIOD_MINUTES
+      });
+    }
+  } else if (existingAlarm) {
+    await browser.alarms.clear(SHARED_SYNC_ALARM);
+  }
 }
 
 const BACKUP_GROUP_TITLES = {
@@ -582,20 +607,32 @@ async function handleAutoUpdate(windowId, timeDelay = 1, rebuildContextMenus = f
     // 🔍 NEW: Only save if collection content has actually changed
     const hasChanges = collectionsHaveChanges(existingCollection, newCollection);
     if (hasChanges) {
-      // Update timestamp only when there are actual changes
-      newCollection.lastUpdated = Date.now();
-      
-      // 🚀 NEW: Save single collection instead of entire array (MASSIVE performance improvement!)
-      const saveSuccess = await saveSingleCollectionBG(newCollection, true); // Force timestamp update
-      if (!saveSuccess) {
-        console.error('Failed to save updated collection using indexed storage');
-        return;
-      }
+      // Task 10/13: a collection living in a read-only shared folder is synced
+      // top-down by the shared-folders sync engine (chrome/shared-folders.js) —
+      // the server is the source of truth there. Persisting a local tab-tracking
+      // auto-update here would either get silently discarded by the next pull
+      // or race with it, so skip the write entirely for read-role folders.
+      const parentFolder = existingCollection.parentId
+        ? await loadSingleFolderBG(existingCollection.parentId)
+        : null;
+      const parentIsReadOnlyShared = parentFolder?.shared?.role === 'read';
 
-      browser.runtime.sendMessage({
-        type: 'collectionAutoUpdated',
-        collection: newCollection
-      }).catch(() => {});
+      if (!parentIsReadOnlyShared) {
+        // Update timestamp only when there are actual changes
+        newCollection.lastUpdated = Date.now();
+
+        // 🚀 NEW: Save single collection instead of entire array (MASSIVE performance improvement!)
+        const saveSuccess = await saveSingleCollectionBG(newCollection, true); // Force timestamp update
+        if (!saveSuccess) {
+          console.error('Failed to save updated collection using indexed storage');
+          return;
+        }
+
+        browser.runtime.sendMessage({
+          type: 'collectionAutoUpdated',
+          collection: newCollection
+        }).catch(() => {});
+      }
     }
     
     // Note: Legacy storage will be updated during sync operations
@@ -2338,6 +2375,7 @@ try {
   await handleBadge();
   await handleAutoBackupAlarm();
   await ensureBackgroundSyncAlarm();
+  await ensureSharedSyncAlarm();
   if (typeof ensureProEntitlementAlarm === 'function') await ensureProEntitlementAlarm();
 
   // Clean up large backups on startup (after 5 seconds to not block initialization)
@@ -2355,6 +2393,7 @@ try {
     await applyToolbarLaunchBehavior();
     await handleAutoBackupAlarm();
     await ensureBackgroundSyncAlarm();
+    await ensureSharedSyncAlarm();
     if (typeof ensureProEntitlementAlarm === 'function') await ensureProEntitlementAlarm();
   });
 
@@ -2413,6 +2452,11 @@ try {
 
     if (alarm.name === BACKGROUND_SYNC_ALARM) {
       await runBackgroundSync();
+      return;
+    }
+
+    if (alarm.name === SHARED_SYNC_ALARM) {
+      await syncSharedFolders();
     }
   });
 
