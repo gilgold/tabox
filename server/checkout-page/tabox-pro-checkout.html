@@ -12,6 +12,20 @@
 </div>
 <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
 <script>
+  var PADDLE_ENV = 'production'; // 'sandbox' while testing
+
+  // Env-specific brand color: purple in production, orange in sandbox — so a
+  // sandbox page is never mistaken for the real checkout during testing.
+  var BRAND_COLORS = {
+    production: { brand: '#6a5acd', tint: '#f0edff', disabled: '#b7b3d9' },
+    sandbox:    { brand: '#f97316', tint: '#fff1e6', disabled: '#f5c9a8' }
+  };
+  var brand = BRAND_COLORS[PADDLE_ENV];
+  var rootEl = document.getElementById('tabox-pro-checkout');
+  rootEl.style.setProperty('--brand', brand.brand);
+  rootEl.style.setProperty('--brand-tint', brand.tint);
+  rootEl.style.setProperty('--brand-disabled', brand.disabled);
+
   var params = new URLSearchParams(window.location.search);
   var isSuccess = params.get('success') === '1';
 
@@ -25,7 +39,6 @@
     document.getElementById('tabox-pro-checkout').innerHTML =
       '<h3>You\'re in! 🎉</h3><p>Return to the Tabox extension — Pro unlocks automatically within a minute.</p>';
   } else {
-    var PADDLE_ENV = 'production'; // 'sandbox' while testing
     var TOKENS = {
       production: 'REPLACE_WITH_LIVE_CLIENT_SIDE_TOKEN',
       sandbox: 'test_4961f5d3c7b833606638b5c40cd'
@@ -82,9 +95,9 @@
   #tabox-pro-checkout { max-width: 380px; margin: 0 auto; text-align: center; font-family: inherit; }
   .plan-toggle { display: flex; gap: 8px; justify-content: center; margin-bottom: 12px; }
   .plan-btn { padding: 8px 14px; border-radius: 8px; border: 1px solid #ccc; background: #fff; cursor: pointer; }
-  .plan-btn.active { border-color: #6a5acd; background: #f0edff; }
-  #start-trial { padding: 10px 24px; border: none; border-radius: 8px; background: #6a5acd; color: #fff; font-weight: 600; cursor: pointer; }
-  #start-trial:disabled { background: #b7b3d9; cursor: not-allowed; }
+  .plan-btn.active { border-color: var(--brand, #6a5acd); background: var(--brand-tint, #f0edff); }
+  #start-trial { padding: 10px 24px; border: none; border-radius: 8px; background: var(--brand, #6a5acd); color: #fff; font-weight: 600; cursor: pointer; }
+  #start-trial:disabled { background: var(--brand-disabled, #b7b3d9); cursor: not-allowed; }
   .fine-print { font-size: 12px; opacity: 0.7; }
   .paddle-blocked-message { color: #b3261e; font-size: 13px; margin-top: 8px; }
 </style>
