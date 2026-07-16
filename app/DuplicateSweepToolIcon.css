@@ -1,0 +1,109 @@
+/* Animated icon for the duplicate-sweep AI tool card. Cards inherit color from
+ * .ai-tool-card-icon (currentColor = #4361ee); the keep/remove marks use fixed
+ * semantic colors so they read in both themes. Plays a single iteration on
+ * hover — see DuplicateSweepToolIcon.js. */
+
+.ds-card {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linejoin: round;
+}
+
+.ds-line {
+    stroke: currentColor;
+    stroke-width: 1.4;
+    stroke-linecap: round;
+    opacity: 0.55;
+}
+
+.ds-check {
+    fill: none;
+    stroke: #22c55e;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0;
+}
+
+.ds-cross line {
+    stroke: #ef4444;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+}
+
+.ds-cross {
+    opacity: 0;
+}
+
+/* Scale about each element's own centre. */
+.ds-keep,
+.ds-remove,
+.ds-check,
+.ds-cross {
+    transform-box: fill-box;
+    transform-origin: center;
+}
+
+/* ── Hover: mark the keeper, remove the duplicate, then centre the keeper ───
+ * The animations end held (fill: forwards) so the deduped result rests while
+ * hovering; mouse-out drops the :hover rules and the icon snaps back to the
+ * two-card static state, ready to replay. */
+.ai-tool-card[data-tool-id="duplicate-sweep"]:hover .ds-keep {
+    will-change: transform;
+    animation: ds-keep-center 1.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.ai-tool-card[data-tool-id="duplicate-sweep"]:hover .ds-check {
+    will-change: transform, opacity;
+    animation: ds-mark-in 1.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.ai-tool-card[data-tool-id="duplicate-sweep"]:hover .ds-remove {
+    will-change: transform, opacity;
+    animation: ds-remove-collapse 1.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.ai-tool-card[data-tool-id="duplicate-sweep"]:hover .ds-cross {
+    will-change: transform, opacity;
+    animation: ds-mark-in 1.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Marks: pop in with a slight overshoot, then hold. (The cross is hidden with
+ * its card when the duplicate collapses.) */
+@keyframes ds-mark-in {
+    0%, 4%   { opacity: 0; transform: scale(0.3); }
+    18%      { opacity: 1; transform: scale(1.2); }
+    26%      { opacity: 1; transform: scale(1); }
+    100%     { opacity: 1; transform: scale(1); }
+}
+
+/* Duplicate: hold → collapse away (shrink + fade) and stay gone. */
+@keyframes ds-remove-collapse {
+    0%, 30%  { transform: scale(1);   opacity: 1; }
+    50%      { transform: scale(0.5); opacity: 0; }
+    100%     { transform: scale(0.5); opacity: 0; }
+}
+
+/* Kept card: a small confirming pulse, then slide to the centre once the
+ * duplicate is gone, and hold there. (+10.5px = its left edge x2 → centred.) */
+@keyframes ds-keep-center {
+    0%, 30% { transform: translateX(0px) scale(1); }
+    44%     { transform: translateX(0px) scale(1.08); }
+    56%     { transform: translateX(0px) scale(1); }
+    78%     { transform: translateX(10.5px) scale(1); }
+    100%    { transform: translateX(10.5px) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ai-tool-card[data-tool-id="duplicate-sweep"]:hover .ds-keep,
+    .ai-tool-card[data-tool-id="duplicate-sweep"]:hover .ds-check,
+    .ai-tool-card[data-tool-id="duplicate-sweep"]:hover .ds-remove,
+    .ai-tool-card[data-tool-id="duplicate-sweep"]:hover .ds-cross {
+        animation: none;
+    }
+}
+
+html.performance-mode .ai-tool-card[data-tool-id="duplicate-sweep"]:hover .ds-keep,
+html.performance-mode .ai-tool-card[data-tool-id="duplicate-sweep"]:hover .ds-check,
+html.performance-mode .ai-tool-card[data-tool-id="duplicate-sweep"]:hover .ds-remove,
+html.performance-mode .ai-tool-card[data-tool-id="duplicate-sweep"]:hover .ds-cross {
+    animation: none;
+}

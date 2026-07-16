@@ -1,0 +1,93 @@
+/* Animated icon for the split-collection AI tool card. Colors inherit from
+ * .ai-tool-card-icon (currentColor = #4361ee). A single card holds a split
+ * glyph; on hover the glyph fades and the card divides into two spaced cards.
+ * Plays a single iteration, held while hovering — see SplitCollectionToolIcon.js. */
+
+.sl-card {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linejoin: round;
+}
+
+.sl-icon {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.9;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* The result halves are hidden until the split begins. */
+.sl-half {
+    opacity: 0;
+}
+
+.sl-base,
+.sl-half,
+.sl-icon {
+    transform-box: fill-box;
+    transform-origin: center;
+}
+
+/* ── Hover: fade the glyph, split the card into two, single iteration ────────
+ * Held (fill: forwards) so the split rests while hovering; mouse-out drops the
+ * :hover rules and the icon snaps back to the single-card state. */
+.ai-tool-card[data-tool-id="split-collection"]:hover .sl-icon {
+    will-change: opacity;
+    animation: sl-icon-out 1.1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.ai-tool-card[data-tool-id="split-collection"]:hover .sl-base {
+    will-change: opacity;
+    animation: sl-base-out 1.1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.ai-tool-card[data-tool-id="split-collection"]:hover .sl-left {
+    will-change: transform, opacity;
+    animation: sl-part-left 1.1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.ai-tool-card[data-tool-id="split-collection"]:hover .sl-right {
+    will-change: transform, opacity;
+    animation: sl-part-right 1.1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Glyph fades out early. */
+@keyframes sl-icon-out {
+    0%        { opacity: 1; }
+    26%, 100% { opacity: 0; }
+}
+
+/* Base card hands off to the two halves. */
+@keyframes sl-base-out {
+    0%, 8%    { opacity: 1; }
+    22%, 100% { opacity: 0; }
+}
+
+/* Halves: appear over the base, then slide apart (slight overshoot) and hold. */
+@keyframes sl-part-left {
+    0%   { opacity: 0; transform: translateX(0px); }
+    16%  { opacity: 1; transform: translateX(0px); }
+    70%  { opacity: 1; transform: translateX(-6.5px); }
+    100% { opacity: 1; transform: translateX(-5.5px); }
+}
+@keyframes sl-part-right {
+    0%   { opacity: 0; transform: translateX(0px); }
+    16%  { opacity: 1; transform: translateX(0px); }
+    70%  { opacity: 1; transform: translateX(6.5px); }
+    100% { opacity: 1; transform: translateX(5.5px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ai-tool-card[data-tool-id="split-collection"]:hover .sl-icon,
+    .ai-tool-card[data-tool-id="split-collection"]:hover .sl-base,
+    .ai-tool-card[data-tool-id="split-collection"]:hover .sl-left,
+    .ai-tool-card[data-tool-id="split-collection"]:hover .sl-right {
+        animation: none;
+    }
+}
+
+html.performance-mode .ai-tool-card[data-tool-id="split-collection"]:hover .sl-icon,
+html.performance-mode .ai-tool-card[data-tool-id="split-collection"]:hover .sl-base,
+html.performance-mode .ai-tool-card[data-tool-id="split-collection"]:hover .sl-left,
+html.performance-mode .ai-tool-card[data-tool-id="split-collection"]:hover .sl-right {
+    animation: none;
+}

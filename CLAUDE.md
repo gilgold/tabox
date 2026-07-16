@@ -86,6 +86,11 @@ webpack.js            # Webpack config
 ### Communication
 - Popup ↔ Background: `browser.runtime.sendMessage()` via webextension-polyfill
 
+### Command palette (popup ↔ full-page parity)
+- The command palette (`app/CommandPalette.js`, opened with Ctrl/⌘+K) renders in **both** the popup and the full-page view. **Keep them at full parity:** whenever you add a setting or a user-facing action, register it in the shared command-palette registries so it appears in both views. The registries: `EXTENSION_ACTIONS` (global actions), `SETTINGS_TOGGLES` (settings), `COLLECTION_SUB_ACTIONS` (per-collection actions), and `AI_ACTIONS` (AI Tools modal actions, built from the canonical `AI_TOOLS` in `app/ai/aiTasks.js`).
+- View-specific behavior is gated by `isFullPage` (`viewContextState`). Only differ between views when a feature is inherently view-bound (e.g. `open-fullpage` is hidden in full-page); a new setting/action is **not** a valid reason to diverge.
+- AI Tools modal actions open `AIToolsModal` pre-navigated to a tool via the `aiToolsInitialToolState` atom (App's `cmdOpenAiTool` → `onOpenAiTool` prop). Add a new AI tool to `AI_TOOLS` and it should also get an `AI_ACTIONS` keyword entry so it surfaces in the palette.
+
 ### AI tasks (MUST run in the service worker)
 - AI features use Chrome's built-in Gemini Nano (`globalThis.LanguageModel`, wrapped in `app/ai/aiClient.js`). That global is available in the MV3 service worker, not only the popup.
 - **Every AI task's long-running work must execute in the service worker** (`chrome/background.js` / `background-utils.js`), driven by `browser.runtime.sendMessage` from the popup — so closing the popup does NOT abort it. The popup only initiates the task, observes progress, and renders results; it is a detachable observer, never the owner of the work.

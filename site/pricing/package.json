@@ -1,0 +1,6 @@
+{
+  "name": "tabox-pricing-page",
+  "private": true,
+  "type": "module",
+  "description": "Static Tabox pricing page (Paddle checkout) embedded into the Wix site tabox.co."
+}

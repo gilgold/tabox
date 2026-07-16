@@ -24,6 +24,7 @@ import {
     MdOutlineHome,
 } from 'react-icons/md';
 import { CiExport } from 'react-icons/ci';
+import { AI_TOOLS } from './ai/aiTasks';
 import './CommandPalette.css';
 
 const EXTENSION_ACTIONS = [
@@ -48,6 +49,26 @@ const SETTINGS_TOGGLES = [
     { key: 'chkAutoUpdateOnNewCollection', label: 'Auto Update New Collections', keywords: 'auto update new collections track' },
     { key: 'chkManualUpdateLinkCollection', label: 'Update Button Links Collection', keywords: 'update link active window manual' },
 ];
+
+// Extra search keywords per AI tool (the visible label comes from AI_TOOLS).
+// All include "ai" so the whole group surfaces when the user types "ai".
+const AI_ACTION_KEYWORDS = {
+    'smart-organize': 'ai smart tab grouping organize group window loose tabs',
+    'auto-rename': 'ai auto rename collections name suggest title',
+    'auto-arrange-folders': 'ai auto arrange folders sort organize loose collections',
+    'duplicate-sweep': 'ai duplicate tab sweep find dedupe remove clean',
+    'split-collection': 'ai split collection break divide themed sub oversized',
+};
+
+// AI Tools modal actions, surfaced in the command palette (popup + full-page).
+// Built from the canonical AI_TOOLS registry so labels/icons stay in sync.
+const AI_ACTIONS = AI_TOOLS.map((tool) => ({
+    id: `ai:${tool.id}`,
+    toolId: tool.id,
+    label: tool.title,
+    keywords: AI_ACTION_KEYWORDS[tool.id] || 'ai',
+    icon: tool.icon,
+}));
 
 const COLLECTION_SUB_ACTIONS = [
     { id: 'open', label: 'Open All Tabs', icon: MdOpenInBrowser },
@@ -82,6 +103,7 @@ function CommandPalette({
     onOpenFullPage,
     onRestoreSession,
     onCollectionAction,
+    onOpenAiTool,
 }) {
     const [isOpen, setIsOpen] = useAtom(commandPaletteOpenState);
     const [, setThemeMode] = useAtom(themeState);
@@ -233,6 +255,20 @@ function CommandPalette({
                 label: (isFullPage && action.fullpageLabel) ? action.fullpageLabel : action.label,
                 icon: action.icon,
                 actionDef: action,
+            });
+        });
+
+        AI_ACTIONS.forEach(action => {
+            if (q) {
+                const haystack = `${action.label} ${action.keywords}`.toLowerCase();
+                if (!haystack.includes(q.toLowerCase())) return;
+            }
+            items.push({
+                type: 'ai-action',
+                id: action.id,
+                label: action.label,
+                icon: action.icon,
+                toolId: action.toolId,
             });
         });
 
@@ -403,10 +439,13 @@ function CommandPalette({
             setSelectedIndex(0);
         } else if (item.type === 'action') {
             executeAction(item.id);
+        } else if (item.type === 'ai-action') {
+            close();
+            onOpenAiTool?.(item.toolId);
         } else if (item.type === 'setting') {
             toggleSetting(item.settingKey);
         }
-    }, [displayItems, folderPickMode, folderOptions, activeCollection, executeAction, handleSubAction, handleFolderPick, toggleSetting]);
+    }, [displayItems, folderPickMode, folderOptions, activeCollection, executeAction, handleSubAction, handleFolderPick, toggleSetting, close, onOpenAiTool]);
 
     // --- Keyboard ---
 
@@ -464,7 +503,9 @@ function CommandPalette({
 
     const hasCollections = results.some(r => r.type === 'collection');
     const hasActions = results.some(r => r.type === 'action');
+    const hasAiActions = results.some(r => r.type === 'ai-action');
     const actionsStart = results.findIndex(r => r.type === 'action');
+    const aiActionsStart = results.findIndex(r => r.type === 'ai-action');
     const settingsStart = results.findIndex(r => r.type === 'setting');
 
     // Determine current input placeholder and scope label
@@ -607,10 +648,17 @@ function CommandPalette({
                                                 <div className="cmd-palette-section-label">Actions</div>
                                             </>
                                         );
-                                    } else if (item.type === 'setting' && i === settingsStart) {
+                                    } else if (item.type === 'ai-action' && i === aiActionsStart) {
                                         header = (
                                             <>
                                                 {(hasCollections || hasActions) && <div className="cmd-palette-separator" />}
+                                                <div className="cmd-palette-section-label">AI Tools</div>
+                                            </>
+                                        );
+                                    } else if (item.type === 'setting' && i === settingsStart) {
+                                        header = (
+                                            <>
+                                                {(hasCollections || hasActions || hasAiActions) && <div className="cmd-palette-separator" />}
                                                 <div className="cmd-palette-section-label">Settings</div>
                                             </>
                                         );

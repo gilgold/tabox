@@ -3,7 +3,7 @@ import Modal from 'react-modal';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { MdClose, MdArrowBack, MdUndo } from 'react-icons/md';
 import { BsStars } from 'react-icons/bs';
-import { aiToolsModalOpenState, aiToolsScopeState, aiProcessingUidsState, aiProcessingCurrentUidState, aiSplitTargetState } from './atoms/aiState';
+import { aiToolsModalOpenState, aiToolsScopeState, aiProcessingUidsState, aiProcessingCurrentUidState, aiSplitTargetState, aiToolsInitialToolState } from './atoms/aiState';
 import { viewContextState } from './atoms/globalAppSettingsState';
 import { AI_TOOLS } from './ai/aiTasks';
 import { getAIAvailability } from './ai/aiClient';
@@ -17,6 +17,11 @@ import { useDuplicateSweep } from './ai/useDuplicateSweep';
 import { DuplicateSweepPanel } from './DuplicateSweepPanel';
 import SplitCollectionPanel from './SplitCollectionPanel';
 import AutoArrangeFoldAnimation from './AutoArrangeFoldAnimation';
+import RenameToolIcon from './RenameToolIcon';
+import AutoArrangeToolIcon from './AutoArrangeToolIcon';
+import DuplicateSweepToolIcon from './DuplicateSweepToolIcon';
+import SplitCollectionToolIcon from './SplitCollectionToolIcon';
+import SmartGroupingToolIcon from './SmartGroupingToolIcon';
 import SmartOrganizeFoldAnimation from './SmartOrganizeFoldAnimation';
 import { showUndoToast, showSuccessToast } from './toastHelpers';
 import { UNDO_TIME } from './constants';
@@ -41,6 +46,7 @@ function AIToolsModal({ updateRemoteData }) {
     const setAiProcessingUids = useSetAtom(aiProcessingUidsState);
     const setAiProcessingCurrentUid = useSetAtom(aiProcessingCurrentUidState);
     const [splitTarget, setSplitTarget] = useAtom(aiSplitTargetState);
+    const [initialTool, setInitialTool] = useAtom(aiToolsInitialToolState);
     const [activeToolId, setActiveToolId] = useState(null);
     const [collections, setCollections] = useState([]);
     // Panel state machine: idle | running | done
@@ -164,6 +170,19 @@ function AIToolsModal({ updateRemoteData }) {
             dispatchAiRun('split-collection', { uid: splitTarget.uid });
         }
     }, [isOpen, splitTarget, dispatchAiRun]);
+
+    // Command-palette route: when the modal opens with a pre-selected tool, jump
+    // straight to that tool's panel (its idle state, where the user presses run).
+    // For split-collection this lands on the picker, since the palette carries no
+    // target (the target-carrying split route above only fires when splitTarget is
+    // set, which the palette never does). Consume the atom so a later "open the
+    // hub" action isn't hijacked. Declared AFTER the open-reset effect so it runs
+    // after the reset clears activeToolId.
+    useEffect(() => {
+        if (!isOpen || !initialTool) return;
+        setActiveToolId(initialTool);
+        setInitialTool(null);
+    }, [isOpen, initialTool, setInitialTool]);
 
     // SplitCollectionPanel manages its own running/review/done UI from
     // aiTaskState, so the modal chrome must never enter the locked 'running'
@@ -840,7 +859,9 @@ function AIToolsModal({ updateRemoteData }) {
                             const ToolIcon = tool.icon;
                             return (
                                 <button key={tool.id} type="button" className="ai-hero-card" onClick={() => setActiveToolId(tool.id)}>
-                                    <ToolIcon size={40} className="ai-hero-icon" />
+                                    {tool.id === 'smart-organize'
+                                        ? <SmartGroupingToolIcon className="ai-hero-icon" />
+                                        : <ToolIcon size={40} className="ai-hero-icon" />}
                                     <span className="ai-hero-text">
                                         <span className="ai-hero-title">{tool.title}</span>
                                         <span className="ai-hero-description">{tool.description}</span>
@@ -860,13 +881,22 @@ function AIToolsModal({ updateRemoteData }) {
                                         key={tool.id}
                                         type="button"
                                         className="ai-tool-card"
+                                        data-tool-id={tool.id}
                                         onClick={() => setActiveToolId(tool.id)}
                                         disabled={disabled}
                                         data-tooltip-id="main-tooltip"
                                         data-tooltip-html={tooltipHtml}
                                         data-tooltip-place="bottom"
                                     >
-                                        <ToolIcon size={30} className="ai-tool-card-icon" />
+                                        {tool.id === 'auto-rename'
+                                            ? <RenameToolIcon className="ai-tool-card-icon" />
+                                            : tool.id === 'auto-arrange-folders'
+                                                ? <AutoArrangeToolIcon className="ai-tool-card-icon" />
+                                                : tool.id === 'duplicate-sweep'
+                                                    ? <DuplicateSweepToolIcon className="ai-tool-card-icon" />
+                                                    : tool.id === 'split-collection'
+                                                        ? <SplitCollectionToolIcon className="ai-tool-card-icon" />
+                                                        : <ToolIcon size={30} className="ai-tool-card-icon" />}
                                         <span className="ai-tool-card-title">{tool.title}</span>
                                     </button>
                                 );

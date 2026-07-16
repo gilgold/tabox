@@ -1,0 +1,245 @@
+<!-- Tabox pricing page — generated from this template by build-pricing.mjs. -->
+<!-- Do NOT edit the built pricing.html by hand; edit this template + tiers.js and rebuild. -->
+<div id="tabox-pricing" class="tbx-pricing">
+  <style>
+    .tbx-pricing {
+      --tbx-bg: #ffffff;
+      --tbx-fg: #0f172a;
+      --tbx-muted: #64748b;
+      --tbx-border: #e2e8f0;
+      --tbx-accent: #4f46e5;
+      --tbx-accent-fg: #ffffff;
+      --tbx-card: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: var(--tbx-fg);
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 48px 20px 64px;
+      box-sizing: border-box;
+    }
+    @media (prefers-color-scheme: dark) {
+      .tbx-pricing {
+        --tbx-bg: #0b1120; --tbx-fg: #e2e8f0; --tbx-muted: #94a3b8;
+        --tbx-border: #1e293b; --tbx-card: #0f172a;
+      }
+    }
+    .tbx-pricing * { box-sizing: border-box; }
+    .tbx-head { text-align: center; margin-bottom: 32px; }
+    .tbx-head h1 { font-size: 2rem; margin: 0 0 8px; letter-spacing: -0.02em; }
+    .tbx-head p { color: var(--tbx-muted); margin: 0; font-size: 1.05rem; }
+    .tbx-toggle {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: var(--tbx-border); border-radius: 999px; padding: 4px; margin: 24px auto 8px;
+    }
+    .tbx-toggle button {
+      border: 0; background: transparent; color: var(--tbx-muted); cursor: pointer;
+      font: inherit; font-weight: 600; padding: 8px 18px; border-radius: 999px; transition: all .15s ease;
+    }
+    .tbx-toggle button[aria-pressed="true"] { background: var(--tbx-card); color: var(--tbx-fg); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+    .tbx-toggle-wrap { text-align: center; }
+    .tbx-save { display: block; text-align: center; color: var(--tbx-accent); font-size: .85rem; font-weight: 600; min-height: 1.1em; margin-bottom: 24px; }
+    .tbx-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; justify-content: center; }
+    .tbx-card {
+      border: 1px solid var(--tbx-border); border-radius: 16px; background: var(--tbx-card);
+      padding: 28px 24px; display: flex; flex-direction: column;
+    }
+    .tbx-card.highlighted { border-color: var(--tbx-accent); box-shadow: 0 10px 30px -12px rgba(79,70,229,.35); }
+    .tbx-card h2 { margin: 0 0 4px; font-size: 1.3rem; }
+    .tbx-card .desc { color: var(--tbx-muted); margin: 0 0 20px; font-size: .95rem; min-height: 2.6em; }
+    .tbx-price { font-size: 2.4rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+    .tbx-price .cadence { font-size: .95rem; font-weight: 500; color: var(--tbx-muted); }
+    .tbx-price.loading { color: var(--tbx-muted); font-size: 1.1rem; font-weight: 500; }
+    .tbx-features { list-style: none; padding: 0; margin: 20px 0 24px; flex: 1; }
+    .tbx-features li { padding: 6px 0 6px 26px; position: relative; font-size: .95rem; }
+    .tbx-features li::before { content: "\2713"; position: absolute; left: 0; color: var(--tbx-accent); font-weight: 700; }
+    .tbx-cta {
+      border: 0; border-radius: 10px; background: var(--tbx-accent); color: var(--tbx-accent-fg);
+      font: inherit; font-weight: 600; font-size: 1rem; padding: 13px 20px; cursor: pointer; width: 100%;
+      transition: filter .15s ease;
+    }
+    .tbx-cta:hover { filter: brightness(1.08); }
+    .tbx-cta:disabled { opacity: .55; cursor: not-allowed; }
+    .tbx-error { text-align: center; color: #dc2626; margin-top: 16px; font-size: .9rem; min-height: 1.1em; }
+  </style>
+
+  <div class="tbx-head">
+    <h1>Upgrade to Tabox Pro</h1>
+    <p>Prices shown in your local currency. Cancel anytime.</p>
+  </div>
+
+  <div class="tbx-toggle-wrap">
+    <div class="tbx-toggle" role="group" aria-label="Billing period">
+      <button type="button" data-cadence="month" aria-pressed="true">Monthly</button>
+      <button type="button" data-cadence="year" aria-pressed="false">Yearly</button>
+    </div>
+  </div>
+  <span class="tbx-save" id="tbx-save"></span>
+
+  <div class="tbx-grid" id="tbx-grid"></div>
+  <div class="tbx-error" id="tbx-error"></div>
+
+  <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
+  <script>
+  (function () {
+    // --- Injected at build time (build-pricing.mjs) -------------------------
+    var PADDLE_ENVIRONMENT = "__PADDLE_ENVIRONMENT__"; // 'production' | 'sandbox'
+    var PADDLE_CLIENT_TOKEN = "__PADDLE_CLIENT_TOKEN__"; // public client-side token
+    var SITE_URL = "__SITE_URL__"; // canonical site origin — used for the success redirect
+    var TIERS = __TIERS_JSON__;
+    // ------------------------------------------------------------------------
+
+    var root = document.getElementById("tabox-pricing");
+
+    // Placement control: if the page contains an element whose text is exactly
+    // "__TABOX_PRICING__" (add a Text element there in the Wix Editor), move this
+    // block to that spot. Otherwise it stays where the snippet was injected.
+    // Wix hydrates elements asynchronously, so poll briefly for the marker.
+    (function placeAtMarker() {
+      var MARKER = "__TABOX_PRICING__";
+      var tries = 0;
+      function attempt() {
+        try {
+          var cands = [].slice.call(document.querySelectorAll("*")).filter(function (e) {
+            return e !== root && !root.contains(e) && (e.textContent || "").trim() === MARKER;
+          });
+          if (cands.length) {
+            var target = cands.sort(function (a, b) {
+              return a.getElementsByTagName("*").length - b.getElementsByTagName("*").length;
+            })[0];
+            target.style.display = "none";
+            target.parentNode.insertBefore(root, target.nextSibling);
+            return true;
+          }
+        } catch (e) { return true; /* stop retrying on error */ }
+        return false;
+      }
+      if (attempt()) return;
+      var iv = setInterval(function () {
+        if (attempt() || ++tries > 20) clearInterval(iv);
+      }, 300);
+    })();
+
+    var grid = document.getElementById("tbx-grid");
+    var errorEl = document.getElementById("tbx-error");
+    var saveEl = document.getElementById("tbx-save");
+    var cadence = "month";
+    // priceId -> { formattedTotal }  (whatever Paddle returns; we never re-format)
+    var previews = {};
+
+    function showError(msg) { errorEl.textContent = msg; }
+
+    // Optional email prefill: a Wix Velo host page may set window.taboxMemberEmail
+    // (via currentMember.getMember()) before this script runs. If absent, we omit
+    // customer entirely and Paddle collects the email at checkout.
+    function signedInEmail() {
+      var e = window.taboxMemberEmail;
+      return (typeof e === "string" && e.indexOf("@") > 0) ? e : null;
+    }
+
+    if (typeof Paddle === "undefined") { showError("Could not load Paddle. Please refresh."); return; }
+
+    // Environment must be explicit. Production is Paddle.js's default; set sandbox only when asked.
+    if (PADDLE_ENVIRONMENT === "sandbox") {
+      Paddle.Environment.set("sandbox");
+    } else if (PADDLE_ENVIRONMENT !== "production") {
+      showError("Pricing is misconfigured (unknown environment).");
+      return;
+    }
+    Paddle.Initialize({ token: PADDLE_CLIENT_TOKEN });
+
+    // Build one card per tier.
+    TIERS.forEach(function (tier, i) {
+      var card = document.createElement("div");
+      card.className = "tbx-card" + (tier.highlighted ? " highlighted" : "");
+      card.innerHTML =
+        '<h2></h2>' +
+        '<p class="desc"></p>' +
+        '<div class="tbx-price loading" data-tier="' + i + '">Loading price...</div>' +
+        '<ul class="tbx-features"></ul>' +
+        '<button class="tbx-cta" data-tier="' + i + '" disabled>Subscribe</button>';
+      card.querySelector("h2").textContent = tier.name;
+      card.querySelector(".desc").textContent = tier.description;
+      var ul = card.querySelector(".tbx-features");
+      (tier.features || []).forEach(function (f) {
+        var li = document.createElement("li"); li.textContent = f; ul.appendChild(li);
+      });
+      card.querySelector(".tbx-cta").addEventListener("click", function () { openCheckout(tier); });
+      grid.appendChild(card);
+    });
+
+    function openCheckout(tier) {
+      var priceId = tier.priceId[cadence];
+      var email = signedInEmail();
+      Paddle.Checkout.open({
+        items: [{ priceId: priceId, quantity: 1 }],
+        customer: email ? { email: email } : undefined,
+        settings: {
+          displayMode: "overlay",
+          variant: "one-page",
+          // Canonical URL, not window.location.origin — the latter is a Wix sandbox
+          // origin when this runs inside an "Embed HTML" iframe, which would break the redirect.
+          successUrl: SITE_URL + "/welcome",
+        },
+      });
+    }
+
+    // Fetch localized prices for every price id (both cadences), then render.
+    // No country code is passed — Paddle.PricePreview auto-detects from the visitor's IP.
+    var items = [];
+    TIERS.forEach(function (t) {
+      ["month", "year"].forEach(function (c) {
+        if (t.priceId[c]) items.push({ priceId: t.priceId[c], quantity: 1 });
+      });
+    });
+
+    Paddle.PricePreview({ items: items })
+      .then(function (result) {
+        var lineItems = result && result.data && result.data.details && result.data.details.lineItems;
+        if (!lineItems) { showError("Could not load prices."); return; }
+        lineItems.forEach(function (li) {
+          var id = li.price && li.price.id;
+          // Display ONLY Paddle's already-formatted string. No math, no reformatting.
+          previews[id] = li.formattedTotals && li.formattedTotals.total;
+        });
+        render();
+      })
+      .catch(function (err) {
+        showError("Could not load prices. Please try again later.");
+        if (window.console) console.error("PricePreview failed", err);
+      });
+
+    function render() {
+      TIERS.forEach(function (tier, i) {
+        var priceEl = grid.querySelector('.tbx-price[data-tier="' + i + '"]');
+        var cta = grid.querySelector('.tbx-cta[data-tier="' + i + '"]');
+        var formatted = previews[tier.priceId[cadence]];
+        if (formatted) {
+          priceEl.classList.remove("loading");
+          priceEl.innerHTML = "";
+          var amount = document.createTextNode(formatted);
+          var cad = document.createElement("span");
+          cad.className = "cadence";
+          cad.textContent = cadence === "month" ? " / month" : " / year";
+          priceEl.appendChild(amount); priceEl.appendChild(cad);
+          cta.disabled = false;
+        } else {
+          priceEl.classList.add("loading");
+          priceEl.textContent = "Unavailable";
+          cta.disabled = true;
+        }
+      });
+    }
+
+    // Billing-period toggle.
+    root.querySelectorAll(".tbx-toggle button").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        cadence = btn.getAttribute("data-cadence");
+        root.querySelectorAll(".tbx-toggle button").forEach(function (b) {
+          b.setAttribute("aria-pressed", String(b === btn));
+        });
+        render();
+      });
+    });
+  })();
+  </script>
+</div>

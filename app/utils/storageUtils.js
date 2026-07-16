@@ -7,6 +7,7 @@ import { browser } from '../../static/globals';
 import { STORAGE_KEYS, CURRENT_STORAGE_VERSION } from './sharedConstants';
 import { assessMigrationSupport40 } from './migrationSupport40';
 import { withDataSafetyGuard } from './migrationSafety';
+import { naturalCompare } from './naturalCompare';
 
 // Re-export for backward compatibility
 export { STORAGE_KEYS, CURRENT_STORAGE_VERSION };
@@ -278,12 +279,9 @@ export const sortCollectionsForDisplay = (collections = [], options = {}) => {
         const bVal = b?.[sortBy];
 
         if (sortBy === 'name' || sortBy === 'color') {
-            const aStr = (aVal || '').toString().toLowerCase();
-            const bStr = (bVal || '').toString().toLowerCase();
-
             return sortOrder === 'desc'
-                ? bStr.localeCompare(aStr)
-                : aStr.localeCompare(bStr);
+                ? naturalCompare(bVal, aVal)
+                : naturalCompare(aVal, bVal);
         }
 
         const aNum = aVal || 0;

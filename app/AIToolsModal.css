@@ -138,6 +138,7 @@ html.performance-mode .ai-hero-card::before {
     text-align: left;
     color: var(--text-color);
     background: rgba(67, 97, 238, 0.10);
+    transition: background 0.2s ease;
 }
 /* Gradient ring via mask-composite — clean rounded corners. */
 .ai-hero-card::before {
@@ -145,7 +146,7 @@ html.performance-mode .ai-hero-card::before {
     position: absolute;
     inset: 0;
     border-radius: inherit;
-    padding: 1px;
+    padding: 1.5px;
     background: linear-gradient(120deg, #1d4ed8, #22d3ee, #3b82f6, #22d3ee, #1d4ed8) 0 0 / 300% 100%;
     -webkit-mask:
         linear-gradient(#fff 0 0) content-box,
@@ -157,8 +158,20 @@ html.performance-mode .ai-hero-card::before {
     mask-composite: exclude;
     pointer-events: none;
 }
-.ai-hero-card:hover { box-shadow: 0 0 14px rgba(67, 97, 238, 0.35); }
+.ai-hero-card:hover { background: rgba(67, 97, 238, 0.2); box-shadow: 0 0 14px rgba(67, 97, 238, 0.35); }
 .ai-hero-card:focus-visible { outline: 2px solid rgba(67, 97, 238, 0.6); outline-offset: 2px; }
+
+/* Primary distinction: a gentle always-on glow pulse (in addition to the
+ * sweeping border) so the hero clearly outranks the secondary tiles. The
+ * single gradient ring above is the only border — no second one. */
+@media (prefers-reduced-motion: no-preference) {
+    .ai-hero-card { animation: ai-hero-glow 2.8s ease-in-out infinite; }
+}
+@keyframes ai-hero-glow {
+    0%, 100% { box-shadow: 0 0 0 rgba(99, 102, 241, 0); }
+    50%      { box-shadow: 0 0 20px rgba(99, 102, 241, 0.45); }
+}
+html.performance-mode .ai-hero-card { animation: none !important; }
 .ai-hero-icon { color: #7e93ff; flex-shrink: 0; }
 .ai-hero-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .ai-hero-title { font-size: 15px; font-weight: 700; color: var(--text-color); }
@@ -200,6 +213,115 @@ html.performance-mode .ai-hero-card::before {
 
 .ai-tool-card-icon {
     color: #4361ee;
+}
+
+/* ── Auto-rename card hover: pen scribble + half-circling gradient border ──
+ * Two parallel hover animations, scoped to the auto-rename card only:
+ *   1. The pen icon plays a single-iteration "writing" wiggle (ease-out).
+ *   2. A localized conic-gradient arc, masked to the 2px ring, sweeps 180°
+ *      (half the perimeter) by transitioning a registered angle property —
+ *      so on mouse-out it transitions back to where it started. */
+@property --tabox-card-angle {
+    syntax: '<angle>';
+    inherits: false;
+    initial-value: 0deg;
+}
+
+/* Cards that get the animated-icon + half-circling gradient border treatment.
+ * Each card's storytelling icon animation lives in its own *ToolIcon.css. */
+.ai-tool-card[data-tool-id="auto-rename"],
+.ai-tool-card[data-tool-id="auto-arrange-folders"],
+.ai-tool-card[data-tool-id="duplicate-sweep"],
+.ai-tool-card[data-tool-id="split-collection"] {
+    position: relative;
+    isolation: isolate;
+}
+
+.ai-tool-card[data-tool-id="auto-rename"]::before,
+.ai-tool-card[data-tool-id="auto-arrange-folders"]::before,
+.ai-tool-card[data-tool-id="duplicate-sweep"]::before,
+.ai-tool-card[data-tool-id="split-collection"]::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 2px;
+    /* A ~90° bright arc; the rest of the ring is transparent. Rotating the
+     * gradient's start angle moves the arc around the perimeter. */
+    background: conic-gradient(
+        from var(--tabox-card-angle),
+        transparent 0deg,
+        #4361ee 12deg,
+        #8b5cf6 48deg,
+        #22d3ee 78deg,
+        transparent 92deg,
+        transparent 360deg
+    );
+    -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+    mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+    -webkit-mask-composite: destination-out;
+    mask-composite: exclude;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 1;
+    /* ease-in-out: the arc is an on-screen element moving. Quick (450ms).
+     * The reverse of this same transition runs the arc back on mouse-out. */
+    transition:
+        --tabox-card-angle 0.45s cubic-bezier(0.645, 0.045, 0.355, 1),
+        opacity 0.2s ease;
+}
+
+.ai-tool-card[data-tool-id="auto-rename"]:hover::before,
+.ai-tool-card[data-tool-id="auto-arrange-folders"]:hover::before,
+.ai-tool-card[data-tool-id="duplicate-sweep"]:hover::before,
+.ai-tool-card[data-tool-id="split-collection"]:hover::before {
+    opacity: 1;
+    --tabox-card-angle: 180deg;
+}
+
+[data-theme="dark"] .ai-tool-card[data-tool-id="auto-rename"]::before,
+[data-theme="dark"] .ai-tool-card[data-tool-id="auto-arrange-folders"]::before,
+[data-theme="dark"] .ai-tool-card[data-tool-id="duplicate-sweep"]::before,
+[data-theme="dark"] .ai-tool-card[data-tool-id="split-collection"]::before {
+    background: conic-gradient(
+        from var(--tabox-card-angle),
+        transparent 0deg,
+        #7e93ff 12deg,
+        #a78bfa 48deg,
+        #38bdf8 78deg,
+        transparent 92deg,
+        transparent 360deg
+    );
+}
+
+/* Don't show the sweep on a disabled card (e.g. auto-arrange with no
+ * top-level collections to arrange). */
+.ai-tool-card[data-tool-id="auto-arrange-folders"]:disabled::before {
+    display: none;
+}
+
+/* The storytelling icon animations that run in parallel with this border
+ * sweep live in each card's *ToolIcon.css. Respect the perf opt-out and
+ * reduced-motion preference for the border sweep here (freeze the arc, keep
+ * the fade). */
+html.performance-mode .ai-tool-card[data-tool-id="auto-rename"]::before,
+html.performance-mode .ai-tool-card[data-tool-id="auto-arrange-folders"]::before,
+html.performance-mode .ai-tool-card[data-tool-id="duplicate-sweep"]::before,
+html.performance-mode .ai-tool-card[data-tool-id="split-collection"]::before {
+    transition: opacity 0.2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ai-tool-card[data-tool-id="auto-rename"]::before,
+    .ai-tool-card[data-tool-id="auto-arrange-folders"]::before,
+    .ai-tool-card[data-tool-id="duplicate-sweep"]::before,
+    .ai-tool-card[data-tool-id="split-collection"]::before {
+        transition: opacity 0.2s ease;
+    }
 }
 
 .ai-tool-card-title {

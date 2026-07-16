@@ -19,6 +19,12 @@ export const aiProcessingUidsState = atom([]);
 // .ai-processing-overlay--current variant of the effect.
 export const aiProcessingCurrentUidState = atom(null);
 
+// The AI tool the modal should jump straight to when it opens (e.g. when an AI
+// action is invoked from the command palette). null means "open the tool hub".
+// The modal consumes (reads + clears) this on open so a later hub open isn't
+// hijacked. Variant: a tool id string from AI_TOOLS (app/ai/aiTasks.js).
+export const aiToolsInitialToolState = atom(null);
+
 // The collection the Split Collection tool should operate on, set by the
 // context-menu route. null means "no pre-selected target" (modal shows the
 // picker). Variant: { uid: string }.

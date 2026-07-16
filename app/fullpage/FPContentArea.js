@@ -42,6 +42,7 @@ import {
     batchDeleteCollections,
 } from '../utils/storageUtils';
 import { getColorValue, normalizeColorKey } from '../utils/colorMigration';
+import { naturalCompare } from '../utils/naturalCompare';
 import {
     MdArrowUpward,
     MdArrowDownward,
@@ -868,9 +869,7 @@ function FPContentArea({
             const aVal = a[field];
             const bVal = b[field];
             if (field === 'name' || field === 'color') {
-                const aStr = (aVal || '').toString().toLowerCase();
-                const bStr = (bVal || '').toString().toLowerCase();
-                return sortAscending ? aStr.localeCompare(bStr) : bStr.localeCompare(aStr);
+                return sortAscending ? naturalCompare(aVal, bVal) : naturalCompare(bVal, aVal);
             }
             const aNum = aVal || 0;
             const bNum = bVal || 0;

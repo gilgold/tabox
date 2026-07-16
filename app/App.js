@@ -12,6 +12,7 @@ import TabSwitcher from './TabSwitcher';
 import { useAtom, useSetAtom, useAtomValue } from 'jotai';
 import { highlightedCollectionUidState } from './atoms/animationsState';
 import { commandPaletteOpenState } from './atoms/commandPaletteState';
+import { aiToolsModalOpenState, aiToolsInitialToolState } from './atoms/aiState';
 import { tabSwitcherOpenState } from './atoms/tabSwitcherState';
 import { sidebarNavigationState } from './atoms/fullpageState';
 import {
@@ -249,6 +250,8 @@ function App({ mode = 'popup' }) {
   const setViewContext = useSetAtom(viewContextState);
   const isPanelOpen = useAtomValue(detailPanelOpenState);
   const setCommandPaletteOpen = useSetAtom(commandPaletteOpenState);
+  const setAiToolsModalOpen = useSetAtom(aiToolsModalOpenState);
+  const setAiToolsInitialTool = useSetAtom(aiToolsInitialToolState);
   const setTabSwitcherOpen = useSetAtom(tabSwitcherOpenState);
   const setSidebarNavigation = useSetAtom(sidebarNavigationState);
   const search = useAtomValue(searchState);
@@ -1911,6 +1914,11 @@ function App({ mode = 'popup' }) {
     }
   }, [isFullPage, setSidebarNavigation]);
 
+  const cmdOpenAiTool = useCallback((toolId) => {
+    setAiToolsInitialTool(toolId);
+    setAiToolsModalOpen(true);
+  }, [setAiToolsInitialTool, setAiToolsModalOpen]);
+
   const cmdCollectionAction = useCallback(async (collection, actionId, payload) => {
     switch (actionId) {
       case 'open': {
@@ -2010,6 +2018,7 @@ function App({ mode = 'popup' }) {
       onOpenFullPage={cmdOpenFullPage}
       onRestoreSession={cmdRestoreSession}
       onCollectionAction={cmdCollectionAction}
+      onOpenAiTool={cmdOpenAiTool}
     />
   );
 

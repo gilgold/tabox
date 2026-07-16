@@ -16,7 +16,7 @@ export const AI_TOOLS = [
     },
     {
         id: 'auto-rename',
-        title: 'Auto rename all collections',
+        title: 'Auto rename collections',
         description: 'Let AI suggest a name for a collection based on its tabs.',
         icon: MdDriveFileRenameOutline,
     },
