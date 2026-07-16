@@ -5,6 +5,7 @@ import './SettingsMenu.css';
 import Switch from './Switch';
 import { ToastViewport } from './ToastViewport';
 import { themeState, isLoggedInState, listKeyState } from './atoms/globalAppSettingsState';
+import { premiumEntitlementState, isProState } from './atoms/premiumState';
 import { useAtomValue, useSetAtom, useAtom } from 'jotai';
 import { browser } from '../static/globals';
 import { showUndoToast, setToastViewContext } from './toastHelpers';
@@ -16,10 +17,14 @@ import { buildOrphanRecoveryMenuItem } from './orphanRecoveryMenuItem';
 import { loadBrowserSessions, subscribeToBrowserSessions } from './utils/browserSessions';
 import { RiFolderAddFill, RiEdit2Line, RiSettings5Fill } from 'react-icons/ri';
 import { ImNewTab } from 'react-icons/im';
-import { MdOutlineSyncAlt, MdSettingsBackupRestore, MdClose, MdExpandMore, MdExpandLess, MdBugReport, MdFileDownload, MdHistory } from 'react-icons/md';
+import { MdOutlineSyncAlt, MdSettingsBackupRestore, MdClose, MdExpandMore, MdExpandLess, MdBugReport, MdFileDownload, MdHistory, MdWorkspacePremium } from 'react-icons/md';
 import { FaRegCheckCircle } from 'react-icons/fa';
 import { IoMoon, IoSunny } from 'react-icons/io5';
 import { BsStars } from 'react-icons/bs';
+
+// TODO(Task 15): replace with the real customer portal URL from the Paddle
+// dashboard (Checkout → Customer portal) before release.
+const PRO_PORTAL_URL = 'https://customer-portal.paddle.com';
 
 const SyncDebugModal = lazy(() => import('./SyncDebugModal').then((module) => ({ default: module.SyncDebugModal })));
 const AIEnableModal = lazy(() => import('./AIEnableModal'));
@@ -46,12 +51,15 @@ export default function SettingsMenu(props) {
         opening: true,
         editing: true,
         autoUpdate: true,
+        'tabox-pro': true,
         backup: true,
     });
 
     const isLoggedIn = useAtomValue(isLoggedInState);
     const setListKey = useSetAtom(listKeyState);
     const orphanRecovery = useOrphanRecoveryContext() || {};
+    const premium = useAtomValue(premiumEntitlementState);
+    const isPro = useAtomValue(isProState);
 
     const closeMenu = () => setIsDrawerOpen(false);
 
@@ -260,6 +268,58 @@ export default function SettingsMenu(props) {
             ...prev,
             [sectionKey]: !prev[sectionKey],
         }));
+    };
+
+    const proStatusLabel = !isPro
+        ? 'Free plan'
+        : premium?.status === 'trialing'
+            ? `Trial — ends ${new Date(premium.expiresAt).toLocaleDateString()}`
+            : `Pro (${premium?.plan === 'annual' ? 'annual' : 'monthly'})`;
+
+    const proSection = {
+        key: 'tabox-pro',
+        title: 'Tabox Pro',
+        icon: MdWorkspacePremium,
+        description: 'Manage your Tabox Pro subscription and unlock premium features.',
+        items: [
+            {
+                type: 'button',
+                key: 'pro-status',
+                title: 'Current plan',
+                description: 'Your current Tabox Pro subscription status.',
+                variant: 'status',
+                disabled: true,
+                onClick: undefined,
+                content: proStatusLabel,
+            },
+            isPro
+                ? {
+                    type: 'button',
+                    key: 'pro-manage',
+                    title: 'Manage subscription',
+                    description: 'Update payment details, change plan, or cancel your subscription.',
+                    onClick: () => window.open(PRO_PORTAL_URL, '_blank'),
+                    content: (
+                        <>
+                            <MdWorkspacePremium size="14" style={{ marginRight: '8px' }} />
+                            Manage subscription
+                        </>
+                    ),
+                }
+                : {
+                    type: 'button',
+                    key: 'pro-upgrade',
+                    title: 'Upgrade to Tabox Pro',
+                    description: 'Unlock premium features with a free 7-day trial.',
+                    onClick: () => browser.runtime.sendMessage({ type: 'openProCheckout' }),
+                    content: (
+                        <>
+                            <MdWorkspacePremium size="14" style={{ marginRight: '8px' }} />
+                            Upgrade — start free 7-day trial
+                        </>
+                    ),
+                },
+        ],
     };
 
     const commonSettingsSections = [
@@ -482,6 +542,7 @@ export default function SettingsMenu(props) {
                 },
             ],
         },
+        proSection,
     ];
 
     const orphanRecoveryItem = buildOrphanRecoveryMenuItem(orphanRecovery, { onActivate: closeMenu });
@@ -597,7 +658,12 @@ export default function SettingsMenu(props) {
     const renderPopupItem = (item) => {
         if (item.type === 'button') {
             return (
-                <button key={item.key} className="menu-button" onClick={item.onClick}>
+                <button
+                    key={item.key}
+                    className={`menu-button${item.variant === 'status' ? ' menu-button-status' : ''}`}
+                    onClick={item.onClick}
+                    disabled={item.disabled}
+                >
                     {item.content}
                 </button>
             );
@@ -618,7 +684,11 @@ export default function SettingsMenu(props) {
                         <h4>{item.title}</h4>
                         <p>{item.description}</p>
                     </div>
-                    <button className="menu-button fp-settings-menu-button" onClick={item.onClick}>
+                    <button
+                        className={`menu-button fp-settings-menu-button${item.variant === 'status' ? ' menu-button-status' : ''}`}
+                        onClick={item.onClick}
+                        disabled={item.disabled}
+                    >
                         {item.content}
                     </button>
                 </div>

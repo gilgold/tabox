@@ -1173,6 +1173,29 @@ html.fullpage-mode .fp-settings-modal-shell .setting-item {
     box-sizing: border-box;
 }
 
+/* Tabox Pro: non-interactive status row shown above the upgrade/manage button. */
+.menu-button-status {
+    cursor: default;
+    opacity: 0.85;
+    font-weight: 600;
+}
+
+.menu-button-status:hover,
+.menu-button-status:active {
+    background: rgba(255, 255, 255, 0.1);
+    transform: none;
+    box-shadow: none;
+}
+
+[data-theme="dark"] .menu-button-status:hover,
+[data-theme="dark"] .menu-button-status:active {
+    background: rgba(0, 0, 0, 0.3);
+}
+
+html.fullpage-mode .menu-button-status {
+    cursor: default;
+}
+
 .fp-settings-sidebar-badge {
     margin-left: auto;
     min-width: 18px;
