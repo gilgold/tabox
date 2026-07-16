@@ -3,7 +3,7 @@ main = "src/index.js"
 compatibility_date = "2026-07-01"
 
 kv_namespaces = [
-  { binding = "ENTITLEMENTS", id = "REPLACE_AFTER_CF_SIGNUP" }
+  { binding = "ENTITLEMENTS", id = "97529b2ae7b84becbbe83cf9129b8387" }
 ]
 
 [vars]
