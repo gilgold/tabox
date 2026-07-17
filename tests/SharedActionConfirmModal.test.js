@@ -37,7 +37,7 @@ test('renders leave-specific copy', () => {
 });
 
 test('Confirm sends sharedUnshareFolder, calls onConfirmed, and closes the modal', async () => {
-  browser.runtime.sendMessage.mockResolvedValue(undefined);
+  browser.runtime.sendMessage.mockResolvedValue({ ok: true });
   const onConfirmed = jest.fn().mockResolvedValue(undefined);
   const store = createStore();
   store.set(sharedActionConfirmState, { kind: 'unshare', folder: FOLDER });
@@ -51,7 +51,7 @@ test('Confirm sends sharedUnshareFolder, calls onConfirmed, and closes the modal
 });
 
 test('Confirm sends sharedLeaveFolder for the leave kind', async () => {
-  browser.runtime.sendMessage.mockResolvedValue(undefined);
+  browser.runtime.sendMessage.mockResolvedValue({ ok: true });
   const onConfirmed = jest.fn().mockResolvedValue(undefined);
   const store = createStore();
   store.set(sharedActionConfirmState, { kind: 'leave', folder: FOLDER });
@@ -76,7 +76,7 @@ test('Cancel does not send any message and closes the modal', () => {
   expect(store.get(sharedActionConfirmState)).toBeNull();
 });
 
-test('a failed send keeps the modal open (does not clear the atom)', async () => {
+test('a thrown error keeps the modal open (does not clear the atom)', async () => {
   browser.runtime.sendMessage.mockRejectedValue(new Error('network'));
   const store = createStore();
   store.set(sharedActionConfirmState, { kind: 'unshare', folder: FOLDER });
@@ -86,4 +86,32 @@ test('a failed send keeps the modal open (does not clear the atom)', async () =>
 
   await waitFor(() => expect(browser.runtime.sendMessage).toHaveBeenCalled());
   expect(store.get(sharedActionConfirmState)).toEqual({ kind: 'unshare', folder: FOLDER });
+});
+
+test('when unshare returns { ok: false }, the modal stays open and does not call onConfirmed', async () => {
+  browser.runtime.sendMessage.mockResolvedValue({ ok: false, error: 'forbidden' });
+  const onConfirmed = jest.fn();
+  const store = createStore();
+  store.set(sharedActionConfirmState, { kind: 'unshare', folder: FOLDER });
+  render(<Provider store={store}><SharedActionConfirmModal onConfirmed={onConfirmed} /></Provider>);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Stop Sharing' }));
+
+  await waitFor(() => expect(browser.runtime.sendMessage).toHaveBeenCalled());
+  expect(store.get(sharedActionConfirmState)).toEqual({ kind: 'unshare', folder: FOLDER });
+  expect(onConfirmed).not.toHaveBeenCalled();
+});
+
+test('when leave returns { ok: false }, the modal stays open and does not call onConfirmed', async () => {
+  browser.runtime.sendMessage.mockResolvedValue({ ok: false, error: 'forbidden' });
+  const onConfirmed = jest.fn();
+  const store = createStore();
+  store.set(sharedActionConfirmState, { kind: 'leave', folder: FOLDER });
+  render(<Provider store={store}><SharedActionConfirmModal onConfirmed={onConfirmed} /></Provider>);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
+
+  await waitFor(() => expect(browser.runtime.sendMessage).toHaveBeenCalled());
+  expect(store.get(sharedActionConfirmState)).toEqual({ kind: 'leave', folder: FOLDER });
+  expect(onConfirmed).not.toHaveBeenCalled();
 });

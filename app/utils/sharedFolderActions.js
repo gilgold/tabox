@@ -17,13 +17,17 @@ import { showInfoToast, showErrorToast } from '../toastHelpers';
  */
 export async function leaveSharedFolder(folder, onDataUpdate) {
     try {
-        await browser.runtime.sendMessage({ type: 'sharedLeaveFolder', folderId: folder.uid });
+        const res = await browser.runtime.sendMessage({ type: 'sharedLeaveFolder', folderId: folder.uid });
+        if (!res?.ok) {
+            showErrorToast('Couldn\'t leave the folder — please try again.');
+            return false;
+        }
         showInfoToast(`You left "${folder.name}". A local copy was kept.`);
         if (onDataUpdate) await onDataUpdate();
         return true;
     } catch (error) {
         console.error('Error leaving shared folder:', error);
-        showErrorToast('Could not leave this folder. Please try again.');
+        showErrorToast('Couldn\'t leave the folder — please try again.');
         return false;
     }
 }
@@ -37,13 +41,17 @@ export async function leaveSharedFolder(folder, onDataUpdate) {
  */
 export async function unshareSharedFolder(folder, onDataUpdate) {
     try {
-        await browser.runtime.sendMessage({ type: 'sharedUnshareFolder', folderId: folder.uid });
+        const res = await browser.runtime.sendMessage({ type: 'sharedUnshareFolder', folderId: folder.uid });
+        if (!res?.ok) {
+            showErrorToast('Couldn\'t stop sharing — please try again.');
+            return false;
+        }
         showInfoToast(`"${folder.name}" is no longer shared.`);
         if (onDataUpdate) await onDataUpdate();
         return true;
     } catch (error) {
         console.error('Error unsharing folder:', error);
-        showErrorToast('Could not stop sharing this folder. Please try again.');
+        showErrorToast('Couldn\'t stop sharing — please try again.');
         return false;
     }
 }

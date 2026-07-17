@@ -683,7 +683,13 @@ async function handleSharedMessage(request) {
       const r = await sharedApiFetch(`/shared/folders/${request.folderId}`, {
         method: 'PATCH', body: { name: request.name, color: request.color },
       });
-      if (r.ok) await setFolderSyncState(request.folderId, { lastRev: r.data.revision });
+      // NOTE: we deliberately do NOT advance lastRev to the PATCH response's
+      // revision. PATCH has no baseRev conflict semantics, so bumping lastRev
+      // here would silently skip any collection rows other members wrote in the
+      // window before this rename, excluding them from all future sinceRev deltas.
+      // The next unconditional folder-meta refresh (during the normal pull cycle)
+      // harmlessly re-fetches this own meta change; rename events only fire for
+      // changes by other authors anyway.
       return r;
     }
     case 'sharedGetMembers':

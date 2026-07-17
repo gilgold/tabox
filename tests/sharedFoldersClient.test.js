@@ -67,10 +67,11 @@ test('sharedCreateShare POSTs folder + collections + invites, marks local folder
 
 // I1 review fix: folder rename/recolor was never pushed to the server, so it
 // silently reverted on the next pull. sharedUpdateFolderMeta PATCHes
-// /shared/folders/:id and, on success, bumps this folder's sync-state
-// lastRev to the revision the server returns (so the next pull's delta
-// fetch uses the right sinceRev and doesn't re-see its own change as new).
-test('sharedUpdateFolderMeta PATCHes the folder and bumps sync-state lastRev on success', async () => {
+// /shared/folders/:id and returns the response, but deliberately does NOT
+// bump this folder's sync-state lastRev (PATCH has no baseRev conflict
+// semantics, so advancing lastRev would skip rows other members wrote before
+// the rename). The next unconditional pull refreshes folder meta harmlessly.
+test('sharedUpdateFolderMeta PATCHes the folder but does not bump sync-state lastRev on success', async () => {
   bgUtils.getAuthToken.mockResolvedValue('tok-1');
   global.fetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ revision: 5 }) });
   await browser.storage.local.set({
@@ -85,8 +86,8 @@ test('sharedUpdateFolderMeta PATCHes the folder and bumps sync-state lastRev on 
     expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ name: 'Renamed', color: '#0f0' }) })
   );
   const { [SHARED_SYNC_STATE_KEY]: state } = await browser.storage.local.get(SHARED_SYNC_STATE_KEY);
-  // lastRev bumped to the server's revision; lastSyncedAt/knownUids untouched.
-  expect(state.f1).toEqual({ lastRev: 5, lastSyncedAt: 100, knownUids: ['c1'] });
+  // lastRev unchanged (not bumped to server's revision); lastSyncedAt/knownUids untouched.
+  expect(state.f1).toEqual({ lastRev: 4, lastSyncedAt: 100, knownUids: ['c1'] });
 });
 
 test('sharedUpdateFolderMeta does not touch sync state when the PATCH fails', async () => {
