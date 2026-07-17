@@ -68,7 +68,7 @@ import ManageSubscriptionModal from './ManageSubscriptionModal';
 import { manageSubscriptionOpenState } from './atoms/premiumState';
 import { usePremiumEntitlement } from './usePremiumEntitlement';
 import NoPermissionModal from './NoPermissionModal';
-import { noPermissionOpenState, pendingInvitesState } from './atoms/sharedFoldersState';
+import { noPermissionOpenState, pendingInvitesState, shareFolderModalState } from './atoms/sharedFoldersState';
 import { guardFolderEdit } from './utils/sharedFolderUtils';
 import ShareFolderModal from './ShareFolderModal';
 import SharedInviteBanner from './SharedInviteBanner';
@@ -265,6 +265,7 @@ function App({ mode = 'popup' }) {
   const setAiToolsInitialTool = useSetAtom(aiToolsInitialToolState);
   const setManageSubscriptionOpen = useSetAtom(manageSubscriptionOpenState);
   const setNoPermissionOpen = useSetAtom(noPermissionOpenState);
+  const setShareFolderModal = useSetAtom(shareFolderModalState);
   const setPendingInvites = useSetAtom(pendingInvitesState);
   const setTabSwitcherOpen = useSetAtom(tabSwitcherOpenState);
   const setSidebarNavigation = useSetAtom(sidebarNavigationState);
@@ -2042,6 +2043,10 @@ function App({ mode = 'popup' }) {
     setManageSubscriptionOpen(true);
   }, [setManageSubscriptionOpen]);
 
+  const cmdShareFolder = useCallback((folder) => {
+    setShareFolderModal(folder);
+  }, [setShareFolderModal]);
+
   const cmdCollectionAction = useCallback(async (collection, actionId, payload) => {
     switch (actionId) {
       case 'open': {
@@ -2153,6 +2158,7 @@ function App({ mode = 'popup' }) {
       onCollectionAction={cmdCollectionAction}
       onOpenAiTool={cmdOpenAiTool}
       onManageSubscription={cmdManageSubscription}
+      onShareFolder={cmdShareFolder}
     />
   );
 

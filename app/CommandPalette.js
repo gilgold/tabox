@@ -24,18 +24,20 @@ import {
     MdFolder,
     MdOutlineHome,
     MdWorkspacePremium,
+    MdFolderShared,
 } from 'react-icons/md';
 import { CiExport } from 'react-icons/ci';
 import { AI_TOOLS } from './ai/aiTasks';
 import './CommandPalette.css';
 
-const EXTENSION_ACTIONS = [
+export const EXTENSION_ACTIONS = [
     { id: 'create-folder', label: 'Create New Folder', keywords: 'folder new create add', icon: MdCreateNewFolder },
     { id: 'import', label: 'Import Collections', keywords: 'import file upload load', icon: MdFileUpload },
     { id: 'export-all', label: 'Export All Collections & Folders', keywords: 'export download backup save', icon: MdFileDownload },
     { id: 'open-fullpage', label: 'Open in Full Page', keywords: 'fullpage full page expand tab window big', icon: MdOpenInNew },
     { id: 'restore-session', label: 'Restore Recently Closed', fullpageLabel: 'Browse Recently Closed', keywords: 'restore recently closed recover previous history browse', icon: MdHistory },
     { id: 'manage-subscription', label: 'Manage Subscription', keywords: 'subscription manage billing plan cancel switch monthly annual yearly pro payment upgrade downgrade', icon: MdWorkspacePremium, proOnly: true },
+    { id: 'share-folder', label: 'Share Folder…', keywords: 'share folder collaborate invite team', icon: MdFolderShared, proOnly: true },
 ];
 
 const SETTINGS_TOGGLES = [
@@ -108,6 +110,7 @@ function CommandPalette({
     onCollectionAction,
     onOpenAiTool,
     onManageSubscription,
+    onShareFolder,
 }) {
     const [isOpen, setIsOpen] = useAtom(commandPaletteOpenState);
     const [, setThemeMode] = useAtom(themeState);
@@ -124,6 +127,8 @@ function CommandPalette({
 
     // Folder pick mode
     const [folderPickMode, setFolderPickMode] = useState(false);
+    // 'move' (from a collection's sub-actions) or 'share' (top-level Share Folder… action)
+    const [pickPurpose, setPickPurpose] = useState(null);
 
     // Settings toggle values (loaded from storage when palette opens)
     const [settingValues, setSettingValues] = useState({});
@@ -140,6 +145,7 @@ function CommandPalette({
         setRenameMode(false);
         setRenameValue('');
         setFolderPickMode(false);
+        setPickPurpose(null);
     }, []);
 
     // Load all setting values from storage when palette opens
@@ -192,6 +198,7 @@ function CommandPalette({
         setRenameMode(false);
         setRenameValue('');
         setFolderPickMode(false);
+        setPickPurpose(null);
         setQuery('');
         setSelectedIndex(0);
         focusInput();
@@ -202,6 +209,7 @@ function CommandPalette({
         setRenameMode(false);
         setRenameValue('');
         setFolderPickMode(false);
+        setPickPurpose(null);
         setQuery('');
         setSelectedIndex(0);
         focusInput();
@@ -304,27 +312,32 @@ function CommandPalette({
         );
     }, [activeCollection, query, renameMode, folderPickMode]);
 
-    // Folder list for move-to-folder picker
+    // Folder list for the move-to-folder / share-folder pickers
     const folderOptions = useMemo(() => {
-        if (!folderPickMode || !activeCollection) return [];
+        if (!folderPickMode) return [];
+        if (pickPurpose === 'move' && !activeCollection) return [];
         const q = query.trim().toLowerCase();
         const opts = [];
 
-        // "No folder (root)" option if collection is currently in a folder
-        if (activeCollection.parentId) {
-            const rootLabel = 'No Folder (Root)';
-            if (!q || rootLabel.toLowerCase().includes(q)) {
-                opts.push({ id: '__root__', label: rootLabel, icon: MdOutlineHome, color: null });
+        if (pickPurpose === 'move') {
+            // "No folder (root)" option if collection is currently in a folder
+            if (activeCollection.parentId) {
+                const rootLabel = 'No Folder (Root)';
+                if (!q || rootLabel.toLowerCase().includes(q)) {
+                    opts.push({ id: '__root__', label: rootLabel, icon: MdOutlineHome, color: null });
+                }
             }
         }
 
         (folders || []).forEach(f => {
-            if (f.uid === activeCollection.parentId) return;
+            if (pickPurpose === 'move' && f.uid === activeCollection.parentId) return;
+            // Sharing: only own/unshared folders can be (re)shared — never a folder you're merely a member of.
+            if (pickPurpose === 'share' && f.shared && f.shared.role !== 'owner') return;
             if (q && !f.name.toLowerCase().includes(q)) return;
             opts.push({ id: f.uid, label: f.name, icon: MdFolder, color: getColorValue(f.color) });
         });
         return opts;
-    }, [folderPickMode, activeCollection, folders, query]);
+    }, [folderPickMode, pickPurpose, activeCollection, folders, query]);
 
     // What list is currently visible
     const displayItems = useMemo(() => {
@@ -346,6 +359,14 @@ function CommandPalette({
     // --- Action execution ---
 
     const executeAction = useCallback((actionId) => {
+        if (actionId === 'share-folder') {
+            setPickPurpose('share');
+            setFolderPickMode(true);
+            setQuery('');
+            setSelectedIndex(0);
+            focusInput();
+            return;
+        }
         close();
         switch (actionId) {
             case 'create-folder': onCreateFolder?.(); break;
@@ -355,7 +376,7 @@ function CommandPalette({
             case 'restore-session': onRestoreSession?.(); break;
             case 'manage-subscription': onManageSubscription?.(); break;
         }
-    }, [close, onCreateFolder, onImport, onExportAll, onOpenFullPage, onRestoreSession, onManageSubscription]);
+    }, [close, onCreateFolder, onImport, onExportAll, onOpenFullPage, onRestoreSession, onManageSubscription, focusInput]);
 
     const toggleSetting = useCallback(async (settingKey) => {
         const newVal = !settingValues[settingKey];
@@ -396,6 +417,7 @@ function CommandPalette({
         }
 
         if (subActionId === 'move') {
+            setPickPurpose('move');
             setFolderPickMode(true);
             setQuery('');
             setSelectedIndex(0);
@@ -419,11 +441,17 @@ function CommandPalette({
     }, [renameValue, activeCollection, close, onCollectionAction, goBackToSubActions]);
 
     const handleFolderPick = useCallback((folderId) => {
+        if (pickPurpose === 'share') {
+            const folder = (folders || []).find(f => f.uid === folderId);
+            close();
+            if (folder) onShareFolder?.(folder);
+            return;
+        }
         if (!activeCollection) return;
         close();
         const targetId = folderId === '__root__' ? null : folderId;
         onCollectionAction?.(activeCollection, 'move', { targetFolderId: targetId });
-    }, [activeCollection, close, onCollectionAction]);
+    }, [pickPurpose, folders, activeCollection, close, onCollectionAction, onShareFolder]);
 
     const handleSelect = useCallback((index) => {
         if (folderPickMode) {
@@ -522,14 +550,14 @@ function CommandPalette({
         scopeLabel = 'Rename';
         placeholder = '';
     } else if (folderPickMode) {
-        scopeLabel = activeCollection?.name;
+        scopeLabel = pickPurpose === 'share' ? 'Share Folder' : activeCollection?.name;
         placeholder = 'Pick a folder...';
     } else if (activeCollection) {
         scopeLabel = activeCollection.name;
         placeholder = 'Choose an action...';
     }
 
-    const showBackBtn = activeCollection && !renameMode;
+    const showBackBtn = (activeCollection || folderPickMode) && !renameMode;
 
     return ReactDOM.createPortal(
         <div className="cmd-palette-overlay" onClick={handleOverlayClick} onKeyDown={handleKeyDown} tabIndex={-1}>
@@ -554,7 +582,11 @@ function CommandPalette({
                                     style={{ background: getColorValue(activeCollection.color) || 'var(--text-color)' }}
                                 />
                             )}
-                            {folderPickMode && <MdDriveFileMoveOutline size={14} style={{ flexShrink: 0 }} />}
+                            {folderPickMode && (
+                                pickPurpose === 'share'
+                                    ? <MdFolderShared size={14} style={{ flexShrink: 0 }} />
+                                    : <MdDriveFileMoveOutline size={14} style={{ flexShrink: 0 }} />
+                            )}
                             {renameMode && <MdDriveFileRenameOutline size={14} style={{ flexShrink: 0 }} />}
                             {scopeLabel}
                         </span>
