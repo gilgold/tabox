@@ -40,8 +40,8 @@ describe('revision protocol edges', () => {
       .toEqual({ ok: true, data: { revision: 2 } });
   });
 
-  it('baseRev 0 / -1 / null against an existing row are all treated as maximally stale -> conflict', async () => {
-    for (const baseRev of [0, -1, null]) {
+  it('baseRev 0 / -1 (finite numbers) against an existing row are treated as maximally stale -> conflict', async () => {
+    for (const baseRev of [0, -1]) {
       const db = await seed();
       await putCollection(db, OWNER, 'f1', 'c1', { data: { v: 'server' }, baseRev: 1 }, 1500); // rev -> 2
       expect(await putCollection(db, WRITER, 'f1', 'c1', { data: { v: 1 }, baseRev }, 2000))
@@ -52,6 +52,36 @@ describe('revision protocol edges', () => {
   it('new-uid insert ignores baseRev entirely (no prior row to conflict with)', async () => {
     const db = await seed();
     expect(await putCollection(db, WRITER, 'f1', 'brand-new-uid', { data: { v: 1 }, baseRev: 0 }, 2000))
+      .toEqual({ ok: true, data: { revision: 2 } });
+  });
+
+  // B1 fix (was category-c bug #1 in the adversarial report): a PRESENT
+  // baseRev that isn't a finite JS number used to silently disable the
+  // conflict check entirely (Number('abc')/Number(Infinity)/Number(NaN)/
+  // Number({}) are all NaN, and Number.isFinite(NaN) is false, so the whole
+  // `row.rev > Number(baseRev)` branch was skipped) — the write always
+  // succeeded even against a row that had moved on. Every one of these must
+  // now be rejected outright with 400 before any write happens, distinct
+  // from the legitimate "absent baseRev -> LWW" escape hatch (still exercised
+  // by the "new-uid insert ignores baseRev" test above via a fully-omitted
+  // baseRev on other tests, and implicitly by every call above that never
+  // sets baseRev at all).
+  it('B1: a PRESENT but garbage baseRev (non-numeric string / Infinity / NaN / object / null) is rejected with 400, not silently treated as LWW', async () => {
+    const garbageValues = ['abc', Infinity, -Infinity, NaN, {}, null, [], true];
+    for (const baseRev of garbageValues) {
+      const db = await seed();
+      await putCollection(db, OWNER, 'f1', 'c1', { data: { v: 'server' }, baseRev: 1 }, 1500); // rev -> 2, so a real conflict WOULD fire if the guard worked
+      const res = await putCollection(db, WRITER, 'f1', 'c1', { data: { v: 'attacker' }, baseRev }, 2000);
+      expect(res).toEqual({ ok: false, status: 400, error: 'invalid_request' });
+      // Confirm the write genuinely did not happen (not just a coincidental 400 for some other reason).
+      const delta = await getFolderDelta(db, OWNER, 'f1', 1);
+      expect(delta.data.collections.find((c) => c.uid === 'c1').data).toEqual({ v: 'server' });
+    }
+  });
+
+  it('B1: an absent baseRev on a brand-new folder-less write still validates cleanly (no false-positive 400 on the legitimate LWW path)', async () => {
+    const db = await seed();
+    expect(await putCollection(db, WRITER, 'f1', 'c1', { data: { v: 1 } }, 2000))
       .toEqual({ ok: true, data: { revision: 2 } });
   });
 
@@ -116,10 +146,13 @@ describe('tombstone resurrection', () => {
     ]);
   });
 
-  it('deleteCollection has no baseRev/conflict check at all: a stale writer can blindly delete over a newer, unseen write', async () => {
-    // Surprising-but-acceptable: unlike putCollection, deleteCollection accepts no baseRev,
-    // so it can never return 409. A write-role member who last saw rev 1 can delete a
-    // collection that has since been updated to rev 2 by someone else, with no warning.
+  it('deleteCollection called with NO baseRev (compatibility path) still blindly deletes over a newer, unseen write', async () => {
+    // B5 gave deleteCollection an OPTIONAL 6th baseRev parameter mirroring
+    // putCollection's, but a caller that omits it entirely (as here) keeps
+    // the original unconditional "delete always wins" behavior for backward
+    // compatibility. A write-role member who last saw rev 1 can still delete
+    // a collection that has since been updated to rev 2 by someone else, with
+    // no warning, AS LONG AS they don't opt into the conflict check below.
     const db = makeDB();
     await createSharedFolder(db, OWNER, { folderId: 'f1', name: 'T', collections: [{ uid: 'c1', data: { v: 'orig' } }] }, 1000);
     await inviteMember(db, OWNER, 'f1', { email: 'w@x.com', role: 'write' }, 1000);
@@ -129,6 +162,38 @@ describe('tombstone resurrection', () => {
     expect(del).toEqual({ ok: true, data: { revision: 3 } });
     const delta = await getFolderDelta(db, OWNER, 'f1', 0);
     expect(delta.data.collections.find((c) => c.uid === 'c1')).toMatchObject({ deleted: 1, data: null });
+  });
+
+  // B5: deleteCollection's new optional baseRev parameter mirrors putCollection's
+  // conflict semantics (present+finite+row.rev>baseRev -> 409; present+garbage -> 400
+  // per B1; absent -> old unconditional behavior, exercised just above).
+  it('B5: deleteCollection WITH a stale baseRev conflicts with 409 instead of clobbering the newer write', async () => {
+    const db = makeDB();
+    await createSharedFolder(db, OWNER, { folderId: 'f1', name: 'T', collections: [{ uid: 'c1', data: { v: 'orig' } }] }, 1000);
+    await inviteMember(db, OWNER, 'f1', { email: 'w@x.com', role: 'write' }, 1000);
+    await respondInvite(db, WRITER, 'f1', true, 1001);
+    await putCollection(db, OWNER, 'f1', 'c1', { data: { v: 'updated-by-owner' }, baseRev: 1 }, 1500); // rev -> 2
+    expect(await deleteCollection(db, WRITER, 'f1', 'c1', 2000, 1)).toEqual({ ok: false, status: 409, error: 'conflict' });
+    // The row survives untouched.
+    const delta = await getFolderDelta(db, OWNER, 'f1', 0);
+    expect(delta.data.collections.find((c) => c.uid === 'c1')).toMatchObject({ deleted: 0, data: { v: 'updated-by-owner' } });
+  });
+
+  it('B5: deleteCollection WITH a baseRev equal to (or greater than) the current rev succeeds', async () => {
+    const db = await seed();
+    expect(await deleteCollection(db, WRITER, 'f1', 'c1', 2000, 1)).toEqual({ ok: true, data: { revision: 2 } });
+    const db2 = await seed();
+    expect(await deleteCollection(db2, WRITER, 'f1', 'c1', 2000, 999)).toEqual({ ok: true, data: { revision: 2 } });
+  });
+
+  it('B5/B1: deleteCollection WITH a garbage baseRev is rejected with 400, same as putCollection', async () => {
+    for (const baseRev of ['abc', Infinity, NaN, {}, null]) {
+      const db = await seed();
+      expect(await deleteCollection(db, WRITER, 'f1', 'c1', 2000, baseRev)).toEqual({ ok: false, status: 400, error: 'invalid_request' });
+      // Confirm the row was not touched: still rev 1, not deleted.
+      const delta = await getFolderDelta(db, OWNER, 'f1', 0);
+      expect(delta.data.collections).toEqual([{ uid: 'c1', data: { name: 'A' }, rev: 1, deleted: 0, updatedBy: 'owner@x.com', updatedAt: 1000 }]);
+    }
   });
 });
 
@@ -283,6 +348,72 @@ describe('input hostility', () => {
     const res = await inviteMember(db, OWNER, 'f1', { email, role: 'read' }, 1000);
     expect(res.ok).toBe(true);
     expect(res.data.members[0].email).toBe(email.toLowerCase());
+  });
+});
+
+describe('B2/B3: create-time validation hardening', () => {
+  it('B2: a duplicate uid in collections rejects with 400 BEFORE any DB write (no partial folder/collection rows)', async () => {
+    // Was category-c bug #2 in the adversarial report: the collections loop
+    // had no dedup/transaction, so a duplicate uid threw an uncaught SQLite
+    // UNIQUE-constraint error mid-loop, AFTER the shared_folders row (inserted
+    // first, no transaction) was already committed — leaving a half-built
+    // folder row with only the first of the duplicate pair's collection row
+    // written, surfaced at the route layer as a generic 500.
+    const db = makeDB();
+    const res = await createSharedFolder(db, OWNER, {
+      folderId: 'fdup', name: 'Dup',
+      collections: [{ uid: 'same', data: { v: 1 } }, { uid: 'same', data: { v: 2 } }],
+    }, 1000);
+    expect(res).toEqual({ ok: false, status: 400, error: 'invalid_request' });
+    // No partial state whatsoever: neither the folder row nor any collection row exists.
+    const folderRow = await db.prepare('SELECT id FROM shared_folders WHERE id = ?').bind('fdup').first();
+    expect(folderRow).toBeFalsy();
+    const collRows = (await db.prepare('SELECT uid FROM shared_collections WHERE folder_id = ?').bind('fdup').all()).results;
+    expect(collRows).toEqual([]);
+  });
+
+  it('B2: a collection entry missing a uid, with an empty/non-string uid, or a null entry is rejected with 400', async () => {
+    const db = makeDB();
+    const badCollectionsCases = [
+      [{ data: { v: 1 } }],                                   // missing uid
+      [{ uid: '', data: { v: 1 } }],                           // empty uid
+      [{ uid: 123, data: { v: 1 } }],                          // non-string uid
+      [{ uid: 'ok', data: { v: 1 } }, null],                   // null entry alongside a valid one
+    ];
+    for (let i = 0; i < badCollectionsCases.length; i++) {
+      const res = await createSharedFolder(db, OWNER, { folderId: `f-bad-${i}`, name: 'T', collections: badCollectionsCases[i] }, 1000);
+      expect(res).toEqual({ ok: false, status: 400, error: 'invalid_request' });
+      const folderRow = await db.prepare('SELECT id FROM shared_folders WHERE id = ?').bind(`f-bad-${i}`).first();
+      expect(folderRow).toBeFalsy();
+    }
+  });
+
+  it('B3: a pathologically deep (but tiny) nested JSON payload is rejected with 400 instead of crashing JSON.stringify (createSharedFolder)', async () => {
+    // Was category-c bug #3: the 512KB size cap is enforced via
+    // JSON.stringify(...).length, which is recursive and blows the call
+    // stack (uncaught RangeError -> generic 500) long before the byte cap is
+    // reached for pathologically deep structures. Depth here (200k) is well
+    // beyond the ~20k+ threshold the report found necessary to reproduce, and
+    // far beyond the 5000-level "moderately deep" case above that must keep
+    // working fine.
+    const db = makeDB();
+    let nested = { v: 1 };
+    for (let i = 0; i < 200_000; i++) nested = { child: nested };
+    const res = await createSharedFolder(db, OWNER, { folderId: 'fdeep', name: 'T', collections: [{ uid: 'c1', data: nested }] }, 1000);
+    expect(res).toEqual({ ok: false, status: 400, error: 'invalid_request' });
+    const folderRow = await db.prepare('SELECT id FROM shared_folders WHERE id = ?').bind('fdeep').first();
+    expect(folderRow).toBeFalsy(); // no partial state here either
+  });
+
+  it('B3: a pathologically deep nested JSON payload is rejected with 400 instead of crashing JSON.stringify (putCollection)', async () => {
+    const db = makeDB();
+    await createSharedFolder(db, OWNER, { folderId: 'f1', name: 'T', collections: [] }, 1000);
+    let nested = { v: 1 };
+    for (let i = 0; i < 200_000; i++) nested = { child: nested };
+    const res = await putCollection(db, OWNER, 'f1', 'deep', { data: nested, baseRev: 1 }, 2000);
+    expect(res).toEqual({ ok: false, status: 400, error: 'invalid_request' });
+    const delta = await getFolderDelta(db, OWNER, 'f1', 0);
+    expect(delta.data.collections).toEqual([]); // the write never happened
   });
 });
 

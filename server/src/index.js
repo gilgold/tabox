@@ -258,7 +258,16 @@ async function handleShared(request, env, url) {
     if (seg.length === 5 && seg[3] === 'collections') {
       const uid = decodeURIComponent(seg[4]);
       if (method === 'PUT') return out(await putCollection(db, identity, folderId, uid, await body(), now));
-      if (method === 'DELETE') return out(await deleteCollection(db, identity, folderId, uid, now));
+      if (method === 'DELETE') {
+        // B5: DELETE has no body, so an optional conflict-check baseRev rides
+        // as a query param instead. Absent -> undefined (delete always wins,
+        // preserving prior behavior); present -> forwarded as-is (including
+        // garbage, e.g. non-numeric) so deleteCollection's own validation
+        // returns the same 400 putCollection would for a garbage baseRev.
+        const rawBaseRev = url.searchParams.get('baseRev');
+        const baseRev = rawBaseRev === null ? undefined : Number(rawBaseRev);
+        return out(await deleteCollection(db, identity, folderId, uid, now, baseRev));
+      }
     }
     return json({ error: 'not_found' }, 404);
   } catch (err) {

@@ -284,7 +284,7 @@ describe('shared folders: cross-layer multi-device conflict harness', () => {
     expect(events.some((e) => e.kind === 'deleted' && e.folderId === folderId)).toBe(true);
   });
 
-  it('3b. deleteCollection has no baseRev/conflict guard at all: a stale DELETE unconditionally clobbers a fresher edit', async () => {
+  it('3b. deleteCollection with NO baseRev preserves the original unconditional delete-wins behavior (B5 compatibility path)', async () => {
     const { folderId } = await shareAndAccept();
 
     // B edits and syncs: c1 gets a real revision bump.
@@ -293,17 +293,18 @@ describe('shared folders: cross-layer multi-device conflict harness', () => {
     expect(syncB.data.pushed).toBe(1);
     const revAfterBEdit = rawCollection(folderId, 'c1').rev;
 
-    // A, never having pulled B's edit, issues a raw DELETE directly (isolating
-    // the finding from the client's pull-then-push cycle ordering, which has
-    // its own, separately-documented same-cycle-revival issue — see 4b).
-    // putCollection() takes a `baseRev` and 409s on a stale write (see
-    // scenario 2b); deleteCollection() takes NO baseRev parameter at all —
-    // there is no way for a stale client to even detect it's about to
-    // destroy someone else's newer write, let alone avoid it.
+    // A, never having pulled B's edit, issues a raw DELETE directly with NO
+    // baseRev query param (isolating the finding from the client's
+    // pull-then-push cycle ordering, which has its own, separately-documented
+    // same-cycle-revival issue — see 4b). B5 gave deleteCollection() an
+    // OPTIONAL baseRev, mirroring putCollection's; a caller that omits it
+    // (as here) deliberately keeps the original "delete always wins"
+    // semantics for backward compatibility — see 3c below for the
+    // conflict-protected path a baseRev-aware caller now gets.
     const del = await harness.asDevice(ownerA, (c) => c.sharedApiFetch(
       `/shared/folders/${folderId}/collections/c1`, { method: 'DELETE' },
     ));
-    expect(del.ok).toBe(true); // succeeds unconditionally — no 409 is even possible here
+    expect(del.ok).toBe(true); // succeeds unconditionally — no baseRev was sent, so no conflict check ran
 
     const finalRow = rawCollection(folderId, 'c1');
     expect(finalRow.deleted).toBe(1);
@@ -315,6 +316,45 @@ describe('shared folders: cross-layer multi-device conflict harness', () => {
     await syncDevice(memberB);
     expect(ownerA.browserMock._store.collection_c1).toBeUndefined();
     expect(memberB.browserMock._store.collection_c1).toBeUndefined();
+  });
+
+  it('3c (B5). a DELETE that DOES send a stale baseRev 409s instead of clobbering a fresher unseen edit; the fresh edit survives and reappears on both devices', async () => {
+    const { folderId } = await shareAndAccept();
+
+    // A edits X and syncs: a real revision bump, rev now known server-side.
+    editCollection(ownerA, 'c1', { name: 'A fresh edit' });
+    const syncA = await syncDevice(ownerA);
+    expect(syncA.data.pushed).toBe(1);
+    const revAfterAEdit = rawCollection(folderId, 'c1').rev;
+
+    // B syncs once BEFORE A's edit lands, so B's baseline lastRev is stale
+    // (captured via a raw delta fetch at rev 1, i.e. before A's push above —
+    // simulating a device whose last real sync predates the other side's
+    // edit). B then issues a raw DELETE with that stale baseRev, exactly
+    // mirroring how doSyncSharedFolders' goneUids loop calls
+    // `?baseRev=${lastRev}` — except here `lastRev` is deliberately stale
+    // rather than post-pull-fresh, to force the genuine race this scenario
+    // needs (see 4b for why a normal same-cycle pull already reconciles this
+    // before the push phase runs, which would otherwise mask the conflict).
+    const staleBaseRev = revAfterAEdit - 1;
+    const del = await harness.asDevice(memberB, (c) => c.sharedApiFetch(
+      `/shared/folders/${folderId}/collections/c1?baseRev=${staleBaseRev}`, { method: 'DELETE' },
+    ));
+    expect(del.ok).toBe(false);
+    expect(del.status).toBe(409);
+    expect(del.error).toBe('conflict');
+
+    // A's edit survived the stale delete attempt entirely.
+    const rowAfterConflict = rawCollection(folderId, 'c1');
+    expect(rowAfterConflict.deleted).toBe(0);
+    expect(rowAfterConflict.rev).toBe(revAfterAEdit);
+
+    // Next cycles: both devices converge with A's edit alive (not B's
+    // rejected delete).
+    await syncDevice(ownerA);
+    await syncDevice(memberB);
+    expect(ownerA.browserMock._store.collection_c1.name).toBe('A fresh edit');
+    expect(memberB.browserMock._store.collection_c1.name).toBe('A fresh edit');
   });
 
   // ---------------------------------------------------------------------
@@ -340,31 +380,41 @@ describe('shared folders: cross-layer multi-device conflict harness', () => {
     expect(ownerA.browserMock._store.collection_c1).toBeUndefined();
   });
 
-  it('4b. A edits X and syncs first (fresh write lands); B moves X out afterward: B\'s move-out intent is silently reverted by the same-cycle pull', async () => {
+  it('4b. A edits X and syncs first (fresh write lands); B moves X out afterward: B\'s move-out intent survives the same-cycle pull (B4 fix)', async () => {
     const { folderId } = await shareAndAccept();
 
     editCollection(ownerA, 'c1', { name: 'A fresh edit' });
     const syncA = await syncDevice(ownerA);
     expect(syncA.data.pushed).toBe(1);
 
+    // B has NOT pulled A's edit yet — B's own local copy of c1 still reads
+    // whatever B had before (the original 'Alpha').
+    expect(memberB.browserMock._store.collection_c1.name).toBe('Alpha');
     moveCollectionOut(memberB, 'c1');
     const syncB = await syncDevice(memberB);
 
-    // FINDING: B's sync pulls A's fresh c1 edit FIRST in the same cycle.
-    // applyDeltaLocally unconditionally re-upserts collection_c1 with
-    // parentId reset back to folderId (it always writes `parentId: folderId`
-    // for any upserted row) — silently reverting B's local move-out — and
-    // re-populates collections_index accordingly. The push phase then reads
-    // collections_index AFTER that revert, so c1 is back in `currentUids`
-    // and (also being in `appliedUids`) is excluded from `goneUids`: B's
-    // intended "remove X from the shared folder" DELETE is never sent, and
-    // is never retried later either (knownUids is set to the post-revert
-    // currentUids, i.e. B's move-out intent is fully swallowed, not merely
-    // delayed).
-    expect(syncB.data.pushed).toBe(0); // the expected DELETE never fires
-    expect(memberB.browserMock._store.collection_c1.parentId).toBe(folderId); // reverted!
-    expect(memberB.browserMock._store.collection_c1.name).toBe('A fresh edit');
-    expect(rawCollection(folderId, 'c1').deleted).toBe(0); // server never saw the delete
+    // FIX (B4): B's sync still pulls A's fresh c1 edit FIRST in the same
+    // cycle, but applyDeltaLocally now recognizes c1 as a uid B already
+    // removed from this folder (moved to a different parent) BEFORE this
+    // cycle's pull ran — computed from the pre-pull collections_index
+    // snapshot, the same one the dirty-edit diff already relies on — and
+    // skips applying the incoming upsert for it entirely. B's local move-out
+    // is therefore left completely untouched (never reverted), AND the push
+    // phase's goneUids (diffed against that same pre-pull snapshot, not the
+    // post-pull index) still correctly treats c1 as gone and issues the
+    // DELETE this same cycle. Net effect: local move-out survives, the
+    // server row is deleted, and B keeps its own moved-out copy of c1 (not
+    // A's edit) locally.
+    expect(syncB.data.pushed).toBe(1); // the DELETE for c1 fires
+    expect(memberB.browserMock._store.collection_c1.parentId).toBe('ROOT'); // NOT reverted
+    expect(memberB.browserMock._store.collection_c1.name).toBe('Alpha'); // B's own copy, not A's edit
+    expect(rawCollection(folderId, 'c1').deleted).toBe(1); // server DOES see the delete
+
+    // knownUids no longer includes c1 after this cycle — B's move-out is
+    // fully resolved, not merely delayed, and won't be redundantly re-DELETEd
+    // on a later cycle.
+    const syncedState = memberB.browserMock._store.shared_sync_state;
+    expect(syncedState[folderId].knownUids).not.toContain('c1');
   });
 
   // ---------------------------------------------------------------------

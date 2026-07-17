@@ -191,7 +191,33 @@ async function loadLocalSharedFolders() {
 // considers "dirty" — otherwise a collection just pulled from another user gets
 // immediately re-PUT to the server, reattributing updated_by/bumping revision and
 // ping-ponging forever between writers.
-async function applyDeltaLocally(folder, delta, myEmail) {
+//
+// B4 fix (own-pending-delete/move-out swallowed by a same-cycle pull):
+// `pendingLocalRemovals` is a Set of uids the caller has already determined
+// were removed from this folder LOCALLY (deleted, or moved to a different
+// parentId) before this cycle's pull ran (computed from the pre-pull
+// collections_index snapshot — see doSyncSharedFolders). Before this fix, an
+// incoming upsert for such a uid (e.g. another member's edit landing in the
+// same delta) was applied unconditionally, silently resurrecting the row
+// locally with `parentId` reset back to this folder — undoing the user's own
+// local action. Because the push phase's `goneUids` used to be computed from
+// the POST-pull collections_index, the just-reverted uid then looked
+// "still present", so the user's delete/move-out was never even pushed as a
+// DELETE, and (knownUids being rewritten to the post-revert state at the end
+// of the cycle) never retried on a later cycle either — a total, silent loss
+// of the user's action.
+//
+// Fix chosen (of the two documented in the task brief): skip applying the
+// upsert entirely for any uid in `pendingLocalRemovals`, rather than letting
+// it land and then reverting/re-deleting it afterward. This is the cleaner
+// semantics — the local removal simply wins for this cycle, local storage is
+// never touched for that uid, and the caller's `goneUids` computation (also
+// diffed against the same pre-pull snapshot, not the post-pull index) still
+// sees it as absent and pushes the real DELETE this same cycle. Net effect:
+// the local move-out/delete survives, the server row still gets deleted, and
+// (for a move-out) the user's own moved-out local copy is left completely
+// untouched rather than being overwritten with the other member's content.
+async function applyDeltaLocally(folder, delta, myEmail, pendingLocalRemovals = new Set()) {
   return withStorageLock(async () => {
     const folderId = folder.uid;
     const keys = ['collections_index', `folder_${folderId}`, 'folders_index', SHARED_EVENTS_KEY];
@@ -222,6 +248,11 @@ async function applyDeltaLocally(folder, delta, myEmail) {
           }
         }
       } else if (isOther) {
+        // B4 fix: this uid was already removed from this folder locally
+        // (deleted, or moved to a different parent) before this cycle's pull
+        // ran — do not resurrect it. See the pendingLocalRemovals doc comment
+        // above applyDeltaLocally for the full reasoning.
+        if (pendingLocalRemovals.has(row.uid)) continue;
         const record = { ...sanitizeRemoteCollection(row.data), uid: row.uid, parentId: folderId, lastUpdated: row.updatedAt };
         updates[`collection_${row.uid}`] = record;
         index[row.uid] = { uid: row.uid, name: record.name, parentId: folderId, lastUpdated: row.updatedAt };
@@ -553,6 +584,20 @@ async function doSyncSharedFolders() {
     const cycleStartTs = Date.now();
     const { collections_index: preCycleIndex = {} } = await browser.storage.local.get('collections_index');
 
+    // B4 fix: uids this device already removed from this folder — deleted, or
+    // moved to a different parent — BEFORE this cycle's pull runs, computed
+    // from the SAME pre-pull snapshot the dirty-edit diff above already uses
+    // (preCycleIndex), not the post-pull collections_index. A uid only lands
+    // here if it was previously known to be part of this folder (knownUids)
+    // and is no longer there pre-pull. Passed into applyDeltaLocally so an
+    // incoming upsert for it (e.g. another member's edit) doesn't resurrect
+    // it, and reused below for goneUids so the local removal still gets
+    // pushed as a real DELETE this same cycle — see applyDeltaLocally's doc
+    // comment for the full reasoning and the interaction this fixes.
+    const pendingLocalRemovals = new Set(
+      state.knownUids.filter((uid) => !(preCycleIndex[uid] && preCycleIndex[uid].parentId === folderId))
+    );
+
     // PULL
     const pull = await sharedApiFetch(`/shared/folders/${folderId}?sinceRev=${state.lastRev}`);
     if (!pull.ok) {
@@ -563,7 +608,7 @@ async function doSyncSharedFolders() {
       }
       continue; // network/auth errors: try again next cycle
     }
-    const appliedUids = await applyDeltaLocally(folder, pull.data, myEmail);
+    const appliedUids = await applyDeltaLocally(folder, pull.data, myEmail, pendingLocalRemovals);
     pulled += (pull.data.collections || []).length;
     let lastRev = pull.data.revision;
 
@@ -603,16 +648,38 @@ async function doSyncSharedFolders() {
         // our local edit is still newer after that, we simply re-push it then).
         // Never throw: one folder's conflict must not abort the rest of the loop.
       }
-      // Same echo-push exclusion applies to deletions: a uid the pull itself just
-      // removed locally (appliedUids) is already reflected server-side — don't
-      // issue a redundant DELETE for it.
-      const goneUids = state.knownUids.filter((u) => !currentUids.includes(u) && !appliedUids.has(u));
+      // B4 fix: goneUids is now diffed against the PRE-pull snapshot
+      // (pendingLocalRemovals, computed above from preCycleIndex) rather than
+      // the post-pull collections_index (`currentUids`). Before this fix, a
+      // uid this device deleted/moved-out locally could get silently
+      // resurrected by this very cycle's pull (another member's edit landing
+      // for the same uid), which made the post-pull collections_index look
+      // "still present" — so the DELETE below was never even attempted, and
+      // (knownUids being rewritten to the post-revert state further down)
+      // never retried on a later cycle either. pendingLocalRemovals is
+      // already restricted to state.knownUids, so no separate `.includes`
+      // check is needed here. Same echo-push exclusion as before applies: a
+      // uid the pull itself deleted server-side (appliedUids) is already
+      // reflected server-side — don't issue a redundant DELETE for it.
+      const goneUids = [...pendingLocalRemovals].filter((u) => !appliedUids.has(u));
       for (const uid of goneUids) {
-        const r = await sharedApiFetch(`/shared/folders/${folderId}/collections/${uid}`, { method: 'DELETE' });
+        // B5: pass this device's current knowledge of the folder's revision
+        // counter as baseRev, opting into deleteCollection's conflict check —
+        // a row someone else updated more recently than what we've seen
+        // (row.rev > baseRev) 409s instead of unconditionally destroying it.
+        const r = await sharedApiFetch(`/shared/folders/${folderId}/collections/${uid}?baseRev=${lastRev}`, { method: 'DELETE' });
         if (r.ok) {
           lastRev = r.data.revision;
           pushed += 1;
         }
+        // 409 (conflict): someone updated this collection more recently than
+        // our baseRev — skip, do NOT retry. The next cycle's pull will bring
+        // the fresher row back (its rev is now > our stale lastRev, so it's
+        // included in the delta and, since this uid is no longer in
+        // knownUids after this cycle's setFolderSyncState call below, it's no
+        // longer a "pending local removal" either — applyDeltaLocally applies
+        // it as a normal upsert). Never throw: one conflict must not abort
+        // the rest of the loop.
       }
       await setFolderSyncState(folderId, { lastRev, lastSyncedAt: cycleStartTs, knownUids: currentUids });
     } else {

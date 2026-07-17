@@ -12,17 +12,54 @@ export async function isProUser(env, googleId) {
   return decideEntitlement(record).entitled;
 }
 
-function tooLarge(collections) {
-  return collections.some((c) => JSON.stringify(c.data ?? null).length > MAX_COLLECTION_BYTES);
+// B3 fix: JSON.stringify is recursive and can blow the call stack on a
+// pathologically deep (but otherwise small) structure well before any byte
+// cap is reached — a RangeError from here used to propagate uncaught past
+// this point to handleShared's generic try/catch, surfacing as a 500. Every
+// caller below treats a throw here as a clean validation failure (400), not
+// a size violation, so `ok:false` (rather than a size number) always means
+// "reject with invalid_request".
+function safeCollectionSize(data) {
+  try {
+    return { ok: true, size: JSON.stringify(data ?? null).length };
+  } catch {
+    return { ok: false };
+  }
+}
+
+// B1 fix: `baseRev` is optional (absent/undefined legitimately means "no
+// conflict check, LWW") but any PRESENT value that isn't a finite JS number —
+// a non-numeric string, Infinity/-Infinity, NaN, an object, or null — used to
+// silently disable the conflict check entirely (Number(x) is NaN for all of
+// these, and Number.isFinite(NaN) is false, so `row.rev > Number(baseRev)`
+// was just skipped). Treat any such present-but-garbage value as a hard
+// validation error instead of a quietly-degraded LWW write.
+function isGarbageBaseRev(baseRev) {
+  return baseRev !== undefined && !(typeof baseRev === 'number' && Number.isFinite(baseRev));
 }
 
 export async function createSharedFolder(db, identity, { folderId, name, color = null, collections = [] }, nowMs) {
   if (!folderId || !name) return err(400, 'invalid_request');
   if (name.length > MAX_NAME_LENGTH) return err(400, 'invalid_request');
   if (collections.length > MAX_COLLECTIONS_PER_FOLDER) return err(413, 'too_many_collections');
+  // B2 fix: validate the collections array BEFORE any DB write. Without this,
+  // a payload with a duplicate uid threw an uncaught UNIQUE-constraint error
+  // mid-insert-loop, after the shared_folders row (inserted first, no
+  // transaction) was already committed — leaving a half-built folder row with
+  // only the first of the duplicate pair's collection row written. Also
+  // folds in the B3 deep-JSON guard so both checks happen in one pass, still
+  // strictly before the folder INSERT below.
+  const seenUids = new Set();
+  for (const c of collections) {
+    if (!c || typeof c.uid !== 'string' || !c.uid) return err(400, 'invalid_request');
+    if (seenUids.has(c.uid)) return err(400, 'invalid_request');
+    seenUids.add(c.uid);
+    const sized = safeCollectionSize(c.data);
+    if (!sized.ok) return err(400, 'invalid_request');
+    if (sized.size > MAX_COLLECTION_BYTES) return err(413, 'collection_too_large');
+  }
   const owned = await db.prepare('SELECT COUNT(*) AS n FROM shared_folders WHERE owner_google_id = ?').bind(identity.googleId).first();
   if (owned.n >= MAX_FOLDERS_PER_OWNER) return err(409, 'folder_limit');
-  if (tooLarge(collections)) return err(413, 'collection_too_large');
   const existing = await db.prepare('SELECT id FROM shared_folders WHERE id = ?').bind(folderId).first();
   if (existing) return err(409, 'already_shared');
   await db.prepare(
@@ -173,9 +210,12 @@ export async function getFolderDelta(db, identity, folderId, sinceRev = 0) {
 export async function putCollection(db, identity, folderId, uid, { data, baseRev }, nowMs) {
   const access = await requireFolderAccess(db, identity, folderId, 'write');
   if (access.ok === false) return access;
-  if (JSON.stringify(data ?? null).length > MAX_COLLECTION_BYTES) return err(413, 'collection_too_large');
+  if (isGarbageBaseRev(baseRev)) return err(400, 'invalid_request');
+  const sized = safeCollectionSize(data);
+  if (!sized.ok) return err(400, 'invalid_request');
+  if (sized.size > MAX_COLLECTION_BYTES) return err(413, 'collection_too_large');
   const row = await db.prepare('SELECT rev FROM shared_collections WHERE folder_id = ? AND uid = ?').bind(folderId, uid).first();
-  if (row && Number.isFinite(Number(baseRev)) && row.rev > Number(baseRev)) return err(409, 'conflict');
+  if (row && baseRev !== undefined && row.rev > baseRev) return err(409, 'conflict');
   if (!row) {
     const count = await db.prepare('SELECT COUNT(*) AS n FROM shared_collections WHERE folder_id = ? AND deleted = 0').bind(folderId).first();
     if (count.n >= MAX_COLLECTIONS_PER_FOLDER) return err(413, 'too_many_collections');
@@ -189,9 +229,21 @@ export async function putCollection(db, identity, folderId, uid, { data, baseRev
   return { ok: true, data: { revision } };
 }
 
-export async function deleteCollection(db, identity, folderId, uid, nowMs) {
+// B5: `baseRev` is optional here too, mirroring putCollection — absent
+// preserves the original unconditional "delete always wins" behavior (kept
+// for backward compatibility with any caller that doesn't send one), while a
+// present, valid baseRev opts into the same conflict protection: a row that
+// moved on past what the deleting client last saw (row.rev > baseRev) 409s
+// instead of silently destroying the newer, unseen write. A present but
+// garbage baseRev (per isGarbageBaseRev, same as B1) is a 400.
+export async function deleteCollection(db, identity, folderId, uid, nowMs, baseRev) {
   const access = await requireFolderAccess(db, identity, folderId, 'write');
   if (access.ok === false) return access;
+  if (isGarbageBaseRev(baseRev)) return err(400, 'invalid_request');
+  if (baseRev !== undefined) {
+    const row = await db.prepare('SELECT rev FROM shared_collections WHERE folder_id = ? AND uid = ?').bind(folderId, uid).first();
+    if (row && row.rev > baseRev) return err(409, 'conflict');
+  }
   const revision = await bumpRevision(db, folderId, identity, nowMs);
   await db.prepare(
     `INSERT INTO shared_collections (folder_id, uid, data, rev, deleted, updated_at, updated_by) VALUES (?,?,NULL,?,1,?,?)
