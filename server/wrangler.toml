@@ -15,7 +15,7 @@ PADDLE_API_BASE = "https://api.paddle.com"
 [[d1_databases]]
 binding = "SHARED_DB"
 database_name = "tabox-shared"
-database_id = "TBD-AFTER-CREATE"
+database_id = "3485b44f-32bd-4007-b0fd-9c79dc199290"
 migrations_dir = "migrations"
 
 # Secrets (set via `wrangler secret put`): PADDLE_WEBHOOK_SECRET, JWT_SECRET, PADDLE_API_KEY
@@ -37,5 +37,5 @@ PADDLE_API_BASE = "https://sandbox-api.paddle.com"
 [[env.sandbox.d1_databases]]
 binding = "SHARED_DB"
 database_name = "tabox-shared-sandbox"
-database_id = "TBD-AFTER-CREATE"
+database_id = "850ff30f-4669-4241-8c0f-55a806b3b208"
 migrations_dir = "migrations"
