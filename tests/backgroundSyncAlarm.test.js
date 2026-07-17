@@ -68,11 +68,22 @@ describe('background sync alarm', () => {
         await browser.runtime.onStartup.trigger();
 
         expect(browser.alarms.clear).toHaveBeenCalledWith('background-sync-alarm');
-        expect(browser.alarms.create).toHaveBeenLastCalledWith(
+
+        // Verify background-sync-alarm was created with correct interval
+        expect(browser.alarms.create).toHaveBeenCalledWith(
             'background-sync-alarm',
             expect.objectContaining({
                 delayInMinutes: 360,
                 periodInMinutes: 360
+            })
+        );
+
+        // Verify shared-folders-sync alarm was also created (new behavior)
+        expect(browser.alarms.create).toHaveBeenCalledWith(
+            'shared-folders-sync',
+            expect.objectContaining({
+                delayInMinutes: 1,
+                periodInMinutes: 5
             })
         );
     });
