@@ -213,6 +213,11 @@ const createBrowserHarness = (options = {}) => {
             onAdded: createEventMock(),
             onRemoved: createEventMock()
         },
+        notifications: {
+            create: jest.fn(async () => 'notif-id'),
+            clear: jest.fn(async () => true),
+            onClicked: createEventMock()
+        },
         alarms: {
             create: jest.fn((name, alarmInfo) => {
                 const index = alarms.findIndex((alarm) => alarm.name === name);

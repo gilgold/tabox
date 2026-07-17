@@ -8,3 +8,10 @@ export const noPermissionOpenState = atom(false);
 
 // Pending shared-folder invites surfaced to the current user (invite banner).
 export const pendingInvitesState = atom([]);
+
+// Leave/Unshare confirmation modal (SharedActionConfirmModal): holds
+// { kind: 'unshare' | 'leave', folder } while open, or null when closed.
+// A single shared atom so every entry point (FolderContainer, FPSidebar,
+// FPContentArea context menus) opens the SAME modal instance rendered once
+// by App.js, instead of the action firing directly on menu click.
+export const sharedActionConfirmState = atom(null);

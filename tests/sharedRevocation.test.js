@@ -1,5 +1,5 @@
 import { browser } from '../static/globals';
-import { handleSharedMessage, SHARED_SYNC_STATE_KEY } from '../chrome/shared-folders';
+import { handleSharedMessage } from '../chrome/shared-folders';
 import * as bgUtils from '../chrome/background-utils';
 
 jest.mock('../chrome/background-utils', () => ({

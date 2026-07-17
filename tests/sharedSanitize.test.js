@@ -14,6 +14,17 @@ test('keeps only whitelisted fields and forces safe defaults', () => {
   expect(clean).toEqual({ name: 'ok', tabs: [] });        // no shared/parentId/uid leakage
 });
 
+// I2 review fix: lastOpened is per-user local state (which device last opened
+// this collection) and must never travel between devices/members. It's no
+// longer in the sanitize whitelist, so even a stray inbound lastOpened (e.g.
+// from an older client that still pushed it, or a malicious payload) is
+// dropped rather than applied locally.
+test('drops lastOpened even when present on the incoming payload', () => {
+  const clean = sanitizeRemoteCollection({ name: 'ok', tabs: [], lastOpened: 999999 });
+  expect(clean).toEqual({ name: 'ok', tabs: [] });
+  expect(clean.lastOpened).toBeUndefined();
+});
+
 test('drops tabs with dangerous URL schemes, keeps http(s)/about/chrome', () => {
   const clean = sanitizeRemoteCollection({
     name: 'n',

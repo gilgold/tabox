@@ -8,7 +8,7 @@ import { sidebarNavigationState, sidebarCollapsedState } from '../atoms/fullpage
 import { commandPaletteOpenState } from '../atoms/commandPaletteState';
 import { searchState } from '../atoms/globalAppSettingsState';
 import { draggingCollectionState } from '../atoms/animationsState';
-import { noPermissionOpenState, shareFolderModalState } from '../atoms/sharedFoldersState';
+import { noPermissionOpenState, shareFolderModalState, sharedActionConfirmState } from '../atoms/sharedFoldersState';
 import { isProState } from '../atoms/premiumState';
 import { downloadTextFile } from '../utils';
 import { loadAllCollections } from '../utils/storageUtils';
@@ -136,6 +136,7 @@ function FPSidebar({
     const setCommandPaletteOpen = useSetAtom(commandPaletteOpenState);
     const setNoPermissionOpen = useSetAtom(noPermissionOpenState);
     const setShareFolderModal = useSetAtom(shareFolderModalState);
+    const setSharedActionConfirm = useSetAtom(sharedActionConfirmState);
     const isPro = useAtomValue(isProState);
     const runTrackedSync = useTrackedSync();
     const isMac = useMemo(() => navigator.platform?.toUpperCase().includes('MAC'), []);
@@ -459,31 +460,24 @@ function FPSidebar({
         setShareFolderModal(folder);
     }, [ctxMenu, closeCtxMenu, setShareFolderModal]);
 
-    const handleCtxLeaveShared = useCallback(async () => {
+    // Leave/Unshare confirmation hardening: opens the shared
+    // SharedActionConfirmModal (rendered once by App.js) instead of firing
+    // the sendMessage+toast+refresh directly on a single click — that logic
+    // now lives in app/utils/sharedFolderActions.js, called by the modal's
+    // Confirm button.
+    const handleCtxLeaveShared = useCallback(() => {
         if (!ctxMenu) return;
         const folder = ctxMenu.folder;
         closeCtxMenu();
-        try {
-            await browser.runtime.sendMessage({ type: 'sharedLeaveFolder', folderId: folder.uid });
-            showInfoToast(`You left "${folder.name}". A local copy was kept.`);
-            if (onDataUpdate) await onDataUpdate();
-        } catch {
-            showErrorToast('Could not leave this folder. Please try again.');
-        }
-    }, [ctxMenu, closeCtxMenu, onDataUpdate]);
+        setSharedActionConfirm({ kind: 'leave', folder });
+    }, [ctxMenu, closeCtxMenu, setSharedActionConfirm]);
 
-    const handleCtxUnshare = useCallback(async () => {
+    const handleCtxUnshare = useCallback(() => {
         if (!ctxMenu) return;
         const folder = ctxMenu.folder;
         closeCtxMenu();
-        try {
-            await browser.runtime.sendMessage({ type: 'sharedUnshareFolder', folderId: folder.uid });
-            showInfoToast(`"${folder.name}" is no longer shared.`);
-            if (onDataUpdate) await onDataUpdate();
-        } catch {
-            showErrorToast('Could not stop sharing this folder. Please try again.');
-        }
-    }, [ctxMenu, closeCtxMenu, onDataUpdate]);
+        setSharedActionConfirm({ kind: 'unshare', folder });
+    }, [ctxMenu, closeCtxMenu, setSharedActionConfirm]);
 
     const handleCtxDelete = useCallback(async () => {
         if (!ctxMenu) return;

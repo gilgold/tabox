@@ -68,6 +68,7 @@ import ManageSubscriptionModal from './ManageSubscriptionModal';
 import { manageSubscriptionOpenState } from './atoms/premiumState';
 import { usePremiumEntitlement } from './usePremiumEntitlement';
 import NoPermissionModal from './NoPermissionModal';
+import SharedActionConfirmModal from './SharedActionConfirmModal';
 import { noPermissionOpenState, pendingInvitesState, shareFolderModalState } from './atoms/sharedFoldersState';
 import { guardFolderEdit } from './utils/sharedFolderUtils';
 import ShareFolderModal from './ShareFolderModal';
@@ -764,7 +765,8 @@ function App({ mode = 'popup' }) {
   const updateCollection = async (newCollection, isManualUpdate = false) => {
     // Opening/focus-tracking updates (lastOpened only) are marked with
     // __skipFolderGuard and must never be blocked (reading is never blocked).
-    if (newCollection?.__skipFolderGuard) {
+    const isLastOpenedOnly = Boolean(newCollection?.__skipFolderGuard);
+    if (isLastOpenedOnly) {
       newCollection = { ...newCollection };
       delete newCollection.__skipFolderGuard;
     } else {
@@ -773,8 +775,11 @@ function App({ mode = 'popup' }) {
     }
 
     try {
-      // Use new single collection update for better performance
-      const success = await saveSingleCollection(newCollection, true); // Force timestamp update for user changes
+      // Use new single collection update for better performance.
+      // I2 fix: a lastOpened-only update must NOT force-bump lastUpdated —
+      // doing so marks the collection sync-dirty and pushes it (with a toast
+      // to every shared-folder member) just because someone opened it locally.
+      const success = await saveSingleCollection(newCollection, !isLastOpenedOnly); // Force timestamp update for user changes, but not for opens
       
       if (success) {
         // Update local state using functional update to avoid stale closure issues
@@ -1808,16 +1813,19 @@ function App({ mode = 'popup' }) {
     let isMounted = true;
 
     const loadPendingInvites = async () => {
-      const { [SHARED_PENDING_INVITES_KEY]: invites } = await browser.storage.local.get(SHARED_PENDING_INVITES_KEY);
+      const { [SHARED_PENDING_INVITES_KEY]: stored } = await browser.storage.local.get(SHARED_PENDING_INVITES_KEY);
       if (isMounted) {
-        setPendingInvites(invites || []);
+        // C1 fix: storage holds { invites, notifiedFolderIds } (see
+        // chrome/shared-folders.js's pollInvites) — unwrap to the invites array
+        // the banner expects instead of feeding it the whole object.
+        setPendingInvites(stored?.invites || []);
       }
     };
     loadPendingInvites();
 
     const handlePendingInvitesChange = (changes, areaName) => {
       if (areaName === 'local' && changes[SHARED_PENDING_INVITES_KEY]) {
-        setPendingInvites(changes[SHARED_PENDING_INVITES_KEY].newValue || []);
+        setPendingInvites(changes[SHARED_PENDING_INVITES_KEY].newValue?.invites || []);
       }
     };
     browser.storage.onChanged.addListener(handlePendingInvitesChange);
@@ -2167,6 +2175,7 @@ function App({ mode = 'popup' }) {
   const manageSubscriptionModalEl = <ManageSubscriptionModal />;
   const shareFolderModalEl = <ShareFolderModal />;
   const noPermissionModalEl = <NoPermissionModal />;
+  const sharedActionConfirmModalEl = <SharedActionConfirmModal onConfirmed={refreshDataAfterFolderOperation} />;
 
   if (isFullPage) {
     return <>
@@ -2186,6 +2195,7 @@ function App({ mode = 'popup' }) {
         {manageSubscriptionModalEl}
         {shareFolderModalEl}
         {noPermissionModalEl}
+        {sharedActionConfirmModalEl}
         <SharedInviteBanner onAccepted={refreshDataAfterFolderOperation} />
         <FPLayout
           folders={displayFolders}
@@ -2235,6 +2245,7 @@ function App({ mode = 'popup' }) {
       {manageSubscriptionModalEl}
       {shareFolderModalEl}
       {noPermissionModalEl}
+      {sharedActionConfirmModalEl}
       <div className={`App${isFullPage ? ' fullpage' : ''}`}>
       <Header
         isFullPage={isFullPage}

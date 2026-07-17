@@ -320,6 +320,122 @@ async function pollInvites() {
 // importScripts AFTER background.js in the real service worker, so the bare
 // identifier resolves there but is safely absent (typeof-guarded, no
 // ReferenceError) when this module is required standalone under Jest.
+// Materializes (creates or wholesale-overwrites) a shared folder + its
+// non-deleted collections as LOCAL records: folder_<folderId>,
+// collection_<uid> per collection, both indexes rewritten, in ONE atomic
+// storage.local.set, followed by a remove() for any stale local collection
+// that used to belong to this folder but is no longer in the fresh set
+// (keeps collectionCount and the index from drifting). The whole record is
+// treated as server-authoritative, so a clean overwrite is correct even when
+// a stale local copy already exists (e.g. re-accepting an invite, or C2's
+// multi-device rematerialization below finding a folder that was pruned/
+// stripped of its marker by a Drive pull on this device).
+//
+// Shared by respondToInvite (Task 12: accepting an invite) and
+// rematerializeMissingSharedFolders (C2 review: reconciling this device's
+// local storage against the server's authoritative folder list so a shared
+// folder created/accepted on ANOTHER device isn't pruned as stale here).
+// Callers are responsible for their own setFolderSyncState call afterward —
+// this helper only ever touches folder_*/collection_*/*_index keys, never
+// SHARED_SYNC_STATE_KEY, and never appends timeline events (a rematerialized
+// folder isn't a "change" a user needs toasted at them).
+async function materializeSharedFolderLocally({ folderId, name, color, role, ownerEmail, members, collections, now = Date.now() }) {
+  return withStorageLock(async () => {
+    const got = await browser.storage.local.get(['folders_index', 'collections_index']);
+    const fIndex = got.folders_index || {};
+    const cIndex = { ...(got.collections_index || {}) };
+    const updates = {};
+    const removals = [];
+
+    // Identify fresh collections from the server response
+    const freshCollectionUids = new Set(collections.map((c) => c.uid));
+
+    // Find and remove stale local collections (parentId matches this folder, but uid not in fresh response)
+    for (const uid of Object.keys(cIndex)) {
+      if (cIndex[uid].parentId === folderId && !freshCollectionUids.has(uid)) {
+        delete cIndex[uid];
+        removals.push(`collection_${uid}`);
+      }
+    }
+
+    const shared = { folderId, role, ownerEmail, members };
+    const safeName = String(name ?? 'Untitled').slice(0, 200) || 'Untitled';
+    const folderRecord = {
+      uid: folderId,
+      name: safeName,
+      type: 'folder',
+      color,
+      collapsed: false,
+      order: 999999,
+      collectionCount: collections.length,
+      createdOn: now,
+      lastUpdated: now,
+      shared,
+    };
+    updates[`folder_${folderId}`] = folderRecord;
+    fIndex[folderId] = { uid: folderId, name: safeName, type: 'folder', color, shared };
+    for (const c of collections) {
+      const record = { ...sanitizeRemoteCollection(c.data), uid: c.uid, parentId: folderId, lastUpdated: now };
+      updates[`collection_${c.uid}`] = record;
+      cIndex[c.uid] = { uid: c.uid, name: record.name, parentId: folderId, lastUpdated: now };
+    }
+    updates.folders_index = fIndex;
+    updates.collections_index = cIndex;
+    await browser.storage.local.set(updates); // one atomic set
+    if (removals.length) await browser.storage.local.remove(removals);
+  });
+}
+
+// C2 review fix (multi-device rematerialization): the Task 8 `shared` marker
+// never travels via Drive sync (Task 9 deliberately excludes it from the
+// upload payload), so when a folder is shared/accepted on one device, a
+// SECOND device's next Drive pull sees a folder it has no local record of (or
+// a record with the marker Drive-pruned as "not ours") and treats it as
+// stale — pruning it, or leaving it un-rematerialized. Reconcile against the
+// server's authoritative "folders I have access to" list BEFORE the normal
+// per-folder pull/push loop in doSyncSharedFolders: anything the server says
+// we should have, but that's missing locally OR present without a live
+// `shared` marker, gets rematerialized (folder + all its non-deleted
+// collections, regardless of which user authored them — this is a full
+// resync, not a delta, so applyDeltaLocally's "isOther" author check does not
+// apply here). A folder already present with a live marker is left
+// completely untouched (the normal loop below already syncs it) — no extra
+// network call for it. Failure of the list call itself is skipped silently;
+// the next 5-minute cycle retries. A per-folder delta-fetch failure only
+// skips THAT folder, same reasoning.
+async function rematerializeMissingSharedFolders() {
+  const listRes = await sharedApiFetch('/shared/folders');
+  if (!listRes.ok) return; // network/auth error: skip silently, next cycle retries
+
+  const { folders_index: localIndex = {} } = await browser.storage.local.get('folders_index');
+
+  for (const entry of listRes.data.folders || []) {
+    const localRecord = localIndex[entry.folderId];
+    if (localRecord?.shared?.folderId) continue; // live locally already — normal loop covers it, no extra fetch
+
+    const deltaRes = await sharedApiFetch(`/shared/folders/${entry.folderId}?sinceRev=0`);
+    if (!deltaRes.ok) continue; // skip this one; retried next cycle
+
+    const now = Date.now();
+    const collections = (deltaRes.data.collections || []).filter((c) => !c.deleted);
+    await materializeSharedFolderLocally({
+      folderId: entry.folderId,
+      name: deltaRes.data.folder.name,
+      color: deltaRes.data.folder.color ?? entry.color,
+      role: deltaRes.data.role,
+      ownerEmail: entry.ownerEmail,
+      members: deltaRes.data.members,
+      collections: collections.map((c) => ({ uid: c.uid, data: c.data })),
+      now,
+    });
+    await setFolderSyncState(entry.folderId, {
+      lastRev: deltaRes.data.revision,
+      lastSyncedAt: now,
+      knownUids: collections.map((c) => c.uid),
+    });
+  }
+}
+
 async function respondToInvite({ folderId, accept }) {
   const res = await sharedApiFetch(`/shared/invites/${folderId}/respond`, { method: 'POST', body: { accept } });
 
@@ -347,55 +463,18 @@ async function respondToInvite({ folderId, accept }) {
   const { folder, collections } = res.data;
   const now = Date.now();
 
-  // One atomic set: folder_<id> + collection_<uid> per collection + both
-  // indexes rewritten. Overwrites any stale local copy of this folder/its
-  // collections wholesale (e.g. re-accepting after a prior partial accept) —
-  // the whole record is server-authoritative here, so a clean overwrite is
-  // correct and keeps both indexes consistent with what was just written.
-  // Also removes any stale local collection records (parentId === folderId,
-  // uid NOT in fresh server response) so collectionCount and the index never drift.
-  await withStorageLock(async () => {
-    const got = await browser.storage.local.get(['folders_index', 'collections_index']);
-    const fIndex = got.folders_index || {};
-    const cIndex = { ...(got.collections_index || {}) };
-    const updates = {};
-    const removals = [];
-
-    // Identify fresh collections from the server response
-    const freshCollectionUids = new Set(collections.map((c) => c.uid));
-
-    // Find and remove stale local collections (parentId matches this folder, but uid not in fresh response)
-    for (const uid of Object.keys(cIndex)) {
-      if (cIndex[uid].parentId === folder.folderId && !freshCollectionUids.has(uid)) {
-        delete cIndex[uid];
-        removals.push(`collection_${uid}`);
-      }
-    }
-
-    const shared = { folderId: folder.folderId, role: folder.role, ownerEmail: folder.ownerEmail, members: folder.members };
-    const folderRecord = {
-      uid: folder.folderId,
-      name: String(folder.name ?? 'Untitled').slice(0, 200) || 'Untitled',
-      type: 'folder',
-      color: folder.color,
-      collapsed: false,
-      order: 999999,
-      collectionCount: collections.length,
-      createdOn: now,
-      lastUpdated: now,
-      shared,
-    };
-    updates[`folder_${folder.folderId}`] = folderRecord;
-    fIndex[folder.folderId] = { uid: folder.folderId, name: folderRecord.name, type: 'folder', color: folder.color, shared };
-    for (const c of collections) {
-      const record = { ...sanitizeRemoteCollection(c.data), uid: c.uid, parentId: folder.folderId, lastUpdated: now };
-      updates[`collection_${c.uid}`] = record;
-      cIndex[c.uid] = { uid: c.uid, name: record.name, parentId: folder.folderId, lastUpdated: now };
-    }
-    updates.folders_index = fIndex;
-    updates.collections_index = cIndex;
-    await browser.storage.local.set(updates); // one atomic set
-    if (removals.length) await browser.storage.local.remove(removals);
+  // Materialization (folder_<id> + collection_<uid> per collection + both
+  // indexes, overwriting any stale local copy wholesale) is shared with C2's
+  // rematerializeMissingSharedFolders below — see materializeSharedFolderLocally.
+  await materializeSharedFolderLocally({
+    folderId: folder.folderId,
+    name: folder.name,
+    color: folder.color,
+    role: folder.role,
+    ownerEmail: folder.ownerEmail,
+    members: folder.members,
+    collections,
+    now,
   });
 
   // Separate, sequential lock acquisitions (setFolderSyncState and
@@ -439,6 +518,22 @@ async function doSyncSharedFolders() {
   const { googleUser } = await browser.storage.local.get('googleUser');
   const myEmail = (googleUser?.emailAddress || '').toLowerCase();
   const folders = await loadLocalSharedFolders();
+
+  // C2 review fix: reconcile against the server's authoritative "folders I
+  // have access to" list BEFORE the per-folder loop below runs (`folders`,
+  // captured just above, deliberately does NOT include anything
+  // rematerialized here — a folder rematerialized this cycle is picked up by
+  // the NEXT cycle's loadLocalSharedFolders() instead of being double-synced
+  // within this same cycle). See rematerializeMissingSharedFolders' comment
+  // for why this exists at all. Never allowed to abort the rest of the
+  // cycle — the list/delta calls it makes already fail silently, but this
+  // extra try/catch also guards against an unexpected local storage error.
+  try {
+    await rematerializeMissingSharedFolders();
+  } catch (error) {
+    console.error('Error rematerializing shared folders:', error);
+  }
+
   let pulled = 0;
   let pushed = 0;
   let revoked = 0;
@@ -487,7 +582,15 @@ async function doSyncSharedFolders() {
       for (const uid of dirty) {
         const rec = recs[`collection_${uid}`];
         if (!rec) continue;
-        const { parentId, ...data } = rec;
+        // I2 review fix (defense in depth): lastOpened is per-user local state
+        // (which device last opened this collection) — it must never travel
+        // to the server, let alone reach other members. Stripped alongside
+        // parentId (already stripped: it's a local-storage relationship, not
+        // shared-collection data). Built via delete rather than destructuring
+        // both into discarded bindings, which would trip no-unused-vars.
+        const data = { ...rec };
+        delete data.parentId;
+        delete data.lastOpened;
         const r = await sharedApiFetch(`/shared/folders/${folderId}/collections/${uid}`, {
           method: 'PUT', body: { data, baseRev: lastRev },
         });
@@ -570,6 +673,19 @@ async function handleSharedMessage(request) {
       }
       return r;
     }
+    // I1 review fix: folder rename/recolor was never pushed to the server —
+    // a shared folder's name/color change silently reverted on the next pull
+    // (applyDeltaLocally always refreshes folder meta from the server's
+    // record, which never learned about the local edit). Called
+    // fire-and-forget from app/utils/folderOperations.js's updateFolderDetails
+    // after a successful LOCAL save of a shared folder the user can edit.
+    case 'sharedUpdateFolderMeta': {
+      const r = await sharedApiFetch(`/shared/folders/${request.folderId}`, {
+        method: 'PATCH', body: { name: request.name, color: request.color },
+      });
+      if (r.ok) await setFolderSyncState(request.folderId, { lastRev: r.data.revision });
+      return r;
+    }
     case 'sharedGetMembers':
       return sharedApiFetch(`/shared/folders/${request.folderId}/members`);
     case 'sharedUpdateMemberRole':
@@ -612,7 +728,11 @@ async function handleSharedMessage(request) {
 }
 
 const ALLOWED_TAB_SCHEMES = ['http:', 'https:', 'about:', 'chrome:'];
-const COLLECTION_FIELDS = ['name', 'tabs', 'chromeGroups', 'color', 'createdOn', 'lastUpdated', 'window', 'lastOpened', 'isFavorite', 'favoriteOrder', 'order'];
+// I2 review fix: lastOpened is per-user local state (which device last opened
+// this collection) and must never travel between devices/members — dropped
+// from the whitelist so a stray inbound lastOpened (e.g. an older client that
+// still pushed it) is never applied locally either.
+const COLLECTION_FIELDS = ['name', 'tabs', 'chromeGroups', 'color', 'createdOn', 'lastUpdated', 'window', 'isFavorite', 'favoriteOrder', 'order'];
 
 function sanitizeRemoteCollection(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return { name: 'Untitled', tabs: [] };

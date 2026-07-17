@@ -26,6 +26,7 @@ import {
 import { triggerBackgroundSync } from './sharedSync';
 import { useTrackedSync } from '../useTrackedSync';
 import { canEditFolder, isSharedFolder } from './sharedFolderUtils';
+import { browser } from '../../static/globals';
 
 // ========================================
 // FOLDER CRUD OPERATIONS
@@ -145,7 +146,26 @@ export const updateFolderDetails = async (folderId, updates = {}) => {
         folder.color = nextColor;
         folder.lastUpdated = Date.now();
 
-        return await updateFolder(folder, true);
+        const success = await updateFolder(folder, true);
+
+        // I1 review fix: rename/recolor was only ever saved locally — a shared
+        // folder's edit silently reverted on the next pull (applyDeltaLocally
+        // always refreshes folder meta FROM the server, which never learned
+        // about this local edit). Push it to the server too, for any shared
+        // folder this device can edit (canEditFolder above already blocked
+        // read-only access, so reaching here means owner/write). Fire-and-forget:
+        // never block the UI on the network round-trip; a failure self-heals
+        // by reverting on the next pull (acceptable per design).
+        if (success && isSharedFolder(folder)) {
+            browser.runtime.sendMessage({
+                type: 'sharedUpdateFolderMeta',
+                folderId: folder.uid,
+                name: nextName,
+                color: nextColor,
+            }).catch(() => {});
+        }
+
+        return success;
     } catch (error) {
         console.error('Error updating folder details:', error);
         return false;

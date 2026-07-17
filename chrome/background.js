@@ -2295,6 +2295,25 @@ try {
     }
   });
 
+  // C1: make the Chrome invite notification (created in chrome/shared-folders.js's
+  // pollInvites, id `shared-invite-<folderId>`) actionable — clicking it opens the
+  // extension's full-page view (where the invite banner/pending-invites UI lives)
+  // and clears the notification so it doesn't linger in the tray.
+  browser.notifications.onClicked.addListener(async (notificationId) => {
+    if (typeof notificationId !== 'string' || !notificationId.startsWith('shared-invite-')) return;
+    try {
+      await openExtensionFullPage();
+    } catch (error) {
+      console.error('Error opening full page from shared-invite notification:', error);
+    } finally {
+      try {
+        await browser.notifications.clear(notificationId);
+      } catch (error) {
+        console.error('Error clearing shared-invite notification:', error);
+      }
+    }
+  });
+
   browser.storage.onChanged.addListener(async (changes, areaName) => {
     if (areaName !== 'local' || !changes[TOOLBAR_FULLPAGE_SETTING_KEY]) {
       return;

@@ -105,4 +105,62 @@ describe('folderOperations.updateFolderDetails', () => {
         expect(loadSingleFolder).toHaveBeenCalledWith('folder-1');
         expect(saveSingleFolder).not.toHaveBeenCalled();
     });
+
+    // I1 review fix: rename/recolor must push to the server for a shared
+    // folder the user can edit (owner/write — read-only is already blocked
+    // earlier by canEditFolder), so it doesn't silently revert on next pull.
+    test('sends sharedUpdateFolderMeta for a shared (owner/write) folder after a successful save', async () => {
+        loadSingleFolder.mockResolvedValue({
+            uid: 'folder-1',
+            name: 'Original Name',
+            color: '#4facfe',
+            collapsed: false,
+            createdOn: 123,
+            lastUpdated: 456,
+            shared: { folderId: 'folder-1', role: 'write', ownerEmail: 'owner@x.com', members: [] },
+        });
+
+        const result = await updateFolderDetails('folder-1', {
+            name: 'Renamed Shared Folder',
+            color: '#ef4444',
+        });
+
+        expect(result).toBe(true);
+        expect(browser.runtime.sendMessage).toHaveBeenCalledWith({
+            type: 'sharedUpdateFolderMeta',
+            folderId: 'folder-1',
+            name: 'Renamed Shared Folder',
+            color: '#ef4444',
+        });
+    });
+
+    test('does not send sharedUpdateFolderMeta for a normal (non-shared) folder', async () => {
+        const result = await updateFolderDetails('folder-1', {
+            name: 'Renamed Folder',
+            color: '#ef4444',
+        });
+
+        expect(result).toBe(true);
+        expect(browser.runtime.sendMessage).not.toHaveBeenCalledWith(
+            expect.objectContaining({ type: 'sharedUpdateFolderMeta' })
+        );
+    });
+
+    test('does not send sharedUpdateFolderMeta when nothing changed (no save happened)', async () => {
+        loadSingleFolder.mockResolvedValue({
+            uid: 'folder-1',
+            name: 'Original Name',
+            color: '#4facfe',
+            shared: { folderId: 'folder-1', role: 'owner', ownerEmail: null, members: [] },
+        });
+
+        const result = await updateFolderDetails('folder-1', {
+            name: 'Original Name',
+            color: '#4facfe',
+        });
+
+        expect(result).toBe(true);
+        expect(saveSingleFolder).not.toHaveBeenCalled();
+        expect(browser.runtime.sendMessage).not.toHaveBeenCalled();
+    });
 });

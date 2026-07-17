@@ -1,6 +1,5 @@
 import { browser } from '../static/globals';
 import { syncSharedFolders, handleSharedMessage, SHARED_EVENTS_KEY, SHARED_SYNC_STATE_KEY } from '../chrome/shared-folders';
-import * as bgUtils from '../chrome/background-utils';
 
 jest.mock('../chrome/background-utils', () => ({
   ...jest.requireActual('../chrome/background-utils'),
@@ -79,6 +78,30 @@ test('push sends locally-updated collections with baseRev and local deletions as
   const calls = global.fetch.mock.calls.map(([url, opts]) => `${(opts && opts.method) || 'GET'} ${url}`);
   expect(calls.some((c) => c.startsWith('PUT') && c.includes('/collections/c1'))).toBe(true);   // lastUpdated 100 > lastSyncedAt 50
   expect(calls.some((c) => c.startsWith('DELETE') && c.includes('/collections/gone'))).toBe(true); // knownUid vanished locally
+});
+
+// I2 review fix (defense in depth): lastOpened is per-user local state (which
+// device last opened this collection) — pushing it would leak one member's
+// local "opened" activity to the server, and from there to every other
+// member's next pull. It must be stripped alongside parentId in the push
+// phase, same as it's excluded from sanitizeRemoteCollection's inbound
+// whitelist (tests/sharedSanitize.test.js).
+test('push strips lastOpened from the PUT body alongside parentId', async () => {
+  await seedLocal({
+    collection_c1: { uid: 'c1', name: 'A', parentId: 'f1', tabs: [], lastUpdated: 100, lastOpened: 123456 },
+    [SHARED_SYNC_STATE_KEY]: { f1: { lastRev: 1, lastSyncedAt: 50, knownUids: ['c1'] } },
+  });
+  global.fetch.mockImplementation(async (url, opts = {}) => {
+    if (!opts.method || opts.method === 'GET') return deltaResponse({ collections: [] });
+    return { ok: true, status: 200, json: async () => ({ revision: 3 }) };
+  });
+  await syncSharedFolders();
+  const putCall = global.fetch.mock.calls.find(([url, opts]) => opts?.method === 'PUT' && url.includes('/collections/c1'));
+  expect(putCall).toBeDefined();
+  const body = JSON.parse(putCall[1].body);
+  expect(body.data).not.toHaveProperty('lastOpened');
+  expect(body.data).not.toHaveProperty('parentId');
+  expect(body.data.name).toBe('A');
 });
 
 test('403 on pull converts the folder to a local unshared folder and records a revoked event', async () => {

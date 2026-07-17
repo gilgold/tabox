@@ -19,7 +19,7 @@ import { useDndContext } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { trackingStateVersion } from './atoms/globalAppSettingsState';
-import { shareFolderModalState } from './atoms/sharedFoldersState';
+import { shareFolderModalState, sharedActionConfirmState } from './atoms/sharedFoldersState';
 import { isProState } from './atoms/premiumState';
 import './FolderContainer.css';
 
@@ -57,6 +57,7 @@ function FolderContainer({
     // Shared folders: opens the Share/Manage-sharing modal; isPro only drives
     // the (currently inert) proBadge hint on the builder's "share" item.
     const setShareFolderModal = useSetAtom(shareFolderModalState);
+    const setSharedActionConfirm = useSetAtom(sharedActionConfirmState);
     const isPro = useAtomValue(isProState);
 
     // Sync local state with folder prop changes
@@ -749,27 +750,14 @@ function FolderContainer({
 
     const handleShareClick = () => setShareFolderModal(folder);
 
-    const handleLeaveShared = async () => {
-        try {
-            await browser.runtime.sendMessage({ type: 'sharedLeaveFolder', folderId: folder.uid });
-            showInfoToast(`You left "${folder.name}". A local copy was kept.`);
-            await onDataUpdate?.();
-        } catch (error) {
-            console.error('Error leaving shared folder:', error);
-            showErrorToast('Could not leave this folder. Please try again.');
-        }
-    };
+    // Leave/Unshare confirmation hardening: the menu action now opens the
+    // shared SharedActionConfirmModal (rendered once by App.js) instead of
+    // firing the sendMessage+toast+refresh directly on a single click — that
+    // logic now lives in app/utils/sharedFolderActions.js, which the modal's
+    // Confirm button calls.
+    const handleLeaveShared = () => setSharedActionConfirm({ kind: 'leave', folder });
 
-    const handleUnshare = async () => {
-        try {
-            await browser.runtime.sendMessage({ type: 'sharedUnshareFolder', folderId: folder.uid });
-            showInfoToast(`"${folder.name}" is no longer shared.`);
-            await onDataUpdate?.();
-        } catch (error) {
-            console.error('Error unsharing folder:', error);
-            showErrorToast('Could not stop sharing this folder. Please try again.');
-        }
-    };
+    const handleUnshare = () => setSharedActionConfirm({ kind: 'unshare', folder });
 
     // Existing (non-shared-specific) menu entries, in the exact ContextMenu
     // item shape. The old inline "delete" entry is intentionally omitted here —
