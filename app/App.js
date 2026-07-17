@@ -1850,6 +1850,11 @@ function App({ mode = 'popup' }) {
         for (const e of events.slice(-3)) {
           if (e.kind === 'revoked') {
             showInfoToast(`Your access to "${e.folderName}" ended. A local copy was kept.`);
+          } else if (e.kind === 'conflict') {
+            // I3 fix: a locally-dirty (unsynced) edit lost a fair race against
+            // another member's newer change to the same collection — tell the
+            // user their change was replaced instead of silently discarding it.
+            showInfoToast(`${e.actorEmail}'s newer change to "${e.collectionName}" replaced yours in ${e.folderName}`);
           } else if (e.kind === 'deleted') {
             showInfoToast(`${e.actorEmail} removed a collection from "${e.folderName}"`);
           } else if (e.kind === 'renamed') {

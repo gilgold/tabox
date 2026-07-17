@@ -217,7 +217,32 @@ async function loadLocalSharedFolders() {
 // the local move-out/delete survives, the server row still gets deleted, and
 // (for a move-out) the user's own moved-out local copy is left completely
 // untouched rather than being overwritten with the other member's content.
-async function applyDeltaLocally(folder, delta, myEmail, pendingLocalRemovals = new Set()) {
+//
+// I3 fix (conflict-aware pull — dirty local edits race fairly instead of
+// being silently clobbered): collections sync at WHOLE-DOCUMENT granularity
+// (a tab add/remove/reorder is just an edit to the `tabs` array), so
+// unconditionally overwriting a locally-DIRTY row the instant a same-uid
+// remote row arrives was silently destroying a user's unsynced tab changes
+// whenever another member's edit to the SAME collection landed first — with
+// zero signal. "Dirty" here means the SAME thing the push phase's own dirty
+// diff already means: `preCycleIndex[uid].lastUpdated > lastSyncedAt` (the
+// two watermarks the caller already captures before any network I/O this
+// cycle — see doSyncSharedFolders' `cycleStartTs`/`preCycleIndex` comment).
+// Rather than overwrite such a row (upsert) or destroy it outright (delete
+// tombstone), stash the remote row in `deferredRemotes` (keyed by uid) and do
+// NOT add the uid to `appliedUids` — leaving local storage untouched for it.
+// The caller's push phase then races fairly: the uid is still "dirty" (not
+// excluded via appliedUids) so it still gets pushed, but with baseRev pinned
+// to the PRE-pull revision watermark (state.lastRev) rather than the
+// just-pulled one — since the deferred row, by construction, has a server
+// rev newer than that stale watermark (that's why it appeared in this
+// cycle's delta at all), the push 409s unless this device's own write
+// somehow still lands first (see doSyncSharedFolders' M3 scenario). A 409
+// means the local edit LOST the race: the caller applies the deferred remote
+// (upsert or deletion) and records a 'conflict' timeline event so the user is
+// told. A successful push means this device raced ahead; the deferred remote
+// is simply discarded, never applied.
+async function applyDeltaLocally(folder, delta, myEmail, pendingLocalRemovals = new Set(), preCycleIndex = {}, lastSyncedAt = 0) {
   return withStorageLock(async () => {
     const folderId = folder.uid;
     const keys = ['collections_index', `folder_${folderId}`, 'folders_index', SHARED_EVENTS_KEY];
@@ -227,6 +252,7 @@ async function applyDeltaLocally(folder, delta, myEmail, pendingLocalRemovals = 
     const removals = [];
     const events = [];
     const appliedUids = new Set();
+    const deferredRemotes = new Map();
     const normalizedMyEmail = (myEmail || '').toLowerCase();
 
     // Compute sanitized folder name once, use everywhere (folder record, index, events)
@@ -235,8 +261,21 @@ async function applyDeltaLocally(folder, delta, myEmail, pendingLocalRemovals = 
 
     for (const row of delta.collections || []) {
       const isOther = Boolean(row.updatedBy) && row.updatedBy.toLowerCase() !== normalizedMyEmail;
+      // I3 fix: is THIS uid's local copy an unsynced edit made before this
+      // cycle's pull started? Same formula the push phase's own dirty diff
+      // uses (see doSyncSharedFolders) — deliberately NOT gated on
+      // pendingLocalRemovals here (a pending-removed uid is handled by its
+      // own dedicated check below/above, same as before this fix).
+      const isLocallyDirty = ((preCycleIndex[row.uid] && preCycleIndex[row.uid].lastUpdated) || 0) > lastSyncedAt;
       if (row.deleted) {
         if (index[row.uid]) {
+          if (isOther && isLocallyDirty) {
+            // I3 fix: a remote deletion raced a local dirty edit — defer
+            // rather than silently destroying the unsynced edit. See the
+            // header comment above applyDeltaLocally for the full reasoning.
+            deferredRemotes.set(row.uid, row);
+            continue;
+          }
           delete index[row.uid];
           removals.push(`collection_${row.uid}`);
           appliedUids.add(row.uid);
@@ -253,6 +292,13 @@ async function applyDeltaLocally(folder, delta, myEmail, pendingLocalRemovals = 
         // ran — do not resurrect it. See the pendingLocalRemovals doc comment
         // above applyDeltaLocally for the full reasoning.
         if (pendingLocalRemovals.has(row.uid)) continue;
+        if (isLocallyDirty) {
+          // I3 fix: don't overwrite a locally-dirty (unsynced) edit — defer
+          // the remote row for the push phase to resolve fairly. See the
+          // header comment above applyDeltaLocally for the full reasoning.
+          deferredRemotes.set(row.uid, row);
+          continue;
+        }
         const record = { ...sanitizeRemoteCollection(row.data), uid: row.uid, parentId: folderId, lastUpdated: row.updatedAt };
         updates[`collection_${row.uid}`] = record;
         index[row.uid] = { uid: row.uid, name: record.name, parentId: folderId, lastUpdated: row.updatedAt };
@@ -290,7 +336,53 @@ async function applyDeltaLocally(folder, delta, myEmail, pendingLocalRemovals = 
 
     await browser.storage.local.set(updates); // ONE atomic set for upserts + meta refresh
     if (removals.length) await browser.storage.local.remove(removals); // deletions
-    return appliedUids;
+    return { appliedUids, deferredRemotes };
+  });
+}
+
+// I3 fix: called from the push phase when a uid that had a `deferredRemotes`
+// entry comes back 409 — the local dirty edit lost the fair race against the
+// remote row applyDeltaLocally chose not to apply. Applies that deferred
+// remote row (upsert or deletion) locally now, and records a 'conflict'
+// timeline event (distinct from 'updated'/'deleted', which are for changes
+// the local device was never fighting over) so the user is told their change
+// was replaced. Locked, like every other aggregate-key mutation in this file.
+async function applyDeferredRemoteConflict(folder, deferredRow) {
+  return withStorageLock(async () => {
+    const folderId = folder.uid;
+    const uid = deferredRow.uid;
+    const keys = ['collections_index', `folder_${folderId}`, `collection_${uid}`, SHARED_EVENTS_KEY];
+    const got = await browser.storage.local.get(keys);
+    const index = { ...(got.collections_index || {}) };
+    const localFolder = got[`folder_${folderId}`] || folder;
+    const localRecord = got[`collection_${uid}`];
+    const updates = {};
+    const removals = [];
+
+    // collectionName for the toast: the local (about-to-be-replaced) name if
+    // we have one, else — for an upsert — the incoming remote name.
+    let collectionName = localRecord?.name ?? null;
+    if (deferredRow.deleted) {
+      if (index[uid]) {
+        delete index[uid];
+        removals.push(`collection_${uid}`);
+      }
+    } else {
+      const record = { ...sanitizeRemoteCollection(deferredRow.data), uid, parentId: folderId, lastUpdated: deferredRow.updatedAt };
+      updates[`collection_${uid}`] = record;
+      index[uid] = { uid, name: record.name, parentId: folderId, lastUpdated: deferredRow.updatedAt };
+      collectionName = collectionName ?? record.name;
+    }
+    updates.collections_index = index;
+
+    const existingEvents = got[SHARED_EVENTS_KEY] || [];
+    updates[SHARED_EVENTS_KEY] = [...existingEvents, {
+      folderId, folderName: localFolder.name, actorEmail: deferredRow.updatedBy,
+      kind: 'conflict', collectionName, at: deferredRow.updatedAt,
+    }].slice(-20);
+
+    await browser.storage.local.set(updates);
+    if (removals.length) await browser.storage.local.remove(removals);
   });
 }
 
@@ -608,7 +700,12 @@ async function doSyncSharedFolders() {
       }
       continue; // network/auth errors: try again next cycle
     }
-    const appliedUids = await applyDeltaLocally(folder, pull.data, myEmail, pendingLocalRemovals);
+    // I3 fix: applyDeltaLocally now also returns `deferredRemotes` — uids
+    // whose local copy was DIRTY (an unsynced edit made before this cycle's
+    // pull) when a same-uid remote row arrived. Those rows were deliberately
+    // NOT applied to local storage; the push phase below races them fairly
+    // instead (see applyDeltaLocally's header comment for the full design).
+    const { appliedUids, deferredRemotes } = await applyDeltaLocally(folder, pull.data, myEmail, pendingLocalRemovals, preCycleIndex, state.lastSyncedAt);
     pulled += (pull.data.collections || []).length;
     let lastRev = pull.data.revision;
 
@@ -636,17 +733,36 @@ async function doSyncSharedFolders() {
         const data = { ...rec };
         delete data.parentId;
         delete data.lastOpened;
+        // I3 fix: a uid with a deferred remote races fairly against the
+        // PRE-pull revision watermark (state.lastRev), not the just-pulled
+        // `lastRev` — the deferred row is, by construction, newer than
+        // state.lastRev (that's why it showed up in this cycle's delta at
+        // all), so this correctly 409s unless our own write somehow still
+        // lands first (a genuinely simultaneous cross-device race — neither
+        // side's pull would have seen the other's row yet, so neither would
+        // have a deferred remote in that case; see the M3 test scenario). A
+        // plain dirty uid with no deferred remote keeps using the current
+        // (post-pull, possibly already-advanced-by-this-loop) `lastRev`,
+        // unchanged from before this fix.
+        const deferred = deferredRemotes.get(uid);
+        const baseRevForPush = deferred ? state.lastRev : lastRev;
         const r = await sharedApiFetch(`/shared/folders/${folderId}/collections/${uid}`, {
-          method: 'PUT', body: { data, baseRev: lastRev },
+          method: 'PUT', body: { data, baseRev: baseRevForPush },
         });
         if (r.ok) {
           lastRev = r.data.revision;
           pushed += 1;
+        } else if (r.status === 409 && deferred) {
+          // I3 fix: the local edit LOST the fair race — apply the deferred
+          // remote (upsert or deletion) locally now and record a 'conflict'
+          // event so the user is told their change was replaced.
+          await applyDeferredRemoteConflict(folder, deferred);
         }
-        // 409 (conflict): the server has a newer revision for this collection than
-        // our baseRev — skip it silently. The next cycle's pull reconciles (or, if
-        // our local edit is still newer after that, we simply re-push it then).
-        // Never throw: one folder's conflict must not abort the rest of the loop.
+        // 409 (conflict) with no deferred remote: the server has a newer
+        // revision for this collection than our baseRev — skip it silently.
+        // The next cycle's pull reconciles (or, if our local edit is still
+        // newer after that, we simply re-push it then). Never throw: one
+        // folder's conflict must not abort the rest of the loop.
       }
       // B4 fix: goneUids is now diffed against the PRE-pull snapshot
       // (pendingLocalRemovals, computed above from preCycleIndex) rather than
@@ -681,7 +797,16 @@ async function doSyncSharedFolders() {
         // it as a normal upsert). Never throw: one conflict must not abort
         // the rest of the loop.
       }
-      await setFolderSyncState(folderId, { lastRev, lastSyncedAt: cycleStartTs, knownUids: currentUids });
+      // I3 fix: re-read collections_index fresh here rather than reusing the
+      // `currentUids` snapshot captured before this push loop ran — a 409'd
+      // deferred-remote DELETE conflict (applyDeferredRemoteConflict, above)
+      // can remove a uid from local storage mid-loop, and knownUids must
+      // reflect that or the next cycle's pendingLocalRemovals computation
+      // would wrongly treat an already-server-deleted uid as a fresh local
+      // removal to push again.
+      const { collections_index: postPushIndex = {} } = await browser.storage.local.get('collections_index');
+      const finalKnownUids = Object.keys(postPushIndex).filter((uid) => postPushIndex[uid].parentId === folderId);
+      await setFolderSyncState(folderId, { lastRev, lastSyncedAt: cycleStartTs, knownUids: finalKnownUids });
     } else {
       await setFolderSyncState(folderId, { lastRev, lastSyncedAt: cycleStartTs, knownUids: state.knownUids });
     }

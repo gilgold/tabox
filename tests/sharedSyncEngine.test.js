@@ -315,3 +315,46 @@ describe('sharedDrainEvents', () => {
     expect(res).toEqual({ ok: true, data: { events: [] } });
   });
 });
+
+// I3 fix: applyDeltaLocally must not overwrite a locally-dirty (unsynced)
+// edit the instant a same-uid remote row arrives — instead it defers the
+// remote row, lets the push phase race it fairly (baseRev pinned to the
+// PRE-pull revision watermark), and on a 409 loss applies the deferred remote
+// + records a 'conflict' event instead of silently discarding the local edit.
+describe('I3 fix: conflict-aware pull (deferred remote + fair race)', () => {
+  test('a locally-dirty edit is not overwritten by an incoming remote upsert; it races fairly, loses the 409, and the deferred remote is applied with a conflict event', async () => {
+    await seedLocal({
+      // collection_c1/collections_index.c1 keep seedLocal's default
+      // lastUpdated: 100, which is > lastSyncedAt (50) here — genuinely dirty.
+      [SHARED_SYNC_STATE_KEY]: { f1: { lastRev: 1, lastSyncedAt: 50, knownUids: ['c1'] } },
+    });
+    global.fetch.mockImplementation(async (url, opts = {}) => {
+      if (!opts.method || opts.method === 'GET') {
+        return deltaResponse({
+          collections: [{ uid: 'c1', data: { name: 'Owner version', tabs: [] }, rev: 2, deleted: 0, updatedBy: 'o@x.com', updatedAt: 200 }],
+        });
+      }
+      if (opts.method === 'PUT') return { ok: false, status: 409, json: async () => ({ error: 'conflict' }) };
+      return { ok: true, status: 200, json: async () => ({ revision: 3 }) };
+    });
+
+    await syncSharedFolders();
+
+    const store = await browser.storage.local.get(['collection_c1', 'collections_index', SHARED_EVENTS_KEY]);
+
+    // Deferred remote applied: the dirty local edit lost the fair race.
+    expect(store.collection_c1.name).toBe('Owner version');
+    expect(store.collections_index.c1.name).toBe('Owner version');
+
+    // A conflict event was recorded, naming A's own (replaced) collection.
+    const conflictEvent = store[SHARED_EVENTS_KEY].find((e) => e.kind === 'conflict');
+    expect(conflictEvent).toMatchObject({ folderId: 'f1', actorEmail: 'o@x.com', collectionName: 'A' });
+
+    // The push attempt raced fairly against the PRE-pull watermark
+    // (lastRev: 1), not the just-pulled revision (2) — proving this is a
+    // genuine race, not a guaranteed-to-fail/win rubber stamp.
+    const putCall = global.fetch.mock.calls.find(([u, o]) => o?.method === 'PUT' && u.includes('/collections/c1'));
+    expect(putCall).toBeDefined();
+    expect(JSON.parse(putCall[1].body).baseRev).toBe(1);
+  });
+});

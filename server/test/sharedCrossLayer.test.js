@@ -185,7 +185,7 @@ describe('shared folders: cross-layer multi-device conflict harness', () => {
   // 2. Same-collection conflict: 409 stale baseRev, documented LWW, no
   //    revision runaway.
   // ---------------------------------------------------------------------
-  it('2. same-collection conflicting edits: B wins, A gets 409 then converges (documented LWW)', async () => {
+  it('2. same-collection conflicting edits (I3 fix): B wins the fair race; A\'s dirty edit is deferred, 409s, and A gets a conflict event instead of a silent overwrite', async () => {
     const { folderId } = await shareAndAccept();
 
     editCollection(ownerA, 'c1', { name: 'A version' });
@@ -197,26 +197,45 @@ describe('shared folders: cross-layer multi-device conflict harness', () => {
     expect(rawCollection(folderId, 'c1').data).toContain('B version');
     const revAfterB = rawFolder(folderId).revision;
 
-    // A syncs: pull first (gets B's c1, isOther -> applied locally, A's own
-    // edit is overwritten in storage), then push phase has nothing dirty for
-    // c1 (it was just applied by the pull, so excluded from "dirty").
+    // A syncs: pull first. A's own c1 copy is locally DIRTY (an unsynced edit
+    // made before this cycle's pull, per the preCycleIndex/lastSyncedAt
+    // watermark) — applyDeltaLocally (I3 fix) does NOT overwrite it; it
+    // stashes B's row as a deferred remote instead and does not mark c1 as
+    // "applied" this cycle, so A's edit is still sitting in local storage.
     const syncA1 = await syncDevice(ownerA);
     expect(syncA1.data.pulled).toBeGreaterThanOrEqual(1);
-    expect(syncA1.data.pushed).toBe(0);
 
-    // Revision must not have run away: exactly one bump (B's write).
+    // A's push phase still considers c1 dirty (deferred, not applied) and
+    // attempts a real PUT — racing fairly against the PRE-pull revision
+    // watermark, which is stale relative to B's already-landed write, so it
+    // 409s. Unlike the old silent-overwrite behavior (where A never even
+    // attempted a push), the attempt now genuinely happens and genuinely
+    // loses.
+    expect(syncA1.data.pushed).toBe(0);
+    expect(harness.putCollectionCalls('c1')).toHaveLength(2); // B's success + A's 409'd attempt
+    expect(harness.putCollectionCalls('c1')[1].device).toBe('A');
+
+    // Revision must not have run away: exactly one bump (B's write) — A's
+    // 409'd attempt never bumped anything server-side.
     expect(rawFolder(folderId).revision).toBe(revAfterB);
 
-    // Documented LWW: A's local edit is lost but consistent — A now has B's version.
+    // A lost the fair race: the deferred remote (B's version) is applied
+    // locally now, and both devices converge on it.
     expect(ownerA.browserMock._store.collection_c1.name).toBe('B version');
     expect(memberB.browserMock._store.collection_c1.name).toBe('B version');
     expect(rawCollection(folderId, 'c1').data).toContain('B version');
 
-    // A never actually attempted a PUT for c1 this cycle (its "dirty" edit was
-    // pre-empted by the pull's isOther overwrite before the push phase ran) —
-    // so there's no literal 409 response object to inspect, but the effect is
-    // the same stale-write-discarded outcome a baseRev 409 would produce.
-    expect(harness.putCollectionCalls('c1')).toHaveLength(1); // only B's
+    // A is NOT left in the dark (I3 fix): a 'conflict' timeline event records
+    // whose change won and what A's own (replaced) collection was called.
+    const aEvents = ownerA.browserMock._store.shared_folder_events || [];
+    const conflictEvent = aEvents.find((e) => e.kind === 'conflict' && e.folderId === folderId);
+    expect(conflictEvent).toBeDefined();
+    expect(conflictEvent.actorEmail).toBe('guest@x.com');
+    expect(conflictEvent.collectionName).toBe('A version'); // A's own (about-to-be-replaced) name
+
+    // A further sync pushes nothing new — no runaway, no retry loop.
+    const syncA2 = await syncDevice(ownerA);
+    expect(syncA2.data.pushed).toBe(0);
   });
 
   // ---------------------------------------------------------------------
@@ -257,7 +276,7 @@ describe('shared folders: cross-layer multi-device conflict harness', () => {
   // ---------------------------------------------------------------------
   // 3. Delete-vs-edit.
   // ---------------------------------------------------------------------
-  it('3a. A deletes X and syncs first; B has an unsynced edit to X: B\'s edit is silently discarded, no ghost row', async () => {
+  it('3a (I3 fix). A deletes X and syncs first; B has an unsynced edit to X: B\'s push 409s against the tombstone, the deletion is applied, and B gets a conflict event (not a silent \'deleted\')', async () => {
     const { folderId } = await shareAndAccept();
 
     deleteCollectionLocally(ownerA, 'c1');
@@ -265,11 +284,14 @@ describe('shared folders: cross-layer multi-device conflict harness', () => {
     expect(syncA.data.pushed).toBe(1); // the DELETE
     expect(rawCollection(folderId, 'c1').deleted).toBe(1);
 
-    // B, unaware, made a local edit to c1 before this sync.
+    // B, unaware, made a local edit to c1 before this sync — c1 is locally
+    // DIRTY for B, so the incoming tombstone is deferred rather than applied
+    // immediately; B's push phase races it and 409s against the tombstone.
     editCollection(memberB, 'c1', { name: 'B late edit' });
     const syncB = await syncDevice(memberB);
     expect(syncB.data.pulled).toBeGreaterThanOrEqual(1);
-    expect(syncB.data.pushed).toBe(0); // no echo-DELETE, no resurrection push
+    expect(syncB.data.pushed).toBe(0); // B's push attempt lost the race
+    expect(harness.putCollectionCalls('c1').some((c) => c.device === 'B')).toBe(true);
 
     // Converged: no ghost row on either side.
     expect(ownerA.browserMock._store.collection_c1).toBeUndefined();
@@ -278,10 +300,15 @@ describe('shared folders: cross-layer multi-device conflict harness', () => {
     expect(memberB.browserMock._store.collections_index.c1).toBeUndefined();
     expect(rawCollection(folderId, 'c1').deleted).toBe(1);
 
-    // B got a 'deleted' timeline event (visibility that something vanished),
-    // even though it does NOT warn them their own unsynced edit was involved.
+    // I3 fix: B gets a 'conflict' event (its own dirty edit was actually in
+    // the running and lost), not the plain 'deleted' event a bystander with
+    // no local edit would get.
     const events = memberB.browserMock._store.shared_folder_events || [];
-    expect(events.some((e) => e.kind === 'deleted' && e.folderId === folderId)).toBe(true);
+    const conflictEvent = events.find((e) => e.kind === 'conflict' && e.folderId === folderId);
+    expect(conflictEvent).toBeDefined();
+    expect(conflictEvent.actorEmail).toBe('owner@x.com');
+    expect(conflictEvent.collectionName).toBe('B late edit'); // B's own (about-to-be-replaced) name
+    expect(events.some((e) => e.kind === 'deleted')).toBe(false);
   });
 
   it('3b. deleteCollection with NO baseRev preserves the original unconditional delete-wins behavior (B5 compatibility path)', async () => {
@@ -655,5 +682,312 @@ describe('shared folders: cross-layer multi-device conflict harness', () => {
     expect(harness.putCollectionCalls('c1')).toHaveLength(1);
     expect(harness.putCollectionCalls('c2')).toHaveLength(1);
     expect(harness.putCollectionCalls('c3')).toHaveLength(1);
+  });
+
+  // ---------------------------------------------------------------------
+  // I3 fix matrix: same-collection concurrent mutations.
+  //
+  // Multiple members editing the SAME collection at the same time — drag/
+  // drop, tab add/remove/reorder, or a delete racing an edit — all reduce to
+  // the same underlying question, since collections sync at WHOLE-DOCUMENT
+  // granularity: does a locally-dirty (unsynced) edit ever get silently
+  // destroyed when a same-uid remote row arrives? Before the I3 fix,
+  // applyDeltaLocally overwrote it unconditionally the instant a remote row
+  // showed up, and the echo-push exclusion (appliedUids) then prevented the
+  // local edit from ever being attempted as a push — total, silent loss. The
+  // fix: defer the remote row instead of applying it, let the local edit
+  // still race via the push phase (baseRev pinned to the PRE-pull revision
+  // watermark), and on a 409 loss, apply the deferred remote AND record a
+  // 'conflict' timeline event so the user is told.
+  // ---------------------------------------------------------------------
+  describe('same-collection concurrent mutations', () => {
+    it('M1. A adds a tab and syncs; B (stale) adds a different tab to the same collection: B loses the fair race, gets a conflict event, converges on A\'s version — then B redoes the edit and it lands clean (recovery path)', async () => {
+      const { folderId } = await shareAndAccept();
+
+      // A adds tab T1 to c1 and syncs first.
+      editCollection(ownerA, 'c1', { tabs: [tab('https://a.example', 'A'), tab('https://t1.example', 'T1')] });
+      const syncA1 = await syncDevice(ownerA);
+      expect(syncA1.data.pushed).toBe(1);
+
+      // B, unaware of A's edit (stale), independently adds a DIFFERENT tab T2
+      // to the SAME collection.
+      editCollection(memberB, 'c1', { tabs: [tab('https://a.example', 'A'), tab('https://t2.example', 'T2')] });
+      const syncB1 = await syncDevice(memberB);
+
+      // B's pull picks up A's fresher row; B's own edit is locally dirty, so
+      // it's deferred (not overwritten) rather than silently discarded. B's
+      // push phase still attempts to push it (races fairly against the
+      // pre-pull watermark) and 409s, since A's write already landed.
+      expect(syncB1.data.pushed).toBe(0);
+      expect(harness.putCollectionCalls('c1').some((c) => c.device === 'B')).toBe(true);
+
+      // Convergence: both devices now have A's version (T1, no T2).
+      const bUrls = memberB.browserMock._store.collection_c1.tabs.map((t) => t.url);
+      expect(bUrls).toContain('https://t1.example');
+      expect(bUrls).not.toContain('https://t2.example');
+      expect(ownerA.browserMock._store.collection_c1.tabs.map((t) => t.url)).toEqual(bUrls);
+
+      // B gets a conflict event (its toast).
+      const bEvents = memberB.browserMock._store.shared_folder_events || [];
+      const conflictEvent = bEvents.find((e) => e.kind === 'conflict' && e.folderId === folderId);
+      expect(conflictEvent).toBeDefined();
+      expect(conflictEvent.actorEmail).toBe('owner@x.com');
+
+      // Recovery path: B re-adds T2 (now working from A's converged version)
+      // and syncs — this time cleanly, since B is no longer stale.
+      editCollection(memberB, 'c1', {
+        tabs: [...memberB.browserMock._store.collection_c1.tabs, tab('https://t2.example', 'T2 retry')],
+      });
+      const syncB2 = await syncDevice(memberB);
+      expect(syncB2.data.pushed).toBe(1);
+
+      await syncDevice(ownerA);
+      const finalUrls = ownerA.browserMock._store.collection_c1.tabs.map((t) => t.url);
+      expect(finalUrls).toContain('https://t1.example');
+      expect(finalUrls).toContain('https://t2.example');
+      expect(memberB.browserMock._store.collection_c1.tabs.map((t) => t.url)).toEqual(finalUrls);
+    });
+
+    it('M2a. A removes a tab and syncs first; B reorders tabs in the same collection and syncs after: B loses, gets a conflict event, converges on A\'s tab-removed version', async () => {
+      const { folderId } = await shareAndAccept();
+      editCollection(ownerA, 'c1', { tabs: [tab('https://a.example', 'A'), tab('https://b2.example', 'B2')] });
+      await syncDevice(ownerA);
+      await syncDevice(memberB); // B catches up so both start from the same 2-tab baseline
+
+      // A removes the second tab and syncs.
+      editCollection(ownerA, 'c1', { tabs: [tab('https://a.example', 'A')] });
+      const syncA = await syncDevice(ownerA);
+      expect(syncA.data.pushed).toBe(1);
+
+      // B (stale, still on the 2-tab baseline) reorders the two tabs.
+      editCollection(memberB, 'c1', { tabs: [tab('https://b2.example', 'B2'), tab('https://a.example', 'A')] });
+      const syncB = await syncDevice(memberB);
+      expect(syncB.data.pushed).toBe(0); // B's reorder lost the race
+
+      const revAfterAll = rawFolder(folderId).revision;
+
+      expect(memberB.browserMock._store.collection_c1.tabs).toHaveLength(1);
+      expect(ownerA.browserMock._store.collection_c1.tabs).toHaveLength(1);
+
+      const bEvents = memberB.browserMock._store.shared_folder_events || [];
+      expect(bEvents.some((e) => e.kind === 'conflict' && e.folderId === folderId)).toBe(true);
+
+      // No crash, no revision runaway: one more round pushes nothing new.
+      const syncA2 = await syncDevice(ownerA);
+      const syncB2 = await syncDevice(memberB);
+      expect(syncA2.data.pushed).toBe(0);
+      expect(syncB2.data.pushed).toBe(0);
+      expect(rawFolder(folderId).revision).toBe(revAfterAll);
+    });
+
+    it('M2b. B reorders tabs and syncs first; A removes a tab in the same collection and syncs after: A loses, gets a conflict event, converges on B\'s reordered version', async () => {
+      const { folderId } = await shareAndAccept();
+      editCollection(ownerA, 'c1', { tabs: [tab('https://a.example', 'A'), tab('https://b2.example', 'B2')] });
+      await syncDevice(ownerA);
+      await syncDevice(memberB);
+
+      // B reorders first and syncs.
+      editCollection(memberB, 'c1', { tabs: [tab('https://b2.example', 'B2'), tab('https://a.example', 'A')] });
+      const syncB = await syncDevice(memberB);
+      expect(syncB.data.pushed).toBe(1);
+
+      // A (stale) removes a tab afterward.
+      editCollection(ownerA, 'c1', { tabs: [tab('https://a.example', 'A')] });
+      const syncA = await syncDevice(ownerA);
+      expect(syncA.data.pushed).toBe(0); // A's removal lost the race
+
+      const revAfterAll = rawFolder(folderId).revision;
+
+      expect(ownerA.browserMock._store.collection_c1.tabs.map((t) => t.url)).toEqual(['https://b2.example', 'https://a.example']);
+      expect(memberB.browserMock._store.collection_c1.tabs.map((t) => t.url)).toEqual(['https://b2.example', 'https://a.example']);
+
+      const aEvents = ownerA.browserMock._store.shared_folder_events || [];
+      expect(aEvents.some((e) => e.kind === 'conflict' && e.folderId === folderId)).toBe(true);
+
+      const syncA2 = await syncDevice(ownerA);
+      const syncB2 = await syncDevice(memberB);
+      expect(syncA2.data.pushed).toBe(0);
+      expect(syncB2.data.pushed).toBe(0);
+      expect(rawFolder(folderId).revision).toBe(revAfterAll);
+    });
+
+    it('M3. simultaneous-cycle race (both push before either pulls, raw-409 technique): exactly one conflict event once the loser runs a real sync afterward, no revision runaway', async () => {
+      const { folderId } = await shareAndAccept();
+
+      // Both A and B edit c1 independently, with neither having synced since
+      // the shared baseline — simulating truly overlapping pushes within the
+      // SAME round-trip window (neither's pull would have seen the other's
+      // row yet).
+      editCollection(ownerA, 'c1', { name: 'A racing' });
+      editCollection(memberB, 'c1', { name: 'B racing' });
+
+      const revBefore = rawFolder(folderId).revision;
+
+      // B wins the raw race.
+      const bPush = await harness.asDevice(memberB, (c) => c.sharedApiFetch(
+        `/shared/folders/${folderId}/collections/c1`,
+        { method: 'PUT', body: { data: { name: 'B racing', tabs: [] }, baseRev: revBefore } },
+      ));
+      expect(bPush.ok).toBe(true);
+
+      // A's push, using the SAME stale baseRev, 409s — exactly one conflict
+      // at the protocol layer for this initial race.
+      const aPush = await harness.asDevice(ownerA, (c) => c.sharedApiFetch(
+        `/shared/folders/${folderId}/collections/c1`,
+        { method: 'PUT', body: { data: { name: 'A racing', tabs: [] }, baseRev: revBefore } },
+      ));
+      expect(aPush.ok).toBe(false);
+      expect(aPush.status).toBe(409);
+
+      // A's local storage is untouched by that raw call — A's own edit is
+      // still sitting there, dirty, exactly as a genuinely simultaneous
+      // real-world race would leave it. A's next REAL sync now runs the full
+      // conflict-aware pull+push flow: pull picks up B's now-server-side row
+      // (isOther), A's copy is locally dirty -> deferred; push re-attempts
+      // with the (still stale) pre-pull watermark -> 409 again -> deferred
+      // remote applied + a SINGLE conflict event recorded.
+      const syncA = await syncDevice(ownerA);
+      expect(syncA.data.pushed).toBe(0);
+
+      expect(ownerA.browserMock._store.collection_c1.name).toBe('B racing');
+      const aEvents = ownerA.browserMock._store.shared_folder_events || [];
+      const conflictEvents = aEvents.filter((e) => e.kind === 'conflict' && e.folderId === folderId);
+      expect(conflictEvents).toHaveLength(1);
+
+      // Converges — B's own local copy already reads 'B racing' (it's B's
+      // own edit, pushed via the raw call above; no further sync needed on
+      // B's side to observe it) — and no revision runaway: the initial
+      // failed raw PUT from A never bumped anything server-side, and A's
+      // real-sync conflict resolution is a local-only apply (never a
+      // successful write), so only B's one real write ever bumped the
+      // folder's revision counter.
+      expect(memberB.browserMock._store.collection_c1.name).toBe('B racing');
+      expect(rawFolder(folderId).revision).toBe(revBefore + 1); // only B's one real write
+    });
+
+    it('M4. user 1 deletes the collection and syncs; user 2 (dirty edit) syncs after: user 2\'s push 409s against the tombstone, the deletion is applied locally, user 2 gets a conflict event, and the collection is gone on both devices', async () => {
+      const { folderId } = await shareAndAccept();
+
+      deleteCollectionLocally(ownerA, 'c1');
+      const syncA = await syncDevice(ownerA);
+      expect(syncA.data.pushed).toBe(1); // the DELETE
+      expect(rawCollection(folderId, 'c1').deleted).toBe(1);
+
+      // B, unaware, has an unsynced local edit to c1.
+      editCollection(memberB, 'c1', { name: 'B dirty edit' });
+      const syncB = await syncDevice(memberB);
+
+      // B's push attempts to save its edit, races against the pre-pull
+      // watermark, and 409s against A's tombstone (the deferred remote is
+      // the deletion itself).
+      expect(syncB.data.pushed).toBe(0);
+      expect(harness.putCollectionCalls('c1').some((c) => c.device === 'B')).toBe(true);
+
+      // Converged: no ghost row, gone on both devices.
+      expect(ownerA.browserMock._store.collection_c1).toBeUndefined();
+      expect(memberB.browserMock._store.collection_c1).toBeUndefined();
+      expect(ownerA.browserMock._store.collections_index.c1).toBeUndefined();
+      expect(memberB.browserMock._store.collections_index.c1).toBeUndefined();
+
+      // B was told: a 'conflict' event, not a silent 'deleted' one, since
+      // B's OWN unsynced edit was actually in the running.
+      const bEvents = memberB.browserMock._store.shared_folder_events || [];
+      const conflictEvent = bEvents.find((e) => e.kind === 'conflict' && e.folderId === folderId);
+      expect(conflictEvent).toBeDefined();
+      expect(conflictEvent.actorEmail).toBe('owner@x.com');
+      expect(conflictEvent.collectionName).toBe('B dirty edit'); // B's own (about-to-be-replaced) name
+    });
+
+    it('M5. user 2\'s edit syncs first; user 1\'s (now stale) delete 409s (B5); user 1\'s next sync restores user 2\'s edit and the collection stays alive on both devices', async () => {
+      const { folderId } = await shareAndAccept();
+
+      // B (user 2) edits c1's tabs and syncs first — a real revision bump.
+      editCollection(memberB, 'c1', { tabs: [tab('https://b.example', 'B'), tab('https://b2.example', 'B2')] });
+      const syncB = await syncDevice(memberB);
+      expect(syncB.data.pushed).toBe(1);
+      const revAfterBEdit = rawCollection(folderId, 'c1').rev;
+
+      // A (user 1), never having pulled B's edit, issues a raw DELETE with a
+      // stale baseRev (same B5 technique as "3c", with the actor roles the
+      // M5 narrative calls for) — this simulates A's delete having been
+      // decided before A knew about B's edit, without touching A's local
+      // storage (so A's subsequent real sync below isn't confused by a local
+      // pendingLocalRemoval).
+      const staleBaseRev = revAfterBEdit - 1;
+      const del = await harness.asDevice(ownerA, (c) => c.sharedApiFetch(
+        `/shared/folders/${folderId}/collections/c1?baseRev=${staleBaseRev}`, { method: 'DELETE' },
+      ));
+      expect(del.ok).toBe(false);
+      expect(del.status).toBe(409);
+
+      // B's edit survived entirely.
+      const rowAfterConflict = rawCollection(folderId, 'c1');
+      expect(rowAfterConflict.deleted).toBe(0);
+      expect(rowAfterConflict.rev).toBe(revAfterBEdit);
+
+      // A's next REAL sync (through the full conflict-aware engine) pulls
+      // B's edit and restores it locally — A has no dirty edit of its own
+      // fighting over c1, so this is a normal isOther upsert, not a conflict.
+      await syncDevice(ownerA);
+      expect(ownerA.browserMock._store.collection_c1.tabs.map((t) => t.url)).toEqual(['https://b.example', 'https://b2.example']);
+      await syncDevice(memberB);
+      expect(memberB.browserMock._store.collection_c1.tabs.map((t) => t.url)).toEqual(['https://b.example', 'https://b2.example']);
+    });
+
+    it('M6a. B moves a collection out of the shared folder and syncs; A (with a dirty, unsynced edit) syncs after: A\'s edit loses to the tombstone, A gets a conflict event, and A\'s local copy is removed while B keeps its own moved-out copy', async () => {
+      const { folderId } = await shareAndAccept();
+
+      moveCollectionOut(memberB, 'c1');
+      const syncB = await syncDevice(memberB);
+      expect(syncB.data.pushed).toBe(1); // goneUids DELETE for c1
+      expect(rawCollection(folderId, 'c1').deleted).toBe(1);
+      expect(memberB.browserMock._store.collection_c1).toBeDefined();
+      expect(memberB.browserMock._store.collection_c1.parentId).toBe('ROOT');
+
+      editCollection(ownerA, 'c1', { name: 'A edits moved-out collection' });
+      const syncA = await syncDevice(ownerA);
+
+      // A's edit was locally dirty when B's tombstone arrived — it's
+      // deferred, raced fairly (still 0 pushed, since B's delete already
+      // landed), and A gets a conflict event instead of the change silently
+      // vanishing (contrast with the pre-I3-fix "4a" behavior, still
+      // asserted unchanged in its own final-state outcome below).
+      expect(syncA.data.pushed).toBe(0);
+      expect(harness.putCollectionCalls('c1').some((c) => c.device === 'A')).toBe(true);
+      expect(ownerA.browserMock._store.collection_c1).toBeUndefined();
+
+      const aEvents = ownerA.browserMock._store.shared_folder_events || [];
+      const conflictEvent = aEvents.find((e) => e.kind === 'conflict' && e.folderId === folderId);
+      expect(conflictEvent).toBeDefined();
+      expect(conflictEvent.actorEmail).toBe('guest@x.com');
+    });
+
+    it('M6b. A edits and syncs first; B moves the same collection out afterward: B4 pendingLocalRemovals still wins over the new I3 deferred-remote logic — no regression', async () => {
+      const { folderId } = await shareAndAccept();
+
+      editCollection(ownerA, 'c1', { name: 'A fresh edit' });
+      const syncA = await syncDevice(ownerA);
+      expect(syncA.data.pushed).toBe(1);
+
+      expect(memberB.browserMock._store.collection_c1.name).toBe('Alpha');
+      moveCollectionOut(memberB, 'c1');
+      const syncB = await syncDevice(memberB);
+
+      // B4 still applies: B's local move-out (a pendingLocalRemoval) is
+      // checked BEFORE the new I3 dirty-check, so A's incoming edit is
+      // skipped entirely (never even considered for deferral) — B's
+      // move-out survives untouched, exactly as before this fix, and no
+      // conflict event is recorded for B.
+      expect(syncB.data.pushed).toBe(1); // the DELETE for c1 still fires
+      expect(memberB.browserMock._store.collection_c1.parentId).toBe('ROOT');
+      expect(memberB.browserMock._store.collection_c1.name).toBe('Alpha'); // B's own copy, not A's edit
+      expect(rawCollection(folderId, 'c1').deleted).toBe(1);
+
+      const bEvents = memberB.browserMock._store.shared_folder_events || [];
+      expect(bEvents.some((e) => e.kind === 'conflict')).toBe(false);
+
+      const syncedState = memberB.browserMock._store.shared_sync_state;
+      expect(syncedState[folderId].knownUids).not.toContain('c1');
+    });
   });
 });
