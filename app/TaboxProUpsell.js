@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { MdWorkspacePremium } from 'react-icons/md';
 import { browser } from '../static/globals';
+import AIUnavailableWarning from './AIUnavailableWarning';
 import './TaboxProUpsell.css';
 
 // Cross-device unlock: a user who subscribed on another device should see the
@@ -32,6 +33,7 @@ export default function TaboxProUpsell({ isSignedIn, onUpgrade, onSignIn, onEnti
                 <li>Auto-rename &amp; auto-arrange collections</li>
                 <li>Duplicate sweep &amp; collection splitting</li>
             </ul>
+            <AIUnavailableWarning />
             {isSignedIn ? (
                 <button className="pro-upsell-cta" onClick={onUpgrade}>Upgrade — start free trial</button>
             ) : (
