@@ -87,7 +87,7 @@ test('(a) server lists a folder absent locally — it is materialized with its c
   expect(store[SHARED_SYNC_STATE_KEY].f1).toMatchObject({ lastRev: 3, knownUids: ['c1'] });
 });
 
-test('(b) folder present locally WITH a live marker is left untouched — no extra delta fetch beyond the normal per-folder loop', async () => {
+test('(b) folder present locally WITH a live marker is left untouched by rematerialization — and, since the list revision matches our watermark, the revision short-circuit means the normal per-folder loop issues NO delta fetch either', async () => {
   await browser.storage.local.set({
     googleUser: { emailAddress: 'me@x.com', permissionId: 'g-me' },
     folders_index: { f1: { uid: 'f1', name: 'Team', shared: { folderId: 'f1', role: 'write', ownerEmail: 'owner@x.com' } } },
@@ -123,11 +123,13 @@ test('(b) folder present locally WITH a live marker is left untouched — no ext
     throw new Error(`unexpected fetch: ${url}`);
   });
 
-  await syncSharedFolders();
+  const res = await syncSharedFolders();
 
-  // Exactly ONE delta fetch for f1 this cycle — from the normal per-folder
-  // pull/push loop. Rematerialization must not have issued a second one.
-  expect(folderDeltaFetches).toBe(1);
+  // Perf (revision short-circuit): the list call above already reported f1's
+  // revision (1) as matching our watermark (1) — the normal per-folder loop
+  // must not have issued its own delta GET for it this cycle.
+  expect(folderDeltaFetches).toBe(0);
+  expect(res.data).toEqual({ pulled: 0, pushed: 0, revoked: 0 });
 });
 
 test('(c) the /shared/folders list call failing does not abort the sync cycle', async () => {

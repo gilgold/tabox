@@ -526,13 +526,20 @@ async function materializeSharedFolderLocally({ folderId, name, color, role, own
 // network call for it. Failure of the list call itself is skipped silently;
 // the next 5-minute cycle retries. A per-folder delta-fetch failure only
 // skips THAT folder, same reasoning.
+// Returns the raw `/shared/folders` list response's `folders` array on success
+// (also reused by doSyncSharedFolders' revision short-circuit, below — one
+// network call serves both purposes), or `null` if the list call itself
+// failed (network/auth error: skip silently, next cycle retries; the caller's
+// short-circuit falls back to the old always-fetch-the-delta behavior for
+// every folder this cycle when this returns null).
 async function rematerializeMissingSharedFolders() {
   const listRes = await sharedApiFetch('/shared/folders');
-  if (!listRes.ok) return; // network/auth error: skip silently, next cycle retries
+  if (!listRes.ok) return null; // network/auth error: skip silently, next cycle retries
 
   const { folders_index: localIndex = {} } = await browser.storage.local.get('folders_index');
+  const listedFolders = listRes.data.folders || [];
 
-  for (const entry of listRes.data.folders || []) {
+  for (const entry of listedFolders) {
     const localRecord = localIndex[entry.folderId];
     if (localRecord?.shared?.folderId) continue; // live locally already — normal loop covers it, no extra fetch
 
@@ -557,6 +564,39 @@ async function rematerializeMissingSharedFolders() {
       knownUids: collections.map((c) => c.uid),
     });
   }
+
+  return listedFolders;
+}
+
+// Perf (revision short-circuit): refreshes a locally-shared folder's cached
+// role/members from a `/shared/folders` LIST-response entry, but only writes
+// when either actually differs from what's stored locally. Called exclusively
+// from doSyncSharedFolders' short-circuit branch — when the listed revision
+// matches our watermark, the per-folder delta GET (whose response is the
+// normal source of a role/members refresh, via applyDeltaLocally) is skipped
+// entirely this cycle, so this is the only path a role/member change could
+// reach local storage through while short-circuited. In practice
+// updateMemberRole/removeMember/inviteMember all bump the folder's revision
+// (see server/src/sharedFolders.js), so a real role/member change should also
+// change `revision` and take the normal delta path instead — this exists as a
+// defensive fallback for that invariant, not a commonly-hit path. Deliberately
+// does not append a timeline event or touch SHARED_SYNC_STATE_KEY — a
+// role/member sync isn't a "change" the user needs toasted at them, mirroring
+// materializeSharedFolderLocally's reasoning.
+async function refreshFolderMarkerFromList(folderId, listedEntry) {
+  return withStorageLock(async () => {
+    const key = `folder_${folderId}`;
+    const got = await browser.storage.local.get([key, 'folders_index']);
+    const record = got[key];
+    if (!record || !record.shared) return;
+    const roleChanged = record.shared.role !== listedEntry.role;
+    const membersChanged = JSON.stringify(record.shared.members || []) !== JSON.stringify(listedEntry.members || []);
+    if (!roleChanged && !membersChanged) return;
+    const shared = { ...record.shared, role: listedEntry.role, members: listedEntry.members };
+    const index = got.folders_index || {};
+    if (index[folderId]) index[folderId] = { ...index[folderId], shared };
+    await browser.storage.local.set({ [key]: { ...record, shared }, folders_index: index });
+  });
 }
 
 async function respondToInvite({ folderId, accept }) {
@@ -651,8 +691,17 @@ async function doSyncSharedFolders() {
   // for why this exists at all. Never allowed to abort the rest of the
   // cycle — the list/delta calls it makes already fail silently, but this
   // extra try/catch also guards against an unexpected local storage error.
+  // Perf (revision short-circuit): the SAME `/shared/folders` list call
+  // rematerializeMissingSharedFolders already makes also tells us, for every
+  // folder we DO have locally, the server's current revision — reuse it below
+  // so a folder whose listed revision matches our watermark can skip its
+  // per-folder delta GET entirely this cycle. `null` (list call itself
+  // failed) means every folder falls back to the old always-fetch-the-delta
+  // behavior for this cycle; see the loop below.
+  let listByFolderId = null;
   try {
-    await rematerializeMissingSharedFolders();
+    const listedFolders = await rematerializeMissingSharedFolders();
+    if (listedFolders) listByFolderId = new Map(listedFolders.map((f) => [f.folderId, f]));
   } catch (error) {
     console.error('Error rematerializing shared folders:', error);
   }
@@ -690,27 +739,53 @@ async function doSyncSharedFolders() {
       state.knownUids.filter((uid) => !(preCycleIndex[uid] && preCycleIndex[uid].parentId === folderId))
     );
 
-    // PULL
-    const pull = await sharedApiFetch(`/shared/folders/${folderId}?sinceRev=${state.lastRev}`);
-    if (!pull.ok) {
-      if (pull.status === 403 || pull.status === 404) {
-        await unmarkLocalFolderShared(folderId);
-        await appendEvents([{ folderId, folderName: folder.name, actorEmail: null, kind: 'revoked', collectionName: null, at: Date.now() }]);
-        revoked += 1;
+    // Revision short-circuit: the list call captured above already told us
+    // this folder's CURRENT server revision. If it matches our watermark
+    // exactly, nothing has changed for this folder since our last successful
+    // cycle — skip the per-folder delta GET entirely (this is what makes
+    // fast/frequent polling cheap). A folder absent from the list (the query
+    // only returns folders we still have access to — i.e. revoked/deleted)
+    // falls through to the normal delta fetch below, which 404s and converts
+    // it exactly as before this optimization existed.
+    const listedEntry = listByFolderId ? listByFolderId.get(folderId) : undefined;
+    const canShortCircuit = Boolean(listedEntry) && listedEntry.revision === state.lastRev;
+
+    let role;
+    let lastRev = state.lastRev;
+    let appliedUids = new Set();
+    let deferredRemotes = new Map();
+
+    if (canShortCircuit) {
+      role = listedEntry.role;
+      try {
+        await refreshFolderMarkerFromList(folderId, listedEntry);
+      } catch (error) {
+        console.error('Error refreshing shared folder marker from list:', error);
       }
-      continue; // network/auth errors: try again next cycle
+    } else {
+      // PULL
+      const pull = await sharedApiFetch(`/shared/folders/${folderId}?sinceRev=${state.lastRev}`);
+      if (!pull.ok) {
+        if (pull.status === 403 || pull.status === 404) {
+          await unmarkLocalFolderShared(folderId);
+          await appendEvents([{ folderId, folderName: folder.name, actorEmail: null, kind: 'revoked', collectionName: null, at: Date.now() }]);
+          revoked += 1;
+        }
+        continue; // network/auth errors: try again next cycle
+      }
+      // I3 fix: applyDeltaLocally now also returns `deferredRemotes` — uids
+      // whose local copy was DIRTY (an unsynced edit made before this cycle's
+      // pull) when a same-uid remote row arrived. Those rows were deliberately
+      // NOT applied to local storage; the push phase below races them fairly
+      // instead (see applyDeltaLocally's header comment for the full design).
+      ({ appliedUids, deferredRemotes } = await applyDeltaLocally(folder, pull.data, myEmail, pendingLocalRemovals, preCycleIndex, state.lastSyncedAt));
+      pulled += (pull.data.collections || []).length;
+      lastRev = pull.data.revision;
+      role = pull.data.role;
     }
-    // I3 fix: applyDeltaLocally now also returns `deferredRemotes` — uids
-    // whose local copy was DIRTY (an unsynced edit made before this cycle's
-    // pull) when a same-uid remote row arrived. Those rows were deliberately
-    // NOT applied to local storage; the push phase below races them fairly
-    // instead (see applyDeltaLocally's header comment for the full design).
-    const { appliedUids, deferredRemotes } = await applyDeltaLocally(folder, pull.data, myEmail, pendingLocalRemovals, preCycleIndex, state.lastSyncedAt);
-    pulled += (pull.data.collections || []).length;
-    let lastRev = pull.data.revision;
 
     // PUSH (write/owner only — read-role members never write back)
-    if (pull.data.role !== 'read') {
+    if (role !== 'read') {
       const { collections_index: cIndex = {} } = await browser.storage.local.get('collections_index');
       const currentUids = Object.keys(cIndex).filter((uid) => cIndex[uid].parentId === folderId);
       // Echo-push fix: judge "dirty" against the PRE-network snapshot (edits made

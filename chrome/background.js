@@ -70,7 +70,7 @@ const BACKGROUND_SYNC_ALARM = 'background-sync-alarm';
 const BACKGROUND_SYNC_PERIOD_MINUTES = 6 * 60;
 const TOOLBAR_FULLPAGE_SETTING_KEY = 'chkToolbarIconOpensFullPage';
 const SHARED_SYNC_ALARM = 'shared-folders-sync';
-const SHARED_SYNC_PERIOD_MINUTES = 5;
+const SHARED_SYNC_PERIOD_MINUTES = 1;
 
 async function updateSharedSyncSessionState(overrides = {}) {
   const { googleUser, googleRefreshToken } = await browser.storage.local.get(['googleUser', 'googleRefreshToken']);
@@ -162,6 +162,50 @@ async function ensureSharedSyncAlarm() {
   } else if (existingAlarm) {
     await browser.alarms.clear(SHARED_SYNC_ALARM);
   }
+}
+
+// Perf: event-driven push for shared folders. Every local data change already
+// flows through the 'updateRemote' message (Drive path, below) — piggyback a
+// debounced trigger of the shared-folders sync engine on the SAME signal so a
+// locally-shared-folder edit reaches the server in ~3s instead of waiting for
+// the next 1-minute alarm tick or 8s popup poll. Rapid consecutive edits
+// collapse into a single trailing run: each call resets the timer (classic
+// debounce), so a burst of edits schedules exactly one sync ~3s after the
+// LAST one. Deliberately a separate, dedicated timer — NOT the `throttleSync`
+// instance used for Drive (different cadence/semantics: that one only
+// coalesces overlapping in-flight runs, it never delays) — and deliberately
+// does not itself need re-entrancy protection against the alarm/popup poll:
+// syncSharedFolders() (chrome/shared-folders.js) already coalesces onto
+// whichever run is already in flight (`sharedSyncInFlight`).
+//
+// Guarded with `typeof syncSharedFolders === 'function'` (mirroring the
+// existing cross-file guards in shared-folders.js) so this stays a no-op
+// under tests that require background.js without the real shared-folders.js
+// loaded via importScripts.
+const SHARED_FOLDER_PUSH_DEBOUNCE_MS = 3000;
+let sharedFolderPushDebounceTimer = null;
+
+async function hasAnySharedFolderLocally() {
+  const { folders_index: foldersIndex = {} } = await browser.storage.local.get('folders_index');
+  return Object.values(foldersIndex).some((folder) => Boolean(folder?.shared?.folderId));
+}
+
+async function scheduleSharedFolderPush() {
+  const { googleRefreshToken } = await browser.storage.local.get('googleRefreshToken');
+  if (!googleRefreshToken) return; // signed out: nothing to push
+
+  // Cheap guard: the popup also sends 'updateRemote' for plain (non-shared)
+  // changes, which is the common case — bail before arming the timer so that
+  // path costs one storage.local.get and nothing else.
+  if (!(await hasAnySharedFolderLocally())) return;
+
+  if (sharedFolderPushDebounceTimer) clearTimeout(sharedFolderPushDebounceTimer);
+  sharedFolderPushDebounceTimer = setTimeout(() => {
+    sharedFolderPushDebounceTimer = null;
+    if (typeof syncSharedFolders === 'function') {
+      syncSharedFolders().catch((error) => console.error('Error in debounced shared folder push:', error));
+    }
+  }, SHARED_FOLDER_PUSH_DEBOUNCE_MS);
 }
 
 const BACKUP_GROUP_TITLES = {
@@ -1948,6 +1992,10 @@ try {
 
     if (request.type === 'updateRemote') {
       console.log('🔄 [SYNC] updateRemote message received - starting sync');
+      // Perf: piggyback a debounced shared-folder push on the same
+      // local-data-changed signal that drives the Drive sync below.
+      // Fire-and-forget — must never block or fail the Drive path.
+      scheduleSharedFolderPush().catch(() => {});
       try {
         // Coalesce overlapping syncs; a request made during an in-flight sync
         // awaits a trailing run that pushes the latest local state.

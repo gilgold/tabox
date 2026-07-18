@@ -685,6 +685,44 @@ describe('shared folders: cross-layer multi-device conflict harness', () => {
   });
 
   // ---------------------------------------------------------------------
+  // 11. Perf: revision short-circuit against the REAL worker/DB. The
+  // `/shared/folders` LIST call (made every cycle for rematerialization)
+  // reports each folder's current revision; when it matches the device's own
+  // watermark, the per-folder delta GET is skipped entirely.
+  // ---------------------------------------------------------------------
+  it('11. revision short-circuit: an idle second sync issues no per-folder delta GET; a real remote edit is still picked up on the next sync', async () => {
+    const { folderId } = await shareAndAccept();
+
+    // A's first sync after sharing: nothing changed since the share itself,
+    // but this establishes A's watermark against the real server revision.
+    await syncDevice(ownerA);
+
+    const fetchCountBefore = harness.fetchLog.length;
+    const idleSync = await syncDevice(ownerA);
+    expect(idleSync.data.pulled).toBe(0);
+    expect(idleSync.data.pushed).toBe(0);
+
+    const callsDuringIdleSync = harness.fetchLog.slice(fetchCountBefore);
+    // The list call still happens every cycle...
+    expect(callsDuringIdleSync.some((e) => e.pathname === '/shared/folders')).toBe(true);
+    // ...but the per-folder delta GET does not, since nothing changed.
+    expect(callsDuringIdleSync.some((e) => e.method === 'GET' && e.pathname === `/shared/folders/${folderId}`)).toBe(false);
+
+    // B makes a real edit and pushes it — bumping the folder's revision.
+    editCollection(memberB, 'c2', { name: 'Beta (B edit)' });
+    await syncDevice(memberB);
+
+    // A's next sync must now see the listed revision has moved and fetch the
+    // real delta rather than short-circuiting.
+    const fetchCountBeforeRealSync = harness.fetchLog.length;
+    const realSync = await syncDevice(ownerA);
+    expect(realSync.data.pulled).toBeGreaterThanOrEqual(1);
+    const callsDuringRealSync = harness.fetchLog.slice(fetchCountBeforeRealSync);
+    expect(callsDuringRealSync.some((e) => e.method === 'GET' && e.pathname === `/shared/folders/${folderId}`)).toBe(true);
+    expect(ownerA.browserMock._store.collection_c2.name).toBe('Beta (B edit)');
+  });
+
+  // ---------------------------------------------------------------------
   // I3 fix matrix: same-collection concurrent mutations.
   //
   // Multiple members editing the SAME collection at the same time — drag/

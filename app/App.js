@@ -70,9 +70,9 @@ import { usePremiumEntitlement } from './usePremiumEntitlement';
 import NoPermissionModal from './NoPermissionModal';
 import SharedActionConfirmModal from './SharedActionConfirmModal';
 import { noPermissionOpenState, pendingInvitesState, shareFolderModalState } from './atoms/sharedFoldersState';
-import { guardFolderEdit } from './utils/sharedFolderUtils';
+import { guardFolderEdit, isSharedFolder } from './utils/sharedFolderUtils';
 import ShareFolderModal from './ShareFolderModal';
-import SharedInviteBanner from './SharedInviteBanner';
+import SharedInviteToastController from './SharedInviteToastController';
 
 // Migration system imports - wrapped in try/catch for compatibility
 const PERF_NAMESPACE = 'tabox:popup';
@@ -170,7 +170,7 @@ const MIGRATION_SESSION_KEY = 'tabox:migrationChecked';
 const SYNC_SESSION_STATE_KEY = 'syncSessionState';
 const SHARED_PENDING_INVITES_KEY = 'shared_pending_invites';
 const SHARED_EVENTS_KEY = 'shared_folder_events';
-const SHARED_SYNC_INTERVAL_MS = 15000;
+const SHARED_SYNC_INTERVAL_MS = 8000;
 const DEFAULT_SYNC_SESSION_STATE = {
   isEnabled: false,
   status: 'disabled',
@@ -761,6 +761,15 @@ function App({ mode = 'popup' }) {
     }
   }
 
+  // Shared-folder collections are owned by the Worker shared-sync engine, not
+  // Google Drive — Drive uploads exclude them entirely. Mutations that only
+  // touch shared data must NOT stamp the Drive watermark (localTimestamp) or
+  // trigger a Drive sync; instead we nudge the shared engine so the change
+  // pushes promptly instead of waiting for the 15s interval.
+  const nudgeSharedSync = () => {
+    browser.runtime.sendMessage({ type: 'sharedSyncNow' }).catch(() => {});
+  };
+
   // Updated to use new storage system
   const updateCollection = async (newCollection, isManualUpdate = false) => {
     // Opening/focus-tracking updates (lastOpened only) are marked with
@@ -798,10 +807,22 @@ function App({ mode = 'popup' }) {
           setHighlightedCollectionUid(newCollection.uid);
         }
         
+        // Shared-only mutation: the collection stays inside the same shared
+        // folder, so Drive-owned data is untouched — skip the Drive watermark
+        // and Drive sync. Moves across the shared boundary (parentId change)
+        // alter the Drive payload and must keep stamping.
+        const previousParentId = settingsData?.find(c => c.uid === newCollection.uid)?.parentId;
+        const nextParentFolder = foldersData.find(f => f.uid === newCollection?.parentId);
+        const isSharedOnlyUpdate = isSharedFolder(nextParentFolder) && previousParentId === newCollection?.parentId;
+
         // Continue with sync if logged in
-        await browser.storage.local.set({ localTimestamp: Date.now() });
+        if (isSharedOnlyUpdate) {
+          nudgeSharedSync();
+        } else {
+          await browser.storage.local.set({ localTimestamp: Date.now() });
+        }
         await browser.runtime.sendMessage({ type: 'addCollection' });
-        if (!isLoggedIn) return;
+        if (isSharedOnlyUpdate || !isLoggedIn) return;
         _update();
       } else {
         console.error(`❌ Failed to update collection ${newCollection.uid}`);
@@ -859,16 +880,23 @@ function App({ mode = 'popup' }) {
           setHighlightedCollectionUid(newCollection.uid);
         }
         
-        // Continue with sync and auto-update logic
-        await browser.storage.local.set({ localTimestamp: Date.now() });
-        
+        // Continue with sync and auto-update logic. Adding into a shared
+        // folder is a shared-only mutation — skip the Drive watermark and
+        // Drive sync, and nudge the shared engine instead.
+        const isSharedOnlyAdd = isSharedFolder(parentFolder);
+        if (isSharedOnlyAdd) {
+          nudgeSharedSync();
+        } else {
+          await browser.storage.local.set({ localTimestamp: Date.now() });
+        }
+
         // Only trigger context menu update if not skipped (to prevent race conditions in batch operations)
         if (!skipContextMenuUpdate) {
           await browser.runtime.sendMessage({ type: 'addCollection' });
         }
-        
+
         // Only sync if logged in - throttling prevents duplicate syncs
-        if (isLoggedIn && !skipStateUpdate) {
+        if (!isSharedOnlyAdd && isLoggedIn && !skipStateUpdate) {
           _update();
         }
         
@@ -2201,7 +2229,7 @@ function App({ mode = 'popup' }) {
         {shareFolderModalEl}
         {noPermissionModalEl}
         {sharedActionConfirmModalEl}
-        <SharedInviteBanner onAccepted={refreshDataAfterFolderOperation} />
+        <SharedInviteToastController onAccepted={refreshDataAfterFolderOperation} />
         <FPLayout
           folders={displayFolders}
           collections={collectionsToShow}
@@ -2260,7 +2288,7 @@ function App({ mode = 'popup' }) {
         addCollection={addCollection}
         logout={logout} />
       <div className={`main-content-wrapper${isFullPage && isPanelOpen ? ' panel-open' : ''}`}>
-                <SharedInviteBanner onAccepted={refreshDataAfterFolderOperation} />
+                <SharedInviteToastController onAccepted={refreshDataAfterFolderOperation} />
                 <AddNewTextbox addCollection={addCollection} addFolder={addFolder} updateRemoteData={updateRemoteData} onDataUpdate={refreshDataAfterFolderOperation} />
         <CollectionListOptions
           key={`${sortValue}-select`}

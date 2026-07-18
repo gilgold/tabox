@@ -83,7 +83,7 @@ describe('background sync alarm', () => {
             'shared-folders-sync',
             expect.objectContaining({
                 delayInMinutes: 1,
-                periodInMinutes: 5
+                periodInMinutes: 1
             })
         );
     });

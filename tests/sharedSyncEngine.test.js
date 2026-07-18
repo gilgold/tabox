@@ -358,3 +358,117 @@ describe('I3 fix: conflict-aware pull (deferred remote + fair race)', () => {
     expect(JSON.parse(putCall[1].body).baseRev).toBe(1);
   });
 });
+
+// Perf: revision short-circuit. rematerializeMissingSharedFolders' existing
+// `/shared/folders` LIST call (made every cycle for the C2 rematerialization
+// pass) already tells us every locally-known folder's CURRENT server
+// revision, so a folder whose listed revision matches our watermark can skip
+// its per-folder delta GET entirely this cycle.
+describe('doSyncSharedFolders revision short-circuit', () => {
+  const listResponse = (folders) => ({
+    ok: true, status: 200,
+    json: async () => ({ folders }),
+  });
+  const listedEntry = (overrides = {}) => ({
+    folderId: 'f1', name: 'Team', color: null, revision: 5, role: 'write', ownerEmail: 'o@x.com', members: [], ...overrides,
+  });
+  const invitesOk = { ok: true, status: 200, json: async () => ({ invites: [] }) };
+
+  test('unchanged listed revision skips the per-folder delta GET; a server-side revision bump still fetches + applies the delta', async () => {
+    await seedLocal({ [SHARED_SYNC_STATE_KEY]: { f1: { lastRev: 5, lastSyncedAt: 100, knownUids: ['c1'] } } });
+
+    // Cycle 1: listed revision (5) matches our watermark (5) exactly -> short-circuit.
+    global.fetch.mockImplementation(async (url, opts = {}) => {
+      if (url.includes('/shared/invites')) return invitesOk;
+      if ((!opts.method || opts.method === 'GET') && url.endsWith('/shared/folders')) return listResponse([listedEntry({ revision: 5 })]);
+      throw new Error(`unexpected fetch in short-circuit cycle: ${opts.method || 'GET'} ${url}`);
+    });
+
+    const res1 = await syncSharedFolders();
+    expect(res1.ok).toBe(true);
+    expect(global.fetch.mock.calls.some(([u]) => u.includes('/shared/folders/f1?sinceRev='))).toBe(false);
+
+    // Cycle 2: the server bumped the revision (e.g. another member's edit) -> must
+    // fetch and apply the real delta this time.
+    global.fetch.mockClear();
+    global.fetch.mockImplementation(async (url, opts = {}) => {
+      if (url.includes('/shared/invites')) return invitesOk;
+      if ((!opts.method || opts.method === 'GET') && url.endsWith('/shared/folders')) return listResponse([listedEntry({ revision: 6 })]);
+      if ((!opts.method || opts.method === 'GET') && url.includes('/shared/folders/f1?sinceRev=')) {
+        return deltaResponse({
+          revision: 6,
+          collections: [{ uid: 'c2', data: { name: 'New', tabs: [] }, rev: 6, deleted: 0, updatedBy: 'o@x.com', updatedAt: 999 }],
+        });
+      }
+      return { ok: true, status: 200, json: async () => ({ revision: 7 }) };
+    });
+
+    const res2 = await syncSharedFolders();
+    expect(res2.ok).toBe(true);
+    expect(global.fetch.mock.calls.filter(([u]) => u.includes('/shared/folders/f1?sinceRev=')).length).toBe(1);
+
+    const store = await browser.storage.local.get(['collection_c2', SHARED_SYNC_STATE_KEY]);
+    expect(store.collection_c2).toMatchObject({ uid: 'c2', name: 'New' });
+    expect(store[SHARED_SYNC_STATE_KEY].f1.lastRev).toBe(6);
+  });
+
+  test('a folder absent from a successful list response still fetches its delta, so revocation (404) still converts it', async () => {
+    await seedLocal({ [SHARED_SYNC_STATE_KEY]: { f1: { lastRev: 5, lastSyncedAt: 100, knownUids: ['c1'] } } });
+    global.fetch.mockImplementation(async (url, opts = {}) => {
+      if (url.includes('/shared/invites')) return invitesOk;
+      // f1 is NOT in the list response (e.g. access was revoked server-side).
+      if ((!opts.method || opts.method === 'GET') && url.endsWith('/shared/folders')) return listResponse([]);
+      if (url.includes('/shared/folders/f1?sinceRev=')) return { ok: false, status: 404, json: async () => ({ error: 'not_found' }) };
+      throw new Error(`unexpected fetch: ${opts.method || 'GET'} ${url}`);
+    });
+
+    const res = await syncSharedFolders();
+    expect(res.ok).toBe(true);
+    expect(res.data.revoked).toBe(1);
+    // The delta WAS fetched (short-circuit did not apply to a folder missing from the list).
+    expect(global.fetch.mock.calls.some(([u]) => u.includes('/shared/folders/f1?sinceRev='))).toBe(true);
+
+    const store = await browser.storage.local.get(['folder_f1', SHARED_EVENTS_KEY]);
+    expect(store.folder_f1.shared).toBeUndefined();
+    expect(store[SHARED_EVENTS_KEY].some((e) => e.kind === 'revoked' && e.folderId === 'f1')).toBe(true);
+  });
+
+  test('a role/member change reflected in the list without a revision bump still refreshes the local marker, without a delta GET', async () => {
+    await seedLocal({ [SHARED_SYNC_STATE_KEY]: { f1: { lastRev: 5, lastSyncedAt: 100, knownUids: ['c1'] } } });
+    global.fetch.mockImplementation(async (url, opts = {}) => {
+      if (url.includes('/shared/invites')) return invitesOk;
+      if ((!opts.method || opts.method === 'GET') && url.endsWith('/shared/folders')) {
+        return listResponse([listedEntry({
+          revision: 5, // unchanged
+          role: 'read',
+          members: [{ email: 'new@x.com', role: 'read', status: 'active' }],
+        })]);
+      }
+      throw new Error(`unexpected fetch: ${opts.method || 'GET'} ${url}`);
+    });
+
+    await syncSharedFolders();
+
+    expect(global.fetch.mock.calls.some(([u]) => u.includes('/shared/folders/f1?sinceRev='))).toBe(false);
+    const store = await browser.storage.local.get(['folder_f1', 'folders_index']);
+    expect(store.folder_f1.shared.role).toBe('read');
+    expect(store.folder_f1.shared.members).toEqual([{ email: 'new@x.com', role: 'read', status: 'active' }]);
+    expect(store.folders_index.f1.shared.role).toBe('read');
+  });
+
+  test('the list call failing falls back to the old always-fetch-the-delta behavior for that cycle', async () => {
+    await seedLocal({ [SHARED_SYNC_STATE_KEY]: { f1: { lastRev: 1, lastSyncedAt: 100, knownUids: ['c1'] } } });
+    global.fetch.mockImplementation(async (url, opts = {}) => {
+      if (url.includes('/shared/invites')) return invitesOk;
+      if ((!opts.method || opts.method === 'GET') && url.endsWith('/shared/folders')) {
+        return { ok: false, status: 500, json: async () => ({ error: 'server_error' }) };
+      }
+      if ((!opts.method || opts.method === 'GET') && url.includes('/shared/folders/f1?sinceRev=')) return deltaResponse({ collections: [] });
+      return { ok: true, status: 200, json: async () => ({ revision: 3 }) };
+    });
+
+    const res = await syncSharedFolders();
+    expect(res.ok).toBe(true);
+    expect(global.fetch.mock.calls.filter(([u]) => u.includes('/shared/folders/f1?sinceRev=')).length).toBe(1);
+  });
+});
