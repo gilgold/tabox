@@ -16,6 +16,7 @@ import { ManageSubscriptionControls } from './ManageSubscriptionModal';
 import { useOrphanRecoveryContext } from './OrphanRecoveryContext';
 import { buildOrphanRecoveryMenuItem } from './orphanRecoveryMenuItem';
 import { loadBrowserSessions, subscribeToBrowserSessions } from './utils/browserSessions';
+import AIUnavailableWarning from './AIUnavailableWarning';
 import { RiFolderAddFill, RiEdit2Line, RiSettings5Fill } from 'react-icons/ri';
 import { ImNewTab } from 'react-icons/im';
 import { MdOutlineSyncAlt, MdSettingsBackupRestore, MdClose, MdExpandMore, MdExpandLess, MdBugReport, MdFileDownload, MdHistory, MdWorkspacePremium } from 'react-icons/md';
@@ -292,6 +293,9 @@ export default function SettingsMenu(props) {
                 onClick: undefined,
                 content: proStatusLabel,
             },
+            ...(!isPro
+                ? [{ type: 'custom', key: 'pro-ai-warning', content: <AIUnavailableWarning /> }]
+                : []),
             isPro
                 ? {
                     type: 'button',
@@ -669,6 +673,10 @@ export default function SettingsMenu(props) {
     const ActiveSectionIcon = activeSection.icon;
 
     const renderPopupItem = (item) => {
+        if (item.type === 'custom') {
+            return <React.Fragment key={item.key}>{item.content}</React.Fragment>;
+        }
+
         if (item.type === 'button') {
             return (
                 <button
@@ -690,6 +698,10 @@ export default function SettingsMenu(props) {
     };
 
     const renderFullPageItem = (item) => {
+        if (item.type === 'custom') {
+            return <React.Fragment key={item.key}>{item.content}</React.Fragment>;
+        }
+
         if (item.variant === 'status') {
             return (
                 <section

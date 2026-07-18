@@ -5,6 +5,15 @@ import '@testing-library/jest-dom';
 import { Provider, createStore } from 'jotai';
 import SettingsMenu from '../app/SettingsMenu';
 import { isLoggedInState, themeState } from '../app/atoms/globalAppSettingsState';
+import { getAIAvailability } from '../app/ai/aiClient';
+
+// Real getAIAvailability() would resolve 'unsupported' in jsdom (no
+// LanguageModel global) and render the AI-unavailable warning banner in the
+// Tabox Pro section — mock it so these unrelated tests stay focused.
+jest.mock('../app/ai/aiClient', () => ({
+    getAIAvailability: jest.fn(),
+    downloadModel: jest.fn(),
+}));
 
 const seedBrowserStorage = (overrides = {}) => {
     browser.storage.local._data = {
@@ -101,6 +110,7 @@ const syncRecoveryCss = fs.readFileSync(path.join(__dirname, '../app/SyncDebugRe
 describe('SettingsMenu', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        getAIAvailability.mockResolvedValue(undefined);
     });
 
     test('renders the full-page variant as a modal with sidebar categories', async () => {

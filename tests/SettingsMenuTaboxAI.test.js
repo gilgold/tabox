@@ -3,6 +3,7 @@ import '@testing-library/jest-dom';
 import { Provider } from 'jotai';
 import { browser } from '../static/globals';
 import SettingsMenu from '../app/SettingsMenu';
+import { getAIAvailability } from '../app/ai/aiClient';
 
 // AIEnableModal lazily imports these — mock them to keep tests fast.
 jest.mock('../app/ai/aiClient', () => ({
@@ -34,6 +35,8 @@ describe('SettingsMenu — Tabox AI section', () => {
         browser.storage.local.get.mockReset();
         browser.storage.local.set.mockReset();
         browser.storage.local.get.mockResolvedValue({});
+        getAIAvailability.mockReset();
+        getAIAvailability.mockResolvedValue(undefined);
     });
 
     test('renders a Tabox AI section with the enable switch', async () => {

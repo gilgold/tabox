@@ -11,7 +11,16 @@ jest.mock('../app/toastHelpers', () => ({
     setToastViewContext: (...args) => mockSetToastViewContext(...args),
 }));
 
+// Real getAIAvailability() would resolve 'unsupported' in jsdom (no
+// LanguageModel global) and render the AI-unavailable warning banner in the
+// Tabox Pro section — mock it so these unrelated tests stay focused.
+jest.mock('../app/ai/aiClient', () => ({
+    getAIAvailability: jest.fn(),
+    downloadModel: jest.fn(),
+}));
+
 const SettingsMenu = require('../app/SettingsMenu').default;
+const { getAIAvailability } = require('../app/ai/aiClient');
 
 const seedBrowserStorage = () => {
     browser.storage.local._data = {
@@ -61,6 +70,7 @@ const renderSettingsMenu = (variant) => {
 describe('SettingsMenu toast context', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        getAIAvailability.mockResolvedValue(undefined);
     });
 
     test('sets full-page toast context when rendered in the full-page settings surface', () => {

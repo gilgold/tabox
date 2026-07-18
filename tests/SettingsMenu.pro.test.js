@@ -5,6 +5,7 @@ import { Provider, createStore } from 'jotai';
 import { browser } from '../static/globals';
 import SettingsMenu from '../app/SettingsMenu';
 import { premiumEntitlementState, manageSubscriptionOpenState } from '../app/atoms/premiumState';
+import { getAIAvailability } from '../app/ai/aiClient';
 
 // AIEnableModal is lazily imported by SettingsMenu — mock its deps to keep
 // this test focused and fast (mirrors SettingsMenuTaboxAI.test.js).
@@ -49,6 +50,8 @@ describe('SettingsMenu — Tabox Pro section', () => {
         browser.storage.local.get.mockResolvedValue({});
         browser.runtime.sendMessage.mockReset();
         browser.runtime.sendMessage.mockResolvedValue({});
+        getAIAvailability.mockReset();
+        getAIAvailability.mockResolvedValue(undefined);
     });
 
     test('shows Upgrade CTA for free users', () => {
@@ -172,5 +175,36 @@ describe('SettingsMenu — Tabox Pro section', () => {
         expect(
             browser.runtime.sendMessage.mock.calls.filter((c) => c[0].type === 'openProCheckout').length,
         ).toBeGreaterThanOrEqual(2);
+    });
+
+    test('free plan shows the AI-unavailable warning above the upgrade button', async () => {
+        getAIAvailability.mockResolvedValue('unavailable');
+        const { container } = renderSettingsMenu(null);
+        openSettings(container);
+        const alert = await screen.findByRole('alert');
+        expect(alert).toHaveTextContent("Tabox AI won't work on this computer.");
+        const cta = screen.getByRole('button', { name: /upgrade — start free 7-day trial/i });
+        expect(alert.compareDocumentPosition(cta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    test('free plan shows no warning when Tabox AI works', async () => {
+        getAIAvailability.mockResolvedValue('available');
+        const { container } = renderSettingsMenu(null);
+        openSettings(container);
+        await screen.findByRole('button', { name: /upgrade — start free 7-day trial/i });
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    test('pro plan never shows the AI-unavailable warning in settings', async () => {
+        getAIAvailability.mockResolvedValue('unavailable');
+        const { container } = renderSettingsMenu({
+            entitled: true,
+            status: 'active',
+            plan: 'monthly',
+            refreshedAt: new Date().toISOString(),
+        });
+        openSettings(container);
+        await screen.findByRole('button', { name: /manage subscription/i });
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
 });
