@@ -10,7 +10,7 @@
 const sharedFoldersBgUtils = typeof require === 'function'
   ? require('./background-utils')
   : globalThis.TaboxBackgroundUtils;
-const { getAuthToken, STORAGE_KEYS: sharedFoldersStorageKeys } = sharedFoldersBgUtils;
+const { getAuthToken: sharedFoldersGetAuthToken, STORAGE_KEYS: sharedFoldersStorageKeys } = sharedFoldersBgUtils;
 const { DELETED_COLLECTION_TOMBSTONES: DELETED_COLLECTION_TOMBSTONES_KEY, DELETED_FOLDER_TOMBSTONES: DELETED_FOLDER_TOMBSTONES_KEY } =
   sharedFoldersStorageKeys;
 
@@ -42,7 +42,7 @@ function partitionSharedUids(foldersArray = [], collectionsArray = []) {
 }
 
 async function sharedApiFetch(path, { method = 'GET', body } = {}) {
-  const token = await getAuthToken();
+  const token = await sharedFoldersGetAuthToken();
   if (!token) return { ok: false, status: 0, error: 'not_signed_in' };
   try {
     const res = await fetch(`${SHARED_API_BASE}${path}`, {
