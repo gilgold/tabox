@@ -8,6 +8,7 @@ import { isProState } from './atoms/premiumState';
 import { saveContact, searchContacts } from './utils/contactsUtils';
 import { loadCollectionsIndex, loadMultipleCollections } from './utils/storageUtils';
 import { showSuccessToast, showErrorToast } from './toastHelpers';
+import AIUnavailableWarning from './AIUnavailableWarning';
 import './Modal.css';
 import './ShareFolderModal.css';
 
@@ -156,6 +157,7 @@ export default function ShareFolderModal() {
                 <div className="share-upgrade">
                     <MdWorkspacePremium size={28} />
                     <p>Sharing folders is a Tabox Pro feature.</p>
+                    <AIUnavailableWarning />
                     <button onClick={() => send({ type: 'openProCheckout' })}>Upgrade now</button>
                 </div>
             ) : (

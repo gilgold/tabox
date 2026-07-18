@@ -8,6 +8,10 @@ import { shareFolderModalState } from '../app/atoms/sharedFoldersState';
 import { premiumEntitlementState } from '../app/atoms/premiumState';
 
 jest.mock('../app/toastHelpers', () => ({ showSuccessToast: jest.fn(), showErrorToast: jest.fn() }));
+jest.mock('../app/ai/aiClient', () => ({
+    getAIAvailability: jest.fn(),
+}));
+import { getAIAvailability } from '../app/ai/aiClient';
 
 const PRO = { entitled: true, refreshedAt: new Date().toISOString() };
 const FOLDER = { uid: 'f1', name: 'Team', color: '#f00' };
@@ -38,6 +42,7 @@ function installStorageMock() {
 beforeEach(() => {
   browser.runtime.sendMessage.mockReset();
   installStorageMock();
+  getAIAvailability.mockResolvedValue('available');
 });
 
 test('non-Pro sees the upgrade prompt instead of the share form', async () => {
@@ -153,4 +158,20 @@ test('a non-owner (role "write") shared folder does not render the member-manage
   expect(screen.queryByText('a@x.com')).not.toBeInTheDocument();
   // the owner-only refresh must not be triggered for non-owners either
   expect(browser.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'sharedGetMembers' }));
+});
+
+test('non-Pro upgrade prompt warns when the device cannot run Tabox AI', async () => {
+  getAIAvailability.mockResolvedValue('unavailable');
+  renderModal(FOLDER, { entitled: false });
+  const alert = await screen.findByRole('alert');
+  expect(alert).toHaveTextContent("Tabox AI won't work on this computer.");
+  const cta = screen.getByRole('button', { name: /upgrade now/i });
+  expect(alert.compareDocumentPosition(cta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  await act(async () => {});
+});
+
+test('non-Pro upgrade prompt shows no warning when Tabox AI works', async () => {
+  renderModal(FOLDER, { entitled: false });
+  await act(async () => {});
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 });
