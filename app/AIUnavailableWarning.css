@@ -13,14 +13,20 @@
     text-align: left;
 }
 
-.ai-unavailable-warning p {
+div.ai-unavailable-warning > p {
     margin: 0;
+    font-size: 12.5px;
+    opacity: 1;
 }
 
 .ai-unavailable-warning-icon {
     flex-shrink: 0;
     font-size: 18px;
     margin-top: 1px;
+    color: #b8860b;
+}
+
+.ai-unavailable-warning svg.ai-unavailable-warning-icon {
     color: #b8860b;
 }
 
@@ -31,5 +37,9 @@
 }
 
 [data-theme="dark"] .ai-unavailable-warning-icon {
+    color: #e6a700;
+}
+
+[data-theme="dark"] .ai-unavailable-warning svg.ai-unavailable-warning-icon {
     color: #e6a700;
 }
