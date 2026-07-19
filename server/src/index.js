@@ -21,6 +21,7 @@ import {
   createOrRotateFolderLink, getFolderLink, deleteFolderLink, joinViaFolderLink,
   upsertCollectionLink, listCollectionLinks, deleteCollectionLink, getPublicLinkInfo,
 } from './shareLinks.js';
+import { JOIN_PAGE_HTML } from './joinPage.js';
 
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -350,6 +351,9 @@ export default {
     if (request.method === 'POST' && url.pathname === '/subscription/resume') return handleResumeSubscription(request, env);
     if (request.method === 'POST' && url.pathname === '/subscription/change-plan') return handleChangePlan(request, env);
     if (request.method === 'GET' && url.pathname.startsWith('/links/')) return handlePublicLink(request, env, url);
+    if (request.method === 'GET' && url.pathname.startsWith('/join/')) {
+      return new Response(JOIN_PAGE_HTML, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+    }
     if (url.pathname.startsWith('/shared/')) return handleShared(request, env, url);
     if (request.method === 'POST' && url.pathname === '/webhooks/paddle') return handlePaddleWebhook(request, env);
     return json({ error: 'not_found' }, 404);
