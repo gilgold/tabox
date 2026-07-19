@@ -925,7 +925,11 @@ async function publicLinkFetch(token) {
 // whitelist. Mirrors materializeSharedFolderLocally's index bookkeeping.
 async function addLocalCollectionFromSnapshot(info) {
   return withStorageLock(async () => {
-    const uid = crypto.randomUUID();
+    // Same guarded generator as background-utils' generateUid (crypto.randomUUID
+    // is missing in some test environments).
+    const uid = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
     const now = Date.now();
     const { collections_index: got = {} } = await browser.storage.local.get('collections_index');
     const cIndex = { ...got };

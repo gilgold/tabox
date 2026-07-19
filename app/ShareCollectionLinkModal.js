@@ -22,6 +22,7 @@ const ERROR_TEXT = {
 // never leave this account (parentId — folder membership is local; lastOpened
 // — per-device state).
 function toSnapshot(collection) {
+    // eslint-disable-next-line no-unused-vars
     const { parentId, lastOpened, ...data } = collection;
     return data;
 }
