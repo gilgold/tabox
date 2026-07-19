@@ -7,7 +7,7 @@
  * regardless of which of the three menu entry points opened it.
  */
 import { browser } from '../../static/globals';
-import { showInfoToast, showErrorToast } from '../toastHelpers';
+import { showInfoToast, showErrorToast, showSuccessToast } from '../toastHelpers';
 
 /**
  * Leave a shared folder the caller is a member of. Keeps a local copy.
@@ -28,6 +28,61 @@ export async function leaveSharedFolder(folder, onDataUpdate) {
     } catch (error) {
         console.error('Error leaving shared folder:', error);
         showErrorToast('Couldn\'t leave the folder — please try again.');
+        return false;
+    }
+}
+
+/**
+ * Respond to a pending shared-folder invite (accept or decline). Declining
+ * marks the invite "declined" on the owner's member list; the background
+ * handler removes the invite from the shared_pending_invites record either
+ * way, which flows back into pendingInvitesState via storage.onChanged.
+ * @param {object} invite - Pending invite ({ folderId, folderName, ownerEmail, role }).
+ * @param {boolean} accept - true to accept, false to decline.
+ * @param {Function} [onDataUpdate] - Called after a successful accept to refresh data.
+ * @returns {Promise<boolean>} Whether the response succeeded.
+ */
+export async function respondToSharedInvite(invite, accept, onDataUpdate) {
+    try {
+        const res = await browser.runtime.sendMessage({ type: 'sharedRespondInvite', folderId: invite.folderId, accept });
+        if (!res?.ok) {
+            showErrorToast('Could not respond to the invite. Please try again.');
+            return false;
+        }
+        if (accept) {
+            showSuccessToast(`"${invite.folderName}" was added to your folders`);
+            if (onDataUpdate) await onDataUpdate();
+        }
+        return true;
+    } catch (error) {
+        console.error('Error responding to shared invite:', error);
+        showErrorToast('Could not respond to the invite. Please try again.');
+        return false;
+    }
+}
+
+/**
+ * Complete a folder join that was stashed while the user was signed out
+ * (share-link flow). The background handler clears the stash on success.
+ * @param {object} stash - Pending join ({ token, name }).
+ * @param {Function} [onDataUpdate] - Called after a successful join to refresh data.
+ * @returns {Promise<boolean>} Whether the join succeeded.
+ */
+export async function joinSharedFolderLink(stash, onDataUpdate) {
+    try {
+        const res = await browser.runtime.sendMessage({ type: 'sharedJoinLink', token: stash.token });
+        if (!res?.ok) {
+            showErrorToast(res?.status === 'sign_in_required'
+                ? 'Sign in with Google (Settings → Sync) first, then try again.'
+                : 'Couldn\'t join the folder — the link may have been revoked.');
+            return false;
+        }
+        showSuccessToast(`You joined "${res.name || stash.name}"`);
+        if (onDataUpdate) await onDataUpdate();
+        return true;
+    } catch (error) {
+        console.error('Error joining shared folder via link:', error);
+        showErrorToast('Couldn\'t join the folder — please try again.');
         return false;
     }
 }

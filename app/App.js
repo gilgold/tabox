@@ -69,7 +69,7 @@ import { manageSubscriptionOpenState } from './atoms/premiumState';
 import { usePremiumEntitlement } from './usePremiumEntitlement';
 import NoPermissionModal from './NoPermissionModal';
 import SharedActionConfirmModal from './SharedActionConfirmModal';
-import { noPermissionOpenState, pendingInvitesState, shareFolderModalState } from './atoms/sharedFoldersState';
+import { noPermissionOpenState, pendingInvitesState, pendingLinkJoinState, shareFolderModalState } from './atoms/sharedFoldersState';
 import { guardFolderEdit, isSharedFolder } from './utils/sharedFolderUtils';
 import ShareFolderModal from './ShareFolderModal';
 import SharedInviteToastController from './SharedInviteToastController';
@@ -169,6 +169,7 @@ const HYDRATION_BATCH_SIZE = 50;
 const MIGRATION_SESSION_KEY = 'tabox:migrationChecked';
 const SYNC_SESSION_STATE_KEY = 'syncSessionState';
 const SHARED_PENDING_INVITES_KEY = 'shared_pending_invites';
+const SHARED_PENDING_LINK_JOIN_KEY = 'shared_pending_link_join';
 const SHARED_EVENTS_KEY = 'shared_folder_events';
 const SHARED_SYNC_INTERVAL_MS = 8000;
 const DEFAULT_SYNC_SESSION_STATE = {
@@ -268,6 +269,7 @@ function App({ mode = 'popup' }) {
   const setNoPermissionOpen = useSetAtom(noPermissionOpenState);
   const setShareFolderModal = useSetAtom(shareFolderModalState);
   const setPendingInvites = useSetAtom(pendingInvitesState);
+  const setPendingLinkJoin = useSetAtom(pendingLinkJoinState);
   const setTabSwitcherOpen = useSetAtom(tabSwitcherOpenState);
   const setSidebarNavigation = useSetAtom(sidebarNavigationState);
   const search = useAtomValue(searchState);
@@ -1841,12 +1843,14 @@ function App({ mode = 'popup' }) {
     let isMounted = true;
 
     const loadPendingInvites = async () => {
-      const { [SHARED_PENDING_INVITES_KEY]: stored } = await browser.storage.local.get(SHARED_PENDING_INVITES_KEY);
+      const { [SHARED_PENDING_INVITES_KEY]: stored, [SHARED_PENDING_LINK_JOIN_KEY]: linkJoin } =
+        await browser.storage.local.get([SHARED_PENDING_INVITES_KEY, SHARED_PENDING_LINK_JOIN_KEY]);
       if (isMounted) {
         // C1 fix: storage holds { invites, notifiedFolderIds } (see
         // chrome/shared-folders.js's pollInvites) — unwrap to the invites array
         // the banner expects instead of feeding it the whole object.
         setPendingInvites(stored?.invites || []);
+        setPendingLinkJoin(linkJoin || null);
       }
     };
     loadPendingInvites();
@@ -1855,6 +1859,9 @@ function App({ mode = 'popup' }) {
       if (areaName === 'local' && changes[SHARED_PENDING_INVITES_KEY]) {
         setPendingInvites(changes[SHARED_PENDING_INVITES_KEY].newValue?.invites || []);
       }
+      if (areaName === 'local' && changes[SHARED_PENDING_LINK_JOIN_KEY]) {
+        setPendingLinkJoin(changes[SHARED_PENDING_LINK_JOIN_KEY].newValue || null);
+      }
     };
     browser.storage.onChanged.addListener(handlePendingInvitesChange);
 
@@ -1862,7 +1869,7 @@ function App({ mode = 'popup' }) {
       isMounted = false;
       browser.storage.onChanged.removeListener(handlePendingInvitesChange);
     };
-  }, [setPendingInvites]);
+  }, [setPendingInvites, setPendingLinkJoin]);
 
   // Shared folders: drain background-queued change events (revoked/deleted/
   // renamed/updated) into info toasts, then refresh so pulled changes render.
