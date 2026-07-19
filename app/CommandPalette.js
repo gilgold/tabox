@@ -9,6 +9,7 @@ import { escapeRegex, highlightText } from './utils/searchUtils';
 import { browser } from '../static/globals';
 import {
     MdSearch,
+    MdLink,
     MdOpenInBrowser,
     MdDriveFileRenameOutline,
     MdDriveFileMoveOutline,
@@ -80,6 +81,7 @@ const COLLECTION_SUB_ACTIONS = [
     { id: 'rename', label: 'Rename', icon: MdDriveFileRenameOutline },
     { id: 'move', label: 'Move to Folder', icon: MdDriveFileMoveOutline },
     { id: 'duplicate', label: 'Duplicate', icon: MdContentCopy },
+    { id: 'share-link', label: 'Share via Link', icon: MdLink },
     { id: 'export', label: 'Export', icon: CiExport },
     { id: 'delete', label: 'Delete', icon: MdDelete, danger: true },
 ];

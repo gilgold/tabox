@@ -1,4 +1,4 @@
-import { MdDelete, MdOutlineRefresh, MdCallSplit } from 'react-icons/md';
+import { MdDelete, MdOutlineRefresh, MdCallSplit, MdLink } from 'react-icons/md';
 import { CiExport } from 'react-icons/ci';
 import { FaStop } from 'react-icons/fa6';
 import { FaStar, FaRegStar } from 'react-icons/fa';
@@ -21,7 +21,8 @@ export const createCollectionMenuItems = ({
     onToggleFavorite,
     aiEnabled = false,
     tabCount = 0,
-    onSplitCollection
+    onSplitCollection,
+    onShareLink
 }) => [
     {
         id: 'update',
@@ -46,6 +47,14 @@ export const createCollectionMenuItems = ({
         action: onExport,
         className: '',
         condition: true
+    },
+    {
+        id: 'share-link',
+        text: 'Share via Link',
+        icon: <MdLink size={ICON_SIZE} />,
+        action: onShareLink,
+        className: '',
+        condition: typeof onShareLink === 'function'
     },
     {
         id: 'duplicate',

@@ -9,6 +9,9 @@ export const noPermissionOpenState = atom(false);
 // Pending shared-folder invites surfaced to the current user (invite banner).
 export const pendingInvitesState = atom([]);
 
+// Collection currently open in the "Share collection via link" modal, or null.
+export const shareCollectionLinkModalState = atom(null);
+
 // Pending share-link folder join stashed by the background while the user was
 // signed out ({ token, name, ownerEmail, role } or null). Surfaced as a toast
 // once the popup opens; cleared on join, dismiss, or background redemption.

@@ -69,9 +69,10 @@ import { manageSubscriptionOpenState } from './atoms/premiumState';
 import { usePremiumEntitlement } from './usePremiumEntitlement';
 import NoPermissionModal from './NoPermissionModal';
 import SharedActionConfirmModal from './SharedActionConfirmModal';
-import { noPermissionOpenState, pendingInvitesState, pendingLinkJoinState, shareFolderModalState } from './atoms/sharedFoldersState';
+import { noPermissionOpenState, pendingInvitesState, pendingLinkJoinState, shareCollectionLinkModalState, shareFolderModalState } from './atoms/sharedFoldersState';
 import { guardFolderEdit, isSharedFolder } from './utils/sharedFolderUtils';
 import ShareFolderModal from './ShareFolderModal';
+import ShareCollectionLinkModal from './ShareCollectionLinkModal';
 import SharedInviteToastController from './SharedInviteToastController';
 
 // Migration system imports - wrapped in try/catch for compatibility
@@ -268,6 +269,7 @@ function App({ mode = 'popup' }) {
   const setManageSubscriptionOpen = useSetAtom(manageSubscriptionOpenState);
   const setNoPermissionOpen = useSetAtom(noPermissionOpenState);
   const setShareFolderModal = useSetAtom(shareFolderModalState);
+  const setShareCollectionLink = useSetAtom(shareCollectionLinkModalState);
   const setPendingInvites = useSetAtom(pendingInvitesState);
   const setPendingLinkJoin = useSetAtom(pendingLinkJoinState);
   const setTabSwitcherOpen = useSetAtom(tabSwitcherOpenState);
@@ -2164,6 +2166,10 @@ function App({ mode = 'popup' }) {
         downloadTextFile(JSON.stringify(collection, null, 2), collection.name);
         break;
       }
+      case 'share-link': {
+        setShareCollectionLink(collection);
+        break;
+      }
       case 'delete': {
         const parentFolder = collection.parentId ? foldersData.find(f => f.uid === collection.parentId) : null;
         if (!guardFolderEdit(parentFolder, () => setNoPermissionOpen(true))) break;
@@ -2180,7 +2186,7 @@ function App({ mode = 'popup' }) {
         break;
       }
     }
-  }, [addCollection, updateCollection, updateRemoteData, refreshDataAfterFolderOperation, folderNameMap, foldersData, setNoPermissionOpen]);
+  }, [addCollection, updateCollection, updateRemoteData, refreshDataAfterFolderOperation, folderNameMap, foldersData, setNoPermissionOpen, setShareCollectionLink]);
 
   const tooltipPortal = ReactDOM.createPortal(
     <Tooltip
@@ -2214,6 +2220,7 @@ function App({ mode = 'popup' }) {
   const aiToolsModalEl = <AIToolsModal updateRemoteData={updateRemoteData} />;
   const manageSubscriptionModalEl = <ManageSubscriptionModal />;
   const shareFolderModalEl = <ShareFolderModal />;
+  const shareCollectionLinkModalEl = <ShareCollectionLinkModal />;
   const noPermissionModalEl = <NoPermissionModal />;
   const sharedActionConfirmModalEl = <SharedActionConfirmModal onConfirmed={refreshDataAfterFolderOperation} />;
 
@@ -2234,6 +2241,7 @@ function App({ mode = 'popup' }) {
         {aiToolsModalEl}
         {manageSubscriptionModalEl}
         {shareFolderModalEl}
+        {shareCollectionLinkModalEl}
         {noPermissionModalEl}
         {sharedActionConfirmModalEl}
         <SharedInviteToastController onAccepted={refreshDataAfterFolderOperation} />
@@ -2284,6 +2292,7 @@ function App({ mode = 'popup' }) {
       {aiToolsModalEl}
       {manageSubscriptionModalEl}
       {shareFolderModalEl}
+      {shareCollectionLinkModalEl}
       {noPermissionModalEl}
       {sharedActionConfirmModalEl}
       <div className={`App${isFullPage ? ' fullpage' : ''}`}>

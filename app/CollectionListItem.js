@@ -10,6 +10,7 @@ import { useSetAtom, useAtomValue } from 'jotai';
 import { deletingCollectionUidsState, highlightedCollectionUidState, dragSessionState } from './atoms/animationsState';
 import { trackingStateVersion } from './atoms/globalAppSettingsState';
 import { aiProcessingUidsState, aiProcessingCurrentUidState, aiSplitTargetState, aiToolsModalOpenState, aiToolsScopeState } from './atoms/aiState';
+import { shareCollectionLinkModalState } from './atoms/sharedFoldersState';
 import { useTaboxAIEnabled } from './ai/useTaboxAIEnabled';
 import { isAISupported } from './ai/aiClient';
 import './AIEffects.css';
@@ -53,6 +54,7 @@ function CollectionListItem(props) {
     const setAIToolsOpen = useSetAtom(aiToolsModalOpenState);
     const setAIToolsScope = useSetAtom(aiToolsScopeState);
     const setSplitTarget = useSetAtom(aiSplitTargetState);
+    const setShareCollectionLink = useSetAtom(shareCollectionLinkModalState);
     const aiEnabled = useTaboxAIEnabled() && isAISupported();
     const tabCount = props.collection.tabs?.length ?? props.collection.tabCount ?? 0;
 
@@ -407,6 +409,7 @@ function CollectionListItem(props) {
                         aiEnabled,
                         tabCount,
                         onSplitCollection: _handleSplitCollection,
+                        onShareLink: () => setShareCollectionLink(props.collection),
                     })}
                     tooltip="Collection options"
                     onOpenChange={setIsInteractionActive}
