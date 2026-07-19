@@ -16,7 +16,7 @@ import {
     highlightedCollectionUidState,
 } from '../atoms/animationsState';
 import { sidebarNavigationState } from '../atoms/fullpageState';
-import { noPermissionOpenState, shareFolderModalState, sharedActionConfirmState } from '../atoms/sharedFoldersState';
+import { noPermissionOpenState, shareCollectionLinkModalState, shareFolderModalState, sharedActionConfirmState } from '../atoms/sharedFoldersState';
 import { guardFolderEdit, isReadOnlySharedFolder } from '../utils/sharedFolderUtils';
 import { isProState } from '../atoms/premiumState';
 import { buildFolderMenuItems } from '../utils/folderMenuItems';
@@ -70,6 +70,7 @@ import {
     MdSortByAlpha,
     MdCallSplit,
     MdPersonAdd,
+    MdLink,
     MdLinkOff,
     MdLogout,
 } from 'react-icons/md';
@@ -697,6 +698,7 @@ function FPContentArea({
     const setCollectionRevealBatch = useSetAtom(collectionRevealBatchState);
     const setNoPermissionOpen = useSetAtom(noPermissionOpenState);
     const setShareFolderModal = useSetAtom(shareFolderModalState);
+    const setShareCollectionLink = useSetAtom(shareCollectionLinkModalState);
     const setSharedActionConfirm = useSetAtom(sharedActionConfirmState);
     const isPro = useAtomValue(isProState);
 
@@ -3583,6 +3585,13 @@ function FPContentArea({
                     >
                         <MdContentCopy size={16} />
                         <span>Copy all URLs</span>
+                    </button>
+                    <button
+                        className="fp-card-ctx-item"
+                        onClick={() => { const c = cardCtxMenu.collection; setCardCtxMenu(null); setShareCollectionLink(c); }}
+                    >
+                        <MdLink size={16} />
+                        <span>Share via Link</span>
                     </button>
                     {aiEnabled && (cardCtxMenu.collection.tabs?.length || 0) >= SPLIT_MIN_TABS && (
                         <button
