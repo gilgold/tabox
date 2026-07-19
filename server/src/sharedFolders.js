@@ -19,7 +19,7 @@ export async function isProUser(env, googleId) {
 // caller below treats a throw here as a clean validation failure (400), not
 // a size violation, so `ok:false` (rather than a size number) always means
 // "reject with invalid_request".
-function safeCollectionSize(data) {
+export function safeCollectionSize(data) {
   try {
     return { ok: true, size: JSON.stringify(data ?? null).length };
   } catch {
