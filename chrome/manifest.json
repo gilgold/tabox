@@ -68,6 +68,12 @@
     "https://tabox-api.gilgold13.workers.dev/",
     "https://tabox-api-sandbox.gilgold13.workers.dev/"
   ],
+  "externally_connectable": {
+    "matches": [
+      "https://tabox-api.gilgold13.workers.dev/*",
+      "https://tabox-api-sandbox.gilgold13.workers.dev/*"
+    ]
+  },
   "web_accessible_resources": [{
     "resources": ["api-keys.json"],
     "matches": [],

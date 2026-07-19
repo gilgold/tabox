@@ -2286,6 +2286,23 @@ try {
     }
 
   });
+
+  // Share links: the /join/<token> page (externally_connectable origins in the
+  // manifest) hands us its token here. Everything else is ignored — reply with
+  // a closed error so the page can render a failure state instead of hanging.
+  // handleShareLinkRedeem resolves as a bare global exactly like
+  // handleSharedMessage above — shared-folders.js is loaded via importScripts
+  // before any message can fire. Optional-chained: onMessageExternal only
+  // exists when the manifest declares externally_connectable (and is absent
+  // from the Jest webextension mock) — a throw here would silently abort every
+  // listener registration below in this shared try block.
+  browser.runtime.onMessageExternal?.addListener?.(async (request) => {
+    if (request?.type === 'taboxShareLink') {
+      return handleShareLinkRedeem(request.token);
+    }
+    return { ok: false, status: 'error', error: 'unknown_message' };
+  });
+
   browser.commands.onCommand.addListener(async (command) => {
     try {
       const index = parseInt(command.replace('open-collection-', '')) - 1;

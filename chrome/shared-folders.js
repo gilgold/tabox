@@ -24,6 +24,7 @@ const SHARED_API_BASE = typeof require === 'function'
 const SHARED_SYNC_STATE_KEY = 'shared_sync_state';
 const SHARED_PENDING_INVITES_KEY = 'shared_pending_invites';
 const SHARED_EVENTS_KEY = 'shared_folder_events';
+const SHARED_PENDING_LINK_JOIN_KEY = 'shared_pending_link_join';
 
 // Task 9: shared folders/collections must never enter the Google Drive sync payload.
 // isSharedFolderRecord identifies a folder carrying the Task 8 `shared` marker;
@@ -903,6 +904,78 @@ async function doSyncSharedFolders() {
   return { ok: true, data: { pulled, pushed, revoked } };
 }
 
+// Public (unauthenticated) share-link metadata fetch — /links/:token needs no
+// Google token, so this deliberately bypasses sharedApiFetch's auth gate.
+async function publicLinkFetch(token) {
+  try {
+    const res = await fetch(`${SHARED_API_BASE}/links/${encodeURIComponent(token)}`);
+    const data = await res.json().catch(() => ({}));
+    return res.ok
+      ? { ok: true, status: res.status, data }
+      : { ok: false, status: res.status, error: data.error || 'request_failed' };
+  } catch {
+    return { ok: false, status: 0, error: 'network_error' };
+  }
+}
+
+// Import a collection-link snapshot as a plain LOCAL collection. Always a
+// FRESH uid: the same link can be redeemed repeatedly (and the sharer's own
+// uid must never be reused), so each redeem is an independent copy. Loose
+// collection on purpose — parentId is stripped by sanitizeRemoteCollection's
+// whitelist. Mirrors materializeSharedFolderLocally's index bookkeeping.
+async function addLocalCollectionFromSnapshot(info) {
+  return withStorageLock(async () => {
+    const uid = crypto.randomUUID();
+    const now = Date.now();
+    const { collections_index: got = {} } = await browser.storage.local.get('collections_index');
+    const cIndex = { ...got };
+    const record = { ...sanitizeRemoteCollection(info.data), uid, createdOn: now, lastUpdated: now };
+    cIndex[uid] = { uid, name: record.name, parentId: null, lastUpdated: now };
+    await browser.storage.local.set({ [`collection_${uid}`]: record, collections_index: cIndex });
+    return record.name;
+  });
+}
+
+// Entry point for the join page's externally_connectable message
+// ({ type: 'taboxShareLink', token }). Resolves the token publicly first (so
+// we never trust the page's own claims about what the token is), then either
+// imports the snapshot or joins the folder. A signed-out folder join stashes
+// a pending join for the popup to offer after sign-in.
+async function handleShareLinkRedeem(token) {
+  if (typeof token !== 'string' || !token) return { ok: false, status: 'invalid', error: 'invalid_request' };
+  const info = await publicLinkFetch(token);
+  if (!info.ok) {
+    return { ok: false, status: info.status === 404 ? 'invalid' : 'error', error: info.error };
+  }
+  if (info.data.kind === 'collection') {
+    const name = await addLocalCollectionFromSnapshot(info.data);
+    return { ok: true, status: 'added', name };
+  }
+  // kind === 'folder'
+  const joined = await sharedApiFetch('/shared/join-link', { method: 'POST', body: { token } });
+  if (!joined.ok && joined.error === 'not_signed_in') {
+    await browser.storage.local.set({
+      [SHARED_PENDING_LINK_JOIN_KEY]: {
+        token, name: info.data.name, ownerEmail: info.data.ownerEmail, role: info.data.role, stashedAt: Date.now(),
+      },
+    });
+    return { ok: false, status: 'sign_in_required', name: info.data.name };
+  }
+  if (!joined.ok) return { ok: false, status: 'error', error: joined.error };
+  const { folder, collections } = joined.data;
+  const now = Date.now();
+  await materializeSharedFolderLocally({
+    folderId: folder.folderId, name: folder.name, color: folder.color, role: folder.role,
+    ownerEmail: folder.ownerEmail, members: folder.members, collections, now,
+  });
+  await setFolderSyncState(folder.folderId, {
+    lastRev: folder.revision, lastSyncedAt: now, knownUids: collections.map((c) => c.uid),
+  });
+  await browser.storage.local.remove(SHARED_PENDING_LINK_JOIN_KEY);
+  if (typeof ensureSharedSyncAlarm === 'function') await ensureSharedSyncAlarm();
+  return { ok: true, status: 'joined', name: folder.name };
+}
+
 async function handleSharedMessage(request) {
   switch (request.type) {
     case 'sharedCreateShare': {
@@ -1040,6 +1113,8 @@ const sharedFoldersApi = {
   SHARED_SYNC_STATE_KEY,
   SHARED_PENDING_INVITES_KEY,
   SHARED_EVENTS_KEY,
+  SHARED_PENDING_LINK_JOIN_KEY,
+  handleShareLinkRedeem,
   isSharedFolderRecord,
   partitionSharedUids,
   sharedApiFetch,
