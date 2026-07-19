@@ -27,7 +27,8 @@ export const JOIN_PAGE_HTML = `<!doctype html>
   button, a.btn { display: inline-block; margin-top: 16px; padding: 10px 22px; border-radius: 8px; border: 0; background: var(--accent); color: #fff; font-size: 15px; cursor: pointer; text-decoration: none; }
   .spinner { margin: 18px auto 0; width: 22px; height: 22px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .hidden { display: none; }
+  /* !important: must also beat the a.btn display rule above (higher specificity). */
+  .hidden { display: none !important; }
 </style>
 </head>
 <body>
