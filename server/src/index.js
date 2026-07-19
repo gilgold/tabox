@@ -17,6 +17,10 @@ import {
   updateMemberRole, removeMember, deleteSharedFolder, getMembers,
   checkRateLimit, MAX_BODY_BYTES,
 } from './sharedFolders.js';
+import {
+  createOrRotateFolderLink, getFolderLink, deleteFolderLink, joinViaFolderLink,
+  upsertCollectionLink, listCollectionLinks, deleteCollectionLink, getPublicLinkInfo,
+} from './shareLinks.js';
 
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -228,6 +232,27 @@ async function handleShared(request, env, url) {
       }
       return json({ error: 'not_found' }, 404);
     }
+
+    const joinUrl = (token) => `${url.origin}/join/${token}`;
+
+    if (seg[1] === 'join-link' && method === 'POST' && seg.length === 2) {
+      return out(await joinViaFolderLink(db, identity, (await body()).token, now));
+    }
+    if (seg[1] === 'collection-link' && seg.length === 2 && method === 'PUT') {
+      if (!(await isProUser(env, identity.googleId))) return json({ error: 'pro_required' }, 403);
+      const r = await upsertCollectionLink(db, identity, await body(), now);
+      if (r.ok) r.data.url = joinUrl(r.data.token);
+      return out(r);
+    }
+    if (seg[1] === 'collection-links' && seg.length === 2 && method === 'GET') {
+      const r = await listCollectionLinks(db, identity);
+      if (r.ok) r.data.links = r.data.links.map((l) => ({ ...l, url: joinUrl(l.token) }));
+      return out(r);
+    }
+    if (seg[1] === 'collection-link' && seg.length === 3 && method === 'DELETE') {
+      return out(await deleteCollectionLink(db, identity, decodeURIComponent(seg[2])));
+    }
+
     if (seg[1] !== 'folders') return json({ error: 'not_found' }, 404);
 
     if (seg.length === 2) {
@@ -242,6 +267,20 @@ async function handleShared(request, env, url) {
       if (method === 'GET') return out(await getFolderDelta(db, identity, folderId, url.searchParams.get('sinceRev')));
       if (method === 'PATCH') return out(await updateFolderMeta(db, identity, folderId, await body(), now));
       if (method === 'DELETE') return out(await deleteSharedFolder(db, identity, folderId));
+    }
+    if (seg.length === 4 && seg[3] === 'link') {
+      if (method === 'POST') {
+        if (!(await isProUser(env, identity.googleId))) return json({ error: 'pro_required' }, 403);
+        const r = await createOrRotateFolderLink(db, identity, folderId, await body(), now);
+        if (r.ok) r.data.url = joinUrl(r.data.token);
+        return out(r);
+      }
+      if (method === 'GET') {
+        const r = await getFolderLink(db, identity, folderId);
+        if (r.ok && r.data.link) r.data.link = { ...r.data.link, url: joinUrl(r.data.link.token) };
+        return out(r);
+      }
+      if (method === 'DELETE') return out(await deleteFolderLink(db, identity, folderId));
     }
     if (seg.length === 4 && seg[3] === 'invites' && method === 'POST') {
       if (!(await isProUser(env, identity.googleId))) return json({ error: 'pro_required' }, 403);
@@ -277,6 +316,18 @@ async function handleShared(request, env, url) {
   }
 }
 
+// Public, unauthenticated token resolution for the join page and the extension.
+// The unguessable token is the only credential; rate-limit per client IP to
+// blunt token scanning. Folder links expose metadata only (see getPublicLinkInfo).
+async function handlePublicLink(request, env, url) {
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const allowed = await checkRateLimit(env, `ip:${ip}`, 'links', 30, 60, Date.now());
+  if (!allowed) return json({ error: 'rate_limited' }, 429);
+  const token = decodeURIComponent(url.pathname.slice('/links/'.length));
+  const r = await getPublicLinkInfo(env.SHARED_DB, token);
+  return r.ok === false ? json({ error: r.error }, r.status) : json(r.data, 200);
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -298,6 +349,7 @@ export default {
     if (request.method === 'POST' && url.pathname === '/subscription/cancel') return handleCancelSubscription(request, env);
     if (request.method === 'POST' && url.pathname === '/subscription/resume') return handleResumeSubscription(request, env);
     if (request.method === 'POST' && url.pathname === '/subscription/change-plan') return handleChangePlan(request, env);
+    if (request.method === 'GET' && url.pathname.startsWith('/links/')) return handlePublicLink(request, env, url);
     if (url.pathname.startsWith('/shared/')) return handleShared(request, env, url);
     if (request.method === 'POST' && url.pathname === '/webhooks/paddle') return handlePaddleWebhook(request, env);
     return json({ error: 'not_found' }, 404);
