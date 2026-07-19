@@ -99,3 +99,69 @@ export async function joinViaFolderLink(db, identity, token, nowMs) {
     },
   };
 }
+
+export async function upsertCollectionLink(db, identity, { uid, name, data } = {}, nowMs) {
+  if (typeof uid !== 'string' || !uid || typeof name !== 'string' || !name) return err(400, 'invalid_request');
+  if (name.length > MAX_NAME_LENGTH) return err(400, 'invalid_request');
+  const sized = safeCollectionSize(data);
+  if (!sized.ok) return err(400, 'invalid_request');
+  if (sized.size > MAX_COLLECTION_BYTES) return err(413, 'collection_too_large');
+  const existing = await db.prepare(
+    'SELECT token FROM collection_links WHERE owner_google_id = ? AND collection_uid = ?'
+  ).bind(identity.googleId, uid).first();
+  if (existing) {
+    await db.prepare(
+      'UPDATE collection_links SET name = ?, data = ?, updated_at = ? WHERE owner_google_id = ? AND collection_uid = ?'
+    ).bind(name, JSON.stringify(data ?? null), nowMs, identity.googleId, uid).run();
+    return { ok: true, data: { token: existing.token } };
+  }
+  const count = await db.prepare(
+    'SELECT COUNT(*) AS n FROM collection_links WHERE owner_google_id = ?'
+  ).bind(identity.googleId).first();
+  if (count.n >= MAX_COLLECTION_LINKS_PER_OWNER) return err(409, 'link_limit');
+  const token = generateLinkToken();
+  await db.prepare(
+    'INSERT INTO collection_links (owner_google_id, collection_uid, token, name, owner_email, data, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)'
+  ).bind(identity.googleId, uid, token, name, identity.email.toLowerCase(), JSON.stringify(data ?? null), nowMs, nowMs).run();
+  return { ok: true, data: { token } };
+}
+
+export async function listCollectionLinks(db, identity) {
+  const { results } = await db.prepare(
+    'SELECT collection_uid, token, name, created_at, updated_at FROM collection_links WHERE owner_google_id = ? ORDER BY created_at'
+  ).bind(identity.googleId).all();
+  return {
+    ok: true,
+    data: { links: results.map((r) => ({ uid: r.collection_uid, token: r.token, name: r.name, createdAt: r.created_at, updatedAt: r.updated_at })) },
+  };
+}
+
+export async function deleteCollectionLink(db, identity, uid) {
+  const res = await db.prepare(
+    'DELETE FROM collection_links WHERE owner_google_id = ? AND collection_uid = ?'
+  ).bind(identity.googleId, uid).run();
+  if (res.meta.changes === 0) return err(404, 'not_found');
+  return { ok: true, data: { deleted: true } };
+}
+
+// Public (unauthenticated) token resolution. Folder links expose metadata ONLY —
+// never collection contents; joining requires auth. Collection links return the
+// snapshot itself: for them this call IS the redeem.
+export async function getPublicLinkInfo(db, token) {
+  if (typeof token !== 'string' || !token) return err(404, 'not_found');
+  const fl = await db.prepare(
+    `SELECT fl.role, f.id, f.name, f.owner_email FROM folder_links fl
+       JOIN shared_folders f ON f.id = fl.folder_id WHERE fl.token = ?`
+  ).bind(token).first();
+  if (fl) {
+    const count = await db.prepare(
+      'SELECT COUNT(*) AS n FROM shared_collections WHERE folder_id = ? AND deleted = 0'
+    ).bind(fl.id).first();
+    return { ok: true, data: { kind: 'folder', name: fl.name, ownerEmail: fl.owner_email, role: fl.role, collectionCount: count.n } };
+  }
+  const cl = await db.prepare('SELECT name, owner_email, data FROM collection_links WHERE token = ?').bind(token).first();
+  if (!cl) return err(404, 'not_found');
+  const data = JSON.parse(cl.data);
+  const tabCount = Array.isArray(data?.tabs) ? data.tabs.length : 0;
+  return { ok: true, data: { kind: 'collection', name: cl.name, ownerEmail: cl.owner_email, tabCount, data } };
+}
