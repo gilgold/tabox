@@ -1053,6 +1053,25 @@ async function handleSharedMessage(request) {
       if (r.ok) await unmarkLocalFolderShared(request.folderId);
       return r;
     }
+    case 'sharedGetFolderLink':
+      return sharedApiFetch(`/shared/folders/${request.folderId}/link`);
+    case 'sharedCreateFolderLink':
+      return sharedApiFetch(`/shared/folders/${request.folderId}/link`, {
+        method: 'POST', body: { role: request.role, ...(request.rotate ? { rotate: true } : {}) },
+      });
+    case 'sharedDeleteFolderLink':
+      return sharedApiFetch(`/shared/folders/${request.folderId}/link`, { method: 'DELETE' });
+    case 'sharedCreateCollectionLink':
+      return sharedApiFetch('/shared/collection-link', {
+        method: 'PUT', body: { uid: request.uid, name: request.name, data: request.data },
+      });
+    case 'sharedGetCollectionLinks':
+      return sharedApiFetch('/shared/collection-links');
+    case 'sharedDeleteCollectionLink':
+      return sharedApiFetch(`/shared/collection-link/${encodeURIComponent(request.uid)}`, { method: 'DELETE' });
+    case 'sharedJoinLink':
+      // handleShareLinkRedeem clears SHARED_PENDING_LINK_JOIN_KEY on success.
+      return handleShareLinkRedeem(request.token);
     case 'sharedGetInvites':
       return sharedApiFetch('/shared/invites');
     case 'sharedRespondInvite':
