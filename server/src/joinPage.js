@@ -62,16 +62,42 @@ export const JOIN_PAGE_HTML = `<!doctype html>
     }
   }
 
-  function redeem(info) {
-    if (!window.chrome || !chrome.runtime || !chrome.runtime.sendMessage) return notInstalled(info);
+  // sendMessage wrapped with a timeout; calls cb(null) on timeout, error, or
+  // missing reply, cb(reply) otherwise.
+  function sendTo(msg, timeoutMs, cb) {
     var done = false;
-    var timer = setTimeout(function () { if (!done) { done = true; notInstalled(info); } }, 1500);
+    var timer = setTimeout(function () { if (!done) { done = true; cb(null); } }, timeoutMs);
     try {
-      chrome.runtime.sendMessage(EXT_ID, { type: 'taboxShareLink', token: token }, function (reply) {
+      chrome.runtime.sendMessage(EXT_ID, msg, function (reply) {
         if (done) return;
         done = true;
         clearTimeout(timer);
-        if (chrome.runtime.lastError || !reply) return notInstalled(info);
+        cb(chrome.runtime.lastError || !reply ? null : reply);
+      });
+    } catch (e) { if (!done) { done = true; clearTimeout(timer); cb(null); } }
+  }
+
+  // The redeem does real work (cold service-worker start, network calls, a
+  // join + local materialization) and can take seconds — it must never race
+  // a short "is Tabox installed?" timeout. Install detection is a separate
+  // ping that the extension answers instantly; ANY reply (even an
+  // unknown-message error from an older build) proves it's installed.
+  var PING_TIMEOUT_MS = 2000;
+  var REDEEM_TIMEOUT_MS = 30000;
+
+  function redeem(info) {
+    if (!window.chrome || !chrome.runtime || !chrome.runtime.sendMessage) return notInstalled(info);
+    sendTo({ type: 'taboxShareLinkPing' }, PING_TIMEOUT_MS, function (pong) {
+      if (!pong) return notInstalled(info);
+      setStatus(info.kind === 'folder' ? 'Joining the folder…' : 'Adding to your Tabox…', '');
+      show('spinner');
+      sendTo({ type: 'taboxShareLink', token: token }, REDEEM_TIMEOUT_MS, function (reply) {
+        hide('spinner');
+        if (!reply) {
+          setStatus('Tabox didn\\u2019t respond. Please try again.', 'err');
+          show('retry');
+          return;
+        }
         if (reply.status === 'joined') return setStatus('You joined "' + (reply.name || info.name) + '" ✓ — open Tabox to see it.', 'ok');
         if (reply.status === 'added') return setStatus('"' + (reply.name || info.name) + '" was added to your Tabox ✓', 'ok');
         if (reply.status === 'sign_in_required') {
@@ -84,7 +110,7 @@ export const JOIN_PAGE_HTML = `<!doctype html>
         setStatus('Something went wrong redeeming this link. Please try again.', 'err');
         show('retry');
       });
-    } catch (e) { if (!done) { done = true; clearTimeout(timer); notInstalled(info); } }
+    });
   }
 
   function notInstalled(info) {

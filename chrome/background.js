@@ -2297,6 +2297,13 @@ try {
   // from the Jest webextension mock) — a throw here would silently abort every
   // listener registration below in this shared try block.
   browser.runtime.onMessageExternal?.addListener?.(async (request) => {
+    // Install detection: answered instantly, no network/storage work. The
+    // page must never infer "not installed" from redeem latency — a real
+    // redeem (cold SW + /links fetch + auth + join + materialize) can
+    // legitimately take seconds.
+    if (request?.type === 'taboxShareLinkPing') {
+      return { ok: true, status: 'pong' };
+    }
     if (request?.type === 'taboxShareLink') {
       return handleShareLinkRedeem(request.token);
     }

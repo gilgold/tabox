@@ -17,4 +17,11 @@ describe('GET /join/:token', () => {
     expect(html).toContain('bdbliblipiempfdkkkjohnecmeknnpoa');
     expect(html).not.toContain('sometoken'); // static template, token never interpolated
   });
+
+  it('separates install detection (ping) from the redeem, which gets a long timeout', () => {
+    // Ping decides installed-vs-not; the redeem may take seconds (cold SW +
+    // network + join) and must never be mistaken for "not installed".
+    expect(JOIN_PAGE_HTML).toContain('taboxShareLinkPing');
+    expect(JOIN_PAGE_HTML).toContain('REDEEM_TIMEOUT_MS = 30000');
+  });
 });

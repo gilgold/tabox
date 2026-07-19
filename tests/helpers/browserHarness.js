@@ -192,6 +192,7 @@ const createBrowserHarness = (options = {}) => {
                 return undefined;
             }),
             onMessage: runtimeOnMessage,
+            onMessageExternal: createEventMock(),
             onInstalled: createEventMock(),
             onStartup: createEventMock()
         },
