@@ -14,6 +14,7 @@
     --fp-card-min-width: 260px;
     --fp-card-radius: 12px;
     --fp-panel-width: 45vw;
+    --fp-shared-panel-width: 380px;
 
     /* Typography — system stacks only (external fonts blocked by extension CSP) */
     --fp-font-display: -apple-system, 'Segoe UI', system-ui, BlinkMacSystemFont, sans-serif;
@@ -1578,6 +1579,11 @@ html.fullpage-mode .save-collection-folder-select {
     box-shadow: none;
     font-family: var(--fp-font-body);
     font-size: 14px;
+}
+
+/* Keep room for the folder color dot (absolute at left: 12px) when one is shown */
+html.fullpage-mode .save-collection-folder-select-wrapper:has(.save-collection-folder-dot) .save-collection-folder-select {
+    padding-left: 34px;
 }
 
 html.fullpage-mode .save-collection-input:hover,

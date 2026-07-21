@@ -5,6 +5,7 @@ import {
   requireFolderAccess, MAX_MEMBERS_PER_FOLDER, ROLES,
   safeCollectionSize, MAX_COLLECTION_BYTES, MAX_NAME_LENGTH,
 } from './sharedFolders.js';
+import { recordActivity } from './sharedActivity.js';
 
 const err = (status, error) => ({ ok: false, status, error });
 
@@ -52,7 +53,12 @@ export async function deleteFolderLink(db, identity, folderId) {
 
 // Instant join. Mirrors respondInvite(accept:true)'s response shape exactly so
 // the extension client can reuse its invite-accept materialization path.
-export async function joinViaFolderLink(db, identity, token, nowMs) {
+// Entitlement gate on the RECIPIENT: a non-Pro joiner is capped at 'read'
+// regardless of the link's role — the join is the validation point, so a free
+// member who somehow still holds 'write' is also downgraded when they re-open
+// a link. `roleDowngraded: true` rides on the response so the join page can
+// explain why.
+export async function joinViaFolderLink(db, identity, token, nowMs, { isPro = false } = {}) {
   if (typeof token !== 'string' || !token) return err(400, 'invalid_request');
   const link = await db.prepare(
     `SELECT fl.folder_id, fl.role AS link_role, f.owner_google_id, f.owner_email, f.name, f.color, f.revision
@@ -70,17 +76,31 @@ export async function joinViaFolderLink(db, identity, token, nowMs) {
     ).bind(link.folder_id).first();
     if (count.n >= MAX_MEMBERS_PER_FOLDER) return err(409, 'member_limit');
   }
+  const effectiveRole = link.link_role === 'write' && !isPro ? 'read' : link.link_role;
   if (!existing || existing.status !== 'active') {
     await db.prepare(
       `INSERT INTO shared_members (folder_id, email, google_id, role, status, invited_at, responded_at)
        VALUES (?,?,?,?,'active',?,?)
        ON CONFLICT(folder_id, email) DO UPDATE SET role = excluded.role, status = 'active',
          google_id = excluded.google_id, responded_at = excluded.responded_at`
-    ).bind(link.folder_id, email, identity.googleId, link.link_role, nowMs, nowMs).run();
+    ).bind(link.folder_id, email, identity.googleId, effectiveRole, nowMs, nowMs).run();
   }
-  const memberRow = await db.prepare(
+  let memberRow = await db.prepare(
     'SELECT role FROM shared_members WHERE folder_id = ? AND email = ?'
   ).bind(link.folder_id, email).first();
+  // Already-active member path: re-validate the stored role against the
+  // joiner's entitlement so a free user can't keep a stale 'write' grant.
+  if (!isPro && memberRow.role === 'write') {
+    await db.prepare('UPDATE shared_members SET role = ? WHERE folder_id = ? AND email = ?')
+      .bind('read', link.folder_id, email).run();
+    memberRow = { role: 'read' };
+  }
+  // Only an actual transition to 'active' is a join — re-opening the link as
+  // an already-active member records nothing.
+  if (!existing || existing.status !== 'active') {
+    await recordActivity(db, link.folder_id, email, 'member_joined', email, { role: memberRow.role }, nowMs);
+  }
+  const roleDowngraded = !isPro && link.link_role === 'write' && memberRow.role === 'read';
   const { results: members } = await db.prepare(
     'SELECT email, role, status FROM shared_members WHERE folder_id = ? ORDER BY invited_at'
   ).bind(link.folder_id).all();
@@ -96,6 +116,7 @@ export async function joinViaFolderLink(db, identity, token, nowMs) {
         role: memberRow.role, ownerEmail: link.owner_email, members,
       },
       collections: collections.map((r) => ({ uid: r.uid, data: JSON.parse(r.data) })),
+      ...(roleDowngraded ? { roleDowngraded: true } : {}),
     },
   };
 }

@@ -4,6 +4,9 @@ import { useAtom, useAtomValue } from 'jotai';
 import { commandPaletteOpenState } from './atoms/commandPaletteState';
 import { themeState, viewContextState } from './atoms/globalAppSettingsState';
 import { isProState } from './atoms/premiumState';
+import { sharedPanelOpenState } from './atoms/sharedFoldersState';
+import { sidebarNavigationState } from './atoms/fullpageState';
+import { isSharedFolder } from './utils/sharedFolderUtils';
 import { getColorValue } from './utils/colorMigration';
 import { escapeRegex, highlightText } from './utils/searchUtils';
 import { browser } from '../static/globals';
@@ -26,6 +29,7 @@ import {
     MdOutlineHome,
     MdWorkspacePremium,
     MdFolderShared,
+    MdForum,
 } from 'react-icons/md';
 import { CiExport } from 'react-icons/ci';
 import { AI_TOOLS } from './ai/aiTasks';
@@ -39,6 +43,9 @@ export const EXTENSION_ACTIONS = [
     { id: 'restore-session', label: 'Restore Recently Closed', fullpageLabel: 'Browse Recently Closed', keywords: 'restore recently closed recover previous history browse', icon: MdHistory },
     { id: 'manage-subscription', label: 'Manage Subscription', keywords: 'subscription manage billing plan cancel switch monthly annual yearly pro payment upgrade downgrade', icon: MdWorkspacePremium, proOnly: true },
     { id: 'share-folder', label: 'Share Folder…', keywords: 'share folder collaborate invite team', icon: MdFolderShared, proOnly: true },
+    // fullpageOnly: the Activity & comments panel is inherently view-bound to
+    // the full-page layout — the sanctioned reason for a parity divergence.
+    { id: 'open-shared-panel', label: 'Open Activity & Comments', keywords: 'activity comments shared folder discussion feed log panel', icon: MdForum, fullpageOnly: true },
 ];
 
 const SETTINGS_TOGGLES = [
@@ -119,6 +126,15 @@ function CommandPalette({
     const viewContext = useAtomValue(viewContextState);
     const isPro = useAtomValue(isProState);
     const isFullPage = viewContext === 'fullpage';
+    const sidebarNavigation = useAtomValue(sidebarNavigationState);
+    const [, setSharedPanelOpen] = useAtom(sharedPanelOpenState);
+    // The Activity & comments action only applies when the full-page sidebar
+    // selection is a shared folder.
+    const selectedSharedFolder = useMemo(() => {
+        if (!isFullPage) return null;
+        const folder = (folders || []).find((f) => f.uid === sidebarNavigation) || null;
+        return folder && isSharedFolder(folder) ? folder : null;
+    }, [isFullPage, folders, sidebarNavigation]);
     const [query, setQuery] = useState('');
     const [selectedIndex, setSelectedIndex] = useState(0);
     const [activeCollection, setActiveCollection] = useState(null);
@@ -260,6 +276,8 @@ function CommandPalette({
 
         EXTENSION_ACTIONS.forEach(action => {
             if (isFullPage && action.id === 'open-fullpage') return;
+            if (action.fullpageOnly && !isFullPage) return;
+            if (action.id === 'open-shared-panel' && !selectedSharedFolder) return;
             if (action.proOnly && !isPro) return;
             if (q) {
                 const haystack = `${action.label} ${action.keywords}`.toLowerCase();
@@ -303,7 +321,7 @@ function CommandPalette({
         }
 
         return items;
-    }, [query, collections, folderNameMap, activeCollection, isFullPage, settingValues, isPro]);
+    }, [query, collections, folderNameMap, activeCollection, isFullPage, settingValues, isPro, selectedSharedFolder]);
 
     const subActions = useMemo(() => {
         if (!activeCollection || renameMode || folderPickMode) return [];
@@ -377,8 +395,9 @@ function CommandPalette({
             case 'open-fullpage': onOpenFullPage?.(); break;
             case 'restore-session': onRestoreSession?.(); break;
             case 'manage-subscription': onManageSubscription?.(); break;
+            case 'open-shared-panel': setSharedPanelOpen(true); break;
         }
-    }, [close, onCreateFolder, onImport, onExportAll, onOpenFullPage, onRestoreSession, onManageSubscription, focusInput]);
+    }, [close, onCreateFolder, onImport, onExportAll, onOpenFullPage, onRestoreSession, onManageSubscription, focusInput, setSharedPanelOpen]);
 
     const toggleSetting = useCallback(async (settingKey) => {
         const newVal = !settingValues[settingKey];

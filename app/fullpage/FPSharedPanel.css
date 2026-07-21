@@ -1,0 +1,449 @@
+/* ========================================
+   FPSharedPanel — Activity & comments
+   Right-side panel for shared folders,
+   full-page view only. Mirrors the
+   fp-detail-panel width transition but
+   fixed ~380px wide.
+   ======================================== */
+
+.fp-shared-panel {
+    width: 0;
+    flex-shrink: 0;
+    overflow: hidden;
+    border-left: 1px solid var(--fp-border);
+    background: var(--fp-surface-elevated);
+    transition: width var(--fp-duration-slow) var(--fp-ease);
+}
+
+.fp-shared-panel.open {
+    width: var(--fp-shared-panel-width, 380px);
+}
+
+/* Inner column keeps its full width during the open/close transition so text
+   doesn't reflow while the container animates. */
+.fp-shared-panel-inner {
+    display: flex;
+    flex-direction: column;
+    width: var(--fp-shared-panel-width, 380px);
+    height: 100%;
+}
+
+/* ---------- Header ---------- */
+.fp-shared-panel-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid var(--fp-border);
+}
+
+.fp-shared-panel-heading {
+    min-width: 0;
+}
+
+.fp-shared-panel-title {
+    margin: 0;
+    font-family: var(--fp-font-display);
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-color);
+}
+
+.fp-shared-panel-folder-name {
+    display: block;
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--text-secondary-color);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.fp-shared-panel-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    flex-shrink: 0;
+    border: 1px solid transparent;
+    border-radius: var(--fp-radius-sm);
+    background: transparent;
+    color: var(--text-secondary-color);
+    cursor: pointer;
+    transition: background var(--fp-duration) var(--fp-ease), color var(--fp-duration) var(--fp-ease);
+}
+
+.fp-shared-panel-close:hover {
+    background: var(--setting-row-hover-bg-color, rgba(0, 0, 0, 0.06));
+    color: var(--text-color);
+}
+
+/* ---------- Tabs ---------- */
+.fp-shared-panel-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 8px 16px 0;
+    border-bottom: 1px solid var(--fp-border);
+}
+
+.fp-shared-panel-tab {
+    padding: 8px 12px 9px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--text-secondary-color);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color var(--fp-duration) var(--fp-ease), border-color var(--fp-duration) var(--fp-ease);
+}
+
+.fp-shared-panel-tab:hover {
+    color: var(--text-color);
+}
+
+.fp-shared-panel-tab.active {
+    color: var(--primary-color);
+    border-bottom-color: var(--primary-color);
+}
+
+/* ---------- Body ---------- */
+.fp-shared-panel-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    padding: 12px 16px;
+}
+
+.fp-shared-comments-body {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 12px 16px 14px;
+    gap: 10px;
+}
+
+.fp-shared-panel-status {
+    padding: 18px 4px;
+    font-size: 13px;
+    color: var(--text-secondary-color);
+    text-align: center;
+}
+
+.fp-shared-panel-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.fp-shared-panel-retry {
+    padding: 6px 14px;
+    border: 1px solid var(--fp-border-strong);
+    border-radius: var(--fp-radius-sm);
+    background: transparent;
+    color: var(--text-color);
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background var(--fp-duration) var(--fp-ease);
+}
+
+.fp-shared-panel-retry:hover {
+    background: var(--setting-row-hover-bg-color, rgba(0, 0, 0, 0.06));
+}
+
+/* ---------- Activity ---------- */
+.fp-shared-activity-group {
+    margin-bottom: 14px;
+}
+
+.fp-shared-activity-day {
+    margin-bottom: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-secondary-color);
+}
+
+.fp-shared-activity-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.fp-shared-activity-entry {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--fp-border);
+    font-size: 13px;
+    color: var(--text-color);
+}
+
+.fp-shared-activity-entry:last-child {
+    border-bottom: none;
+}
+
+.fp-shared-activity-text {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.fp-shared-activity-time {
+    flex-shrink: 0;
+    font-size: 11.5px;
+    color: var(--text-secondary-color);
+}
+
+/* ---------- Comments ---------- */
+.fp-shared-thread-select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--fp-border-strong);
+    border-radius: var(--fp-radius-sm);
+    background: var(--input-bg-color, var(--fp-surface-solid));
+    color: var(--text-color);
+    font-family: inherit;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.fp-shared-comments-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.fp-shared-comment {
+    padding: 8px 10px;
+    border: 1px solid var(--fp-border);
+    border-radius: var(--fp-radius-sm);
+    background: var(--fp-surface, transparent);
+}
+
+.fp-shared-comment-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.fp-shared-comment-author {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-color);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.fp-shared-comment-time {
+    flex-shrink: 0;
+    font-size: 11px;
+    color: var(--text-secondary-color);
+}
+
+.fp-shared-comment-delete {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    margin-left: auto;
+    border: none;
+    border-radius: var(--fp-radius-xs);
+    background: transparent;
+    color: var(--text-secondary-color);
+    cursor: pointer;
+    transition: color var(--fp-duration) var(--fp-ease), background var(--fp-duration) var(--fp-ease);
+}
+
+.fp-shared-comment-delete:hover {
+    color: var(--delete-button-color, #ef4444);
+    background: var(--setting-row-hover-bg-color, rgba(0, 0, 0, 0.06));
+}
+
+.fp-shared-comment-confirm {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+}
+
+.fp-shared-comment-confirm-yes,
+.fp-shared-comment-confirm-no {
+    padding: 3px 8px;
+    border: 1px solid var(--fp-border-strong);
+    border-radius: var(--fp-radius-xs);
+    background: transparent;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--text-secondary-color);
+}
+
+.fp-shared-comment-confirm-yes {
+    border-color: var(--delete-button-color, #ef4444);
+    color: var(--delete-button-color, #ef4444);
+}
+
+.fp-shared-comment-body {
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--text-color);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+/* ---------- Composer ---------- */
+.fp-shared-composer {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--fp-border);
+}
+
+.fp-shared-composer-locked {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.fp-shared-composer-input {
+    flex: 1;
+    resize: none;
+    padding: 8px 10px;
+    border: 1px solid var(--fp-border-strong);
+    border-radius: var(--fp-radius-sm);
+    background: var(--input-bg-color, var(--fp-surface-solid));
+    color: var(--text-color);
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.fp-shared-composer-input:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.fp-shared-composer-send {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    border: 1px solid var(--primary-color);
+    border-radius: var(--fp-radius-sm);
+    background: var(--primary-color);
+    color: #fff;
+    cursor: pointer;
+    transition: filter var(--fp-duration) var(--fp-ease);
+}
+
+.fp-shared-composer-send:hover:not(:disabled) {
+    filter: brightness(1.08);
+}
+
+.fp-shared-composer-send:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.fp-shared-composer-upsell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.fp-shared-upgrade-btn {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid var(--primary-color);
+    border-radius: var(--fp-radius-sm);
+    background: transparent;
+    color: var(--primary-color);
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background var(--fp-duration) var(--fp-ease);
+}
+
+.fp-shared-upgrade-btn:hover {
+    background: var(--primary-hover-bg, rgba(79, 70, 229, 0.08));
+}
+
+/* ---------- Heading toggle (rendered in FPContentArea title row) ---------- */
+.fp-shared-panel-toggle {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    margin-left: auto;
+    flex-shrink: 0;
+    border: 1px solid var(--fp-border-strong);
+    border-radius: var(--fp-radius-sm);
+    background: transparent;
+    color: var(--text-secondary-color);
+    cursor: pointer;
+    transition: color var(--fp-duration) var(--fp-ease), background var(--fp-duration) var(--fp-ease);
+}
+
+.fp-shared-panel-toggle:hover {
+    color: var(--text-color);
+    background: var(--setting-row-hover-bg-color, rgba(0, 0, 0, 0.06));
+}
+
+.fp-shared-panel-toggle.active {
+    color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.fp-shared-unread-dot {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--color-error, #ef4444);
+    border: 2px solid var(--fp-surface-solid, #fff);
+}
+
+/* ---------- Responsive & motion ---------- */
+@media (max-width: 900px) {
+    .fp-shared-panel {
+        position: fixed;
+        top: 0;
+        right: 0;
+        height: 100vh;
+        z-index: 500;
+        border-left: 1px solid var(--fp-border);
+        box-shadow: var(--fp-shadow-xl);
+    }
+
+    .fp-shared-panel.open {
+        width: min(var(--fp-shared-panel-width, 380px), 90vw);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fp-shared-panel {
+        transition: none !important;
+    }
+}

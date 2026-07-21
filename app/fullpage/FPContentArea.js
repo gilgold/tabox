@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback, lazy, Suspense } from 'react';
-import { createPortal } from 'react-dom';
 import { useAtomValue, useSetAtom } from 'jotai';
 import Select, { components } from 'react-select';
 import {
@@ -16,10 +15,12 @@ import {
     highlightedCollectionUidState,
 } from '../atoms/animationsState';
 import { sidebarNavigationState } from '../atoms/fullpageState';
-import { noPermissionOpenState, shareCollectionLinkModalState, shareFolderModalState, sharedActionConfirmState } from '../atoms/sharedFoldersState';
-import { guardFolderEdit, isReadOnlySharedFolder } from '../utils/sharedFolderUtils';
+import { noPermissionOpenState, shareCollectionLinkModalState, shareFolderModalState, sharedActionConfirmState, sharedPanelOpenState } from '../atoms/sharedFoldersState';
+import { guardFolderEdit, isReadOnlySharedFolder, isSharedFolder } from '../utils/sharedFolderUtils';
+import { useSharedActivityUnread } from './FPSharedPanel';
 import { isProState } from '../atoms/premiumState';
-import { buildFolderMenuItems } from '../utils/folderMenuItems';
+import { createCollectionMenuItems, createFolderMenuItems } from '../utils/contextMenuItems';
+import FPCtxMenu from './FPCtxMenu';
 import ColorPicker from '../ColorPicker';
 import {
     DndContext,
@@ -54,13 +55,9 @@ import {
     MdViewList,
     MdOpenInNew,
     MdOpenInBrowser,
-    MdEdit,
     MdPalette,
     MdClear,
     MdDelete,
-    MdOutlineRefresh,
-    MdContentCopy,
-    MdCenterFocusWeak,
     MdExpandMore,
     MdExpandLess,
     MdSave,
@@ -68,19 +65,11 @@ import {
     MdDriveFileMoveOutline,
     MdOutlineHome,
     MdSortByAlpha,
-    MdCallSplit,
-    MdPersonAdd,
-    MdLink,
-    MdLinkOff,
-    MdLogout,
+    MdForum,
 } from 'react-icons/md';
-import { FaPlay, FaStar, FaRegStar } from 'react-icons/fa';
 import { useTaboxAIEnabled } from '../ai/useTaboxAIEnabled';
 import { isAISupported } from '../ai/aiClient';
 import { aiToolsModalOpenState, aiToolsScopeState, aiSplitTargetState } from '../atoms/aiState';
-import { SPLIT_MIN_TABS } from '../utils/sharedConstants';
-import AiBadge from '../AiBadge';
-import { FaStop } from 'react-icons/fa6';
 import { CiExport } from 'react-icons/ci';
 import { PiGridNineFill } from 'react-icons/pi';
 import { TbFileImport } from 'react-icons/tb';
@@ -123,6 +112,7 @@ import {
     duplicateFolder,
     deleteFolder,
     updateFolderDetails,
+    stopTrackingFolderCollections,
 } from '../utils/folderOperations';
 import FolderDeleteConfirmModal from '../FolderDeleteConfirmModal';
 import CreateFolderModalBase from '../CreateFolderModal';
@@ -135,16 +125,6 @@ const SessionsModal = lazy(() => import('../SessionsModal').then(m => ({ default
 const SaveCollectionModal = lazy(() => import('./SaveCollectionModal'));
 const BulkMoveCollectionsModal = lazy(() => import('./BulkMoveCollectionsModal'));
 const BulkDeleteCollectionsModal = lazy(() => import('./BulkDeleteCollectionsModal'));
-
-// Icons for the share/unshare/leave menu entries buildFolderMenuItems adds
-// (kept icon-free so it stays unit-testable); rendered here alongside the
-// hand-rolled fp-sidebar-ctx-item buttons.
-const FOLDER_MENU_ICONS = {
-    share: <MdPersonAdd size={16} />,
-    unshare: <MdLinkOff size={16} />,
-    'leave-shared': <MdLogout size={16} />,
-    delete: <MdDelete size={16} />,
-};
 
 function SortOption(props) {
     const { icon: Icon } = props.data;
@@ -1049,6 +1029,12 @@ function FPContentArea({
         [folders, sidebarNavigation],
     );
 
+    // Shared "Activity & comments" panel toggle (shared folders only).
+    const sharedPanelOpen = useAtomValue(sharedPanelOpenState);
+    const setSharedPanelOpen = useSetAtom(sharedPanelOpenState);
+    const activeSharedFolderUid = activeFolder && isSharedFolder(activeFolder) ? activeFolder.uid : null;
+    const sharedActivityUnread = useSharedActivityUnread(activeSharedFolderUid);
+
     const contentHeading = useMemo(() => {
         const collectionCountLabel = `${filteredCollections.length} collection${filteredCollections.length !== 1 ? 's' : ''}`;
         const currentWindowCountLabel = `${filteredCurrentWindows.length} window${filteredCurrentWindows.length !== 1 ? 's' : ''}`;
@@ -1570,11 +1556,15 @@ function FPContentArea({
 
     // Panel handlers
     const handleSelectCollection = useCallback((collection) => {
-        setDetailPanelOpen(true);
         setSelectedCurrentWindowId(null);
         setSelectedSessionEntryKey(null);
         setSelectedCollectionUid(collection?.uid || null);
-    }, [setDetailPanelOpen, setSelectedCollectionUid, setSelectedCurrentWindowId, setSelectedSessionEntryKey]);
+        // While the shared Activity & comments panel is open, selecting a
+        // collection scopes its comment thread instead of swapping panels.
+        if (!sharedPanelOpen) {
+            setDetailPanelOpen(true);
+        }
+    }, [setDetailPanelOpen, setSelectedCollectionUid, setSelectedCurrentWindowId, setSelectedSessionEntryKey, sharedPanelOpen]);
 
     // Right-click context menu handlers
     const handleCardContextMenu = useCallback((e, collection, isAutoUpdate, operations) => {
@@ -1817,6 +1807,29 @@ function FPContentArea({
         closeFolderCtxMenu();
         setSharedActionConfirm({ kind: 'unshare', folder });
     }, [folderCtxMenu, closeFolderCtxMenu, setSharedActionConfirm]);
+
+    // Whether any collection in the right-clicked folder is auto-tracked —
+    // gates the "Stop Auto Tracking Folder" menu entry.
+    const folderCtxHasTracked = useMemo(() => {
+        if (!folderCtxMenu || !trackedCollectionUids?.size) return false;
+        return collections.some((collection) => (
+            collection.parentId === folderCtxMenu.folder.uid && trackedCollectionUids.has(collection.uid)
+        ));
+    }, [folderCtxMenu, collections, trackedCollectionUids]);
+
+    const handleFolderCtxStopTracking = useCallback(async () => {
+        if (!folderCtxMenu) return;
+        const folder = folderCtxMenu.folder;
+        closeFolderCtxMenu();
+        try {
+            const count = await stopTrackingFolderCollections(folder.uid);
+            if (count > 0) {
+                showSuccessToast(`Stopped auto update for ${count} collection${count === 1 ? '' : 's'}`);
+            }
+        } catch {
+            showErrorToast('Failed to stop auto tracking');
+        }
+    }, [folderCtxMenu, closeFolderCtxMenu]);
 
     const handleFolderCtxDelete = useCallback(async () => {
         if (!folderCtxMenu) return;
@@ -3264,6 +3277,18 @@ function FPContentArea({
                         <p className="fp-content-heading-subtitle">{contentHeading.subtitle}</p>
                     </>
                 )}
+                {activeSharedFolderUid && (
+                    <button
+                        className={`fp-shared-panel-toggle${sharedPanelOpen ? ' active' : ''}`}
+                        onClick={() => setSharedPanelOpen(!sharedPanelOpen)}
+                        aria-label="Activity & comments"
+                        data-tooltip-id="main-tooltip"
+                        data-tooltip-content="Activity & comments"
+                    >
+                        <MdForum size={17} />
+                        {sharedActivityUnread && <span className="fp-shared-unread-dot" aria-hidden="true" />}
+                    </button>
+                )}
             </div>
 
             {/* Centered floating toolbar — hidden for lightweight live views */}
@@ -3519,142 +3544,54 @@ function FPContentArea({
             </Suspense>
 
             {/* Right-click context menu for collection cards */}
-            {cardCtxMenu && createPortal(
-                <div
-                    ref={cardCtxMenuRef}
-                    className="fp-card-ctx-menu"
-                    style={{ top: cardCtxMenu.y, left: cardCtxMenu.x }}
-                >
-                    <button
-                        className="fp-card-ctx-item"
-                        onClick={() => handleCtxMenuAction(
-                            cardCtxMenu.isAutoUpdate
-                                ? cardCtxMenu.operations._handleFocusWindow
-                                : cardCtxMenu.operations._handleOpenTabs
-                        )}
-                    >
-                        {cardCtxMenu.isAutoUpdate
-                            ? <MdCenterFocusWeak size={16} />
-                            : <FaPlay size={12} />
-                        }
-                        <span>{cardCtxMenu.isAutoUpdate ? 'Focus Window' : 'Open Tabs'}</span>
-                    </button>
-                    <div className="fp-card-ctx-divider" />
-                    {!cardCtxMenu.isAutoUpdate && (
-                        <button
-                            className="fp-card-ctx-item"
-                            onClick={() => handleCtxMenuAction(cardCtxMenu.operations._handleUpdate)}
-                        >
-                            <MdOutlineRefresh size={16} />
-                            <span>Update Collection</span>
-                        </button>
-                    )}
-                    {cardCtxMenu.isAutoUpdate && (
-                        <button
-                            className="fp-card-ctx-item"
-                            onClick={() => handleCtxMenuAction(cardCtxMenu.operations._handleStopTracking)}
-                        >
-                            <FaStop size={14} />
-                            <span>Stop Auto Update</span>
-                        </button>
-                    )}
-                    <button
-                        className="fp-card-ctx-item"
-                        onClick={() => handleCtxMenuAction(cardCtxMenu.operations._exportCollectionToFile)}
-                    >
-                        <CiExport size={16} />
-                        <span>Export Collection</span>
-                    </button>
-                    <button
-                        className="fp-card-ctx-item"
-                        onClick={() => handleCtxMenuAction(cardCtxMenu.operations._handleDuplicate)}
-                    >
-                        <MdContentCopy size={16} />
-                        <span>Duplicate Collection</span>
-                    </button>
-                    <button
-                        className="fp-card-ctx-item"
-                        onClick={() => handleCtxMenuAction(cardCtxMenu.operations._handleToggleFavorite)}
-                    >
-                        {cardCtxMenu.collection.isFavorite ? <FaStar size={14} /> : <FaRegStar size={14} />}
-                        <span>{cardCtxMenu.collection.isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}</span>
-                    </button>
-                    <button
-                        className="fp-card-ctx-item"
-                        onClick={() => { const c = cardCtxMenu.collection; setCardCtxMenu(null); handleCopyCollectionUrls(c); }}
-                    >
-                        <MdContentCopy size={16} />
-                        <span>Copy all URLs</span>
-                    </button>
-                    <button
-                        className="fp-card-ctx-item"
-                        onClick={() => { const c = cardCtxMenu.collection; setCardCtxMenu(null); setShareCollectionLink(c); }}
-                    >
-                        <MdLink size={16} />
-                        <span>Share via Link</span>
-                    </button>
-                    {aiEnabled && (cardCtxMenu.collection.tabs?.length || 0) >= SPLIT_MIN_TABS && (
-                        <button
-                            className="fp-card-ctx-item"
-                            onClick={() => { const c = cardCtxMenu.collection; setCardCtxMenu(null); handleSplitCollection(c); }}
-                        >
-                            <MdCallSplit size={16} />
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                                <AiBadge />
-                                Split Collection
-                            </span>
-                        </button>
-                    )}
-                    <div className="fp-card-ctx-divider" />
-                    <button
-                        className="fp-card-ctx-item fp-card-ctx-danger"
-                        onClick={() => handleCtxMenuAction(cardCtxMenu.operations._handleDelete)}
-                    >
-                        <MdDelete size={16} />
-                        <span>Delete Collection</span>
-                    </button>
-                </div>,
-                document.body
+            {cardCtxMenu && (
+                <FPCtxMenu
+                    menuRef={cardCtxMenuRef}
+                    x={cardCtxMenu.x}
+                    y={cardCtxMenu.y}
+                    variant="card"
+                    items={createCollectionMenuItems({
+                        isAutoUpdate: cardCtxMenu.isAutoUpdate,
+                        onOpenTabs: () => handleCtxMenuAction(cardCtxMenu.operations._handleOpenTabs),
+                        onFocusWindow: () => handleCtxMenuAction(cardCtxMenu.operations._handleFocusWindow),
+                        onUpdate: () => handleCtxMenuAction(cardCtxMenu.operations._handleUpdate),
+                        onStopTracking: () => handleCtxMenuAction(cardCtxMenu.operations._handleStopTracking),
+                        onExport: () => handleCtxMenuAction(cardCtxMenu.operations._exportCollectionToFile),
+                        onShareLink: () => { const c = cardCtxMenu.collection; setCardCtxMenu(null); setShareCollectionLink(c); },
+                        onDuplicate: () => handleCtxMenuAction(cardCtxMenu.operations._handleDuplicate),
+                        isFavorite: cardCtxMenu.collection.isFavorite === true,
+                        onToggleFavorite: () => handleCtxMenuAction(cardCtxMenu.operations._handleToggleFavorite),
+                        onCopyUrls: () => { const c = cardCtxMenu.collection; setCardCtxMenu(null); handleCopyCollectionUrls(c); },
+                        aiEnabled,
+                        isPro,
+                        tabCount: cardCtxMenu.collection.tabs?.length || 0,
+                        onSplitCollection: () => { const c = cardCtxMenu.collection; setCardCtxMenu(null); handleSplitCollection(c); },
+                        onDelete: () => handleCtxMenuAction(cardCtxMenu.operations._handleDelete),
+                    })}
+                />
             )}
 
-            {folderCtxMenu && createPortal(
-                <div
-                    ref={folderCtxMenuRef}
-                    className="fp-sidebar-ctx-menu"
-                    style={{ top: folderCtxMenu.y, left: folderCtxMenu.x }}
-                >
-                    {buildFolderMenuItems({
+            {folderCtxMenu && (
+                <FPCtxMenu
+                    menuRef={folderCtxMenuRef}
+                    x={folderCtxMenu.x}
+                    y={folderCtxMenu.y}
+                    items={createFolderMenuItems({
                         folder: folderCtxMenu.folder,
-                        onShare: handleFolderCtxShare,
-                        onDelete: handleFolderCtxDelete,
-                        onLeave: handleFolderCtxLeave,
-                        onUnshare: handleFolderCtxUnshare,
                         isPro,
-                        existingItems: [
-                            { id: 'open-all', text: 'Open All Collections', icon: <MdOpenInBrowser size={16} />, action: handleFolderCtxOpenAll, condition: true },
-                            { id: 'edit', text: 'Edit Folder', icon: <MdEdit size={16} />, action: handleFolderCtxEdit, condition: true },
-                            { id: 'export', text: 'Export Folder', icon: <CiExport size={16} />, action: handleFolderCtxExport, condition: true },
-                            { id: 'duplicate', text: 'Duplicate Folder', icon: <MdContentCopy size={16} />, action: handleFolderCtxDuplicate, condition: true },
-                            { id: 'copy-folder-urls', text: 'Copy all URLs in folder', icon: <MdContentCopy size={16} />, action: handleFolderCtxCopyUrls, condition: true },
-                        ],
-                    }).map((item, index, items) => {
-                        const isGroupBStart = item.id === 'open-all';
-                        const groupCIds = ['unshare', 'leave-shared', 'delete'];
-                        const isGroupCStart = groupCIds.includes(item.id) && !groupCIds.includes(items[index - 1]?.id);
-                        return (
-                            <React.Fragment key={item.id}>
-                                {(isGroupBStart || isGroupCStart) && index > 0 && <div className="fp-sidebar-ctx-divider" />}
-                                <button
-                                    className={`fp-sidebar-ctx-item ${item.className === 'danger' ? 'fp-sidebar-ctx-danger' : ''}`.trim()}
-                                    onClick={item.action}
-                                >
-                                    {item.icon || FOLDER_MENU_ICONS[item.id]} <span>{item.text}</span>
-                                </button>
-                            </React.Fragment>
-                        );
+                        hasTrackedCollections: folderCtxHasTracked,
+                        onOpenAll: handleFolderCtxOpenAll,
+                        onEdit: handleFolderCtxEdit,
+                        onExport: handleFolderCtxExport,
+                        onDuplicate: handleFolderCtxDuplicate,
+                        onCopyUrls: handleFolderCtxCopyUrls,
+                        onStopTracking: handleFolderCtxStopTracking,
+                        onShare: handleFolderCtxShare,
+                        onUnshare: handleFolderCtxUnshare,
+                        onLeave: handleFolderCtxLeave,
+                        onDelete: handleFolderCtxDelete,
                     })}
-                </div>,
-                document.body
+                />
             )}
         </div>
     );

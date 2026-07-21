@@ -1,4 +1,5 @@
 import { decideEntitlement } from './entitlement.js';
+import { recordActivity } from './sharedActivity.js';
 
 export const MAX_MEMBERS_PER_FOLDER = 20;
 export const MAX_COLLECTION_BYTES = 512 * 1024;
@@ -36,6 +37,15 @@ export function safeCollectionSize(data) {
 // validation error instead of a quietly-degraded LWW write.
 function isGarbageBaseRev(baseRev) {
   return baseRev !== undefined && !(typeof baseRev === 'number' && Number.isFinite(baseRev));
+}
+
+// Display-name snapshot for activity `detail` — history should read well even
+// after the collection is gone. Collections store their label as `name` (or
+// legacy `title`); anything else yields a null detail.
+function collectionNameDetail(data) {
+  if (!data || typeof data !== 'object') return null;
+  const name = typeof data.name === 'string' ? data.name : typeof data.title === 'string' ? data.title : null;
+  return name == null ? null : { name };
 }
 
 export async function createSharedFolder(db, identity, { folderId, name, color = null, collections = [] }, nowMs) {
@@ -150,17 +160,22 @@ export async function listInvites(db, identity) {
   return { ok: true, data: { invites: results } };
 }
 
-export async function respondInvite(db, identity, folderId, accept, nowMs) {
+// Entitlement gate on the RECIPIENT: a non-Pro user can only ever hold 'read'.
+// A 'write' invite accepted by a free user is downgraded to 'read' at accept
+// time (the grant point) — the caller passes the joiner's live Pro status.
+export async function respondInvite(db, identity, folderId, accept, nowMs, { isPro = false } = {}) {
   const email = identity.email.toLowerCase();
   const invite = await db.prepare(
     "SELECT * FROM shared_members WHERE folder_id = ? AND email = ? AND status = 'invited'"
   ).bind(folderId, email).first();
   if (!invite) return err(404, 'not_found');
   const status = accept ? 'active' : 'declined';
+  const effectiveRole = accept && invite.role === 'write' && !isPro ? 'read' : invite.role;
   await db.prepare(
-    'UPDATE shared_members SET status = ?, google_id = ?, responded_at = ? WHERE folder_id = ? AND email = ?'
-  ).bind(status, identity.googleId, nowMs, folderId, email).run();
+    'UPDATE shared_members SET status = ?, role = ?, google_id = ?, responded_at = ? WHERE folder_id = ? AND email = ?'
+  ).bind(status, effectiveRole, identity.googleId, nowMs, folderId, email).run();
   if (!accept) return { ok: true, data: { accepted: false } };
+  await recordActivity(db, folderId, email, 'member_joined', email, { role: effectiveRole }, nowMs);
   const f = await db.prepare('SELECT * FROM shared_folders WHERE id = ?').bind(folderId).first();
   const { results } = await db.prepare(
     'SELECT uid, data FROM shared_collections WHERE folder_id = ? AND deleted = 0'
@@ -171,9 +186,10 @@ export async function respondInvite(db, identity, folderId, accept, nowMs) {
       accepted: true,
       folder: {
         folderId: f.id, name: f.name, color: f.color, revision: f.revision,
-        role: invite.role, ownerEmail: f.owner_email, members: await membersOf(db, folderId),
+        role: effectiveRole, ownerEmail: f.owner_email, members: await membersOf(db, folderId),
       },
       collections: results.map((r) => ({ uid: r.uid, data: JSON.parse(r.data) })),
+      ...(effectiveRole !== invite.role ? { roleDowngraded: true } : {}),
     },
   };
 }
@@ -192,11 +208,15 @@ export async function getFolderDelta(db, identity, folderId, sinceRev = 0) {
   const { results } = await db.prepare(
     'SELECT uid, data, rev, deleted, updated_by, updated_at FROM shared_collections WHERE folder_id = ? AND rev > ? ORDER BY rev'
   ).bind(folderId, Number(sinceRev) || 0).all();
+  // Additive: high-water mark of the folder's activity feed, used by the
+  // client purely for an "unread" dot — no activity rows ride the delta.
+  const lastAct = await db.prepare('SELECT MAX(id) AS m FROM shared_activity WHERE folder_id = ?').bind(folderId).first();
   return {
     ok: true,
     data: {
       revision: folder.revision,
       role,
+      lastActivityId: (lastAct && lastAct.m) || 0,
       folder: { name: folder.name, color: folder.color, updatedBy: folder.updated_by },
       members: await membersOf(db, folderId),
       collections: results.map((r) => ({
@@ -214,7 +234,7 @@ export async function putCollection(db, identity, folderId, uid, { data, baseRev
   const sized = safeCollectionSize(data);
   if (!sized.ok) return err(400, 'invalid_request');
   if (sized.size > MAX_COLLECTION_BYTES) return err(413, 'collection_too_large');
-  const row = await db.prepare('SELECT rev FROM shared_collections WHERE folder_id = ? AND uid = ?').bind(folderId, uid).first();
+  const row = await db.prepare('SELECT rev, deleted FROM shared_collections WHERE folder_id = ? AND uid = ?').bind(folderId, uid).first();
   if (row && baseRev !== undefined && row.rev > baseRev) return err(409, 'conflict');
   if (!row) {
     const count = await db.prepare('SELECT COUNT(*) AS n FROM shared_collections WHERE folder_id = ? AND deleted = 0').bind(folderId).first();
@@ -226,6 +246,9 @@ export async function putCollection(db, identity, folderId, uid, { data, baseRev
      ON CONFLICT(folder_id, uid) DO UPDATE SET data = excluded.data, rev = excluded.rev, deleted = 0,
        updated_at = excluded.updated_at, updated_by = excluded.updated_by`
   ).bind(folderId, uid, JSON.stringify(data ?? null), revision, nowMs, identity.email.toLowerCase()).run();
+  // A row that only exists as a tombstone (deleted = 1) reads as "added" again.
+  const action = row && !row.deleted ? 'collection_updated' : 'collection_added';
+  await recordActivity(db, folderId, identity.email, action, uid, collectionNameDetail(data), nowMs);
   return { ok: true, data: { revision } };
 }
 
@@ -240,9 +263,13 @@ export async function deleteCollection(db, identity, folderId, uid, nowMs, baseR
   const access = await requireFolderAccess(db, identity, folderId, 'write');
   if (access.ok === false) return access;
   if (isGarbageBaseRev(baseRev)) return err(400, 'invalid_request');
-  if (baseRev !== undefined) {
-    const row = await db.prepare('SELECT rev FROM shared_collections WHERE folder_id = ? AND uid = ?').bind(folderId, uid).first();
-    if (row && row.rev > baseRev) return err(409, 'conflict');
+  // Pre-delete snapshot: the activity `detail` keeps the collection's display
+  // name so the feed still reads well after the data column is nulled below.
+  const row = await db.prepare('SELECT rev, data, deleted FROM shared_collections WHERE folder_id = ? AND uid = ?').bind(folderId, uid).first();
+  if (baseRev !== undefined && row && row.rev > baseRev) return err(409, 'conflict');
+  let snapshot = null;
+  if (row && !row.deleted && row.data != null) {
+    try { snapshot = collectionNameDetail(JSON.parse(row.data)); } catch { snapshot = null; }
   }
   const revision = await bumpRevision(db, folderId, identity, nowMs);
   await db.prepare(
@@ -250,6 +277,7 @@ export async function deleteCollection(db, identity, folderId, uid, nowMs, baseR
      ON CONFLICT(folder_id, uid) DO UPDATE SET data = NULL, rev = excluded.rev, deleted = 1,
        updated_at = excluded.updated_at, updated_by = excluded.updated_by`
   ).bind(folderId, uid, revision, nowMs, identity.email.toLowerCase()).run();
+  await recordActivity(db, folderId, identity.email, 'collection_deleted', uid, snapshot, nowMs);
   return { ok: true, data: { revision } };
 }
 
@@ -261,6 +289,9 @@ export async function updateFolderMeta(db, identity, folderId, { name, color }, 
   await db.prepare('UPDATE shared_folders SET name = ?, color = ? WHERE id = ?')
     .bind(name ?? f.name, color === undefined ? f.color : color, folderId).run();
   const revision = await bumpRevision(db, folderId, identity, nowMs);
+  if (name != null && name !== f.name) {
+    await recordActivity(db, folderId, identity.email, 'folder_renamed', null, { from: f.name, to: name }, nowMs);
+  }
   return { ok: true, data: { revision } };
 }
 
@@ -272,6 +303,7 @@ export async function updateMemberRole(db, identity, folderId, email, role, nowM
     .bind(role, folderId, String(email).toLowerCase()).run();
   if (res.meta.changes === 0) return err(404, 'not_found');
   await bumpRevision(db, folderId, identity, nowMs);
+  await recordActivity(db, folderId, identity.email, 'role_changed', String(email).toLowerCase(), { role }, nowMs);
   return { ok: true, data: { members: await membersOf(db, folderId) } };
 }
 
@@ -283,6 +315,7 @@ export async function removeMember(db, identity, folderId, email, nowMs) {
   const res = await db.prepare('DELETE FROM shared_members WHERE folder_id = ? AND email = ?').bind(folderId, target).run();
   if (res.meta.changes === 0) return err(404, 'not_found');
   await bumpRevision(db, folderId, identity, nowMs);
+  await recordActivity(db, folderId, identity.email, isSelf ? 'member_left' : 'member_removed', target, null, nowMs);
   return { ok: true, data: { members: await membersOf(db, folderId) } };
 }
 

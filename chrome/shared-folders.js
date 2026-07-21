@@ -563,6 +563,9 @@ async function rematerializeMissingSharedFolders() {
       lastRev: deltaRes.data.revision,
       lastSyncedAt: now,
       knownUids: collections.map((c) => c.uid),
+      // Same delta endpoint as the normal sync loop — seed the activity
+      // watermark too (0 when the server predates the field).
+      lastActivityId: typeof deltaRes.data.lastActivityId === 'number' ? deltaRes.data.lastActivityId : 0,
     });
   }
 
@@ -753,6 +756,13 @@ async function doSyncSharedFolders() {
 
     let role;
     let lastRev = state.lastRev;
+    // Activity & comments (2026-07-21 design): the delta response now carries
+    // lastActivityId (max shared_activity.id for the folder). Persist it into
+    // this folder's shared_sync_state entry so the UI can diff it against its
+    // own shared_activity_seen map for the unread dot. Additive only: a
+    // response without the field (older server) leaves the stored value
+    // unchanged; a folder that never had one reads as 0.
+    let lastActivityId = state.lastActivityId || 0;
     let appliedUids = new Set();
     let deferredRemotes = new Map();
 
@@ -783,6 +793,7 @@ async function doSyncSharedFolders() {
       pulled += (pull.data.collections || []).length;
       lastRev = pull.data.revision;
       role = pull.data.role;
+      if (typeof pull.data.lastActivityId === 'number') lastActivityId = pull.data.lastActivityId;
     }
 
     // PUSH (write/owner only — read-role members never write back)
@@ -882,9 +893,9 @@ async function doSyncSharedFolders() {
       // removal to push again.
       const { collections_index: postPushIndex = {} } = await browser.storage.local.get('collections_index');
       const finalKnownUids = Object.keys(postPushIndex).filter((uid) => postPushIndex[uid].parentId === folderId);
-      await setFolderSyncState(folderId, { lastRev, lastSyncedAt: cycleStartTs, knownUids: finalKnownUids });
+      await setFolderSyncState(folderId, { lastRev, lastSyncedAt: cycleStartTs, knownUids: finalKnownUids, lastActivityId });
     } else {
-      await setFolderSyncState(folderId, { lastRev, lastSyncedAt: cycleStartTs, knownUids: state.knownUids });
+      await setFolderSyncState(folderId, { lastRev, lastSyncedAt: cycleStartTs, knownUids: state.knownUids, lastActivityId });
     }
   }
 
@@ -977,7 +988,12 @@ async function handleShareLinkRedeem(token) {
   });
   await browser.storage.local.remove(SHARED_PENDING_LINK_JOIN_KEY);
   if (typeof ensureSharedSyncAlarm === 'function') await ensureSharedSyncAlarm();
-  return { ok: true, status: 'joined', name: folder.name };
+  // role/roleDowngraded let the join page tell a free user why a "can edit"
+  // link landed them in view-only (server caps non-Pro joiners at 'read').
+  return {
+    ok: true, status: 'joined', name: folder.name, role: folder.role,
+    roleDowngraded: joined.data.roleDowngraded === true,
+  };
 }
 
 async function handleSharedMessage(request) {
@@ -1076,6 +1092,36 @@ async function handleSharedMessage(request) {
     case 'sharedJoinLink':
       // handleShareLinkRedeem clears SHARED_PENDING_LINK_JOIN_KEY on success.
       return handleShareLinkRedeem(request.token);
+    // Activity & comments (2026-07-21 design): thin wrappers over sharedApiFetch,
+    // returning its envelope UNCHANGED so server errors (pro_required, thread_full,
+    // 404 on revoked access, ...) flow through to the UI exactly like every other
+    // handler in this switch. Query params are appended only when present;
+    // everything interpolated into a path/query is encodeURIComponent'd.
+    case 'sharedGetActivity': {
+      const params = new URLSearchParams();
+      if (request.beforeId !== undefined && request.beforeId !== null) params.set('beforeId', request.beforeId);
+      if (request.limit !== undefined && request.limit !== null) params.set('limit', request.limit);
+      const qs = params.toString();
+      return sharedApiFetch(`/shared/folders/${encodeURIComponent(request.folderId)}/activity${qs ? `?${qs}` : ''}`);
+    }
+    case 'sharedGetComments': {
+      const params = new URLSearchParams();
+      if (typeof request.collectionUid === 'string' && request.collectionUid) params.set('collectionUid', request.collectionUid);
+      if (request.beforeId !== undefined && request.beforeId !== null) params.set('beforeId', request.beforeId);
+      if (request.limit !== undefined && request.limit !== null) params.set('limit', request.limit);
+      const qs = params.toString();
+      return sharedApiFetch(`/shared/folders/${encodeURIComponent(request.folderId)}/comments${qs ? `?${qs}` : ''}`);
+    }
+    case 'sharedPostComment': {
+      const body = { body: request.body };
+      if (typeof request.collectionUid === 'string' && request.collectionUid) body.collectionUid = request.collectionUid;
+      return sharedApiFetch(`/shared/folders/${encodeURIComponent(request.folderId)}/comments`, { method: 'POST', body });
+    }
+    case 'sharedDeleteComment':
+      return sharedApiFetch(
+        `/shared/folders/${encodeURIComponent(request.folderId)}/comments/${encodeURIComponent(request.commentId)}`,
+        { method: 'DELETE' }
+      );
     case 'sharedGetInvites':
       return sharedApiFetch('/shared/invites');
     case 'sharedRespondInvite':

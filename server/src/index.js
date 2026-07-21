@@ -17,6 +17,7 @@ import {
   updateMemberRole, removeMember, deleteSharedFolder, getMembers,
   checkRateLimit, MAX_BODY_BYTES,
 } from './sharedFolders.js';
+import { listActivity, listComments, postComment, deleteComment } from './sharedActivity.js';
 import {
   createOrRotateFolderLink, getFolderLink, deleteFolderLink, joinViaFolderLink,
   upsertCollectionLink, listCollectionLinks, deleteCollectionLink, getPublicLinkInfo,
@@ -229,7 +230,9 @@ async function handleShared(request, env, url) {
       if (method === 'GET' && seg.length === 2) return out(await listInvites(db, identity));
       if (method === 'POST' && seg.length === 4 && seg[3] === 'respond') {
         const { accept } = await body();
-        return out(await respondInvite(db, identity, seg[2], accept === true, now));
+        // The ACCEPTING user's entitlement caps the granted role (free -> read).
+        const opts = accept === true ? { isPro: await isProUser(env, identity.googleId) } : {};
+        return out(await respondInvite(db, identity, seg[2], accept === true, now, opts));
       }
       return json({ error: 'not_found' }, 404);
     }
@@ -237,7 +240,9 @@ async function handleShared(request, env, url) {
     const joinUrl = (token) => `${url.origin}/join/${token}`;
 
     if (seg[1] === 'join-link' && method === 'POST' && seg.length === 2) {
-      return out(await joinViaFolderLink(db, identity, (await body()).token, now));
+      // The JOINING user's entitlement caps the granted role (free -> read).
+      const isPro = await isProUser(env, identity.googleId);
+      return out(await joinViaFolderLink(db, identity, (await body()).token, now, { isPro }));
     }
     if (seg[1] === 'collection-link' && seg.length === 2 && method === 'PUT') {
       if (!(await isProUser(env, identity.googleId))) return json({ error: 'pro_required' }, 403);
@@ -286,6 +291,33 @@ async function handleShared(request, env, url) {
     if (seg.length === 4 && seg[3] === 'invites' && method === 'POST') {
       if (!(await isProUser(env, identity.googleId))) return json({ error: 'pro_required' }, 403);
       return out(await inviteMember(db, identity, folderId, await body(), now));
+    }
+    if (seg.length === 4 && seg[3] === 'activity' && method === 'GET') {
+      // beforeId/limit: absent -> defaults; present-but-garbage -> 400 inside
+      // listActivity (isGarbageBaseRev precedent).
+      return out(await listActivity(db, identity, folderId, {
+        beforeId: url.searchParams.get('beforeId') ?? undefined,
+        limit: url.searchParams.get('limit') ?? undefined,
+      }));
+    }
+    if (seg.length === 4 && seg[3] === 'comments') {
+      if (method === 'GET') {
+        // Absent collectionUid = the folder-level thread.
+        return out(await listComments(db, identity, folderId, {
+          collectionUid: url.searchParams.get('collectionUid') || null,
+          beforeId: url.searchParams.get('beforeId') ?? undefined,
+          limit: url.searchParams.get('limit') ?? undefined,
+        }));
+      }
+      if (method === 'POST') {
+        // Membership is checked inside postComment first (non-members 404);
+        // the POSTING user's live entitlement gates posting (403 pro_required).
+        const isPro = await isProUser(env, identity.googleId);
+        return out(await postComment(db, identity, folderId, await body(), now, { isPro }));
+      }
+    }
+    if (seg.length === 5 && seg[3] === 'comments' && method === 'DELETE') {
+      return out(await deleteComment(db, identity, folderId, decodeURIComponent(seg[4])));
     }
     if (seg.length === 4 && seg[3] === 'members' && method === 'GET') {
       return out(await getMembers(db, identity, folderId));
