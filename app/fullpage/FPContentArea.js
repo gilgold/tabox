@@ -1559,12 +1559,8 @@ function FPContentArea({
         setSelectedCurrentWindowId(null);
         setSelectedSessionEntryKey(null);
         setSelectedCollectionUid(collection?.uid || null);
-        // While the shared Activity & comments panel is open, selecting a
-        // collection scopes its comment thread instead of swapping panels.
-        if (!sharedPanelOpen) {
-            setDetailPanelOpen(true);
-        }
-    }, [setDetailPanelOpen, setSelectedCollectionUid, setSelectedCurrentWindowId, setSelectedSessionEntryKey, sharedPanelOpen]);
+        setDetailPanelOpen(true);
+    }, [setDetailPanelOpen, setSelectedCollectionUid, setSelectedCurrentWindowId, setSelectedSessionEntryKey]);
 
     // Right-click context menu handlers
     const handleCardContextMenu = useCallback((e, collection, isAutoUpdate, operations) => {

@@ -51,8 +51,8 @@ jest.mock('../app/utils/collectionBulkActions', () => ({
 import FPContentArea from '../app/fullpage/FPContentArea';
 import { collectionRevealBatchState, highlightedCollectionUidState } from '../app/atoms/animationsState';
 import { sidebarNavigationState } from '../app/atoms/fullpageState';
-import { searchState } from '../app/atoms/globalAppSettingsState';
-import { noPermissionOpenState } from '../app/atoms/sharedFoldersState';
+import { detailPanelOpenState, searchState, selectedCollectionUidState } from '../app/atoms/globalAppSettingsState';
+import { noPermissionOpenState, sharedPanelOpenState } from '../app/atoms/sharedFoldersState';
 import { CURRENT_WINDOWS_ACCENT_COLOR } from '../app/fullpage/fpAccentColors';
 import {
     loadAllCollections,
@@ -443,6 +443,28 @@ describe('FPContentArea grouped all collections view', () => {
 
         const sectionTitles = screen.getAllByText(/Folder One|Folder Two|Root Level/).map(node => node.textContent);
         expect(sectionTitles).toEqual(['Folder One', 'Folder Two', 'Root Level']);
+    });
+
+    test('clicking a collection opens the detail panel even while the shared panel is open', async () => {
+        const { store } = renderWithStore(
+            <FPContentArea
+                {...baseProps}
+                collections={[
+                    { uid: 'root-1', name: 'Root Collection', parentId: null, order: 0, lastUpdated: 10, tabs: [] },
+                ]}
+            />,
+        );
+        act(() => {
+            store.set(sharedPanelOpenState, true);
+        });
+
+        await waitFor(() => {
+            expect(screen.getByLabelText('open-collection-root-1')).toBeInTheDocument();
+        });
+        fireEvent.click(screen.getByLabelText('open-collection-root-1'));
+
+        expect(store.get(selectedCollectionUidState)).toBe('root-1');
+        expect(store.get(detailPanelOpenState)).toBe(true);
     });
 
     test('shows empty folders in grouped all collections view', async () => {
@@ -918,6 +940,9 @@ describe('FPContentArea grouped all collections view', () => {
         fireEvent.contextMenu(folderHeader);
 
         expect(await screen.findByText('Open All Collections')).toBeInTheDocument();
+        expect(screen.getByText('Share…').closest('button')).toContainElement(
+            screen.getByLabelText('Tabox Pro feature'),
+        );
         expect(screen.getByText('Edit Folder')).toBeInTheDocument();
         expect(screen.getByText('Export Folder')).toBeInTheDocument();
         expect(screen.getByText('Duplicate Folder')).toBeInTheDocument();
@@ -987,6 +1012,9 @@ describe('FPContentArea grouped all collections view', () => {
         fireEvent.contextMenu(alphaCard);
 
         expect(await screen.findByText('Open Tabs')).toBeInTheDocument();
+        expect(screen.getByText('Share via Link').closest('button')).toContainElement(
+            screen.getByLabelText('Tabox Pro feature'),
+        );
         expect(alphaCard).toHaveAttribute('data-interaction-active', 'true');
         expect(betaCard).toHaveAttribute('data-interaction-active', 'false');
     });
