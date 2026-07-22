@@ -120,3 +120,36 @@ test('auto-arrange applies accumulated moves then stops when cancelled mid-loop,
   expect(res.undo).toEqual(expect.objectContaining({ task: 'auto-arrange' }));
   expect(session.destroy).toHaveBeenCalledTimes(1);
 });
+
+test('auto-arrange never offers shared folders as targets (prompt or validation)', async () => {
+  const base = baseCtx();
+  const planners = require('../chrome/ai-planners.js');
+  const buildArrangePrompt = jest.spyOn(planners, 'buildArrangePrompt');
+  const c = baseCtx({
+    storage: {
+      ...base.storage,
+      loadFoldersIndexBG: jest.fn().mockResolvedValue({
+        f1: { name: 'Work' },
+        sf1: { name: 'Team Shared', shared: { folderId: 'srv-1', role: 'owner' } },
+      }),
+    },
+    client: {
+      createAISession: jest.fn().mockResolvedValue({ prompt: jest.fn(), destroy: jest.fn() }),
+      // Model hallucinates the shared folder as a target anyway.
+      promptForJSON: jest.fn().mockResolvedValue({ folders: [{ existingFolderId: 'sf1', newFolderName: null, collectionIndexes: [1] }] }),
+    },
+  });
+  const res = await createEngine({ registry, ctx: c }).runTask({ id: 'auto-arrange', params: {} });
+  // The shared folder is not offered to the model (the captured array is the
+  // task's live folder list, which legitimately grows as folders are created —
+  // so assert membership, not exact equality)...
+  const offeredIds = buildArrangePrompt.mock.calls[0][0].existingFolders.map((f) => f.id);
+  expect(offeredIds).toContain('f1');
+  expect(offeredIds).not.toContain('sf1');
+  // ...and a hallucinated shared-folder assignment is not honored: the
+  // collection falls back to the Misc catch-all instead of moving into sf1.
+  const moves = c.storage.moveCollectionsToFoldersBG.mock.calls[0][0];
+  expect(moves.some((m) => m.parentId === 'sf1')).toBe(false);
+  expect(res.status).toBe('done');
+  buildArrangePrompt.mockRestore();
+});

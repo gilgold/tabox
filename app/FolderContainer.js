@@ -1,17 +1,15 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { MdExpandMore, MdExpandLess, MdFolder, MdFolderOpen, MdDragIndicator, MdDelete, MdPlayArrow, MdContentCopy, MdPeopleAlt, MdPersonAdd, MdLinkOff, MdLogout } from 'react-icons/md';
-import { CiExport } from 'react-icons/ci';
-import { FaStop } from 'react-icons/fa6';
+import { MdExpandMore, MdExpandLess, MdFolder, MdFolderOpen, MdDragIndicator, MdPlayArrow, MdPeopleAlt } from 'react-icons/md';
 import { AutoSaveTextbox } from './AutoSaveTextbox';
 import ColorPicker from './ColorPicker';
 import ContextMenu from './ContextMenu';
 import DroppableFolderHeader from './DroppableFolderHeader';
 import DroppableFolderContent from './DroppableFolderContent';
-import { useFolderOperations, duplicateFolder } from './utils/folderOperations';
+import { useFolderOperations, duplicateFolder, updateFolderDetails, stopTrackingFolderCollections } from './utils/folderOperations';
 import { loadCollectionsIndex } from './utils/storageUtils';
 import { downloadTextFile } from './utils';
 import { buildFolderUrlList, getCollectionUrls, copyToClipboard } from './utils/index';
-import { buildFolderMenuItems } from './utils/folderMenuItems';
+import { createFolderMenuItems } from './utils/contextMenuItems';
 import { isSharedFolder } from './utils/sharedFolderUtils';
 import { showSuccessToast, showErrorToast, showInfoToast } from './toastHelpers';
 import { browser } from '../static/globals';
@@ -23,17 +21,9 @@ import { shareFolderModalState, sharedActionConfirmState } from './atoms/sharedF
 import { isProState } from './atoms/premiumState';
 import './FolderContainer.css';
 
-// Icons for the menu items the pure builder adds (kept icon-free so it stays
-// unit-testable); FolderContainer attaches the visuals here.
-const FOLDER_MENU_ICONS = {
-    share: <MdPersonAdd size={16} />,
-    unshare: <MdLinkOff size={16} />,
-    'leave-shared': <MdLogout size={16} />,
-    delete: <MdDelete size={16} />,
-};
-
-// Lazy load rarely-used modal
+// Lazy load rarely-used modals
 const FolderDeleteConfirmModal = lazy(() => import('./FolderDeleteConfirmModal'));
+const CreateFolderModal = lazy(() => import('./CreateFolderModal'));
 
 function FolderContainer({ 
     folder,
@@ -54,8 +44,8 @@ function FolderContainer({
     const isMountedRef = useRef(true);
     const headerRef = useRef(null);
 
-    // Shared folders: opens the Share/Manage-sharing modal; isPro only drives
-    // the (currently inert) proBadge hint on the builder's "share" item.
+    // Shared folders: opens the Share/Manage-sharing modal; isPro drives the
+    // Pro badge shown on the builder's premium "share" menu item.
     const setShareFolderModal = useSetAtom(shareFolderModalState);
     const setSharedActionConfirm = useSetAtom(sharedActionConfirmState);
     const isPro = useAtomValue(isProState);
@@ -70,6 +60,9 @@ function FolderContainer({
     // State for delete confirmation modal
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [modalCollectionCount, setModalCollectionCount] = useState(0);
+
+    // State for the Edit Folder modal (name + color, same as full-page view)
+    const [showEditModal, setShowEditModal] = useState(false);
     
     // State for tracking indicator
     const [hasTrackedCollections, setHasTrackedCollections] = useState(false);
@@ -678,34 +671,31 @@ function FolderContainer({
 
     const handleStopTrackingFolder = async () => {
         try {
-            // Get all collections in this folder
-            const { getFolderCollections } = await import('./utils/folderOperations');
-            const folderCollections = await getFolderCollections(folder.uid);
-            
-            if (folderCollections.length === 0) {
-                return;
+            const count = await stopTrackingFolderCollections(folder.uid);
+            if (count > 0) {
+                showSuccessToast(`Stopped auto update for ${count} collection${count === 1 ? '' : 's'}`);
             }
-
-            // Get currently tracked collections
-            const { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack');
-            if (!collectionsToTrack || collectionsToTrack.length === 0) {
-                return;
-            }
-
-            // Get UIDs of collections in this folder
-            const folderCollectionUids = folderCollections.map(c => c.uid);
-            
-            // Filter out any tracked collections that are in this folder
-            const updatedCollectionsToTrack = collectionsToTrack.filter(tracked => 
-                !folderCollectionUids.includes(tracked.collectionUid)
-            );
-
-            // Save the updated tracking list
-            await browser.storage.local.set({ collectionsToTrack: updatedCollectionsToTrack });
-            
-            console.log(`✅ Stopped auto-tracking for ${folderCollections.length} collection(s) in folder "${folder.name}"`);
         } catch (error) {
             console.error('Error stopping folder tracking:', error);
+            showErrorToast('Failed to stop auto tracking');
+        }
+    };
+
+    // Edit Folder (name + color) via the same modal the full-page view uses.
+    // CreateFolderModal calls onSave(name, color, folderUid) in edit mode.
+    const handleEditFolderSave = async (name, color) => {
+        const hasChanges = name !== folder.name || color !== folder.color;
+        if (!hasChanges) return;
+
+        const updated = await updateFolderDetails(folder.uid, { name, color });
+        if (!updated) {
+            showErrorToast('Failed to update folder');
+            return;
+        }
+
+        showSuccessToast('Folder updated');
+        if (onDataUpdate) {
+            await onDataUpdate();
         }
     };
 
@@ -759,54 +749,23 @@ function FolderContainer({
 
     const handleUnshare = () => setSharedActionConfirm({ kind: 'unshare', folder });
 
-    // Existing (non-shared-specific) menu entries, in the exact ContextMenu
-    // item shape. The old inline "delete" entry is intentionally omitted here —
-    // buildFolderMenuItems supplies delete/share/unshare/leave-shared based on
-    // the folder's shared-permission state.
-    const existingFolderMenuItems = [
-        {
-            id: 'export',
-            text: 'Export Folder',
-            icon: <CiExport size={16} />,
-            action: handleExportFolder,
-            className: '',
-            condition: true
-        },
-        {
-            id: 'duplicate',
-            text: 'Duplicate Folder',
-            icon: <MdContentCopy size={16} />,
-            action: handleDuplicateFolder,
-            className: '',
-            condition: true
-        },
-        {
-            id: 'copy-folder-urls',
-            text: 'Copy all URLs in folder',
-            icon: <MdContentCopy size={16} />,
-            action: handleCopyFolderUrls,
-            className: '',
-            condition: true
-        },
-        {
-            id: 'stop-tracking-folder',
-            text: 'Stop Auto Tracking Folder',
-            icon: <FaStop size={16} />,
-            action: handleStopTrackingFolder,
-            className: '',
-            condition: hasTrackedCollections
-        }
-    ];
-
-    const folderMenuItems = buildFolderMenuItems({
+    // Folder context menu — same shared builder (and therefore the exact same
+    // entries) as the full-page view's folder menus.
+    const folderMenuItems = createFolderMenuItems({
         folder,
-        onShare: handleShareClick,
-        onDelete: handleDeleteFolderClick,
-        onLeave: handleLeaveShared,
-        onUnshare: handleUnshare,
         isPro,
-        existingItems: existingFolderMenuItems
-    }).map((item) => ({ ...item, icon: item.icon || FOLDER_MENU_ICONS[item.id] }));
+        hasTrackedCollections,
+        onOpenAll: handlePlayFolder,
+        onEdit: () => setShowEditModal(true),
+        onExport: handleExportFolder,
+        onDuplicate: handleDuplicateFolder,
+        onCopyUrls: handleCopyFolderUrls,
+        onStopTracking: handleStopTrackingFolder,
+        onShare: handleShareClick,
+        onUnshare: handleUnshare,
+        onLeave: handleLeaveShared,
+        onDelete: handleDeleteFolderClick,
+    });
 
     return (
         <>
@@ -1017,6 +976,16 @@ function FolderContainer({
                 onConfirm={handleConfirmDelete}
                 folderName={folder?.name || 'Unknown Folder'}
                 collectionCount={modalCollectionCount}
+            />
+        </Suspense>
+
+        {/* Edit folder modal (same modal the full-page view uses) */}
+        <Suspense fallback={null}>
+            <CreateFolderModal
+                isOpen={showEditModal}
+                onClose={() => setShowEditModal(false)}
+                onSave={handleEditFolderSave}
+                folder={folder}
             />
         </Suspense>
         </>

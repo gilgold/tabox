@@ -6,6 +6,7 @@ import { selectedCollectionUidState } from '../atoms/globalAppSettingsState';
 import { browser } from '../../static/globals';
 import { showErrorToast } from '../toastHelpers';
 import ProBadge from '../ProBadge';
+import useProCheckout from '../useProCheckout';
 import './FPSharedPanel.css';
 
 const POLL_INTERVAL_MS = 30000;
@@ -150,6 +151,7 @@ export function describeActivityEvent(event, selfEmail = '') {
  */
 function FPSharedPanel({ folder, collections, isOpen, onClose }) {
     const isPro = useAtomValue(isProState);
+    const startProCheckout = useProCheckout();
     const selectedCollectionUid = useAtomValue(selectedCollectionUidState);
 
     const folderUid = folder?.uid || null;
@@ -316,15 +318,11 @@ function FPSharedPanel({ folder, collections, isOpen, onClose }) {
 
     const handleUpgrade = useCallback(async () => {
         try {
-            const ok = await browser.runtime.sendMessage({ type: 'openProCheckout' });
-            if (!ok) {
-                const loggedIn = await browser.runtime.sendMessage({ type: 'login' });
-                if (loggedIn) await browser.runtime.sendMessage({ type: 'openProCheckout' });
-            }
+            await startProCheckout({ ensureLogin: true });
         } catch {
             showErrorToast('Could not open the upgrade page.');
         }
-    }, []);
+    }, [startProCheckout]);
 
     const groupedActivity = useMemo(() => {
         const groups = [];

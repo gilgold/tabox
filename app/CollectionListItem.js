@@ -11,12 +11,15 @@ import { deletingCollectionUidsState, highlightedCollectionUidState, dragSession
 import { trackingStateVersion } from './atoms/globalAppSettingsState';
 import { aiProcessingUidsState, aiProcessingCurrentUidState, aiSplitTargetState, aiToolsModalOpenState, aiToolsScopeState } from './atoms/aiState';
 import { shareCollectionLinkModalState } from './atoms/sharedFoldersState';
+import { isProState } from './atoms/premiumState';
 import { useTaboxAIEnabled } from './ai/useTaboxAIEnabled';
 import { isAISupported } from './ai/aiClient';
 import './AIEffects.css';
 
 import ColorPicker from './ColorPicker';
 import { useCollectionOperations } from './useCollectionOperations';
+import { buildCollectionUrlList, copyToClipboard } from './utils/index';
+import { showSuccessToast, showErrorToast, showInfoToast } from './toastHelpers';
 import { browser } from '../static/globals';
 import DroppableCollection from './DroppableCollection';
 
@@ -55,6 +58,7 @@ function CollectionListItem(props) {
     const setAIToolsScope = useSetAtom(aiToolsScopeState);
     const setSplitTarget = useSetAtom(aiSplitTargetState);
     const setShareCollectionLink = useSetAtom(shareCollectionLinkModalState);
+    const isPro = useAtomValue(isProState);
     const aiEnabled = useTaboxAIEnabled() && isAISupported();
     const tabCount = props.collection.tabs?.length ?? props.collection.tabCount ?? 0;
 
@@ -86,6 +90,22 @@ function CollectionListItem(props) {
         onDataUpdate: props.onDataUpdate,
         folders: props.folders
     });
+
+    // Copy all collection URLs to the clipboard
+    const _handleCopyUrls = async () => {
+        const urlList = buildCollectionUrlList(props.collection);
+        if (!urlList) {
+            showInfoToast('No URLs to copy');
+            return;
+        }
+        try {
+            await copyToClipboard(urlList);
+            const count = urlList.split('\n').length;
+            showSuccessToast(`${count} URL${count === 1 ? '' : 's'} copied`);
+        } catch {
+            showErrorToast('Failed to copy URLs');
+        }
+    };
 
     // Cleanup on unmount
     useEffect(() => {
@@ -399,14 +419,18 @@ function CollectionListItem(props) {
                 <ContextMenu
                     menuItems={createCollectionMenuItems({
                         isAutoUpdate,
+                        onOpenTabs: _handleOpenTabs,
+                        onFocusWindow: _handleFocusWindow,
                         onExport: _exportCollectionToFile,
                         onDelete: _handleDelete,
                         onUpdate: _handleUpdate,
                         onStopTracking: _handleStopTracking,
                         onDuplicate: _handleDuplicate,
+                        onCopyUrls: _handleCopyUrls,
                         isFavorite: props.collection.isFavorite === true,
                         onToggleFavorite: _handleToggleFavorite,
                         aiEnabled,
+                        isPro,
                         tabCount,
                         onSplitCollection: _handleSplitCollection,
                         onShareLink: () => setShareCollectionLink(props.collection),

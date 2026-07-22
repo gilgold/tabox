@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { MdWarningAmber } from 'react-icons/md';
 import { getAIAvailability } from './ai/aiClient';
+import { getBrowserName } from './ai/browserSupport';
 import './AIUnavailableWarning.css';
 
 // Purchase-material warning shown on every Pro-checkout entry point when this
@@ -14,6 +15,12 @@ const COPY = {
     unsupported: {
         lead: "Tabox AI isn't supported in this browser.",
         body: 'Tabox AI requires Google Chrome 138 or newer. Other Pro features like shared folders will still work.',
+    },
+    'unsupported-browser': {
+        lead: 'Tabox AI is only available on Google Chrome.',
+        get body() {
+            return `You're using ${getBrowserName()}, which doesn't include Chrome's built-in AI model. Other Pro features like shared folders will still work.`;
+        },
     },
 };
 

@@ -161,10 +161,36 @@ export function DuplicateSweepPanel({ sweep, namesByUid }) {
     }
 
     const rec = active.recommendation || {};
+    const total = groups.length;
+    const resolvedCount = total - pendingCount;
 
     return (
         <div className="dup-sweep">
-            <div className="dup-sweep-progress">{pendingCount} duplicate group{pendingCount === 1 ? '' : 's'} left</div>
+            <div className="dup-sweep-progress">
+                <div className="dup-sweep-progress-top">
+                    <span className="dup-sweep-step">Step {resolvedCount + 1} of {total}</span>
+                    <button
+                        type="button"
+                        className="dup-sweep-finish"
+                        onClick={() => sweep.dismiss()}
+                        data-tooltip-id="main-tooltip"
+                        data-tooltip-class-name="dup-action-tip"
+                        data-tooltip-content={'Apply the choices you’ve made so far\nand end the sweep here.'}
+                    >
+                        End sweep
+                    </button>
+                </div>
+                <div
+                    className="dup-sweep-progress-bar"
+                    role="progressbar"
+                    aria-label="Duplicate sweep progress"
+                    aria-valuemin={0}
+                    aria-valuemax={total}
+                    aria-valuenow={resolvedCount}
+                >
+                    <div className="dup-sweep-progress-fill" style={{ width: `${(resolvedCount / total) * 100}%` }} />
+                </div>
+            </div>
 
             <div className="dup-sweep-scroll">
                 <DuplicateGroupView

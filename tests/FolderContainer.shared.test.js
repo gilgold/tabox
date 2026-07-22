@@ -11,6 +11,26 @@ test('normal folder: has Share…, Delete, no Leave', () => {
   expect(ids).not.toContain('leave-shared');
 });
 
+test('normal folder: marks Share… with a Pro badge only for non-Pro users', () => {
+  const freeItems = buildFolderMenuItems({
+    folder: { uid: 'f1', name: 'A' },
+    ...base,
+    isPro: false,
+  });
+  const proItems = buildFolderMenuItems({
+    folder: { uid: 'f1', name: 'A' },
+    ...base,
+    isPro: true,
+  });
+
+  expect(freeItems.find((item) => item.id === 'share')).toEqual(
+    expect.objectContaining({ text: 'Share…', proBadge: true }),
+  );
+  expect(proItems.find((item) => item.id === 'share')).toEqual(
+    expect.objectContaining({ text: 'Share…', proBadge: false }),
+  );
+});
+
 test('owner of shared folder: Share… (manage) + Unshare instead of plain delete flow', () => {
   const items = buildFolderMenuItems({ folder: { uid: 'f1', shared: { folderId: 'f1', role: 'owner' } }, ...base });
   const ids = items.filter((i) => i.condition !== false).map((i) => i.id);

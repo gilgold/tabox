@@ -4,6 +4,7 @@ import { MdClose } from 'react-icons/md';
 import { BsStars } from 'react-icons/bs';
 import { browser } from '../static/globals';
 import { getAIAvailability, downloadModel } from './ai/aiClient';
+import { getBrowserName } from './ai/browserSupport';
 import { showSuccessToast } from './toastHelpers';
 import './Modal.css';
 import './AIEnableModal.css';
@@ -29,6 +30,11 @@ function AIEnableModal({ isOpen, onClose }) {
         setStatus('checking');
         const availability = await getAIAvailability();
 
+        if (availability === 'unsupported-browser') {
+            setError(`Tabox AI is only available on Google Chrome — it won't work in ${getBrowserName()}.`);
+            setStatus('error');
+            return;
+        }
         if (availability === 'unsupported') {
             setError('Tabox AI requires Chrome 138 or newer.');
             setStatus('error');

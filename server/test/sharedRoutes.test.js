@@ -42,7 +42,9 @@ describe('/shared routes', () => {
   });
 
   it('full happy path: create -> invite -> accept -> write -> delta', async () => {
-    const e = env({ 'ent:g-owner': PRO_RECORD }, db);
+    // Guest is Pro too: a free acceptor of a write invite is capped at read
+    // (covered separately below), and this path exercises a member write.
+    const e = env({ 'ent:g-owner': PRO_RECORD, 'ent:g-guest': PRO_RECORD }, db);
     expect((await worker.fetch(req('POST', '/shared/folders', 't-owner', { folderId: 'f1', name: 'T', collections: [{ uid: 'c1', data: { name: 'A' } }] }), e)).status).toBe(200);
     expect((await worker.fetch(req('POST', '/shared/folders/f1/invites', 't-owner', { email: 'guest@x.com', role: 'write' }), e)).status).toBe(200);
     const invites = await (await worker.fetch(req('GET', '/shared/invites', 't-guest'), e)).json();
@@ -55,6 +57,18 @@ describe('/shared routes', () => {
     expect(delta.collections[0].uid).toBe('c2');
     const members = await (await worker.fetch(req('GET', '/shared/folders/f1/members', 't-owner'), e)).json();
     expect(members.members[0]).toMatchObject({ email: 'guest@x.com', status: 'active' });
+  });
+
+  it('free guest accepting a write invite is downgraded to read and cannot write', async () => {
+    const e = env({ 'ent:g-owner': PRO_RECORD }, db); // guest has no entitlement
+    await worker.fetch(req('POST', '/shared/folders', 't-owner', { folderId: 'f1', name: 'T', collections: [{ uid: 'c1', data: { name: 'A' } }] }), e);
+    await worker.fetch(req('POST', '/shared/folders/f1/invites', 't-owner', { email: 'guest@x.com', role: 'write' }), e);
+    const accept = await (await worker.fetch(req('POST', '/shared/invites/f1/respond', 't-guest', { accept: true }), e)).json();
+    expect(accept.accepted).toBe(true);
+    expect(accept.roleDowngraded).toBe(true);
+    expect(accept.folder.role).toBe('read');
+    const put = await worker.fetch(req('PUT', '/shared/folders/f1/collections/c2', 't-guest', { data: { name: 'B' } }), e);
+    expect(put.status).toBe(403);
   });
 
   it('unauthenticated -> 401; authenticated unknown path -> 404', async () => {

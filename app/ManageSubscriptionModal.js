@@ -23,6 +23,12 @@ export function formatAmount(amount, currency) {
 
 const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString() : null);
 
+const statusLabel = (subscription) => {
+    if (subscription.status === 'trialing') return 'Active (Trial)';
+    if (subscription.status === 'active') return subscription.plan === 'annual' ? 'Active (Yearly)' : 'Active (Monthly)';
+    return subscription.status;
+};
+
 const ERROR_MESSAGES = {
     not_signed_in: 'Please sign in to Tabox sync to manage your subscription.',
     network_error: 'Could not reach the Tabox server. Check your connection and try again.',
@@ -150,7 +156,10 @@ export function ManageSubscriptionControls({ active = true, onBack, onBusyChange
                                 </div>
                                 <div className="manage-sub-row">
                                     <span className="manage-sub-label">Status</span>
-                                    <span className="manage-sub-value">{subscription.status}</span>
+                                    <span className="manage-sub-value">
+                                        {statusLabel(subscription)}
+                                        {cancelScheduled ? ' — canceled' : ''}
+                                    </span>
                                 </div>
                                 {cancelScheduled ? (
                                     <div className="manage-sub-row">

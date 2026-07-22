@@ -80,6 +80,77 @@ test('cancelled run does not write partial sweep state', async () => {
   expect(out.summary).toMatch(/cancel/i);
 });
 
+test('publishes the sweep with a deterministic recommendation before the AI responds, then upgrades it', async () => {
+  let stateWhenAIRuns;
+  const c = { ...ctx, client: {
+    createAISession: async () => ({ destroy() {} }),
+    promptForJSON: async () => {
+      stateWhenAIRuns = JSON.parse(JSON.stringify(_store.duplicateSweep));
+      return { recommendedKeeper: 1, message: 'AI says keep in A.', suggestedNewCollectionName: 'Shared', titles: [] };
+    },
+  } };
+  await task.run({ ctx: c, params: {}, report: async () => {} });
+  // Sweep state was live (and usable) while inference was still in flight.
+  expect(stateWhenAIRuns).toBeTruthy();
+  expect(stateWhenAIRuns.groups[0].status).toBe('pending');
+  expect(stateWhenAIRuns.groups[0].recommendation.recommendedKeeperUid).toBeTruthy();
+  // The AI result replaced the deterministic placeholder afterwards.
+  expect(_store.duplicateSweep.groups[0].recommendation.message).toBe('AI says keep in A.');
+  expect(_store.duplicateSweep.groups[0].recommendation.recommendedKeeperUid).toBe('A');
+});
+
+test('prompts on a fresh session clone per group so context never accumulates', async () => {
+  const prompted = [];
+  const base = { clone: jest.fn(async () => ({ __clone: true, destroy: jest.fn() })), destroy: jest.fn() };
+  const c = { ...ctx, client: {
+    createAISession: async () => base,
+    promptForJSON: async (session) => { prompted.push(session); return { recommendedKeeper: 2, message: 'm', suggestedNewCollectionName: 'S', titles: [] }; },
+  } };
+  await task.run({ ctx: c, params: {}, report: async () => {} });
+  expect(base.clone).toHaveBeenCalledTimes(1);
+  expect(prompted).toHaveLength(1);
+  expect(prompted[0].__clone).toBe(true);
+});
+
+test('does not overwrite a group the user resolved while the AI was thinking', async () => {
+  const c = { ...ctx, client: {
+    createAISession: async () => ({ destroy() {} }),
+    promptForJSON: async () => {
+      // Simulate the user acting on the group mid-inference.
+      _store.duplicateSweep.groups[0].status = 'resolved';
+      return { recommendedKeeper: 2, message: 'late AI opinion', suggestedNewCollectionName: 'S', titles: [] };
+    },
+  } };
+  await task.run({ ctx: c, params: {}, report: async () => {} });
+  expect(_store.duplicateSweep.groups[0].status).toBe('resolved');
+  expect(_store.duplicateSweep.groups[0].recommendation.message).not.toBe('late AI opinion');
+});
+
+test('stops refining when the user ends the sweep mid-run', async () => {
+  const promptForJSON = jest.fn(async () => {
+    // Simulate "End sweep" while the first inference is in flight.
+    delete _store.duplicateSweep;
+    return { recommendedKeeper: 2, message: 'm', suggestedNewCollectionName: 'S', titles: [] };
+  });
+  const c = { ...ctx,
+    client: { createAISession: async () => ({ destroy() {} }), promptForJSON },
+    loadCollections: async () => ([
+      { uid: 'A', name: 'A', tabs: [
+        { uid: 'a1', url: 'https://x.com', title: 'X' },
+        { uid: 'a2', url: 'https://y.com', title: 'Y' },
+      ] },
+      { uid: 'D', name: 'D', tabs: [
+        { uid: 'd1', url: 'https://x.com', title: 'X home' },
+        { uid: 'd2', url: 'https://y.com', title: 'Y home' },
+      ] },
+      { uid: 'E', name: 'E', tabs: [{ uid: 'e1', url: 'https://y.com', title: 'Y other' }] },
+    ]),
+  };
+  await task.run({ ctx: c, params: {}, report: async () => {} });
+  expect(promptForJSON).toHaveBeenCalledTimes(1);
+  expect(_store.duplicateSweep).toBeUndefined();
+});
+
 test('skips the AI entirely for cross groups whose copies share the same title', async () => {
   const noAiCtx = {
     planners, detect,

@@ -1,0 +1,39 @@
+.pro-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    min-width: 26px;
+    margin-left: auto;
+    padding: 2px 6px;
+    border: 1px solid rgba(255, 255, 255, 0.32);
+    border-radius: 999px;
+    background: linear-gradient(110deg, #2563eb, #7c3aed, #db2777, #f59e0b, #2563eb);
+    background-size: 300% 100%;
+    box-shadow: 0 2px 7px rgba(124, 58, 237, 0.28);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 800;
+    line-height: 1.2;
+    letter-spacing: 0.02em;
+    animation: pro-badge-gradient 4s ease-in-out infinite;
+}
+
+@keyframes pro-badge-gradient {
+    0%, 100% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pro-badge {
+        animation: none;
+    }
+}
+
+html.performance-mode .pro-badge {
+    animation: none;
+}

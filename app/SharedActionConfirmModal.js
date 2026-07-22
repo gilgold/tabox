@@ -3,7 +3,7 @@ import Modal from 'react-modal';
 import { useAtom } from 'jotai';
 import { MdWarningAmber, MdClose } from 'react-icons/md';
 import { sharedActionConfirmState } from './atoms/sharedFoldersState';
-import { leaveSharedFolder, unshareSharedFolder } from './utils/sharedFolderActions';
+import { leaveSharedFolder, unshareSharedFolder, respondToSharedInvite } from './utils/sharedFolderActions';
 import './Modal.css';
 import './SharedActionConfirmModal.css';
 
@@ -17,6 +17,11 @@ const COPY = {
         title: 'Leave shared folder?',
         body: (name) => `Leave "${name}"? You'll keep a local copy but stop receiving updates.`,
         confirmLabel: 'Leave',
+    },
+    'decline-invite': {
+        title: 'Decline invite?',
+        body: (name) => `Decline the invite to "${name}"? The sender will see that you declined.`,
+        confirmLabel: 'Decline',
     },
 };
 
@@ -37,17 +42,24 @@ export default function SharedActionConfirmModal({ onConfirmed }) {
     const [busy, setBusy] = useState(false);
 
     if (!state) return null;
-    const { kind, folder } = state;
+    const { kind, folder, invite } = state;
     const copy = COPY[kind];
-    if (!copy || !folder) return null;
+    const isInvite = kind === 'decline-invite';
+    if (!copy || (isInvite ? !invite : !folder)) return null;
 
+    const targetName = isInvite ? invite.folderName : folder.name;
     const close = () => !busy && setState(null);
 
     const handleConfirm = async () => {
         setBusy(true);
         try {
-            const action = kind === 'unshare' ? unshareSharedFolder : leaveSharedFolder;
-            const ok = await action(folder, onConfirmed);
+            let ok;
+            if (isInvite) {
+                ok = await respondToSharedInvite(invite, false);
+            } else {
+                const action = kind === 'unshare' ? unshareSharedFolder : leaveSharedFolder;
+                ok = await action(folder, onConfirmed);
+            }
             if (ok) setState(null);
         } finally {
             setBusy(false);
@@ -70,7 +82,7 @@ export default function SharedActionConfirmModal({ onConfirmed }) {
                     <MdClose size={18} />
                 </button>
             </div>
-            <p>{copy.body(folder.name)}</p>
+            <p>{copy.body(targetName)}</p>
             <div className="shared-action-confirm-actions">
                 <button className="shared-action-confirm-cancel" onClick={close} type="button" disabled={busy}>
                     Cancel

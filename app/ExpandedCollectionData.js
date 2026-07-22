@@ -248,7 +248,14 @@ function ExpandedCollectionData(props) {
             newCollectionGroups = newCollectionGroups.filter((group) => !groupExistsInCollection(group));
         }
 
-        currentCollection.tabs = [...updatedTabs, ...newCollectionTabs];
+        // Pinned tabs must stay a contiguous prefix of the tabs array
+        // (rendering and the drag model both rely on this), so partition
+        // the merged list instead of appending the window tabs as-is.
+        const mergedTabs = [...updatedTabs, ...newCollectionTabs];
+        currentCollection.tabs = [
+            ...mergedTabs.filter((tab) => tab.pinned),
+            ...mergedTabs.filter((tab) => !tab.pinned),
+        ];
         totalTabsAdded = currentCollection.tabs.length - totalTabsAdded;
         currentCollection.chromeGroups = [...currentCollection.chromeGroups, ...newCollectionGroups];
         currentCollection.lastUpdated = Date.now();

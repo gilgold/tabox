@@ -7,6 +7,7 @@ import { shareCollectionLinkModalState } from './atoms/sharedFoldersState';
 import { isProState } from './atoms/premiumState';
 import { showSuccessToast, showErrorToast } from './toastHelpers';
 import AIUnavailableWarning from './AIUnavailableWarning';
+import useProCheckout from './useProCheckout';
 import './Modal.css';
 import './ShareCollectionLinkModal.css';
 
@@ -30,6 +31,7 @@ function toSnapshot(collection) {
 export default function ShareCollectionLinkModal() {
     const [collection, setCollection] = useAtom(shareCollectionLinkModalState);
     const isPro = useAtomValue(isProState);
+    const startProCheckout = useProCheckout();
     const [link, setLink] = useState(null); // { token, url } | null
     const [loaded, setLoaded] = useState(false);
     const [busy, setBusy] = useState(false);
@@ -136,7 +138,7 @@ export default function ShareCollectionLinkModal() {
                     <MdWorkspacePremium size={28} />
                     <p>Sharing collections is a Tabox Pro feature.</p>
                     <AIUnavailableWarning />
-                    <button onClick={() => browser.runtime.sendMessage({ type: 'openProCheckout' })}>Upgrade now</button>
+                    <button onClick={() => startProCheckout()}>Upgrade now</button>
                 </div>
             ) : (
                 <div className="share-collection-link-body">

@@ -10,6 +10,16 @@ function storageApi() { return globalThis.TaboxAIStorage; }
 async function readState() { return (await local.get(DUPLICATE_SWEEP_KEY))[DUPLICATE_SWEEP_KEY] || null; }
 async function writeState(state) { await local.set({ [DUPLICATE_SWEEP_KEY]: state }); }
 
+// All sweep-state mutations go through one queue: the scan task streams AI
+// recommendation updates while the user applies actions, and two interleaved
+// read-modify-writes on the same key would clobber each other.
+let mutationQueue = Promise.resolve();
+function serialized(fn) {
+    const run = mutationQueue.then(fn, fn);
+    mutationQueue = run.then(() => {}, () => {});
+    return run;
+}
+
 function newActionId() {
     return (globalThis.crypto && crypto.randomUUID) ? crypto.randomUUID()
         : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
@@ -131,7 +141,8 @@ async function executeGroupAction(group, action, keeperUid) {
     };
 }
 
-async function applyDuplicateSweepAction({ groupId, action, keeperUid, applyToAll } = {}) {
+function applyDuplicateSweepAction(args) { return serialized(() => doApplyDuplicateSweepAction(args)); }
+async function doApplyDuplicateSweepAction({ groupId, action, keeperUid, applyToAll } = {}) {
     const state = await readState();
     if (!state) return { ok: false, reason: 'missing' };
     const current = state.groups.find((g) => g.id === groupId);
@@ -174,7 +185,8 @@ async function applyDuplicateSweepAction({ groupId, action, keeperUid, applyToAl
 // because an earlier group removed their shared tabs, undoing the earlier group
 // restores those tabs but the later group stays 'resolved'. A fresh sweep run
 // re-detects them; no data is lost.
-async function undoDuplicateSweepLast() {
+function undoDuplicateSweepLast() { return serialized(doUndoDuplicateSweepLast); }
+async function doUndoDuplicateSweepLast() {
     const state = await readState();
     if (!state || !state.history.length) return { ok: false, reason: 'empty' };
     const S = storageApi();
@@ -190,9 +202,25 @@ async function undoDuplicateSweepLast() {
     return { ok: true };
 }
 
-async function dismissDuplicateSweep() { await local.remove(DUPLICATE_SWEEP_KEY); return { ok: true }; }
+async function dismissDuplicateSweep() { return serialized(async () => { await local.remove(DUPLICATE_SWEEP_KEY); return { ok: true }; }); }
 
-const taboxDuplicateSweepApi = { DUPLICATE_SWEEP_KEY, applyDuplicateSweepAction, undoDuplicateSweepLast, dismissDuplicateSweep };
+// Called by the scan task as each AI recommendation arrives: swap in the refined
+// recommendation, but only while the group is still pending — never rewrite a
+// group the user has already acted on.
+function updateDuplicateSweepRecommendation({ groupId, recommendation } = {}) {
+    return serialized(async () => {
+        const state = await readState();
+        if (!state) return { ok: false, reason: 'missing' };
+        const g = state.groups.find((x) => x.id === groupId);
+        if (!g) return { ok: false, reason: 'unknown-group' };
+        if (g.status !== 'pending') return { ok: false, reason: 'not-pending' };
+        g.recommendation = recommendation;
+        await writeState(state);
+        return { ok: true };
+    });
+}
+
+const taboxDuplicateSweepApi = { DUPLICATE_SWEEP_KEY, applyDuplicateSweepAction, undoDuplicateSweepLast, dismissDuplicateSweep, updateDuplicateSweepRecommendation };
 /* istanbul ignore next */ if (typeof globalThis !== 'undefined') globalThis.TaboxDuplicateSweep = taboxDuplicateSweepApi;
 /* istanbul ignore next */ if (typeof module !== 'undefined' && module.exports) module.exports = taboxDuplicateSweepApi;
 })();

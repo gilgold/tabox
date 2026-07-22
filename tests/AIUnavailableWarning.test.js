@@ -5,6 +5,10 @@ import '@testing-library/jest-dom';
 jest.mock('../app/ai/aiClient', () => ({
     getAIAvailability: jest.fn(),
 }));
+jest.mock('../app/ai/browserSupport', () => ({
+    getBrowserName: jest.fn().mockReturnValue('Brave'),
+    isChromeBrowser: jest.fn().mockReturnValue(false),
+}));
 
 import { getAIAvailability } from '../app/ai/aiClient';
 import AIUnavailableWarning from '../app/AIUnavailableWarning';
@@ -53,5 +57,15 @@ describe('AIUnavailableWarning', () => {
         expect(screen.getByRole('alert')).toHaveTextContent(
             /requires Google Chrome 138 or newer/,
         );
+    });
+
+    test('shows the Chrome-only warning on a non-Chrome Chromium browser', async () => {
+        getAIAvailability.mockResolvedValue('unsupported-browser');
+        render(<AIUnavailableWarning />);
+        expect(await screen.findByRole('alert')).toHaveTextContent(
+            'Tabox AI is only available on Google Chrome.',
+        );
+        expect(screen.getByRole('alert')).toHaveTextContent(/You're using Brave/);
+        expect(screen.getByRole('alert')).toHaveTextContent(/shared folders will still work/);
     });
 });

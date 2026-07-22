@@ -4,6 +4,7 @@ import '@testing-library/jest-dom';
 import CollectionTile from '../app/CollectionTile';
 import { aiProcessingUidsState, aiProcessingCurrentUidState } from '../app/atoms/aiState';
 import { renderWithProviders } from './helpers/renderWithProviders';
+import { createCollectionMenuItems } from '../app/utils/contextMenuItems';
 
 let mockCollectionHandlers;
 const mockUseCollectionOperations = jest.fn(() => mockCollectionHandlers);
@@ -112,6 +113,7 @@ describe('CollectionTile', () => {
         };
 
         mockUseCollectionOperations.mockClear();
+        createCollectionMenuItems.mockClear();
         mockStorageGet.mockImplementation(async (key) => {
             if (key === 'chkEnableAutoUpdate') {
                 return { chkEnableAutoUpdate: false };
@@ -140,6 +142,9 @@ describe('CollectionTile', () => {
         expect(container.querySelector('.tile-hover-menu')).toBeInTheDocument();
         expect(container.querySelector('.tile-hover-menu [data-testid="color-picker"]')).toBeInTheDocument();
         expect(container.querySelector('.tile-color-picker')).not.toBeInTheDocument();
+        expect(createCollectionMenuItems).toHaveBeenCalledWith(
+            expect.objectContaining({ isPro: false }),
+        );
 
         fireEvent.click(container.querySelector('.collection-tile'));
         expect(onSelect).toHaveBeenCalledWith(baseCollection);

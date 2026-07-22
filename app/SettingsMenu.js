@@ -17,6 +17,8 @@ import { useOrphanRecoveryContext } from './OrphanRecoveryContext';
 import { buildOrphanRecoveryMenuItem } from './orphanRecoveryMenuItem';
 import { loadBrowserSessions, subscribeToBrowserSessions } from './utils/browserSessions';
 import AIUnavailableWarning from './AIUnavailableWarning';
+import useProCheckout from './useProCheckout';
+import TaboxProOverview from './TaboxProOverview';
 import { RiFolderAddFill, RiEdit2Line, RiSettings5Fill } from 'react-icons/ri';
 import { ImNewTab } from 'react-icons/im';
 import { MdOutlineSyncAlt, MdSettingsBackupRestore, MdClose, MdExpandMore, MdExpandLess, MdBugReport, MdFileDownload, MdHistory, MdWorkspacePremium } from 'react-icons/md';
@@ -57,11 +59,23 @@ export default function SettingsMenu(props) {
     const isLoggedIn = useAtomValue(isLoggedInState);
     const setListKey = useSetAtom(listKeyState);
     const orphanRecovery = useOrphanRecoveryContext() || {};
-    const premium = useAtomValue(premiumEntitlementState);
+    const [premium, setPremium] = useAtom(premiumEntitlementState);
     const isPro = useAtomValue(isProState);
+    const startProCheckout = useProCheckout();
     const setManageSubscriptionOpen = useSetAtom(manageSubscriptionOpenState);
 
     const closeMenu = () => setIsDrawerOpen(false);
+
+    // The cached entitlement only refreshes when >24h stale, so a change made
+    // outside the extension (e.g. a cancellation in Paddle) can show a wrong
+    // plan for up to a day. Refresh whenever settings open — but only when a
+    // cached record exists: free users with no record must never hit the
+    // Worker (same `cached &&` constraint as app/usePremiumEntitlement.js).
+    const refreshPremiumOnOpen = useEffectEvent(async () => {
+        if (!premium) return;
+        const fresh = await browser.runtime.sendMessage({ type: 'refreshProEntitlement' });
+        if (fresh && isMountedRef.current) setPremium(fresh);
+    });
 
     const openMenu = () => {
         if (isFullPageVariant) {
@@ -69,6 +83,7 @@ export default function SettingsMenu(props) {
             setShowSubscriptionControls(false);
         }
         setIsDrawerOpen(true);
+        refreshPremiumOnOpen();
     };
 
     const onMount = useEffectEvent(async () => {
@@ -271,17 +286,28 @@ export default function SettingsMenu(props) {
         }));
     };
 
+    const proBaseLabel = premium?.status === 'trialing'
+        ? 'Active (Trial)'
+        : `Active (${premium?.plan === 'annual' ? 'Yearly' : 'Monthly'})`;
+    const proEndDate = premium?.cancelAt || premium?.expiresAt;
     const proStatusLabel = !isPro
         ? 'Free plan'
-        : premium?.status === 'trialing'
-            ? `Trial — ends ${new Date(premium.expiresAt).toLocaleDateString()}`
-            : `Pro (${premium?.plan === 'annual' ? 'annual' : 'monthly'})`;
+        : premium?.cancelAt
+            ? `${proBaseLabel} — canceled, won't renew${proEndDate ? ` after ${new Date(proEndDate).toLocaleDateString()}` : ''}`
+            : premium?.status === 'trialing' && premium?.expiresAt
+                ? `${proBaseLabel} — ends ${new Date(premium.expiresAt).toLocaleDateString()}`
+                : proBaseLabel;
+
+    const handleProUpgrade = () => startProCheckout({ ensureLogin: true });
 
     const proSection = {
         key: 'tabox-pro',
         title: 'Tabox Pro',
         icon: MdWorkspacePremium,
         description: 'Manage your Tabox Pro subscription and unlock premium features.',
+        renderFullPageContent: !isPro
+            ? () => <TaboxProOverview statusLabel={proStatusLabel} onUpgrade={handleProUpgrade} />
+            : undefined,
         items: [
             {
                 type: 'button',
@@ -322,13 +348,7 @@ export default function SettingsMenu(props) {
                     key: 'pro-upgrade',
                     title: 'Upgrade to Tabox Pro',
                     description: 'Unlock premium features with a free 7-day trial.',
-                    onClick: async () => {
-                        const ok = await browser.runtime.sendMessage({ type: 'openProCheckout' });
-                        if (!ok) {
-                            const loggedIn = await browser.runtime.sendMessage({ type: 'login' });
-                            if (loggedIn) await browser.runtime.sendMessage({ type: 'openProCheckout' });
-                        }
-                    },
+                    onClick: handleProUpgrade,
                     content: (
                         <>
                             <MdWorkspacePremium size="14" style={{ marginRight: '8px' }} />

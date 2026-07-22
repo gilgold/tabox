@@ -14,7 +14,7 @@ async function seed() {
   await createSharedFolder(db, OWNER, { folderId: 'f1', name: 'Team', collections: [{ uid: 'c1', data: { name: 'A' } }] }, 1000);
   await inviteMember(db, OWNER, 'f1', { email: 'w@x.com', role: 'write' }, 1000);
   await inviteMember(db, OWNER, 'f1', { email: 'r@x.com', role: 'read' }, 1000);
-  await respondInvite(db, WRITER, 'f1', true, 1001);
+  await respondInvite(db, WRITER, 'f1', true, 1001, { isPro: true });
   await respondInvite(db, READER, 'f1', true, 1001);
   return db;
 }

@@ -13,7 +13,21 @@ const LANGUAGE_OPTIONS = {
 const DEFAULT_TOP_K = 3;
 const DEFAULT_TEMPERATURE = 1;
 
+// Mirror of app/ai/browserSupport.js — Tabox AI is Chrome-only. Edge exposes
+// its own incompatible LanguageModel global, so brand-check before feature-
+// detecting; unidentified Chromium fails open (the feature check still gates).
+function isChromeBrowser() {
+    const nav = globalThis.navigator;
+    if (!nav) return true;
+    if (nav.brave) return false;
+    const brands = ((nav.userAgentData && nav.userAgentData.brands) || []).map((entry) => entry.brand);
+    if (brands.includes('Microsoft Edge') || brands.includes('Opera') || brands.includes('Brave')) return false;
+    const ua = nav.userAgent || '';
+    return !(/\bEdg(?:e|A|iOS)?\//.test(ua) || /\bOPR\//.test(ua) || /\bVivaldi\//.test(ua));
+}
+
 async function aiAvailability() {
+    if (!isChromeBrowser()) return 'unsupported-browser';
     if (typeof globalThis.LanguageModel === 'undefined') return 'unsupported';
     try {
         return await globalThis.LanguageModel.availability(LANGUAGE_OPTIONS);
@@ -24,7 +38,7 @@ async function aiAvailability() {
 }
 
 async function createAISession({ systemPrompt, temperature, topK, signal } = {}) {
-    if (typeof globalThis.LanguageModel === 'undefined') {
+    if (!isChromeBrowser() || typeof globalThis.LanguageModel === 'undefined') {
         throw new Error('Tabox AI: LanguageModel is unavailable in this context');
     }
     const options = { ...LANGUAGE_OPTIONS };

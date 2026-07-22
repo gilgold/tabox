@@ -332,3 +332,52 @@
     color: var(--text-color);
     opacity: 0.6;
 }
+
+/* ─── Pro paywall ─── */
+.tab-switcher-card.paywall {
+    flex-direction: column;
+    width: min(420px, 94vw);
+}
+
+.tab-switcher-upgrade {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 34px 28px 26px;
+    color: var(--text-color);
+    text-align: center;
+}
+
+.tab-switcher-upgrade > svg {
+    color: #7c3aed;
+}
+
+.tab-switcher-upgrade h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.tab-switcher-upgrade p {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+    opacity: 0.75;
+}
+
+.tab-switcher-upgrade button {
+    margin-top: 6px;
+    padding: 10px 18px;
+    border: 0;
+    border-radius: 9px;
+    color: #fff;
+    background: linear-gradient(135deg, #7c3aed, #2563eb);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.tab-switcher-upgrade .tab-switcher-esc-hint {
+    margin-top: 4px;
+}

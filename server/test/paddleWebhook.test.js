@@ -60,10 +60,19 @@ describe('buildSubscriptionRecord', () => {
       record: {
         status: 'active', plan: 'monthly',
         current_period_end: '2026-08-16T10:00:00Z',
+        scheduled_cancel_at: null,
         subscription_id: 'sub_1', customer_id: 'ctm_1',
         occurred_at: '2026-07-16T10:00:00Z',
       },
     });
+  });
+
+  it('captures a scheduled cancellation, and clears it when scheduled_change is gone', () => {
+    const withCancel = subEvent({ scheduled_change: { action: 'cancel', effective_at: '2026-08-16T10:00:00Z' } });
+    expect(buildSubscriptionRecord(withCancel, PRICES).record.scheduled_cancel_at).toBe('2026-08-16T10:00:00Z');
+    const withPause = subEvent({ scheduled_change: { action: 'pause', effective_at: '2026-08-16T10:00:00Z' } });
+    expect(buildSubscriptionRecord(withPause, PRICES).record.scheduled_cancel_at).toBeNull();
+    expect(buildSubscriptionRecord(subEvent({ scheduled_change: null }), PRICES).record.scheduled_cancel_at).toBeNull();
   });
 
   it('maps annual price id and unknown price to plan null', () => {

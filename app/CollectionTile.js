@@ -11,6 +11,7 @@ import { highlightedCollectionUidState, deletingCollectionUidsState } from './at
 import { trackingStateVersion } from './atoms/globalAppSettingsState';
 import { aiProcessingUidsState, aiProcessingCurrentUidState, aiSplitTargetState, aiToolsModalOpenState, aiToolsScopeState } from './atoms/aiState';
 import { shareCollectionLinkModalState } from './atoms/sharedFoldersState';
+import { isProState } from './atoms/premiumState';
 import { useTaboxAIEnabled } from './ai/useTaboxAIEnabled';
 import { isAISupported } from './ai/aiClient';
 import './AIEffects.css';
@@ -51,6 +52,7 @@ function CollectionTile(props) {
     const setAIToolsScope = useSetAtom(aiToolsScopeState);
     const setSplitTarget = useSetAtom(aiSplitTargetState);
     const setShareCollectionLink = useSetAtom(shareCollectionLinkModalState);
+    const isPro = useAtomValue(isProState);
     const aiEnabled = useTaboxAIEnabled() && isAISupported();
 
     const _handleSplitCollection = () => {
@@ -66,6 +68,7 @@ function CollectionTile(props) {
         _exportCollectionToFile,
         _handleUpdate,
         _handleOpenTabs,
+        _handleFocusWindow,
         _handleStopTracking,
         _handleToggleFavorite
     } = useCollectionOperations({
@@ -346,6 +349,8 @@ function CollectionTile(props) {
                     <ContextMenu
                         menuItems={createCollectionMenuItems({
                             isAutoUpdate,
+                            onOpenTabs: _handleOpenTabs,
+                            onFocusWindow: _handleFocusWindow,
                             onExport: _exportCollectionToFile,
                             onDelete: _handleDelete,
                             onUpdate: _handleUpdate,
@@ -355,6 +360,7 @@ function CollectionTile(props) {
                             isFavorite: props.collection.isFavorite === true,
                             onToggleFavorite: _handleToggleFavorite,
                             aiEnabled,
+                            isPro,
                             tabCount,
                             onSplitCollection: _handleSplitCollection,
                             onShareLink: () => setShareCollectionLink(props.collection),

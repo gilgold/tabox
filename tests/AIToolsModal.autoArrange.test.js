@@ -193,3 +193,114 @@ test('reopening after a done run does not re-toast (only running tasks reattach)
     expect(screen.queryByText(/Filed 3 collections/i)).not.toBeInTheDocument();
     expect(showUndoToast).not.toHaveBeenCalled();
 });
+
+test('a done aiTaskState change fires onDataUpdate exactly once (explicit UI refresh)', async () => {
+    const onDataUpdate = jest.fn().mockResolvedValue();
+    const store = createStore();
+    store.set(aiToolsModalOpenState, true);
+    store.set(aiToolsScopeState, { type: 'all' });
+    store.set(premiumEntitlementState, PRO);
+    render(
+        <Provider store={store}>
+            <AIToolsModal updateRemoteData={jest.fn()} onDataUpdate={onDataUpdate} />
+        </Provider>
+    );
+    const arrangeBtn = await openArrangePanel();
+    await act(async () => { fireEvent.click(arrangeBtn); });
+
+    expect(onDataUpdate).not.toHaveBeenCalled();
+    await fireStorageChange(DONE_STATE);
+    await screen.findByText(/Filed 3 collections/i);
+    expect(onDataUpdate).toHaveBeenCalledTimes(1);
+
+    // Re-delivering the same done state (re-render / duplicate event) must not
+    // refresh again — guarded by taskId.
+    await fireStorageChange(DONE_STATE);
+    expect(onDataUpdate).toHaveBeenCalledTimes(1);
+});
+
+test('a cancelled aiTaskState change also fires onDataUpdate (partial moves applied)', async () => {
+    const onDataUpdate = jest.fn().mockResolvedValue();
+    const store = createStore();
+    store.set(aiToolsModalOpenState, true);
+    store.set(aiToolsScopeState, { type: 'all' });
+    store.set(premiumEntitlementState, PRO);
+    render(
+        <Provider store={store}>
+            <AIToolsModal updateRemoteData={jest.fn()} onDataUpdate={onDataUpdate} />
+        </Provider>
+    );
+    const arrangeBtn = await openArrangePanel();
+    await act(async () => { fireEvent.click(arrangeBtn); });
+
+    await fireStorageChange({ ...DONE_STATE, status: 'cancelled', summary: '' });
+    await waitFor(() => expect(onDataUpdate).toHaveBeenCalledTimes(1));
+});
+
+test('the done-panel Undo button refreshes data via onDataUpdate after the undo completes', async () => {
+    const onDataUpdate = jest.fn().mockResolvedValue();
+    const store = createStore();
+    store.set(aiToolsModalOpenState, true);
+    store.set(aiToolsScopeState, { type: 'all' });
+    store.set(premiumEntitlementState, PRO);
+    render(
+        <Provider store={store}>
+            <AIToolsModal updateRemoteData={jest.fn()} onDataUpdate={onDataUpdate} />
+        </Provider>
+    );
+    const arrangeBtn = await openArrangePanel();
+    await act(async () => { fireEvent.click(arrangeBtn); });
+    await fireStorageChange(DONE_STATE);
+    await screen.findByText(/Filed 3 collections/i);
+    onDataUpdate.mockClear();
+
+    const undoBtn = await screen.findByRole('button', { name: /^Undo$/i });
+    await act(async () => { fireEvent.click(undoBtn); });
+    expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'aiUndo' });
+    await waitFor(() => expect(onDataUpdate).toHaveBeenCalledTimes(1));
+});
+
+test('the undo toast callback refreshes data via onDataUpdate after the undo completes', async () => {
+    const onDataUpdate = jest.fn().mockResolvedValue();
+    const store = createStore();
+    store.set(aiToolsModalOpenState, true);
+    store.set(aiToolsScopeState, { type: 'all' });
+    store.set(premiumEntitlementState, PRO);
+    render(
+        <Provider store={store}>
+            <AIToolsModal updateRemoteData={jest.fn()} onDataUpdate={onDataUpdate} />
+        </Provider>
+    );
+    const arrangeBtn = await openArrangePanel();
+    await act(async () => { fireEvent.click(arrangeBtn); });
+    await fireStorageChange(DONE_STATE);
+    await screen.findByText(/Filed 3 collections/i);
+    onDataUpdate.mockClear();
+
+    const undoFn = showUndoToast.mock.calls[0][3];
+    await act(async () => { await undoFn(); });
+    expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'aiUndo' });
+    await waitFor(() => expect(onDataUpdate).toHaveBeenCalledTimes(1));
+});
+
+test('the persistent "Undo last arrange" button refreshes data via onDataUpdate', async () => {
+    const onDataUpdate = jest.fn().mockResolvedValue();
+    const store = createStore();
+    store.set(aiToolsModalOpenState, true);
+    store.set(aiToolsScopeState, { type: 'all' });
+    store.set(premiumEntitlementState, PRO);
+    render(
+        <Provider store={store}>
+            <AIToolsModal updateRemoteData={jest.fn()} onDataUpdate={onDataUpdate} />
+        </Provider>
+    );
+    await openArrangePanel();
+    await fireStorageChange(DONE_STATE);
+    const doneUndo = await screen.findByRole('button', { name: /^Undo$/i });
+    await act(async () => { fireEvent.click(doneUndo); });
+
+    const persistent = await screen.findByRole('button', { name: /Undo last arrange/i });
+    onDataUpdate.mockClear();
+    await act(async () => { fireEvent.click(persistent); });
+    await waitFor(() => expect(onDataUpdate).toHaveBeenCalledTimes(1));
+});

@@ -40,6 +40,8 @@ export function buildSubscriptionRecord(event, priceMap) {
       status: sub.status,
       plan,
       current_period_end: (sub.current_billing_period && sub.current_billing_period.ends_at) || null,
+      scheduled_cancel_at:
+        (sub.scheduled_change && sub.scheduled_change.action === 'cancel' && sub.scheduled_change.effective_at) || null,
       subscription_id: sub.id,
       customer_id: sub.customer_id,
       occurred_at: event.occurred_at,

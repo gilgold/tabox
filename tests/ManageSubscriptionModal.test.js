@@ -44,7 +44,7 @@ describe('ManageSubscriptionModal', () => {
         renderModal();
 
         expect(await screen.findByText('Tabox Pro — monthly')).toBeInTheDocument();
-        expect(screen.getByText('active')).toBeInTheDocument();
+        expect(screen.getByText('Active (Monthly)')).toBeInTheDocument();
         expect(screen.getByText('Renews on')).toBeInTheDocument();
         expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'proGetSubscription' });
         expect(screen.getByRole('button', { name: /switch to annual/i })).toBeInTheDocument();

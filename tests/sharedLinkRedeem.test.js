@@ -77,13 +77,30 @@ test('joins a folder link when signed in: materializes + seeds sync state', asyn
     .mockResolvedValueOnce({ ok: true, status: 200, json: async () => FOLDER_INFO })   // public /links lookup
     .mockResolvedValueOnce({ ok: true, status: 200, json: async () => JOIN_PAYLOAD }); // authed join
   const res = await handleShareLinkRedeem('tok2');
-  expect(res).toMatchObject({ ok: true, status: 'joined', name: 'Team' });
+  expect(res).toMatchObject({ ok: true, status: 'joined', name: 'Team', role: 'write', roleDowngraded: false });
   expect(global.fetch.mock.calls[1][0]).toContain('/shared/join-link');
   expect(JSON.parse(global.fetch.mock.calls[1][1].body)).toEqual({ token: 'tok2' });
   const store = await browser.storage.local.get(null);
   expect(store.folder_f1).toMatchObject({ uid: 'f1', shared: { folderId: 'f1', role: 'write' } });
   expect(store.collection_c1).toMatchObject({ uid: 'c1', parentId: 'f1' });
   expect(store[SHARED_SYNC_STATE_KEY].f1).toMatchObject({ lastRev: 3, knownUids: ['c1'] });
+});
+
+test('free-user join of a write link: server-downgraded read role and flag flow through to the reply', async () => {
+  bgUtils.getAuthToken.mockResolvedValue('tok-auth');
+  const downgraded = {
+    ...JOIN_PAYLOAD,
+    folder: { ...JOIN_PAYLOAD.folder, role: 'read' },
+    roleDowngraded: true,
+  };
+  global.fetch
+    .mockResolvedValueOnce({ ok: true, status: 200, json: async () => FOLDER_INFO })
+    .mockResolvedValueOnce({ ok: true, status: 200, json: async () => downgraded });
+  const res = await handleShareLinkRedeem('tok2');
+  expect(res).toMatchObject({ ok: true, status: 'joined', role: 'read', roleDowngraded: true });
+  const store = await browser.storage.local.get(null);
+  // Materialized locally as read-only — the UI's isReadOnlySharedFolder gate keys off this.
+  expect(store.folder_f1).toMatchObject({ shared: { folderId: 'f1', role: 'read' } });
 });
 
 test('stashes a pending join and reports sign_in_required when signed out', async () => {

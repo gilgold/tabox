@@ -709,6 +709,13 @@
 		inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
+/* Divider between menu item groups (open / main / danger) */
+.context-menu-divider {
+	height: 1px;
+	margin: 4px 8px;
+	background: var(--border-color, rgba(128, 128, 128, 0.25));
+}
+
 /* Modern Context Menu Items */
 .context-menu-item {
 	padding: 8px 12px;

@@ -1,9 +1,15 @@
 .share-folder-modal {
+    width: 560px;
+    max-width: min(94vw, 560px);
+}
+
+/* Modal surface + shared --share-* variables, used by both share modals
+   (the collection-link modal sets its own width in its co-located CSS). */
+.share-folder-modal,
+.share-collection-link-modal {
     --share-border: rgba(70, 70, 70, 0.14);
     --share-muted: rgba(70, 70, 70, 0.68);
     --share-surface: rgba(245, 249, 251, 0.78);
-    width: 560px;
-    max-width: min(94vw, 560px);
     max-height: min(88vh, 680px);
     display: flex;
     flex-direction: column;
@@ -15,7 +21,8 @@
     box-shadow: 0 24px 64px rgba(24, 39, 58, 0.24), 0 4px 14px rgba(24, 39, 58, 0.12);
 }
 
-[data-theme="dark"] .share-folder-modal {
+[data-theme="dark"] .share-folder-modal,
+[data-theme="dark"] .share-collection-link-modal {
     --share-border: rgba(255, 255, 255, 0.11);
     --share-muted: rgba(242, 242, 242, 0.62);
     --share-surface: rgba(47, 52, 59, 0.72);
@@ -954,8 +961,13 @@
 }
 
 .share-link-row .share-field-icon {
+    /* The base .share-field-icon rule absolutely positions the icon inside a
+       relative wrapper (.share-email-wrap); here it's a plain flex child, so
+       undo that or it escapes to the modal and overlaps the text. */
+    position: static;
     flex: 0 0 auto;
     color: var(--share-muted);
+    transform: none;
 }
 
 .share-link-row input[type='text'] {

@@ -1,11 +1,15 @@
 /** @jest-environment jsdom */
 import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import fs from 'fs';
+import path from 'path';
 import { Provider, createStore } from 'jotai';
 import { browser } from '../static/globals';
 import SettingsMenu from '../app/SettingsMenu';
 import { premiumEntitlementState, manageSubscriptionOpenState } from '../app/atoms/premiumState';
 import { getAIAvailability } from '../app/ai/aiClient';
+
+const taboxProOverviewCss = fs.readFileSync(path.join(__dirname, '../app/TaboxProOverview.css'), 'utf8');
 
 // AIEnableModal is lazily imported by SettingsMenu — mock its deps to keep
 // this test focused and fast (mirrors SettingsMenuTaboxAI.test.js).
@@ -80,9 +84,38 @@ describe('SettingsMenu — Tabox Pro section', () => {
         openSettings(container);
 
         expect(screen.getByText('Tabox Pro')).toBeInTheDocument();
-        expect(screen.getByText(/trial/i)).toBeInTheDocument();
+        expect(screen.getByText(/Active \(Trial\) — ends/)).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /manage subscription/i })).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /upgrade/i })).not.toBeInTheDocument();
+    });
+
+    test('shows Active (Monthly) / Active (Yearly) for paid plans', () => {
+        const { container } = renderSettingsMenu({
+            entitled: true,
+            status: 'active',
+            plan: 'annual',
+            expiresAt: '2027-07-01T10:00:00Z',
+            refreshedAt: new Date().toISOString(),
+        });
+
+        openSettings(container);
+
+        expect(screen.getByText('Active (Yearly)')).toBeInTheDocument();
+    });
+
+    test('notes a scheduled cancellation on the plan overview', () => {
+        const { container } = renderSettingsMenu({
+            entitled: true,
+            status: 'trialing',
+            plan: 'monthly',
+            expiresAt: '2026-07-23T10:00:00Z',
+            cancelAt: '2026-07-23T10:00:00Z',
+            refreshedAt: new Date().toISOString(),
+        });
+
+        openSettings(container);
+
+        expect(screen.getByText(/Active \(Trial\) — canceled, won't renew after/)).toBeInTheDocument();
     });
 
     test('renders the current plan as read-only plan details in the full-page view', () => {
@@ -98,6 +131,37 @@ describe('SettingsMenu — Tabox Pro section', () => {
         expect(planDetails).toHaveTextContent('Current plan');
         expect(planStatus.closest('button')).toBeNull();
         expect(planDetails).not.toHaveClass('fp-settings-item-card');
+    });
+
+    test('shows the benefit-led Pro overview and non-interactive pricing in the full-page view', () => {
+        const { container } = renderSettingsMenu(null, 'fullpage');
+
+        openSettings(container);
+        fireEvent.click(screen.getByRole('button', { name: 'Tabox Pro' }));
+
+        expect(screen.getByRole('heading', { name: 'Upgrade your tab workflow' })).toBeInTheDocument();
+        expect(screen.getByText('Organize with AI')).toBeInTheDocument();
+        expect(screen.getByText('Share anything')).toBeInTheDocument();
+        expect(screen.getByText('Stay in control')).toBeInTheDocument();
+        expect(screen.getByText('$5.99 / month')).toBeInTheDocument();
+        expect(screen.getByText('$59.99 / year')).toBeInTheDocument();
+        const savingsBadge = screen.getByText('2 months free!');
+        expect(savingsBadge).toBeInTheDocument();
+        const yearlyPriceCard = savingsBadge.closest('.fp-pro-price');
+        expect(yearlyPriceCard).toBeInTheDocument();
+        expect(yearlyPriceCard).toHaveTextContent('Yearly');
+        expect(yearlyPriceCard).not.toHaveTextContent('Monthly');
+        const savingsBadgeRule = taboxProOverviewCss.match(/\.fp-pro-savings\s*\{[^}]+}/)?.[0] || '';
+        expect(savingsBadgeRule).toContain('position: absolute');
+        expect(savingsBadgeRule).toMatch(/transform:\s*rotate\([^)]*deg\)/);
+        expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+
+        const upgradeButton = screen.getByRole('button', { name: /upgrade — start free 7-day trial/i });
+        const upgradeButtonRule = taboxProOverviewCss.match(/\.fp-pro-upgrade-button\s*\{[^}]+}/)?.[0] || '';
+        expect(upgradeButtonRule).toContain('white-space: nowrap');
+
+        fireEvent.click(upgradeButton);
+        expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'openProCheckout' });
     });
 
     test('Manage subscription opens the shared modal via the atom', () => {
@@ -193,6 +257,63 @@ describe('SettingsMenu — Tabox Pro section', () => {
         openSettings(container);
         await screen.findByRole('button', { name: /upgrade — start free 7-day trial/i });
         expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    test('opening settings refreshes a cached entitlement so external changes show up', async () => {
+        browser.runtime.sendMessage.mockImplementation(async (message) => {
+            if (message.type === 'refreshProEntitlement') {
+                return {
+                    entitled: false,
+                    status: 'canceled',
+                    plan: 'monthly',
+                    expiresAt: null,
+                    cancelAt: null,
+                    refreshedAt: new Date().toISOString(),
+                };
+            }
+            return {};
+        });
+
+        const { container } = renderSettingsMenu({
+            entitled: true,
+            status: 'trialing',
+            plan: 'monthly',
+            expiresAt: '2026-07-25T10:00:00Z',
+            refreshedAt: new Date().toISOString(),
+        });
+
+        openSettings(container);
+
+        expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'refreshProEntitlement' });
+        expect(await screen.findByText('Free plan')).toBeInTheDocument();
+        expect(screen.queryByText(/Active \(Trial\)/)).not.toBeInTheDocument();
+    });
+
+    test('opening settings does NOT call the Worker when there is no cached entitlement', () => {
+        const { container } = renderSettingsMenu(null);
+
+        openSettings(container);
+
+        expect(browser.runtime.sendMessage).not.toHaveBeenCalledWith({ type: 'refreshProEntitlement' });
+    });
+
+    test('a failed refresh keeps showing the cached status', async () => {
+        browser.runtime.sendMessage.mockImplementation(async (message) => {
+            if (message.type === 'refreshProEntitlement') return null;
+            return {};
+        });
+
+        const { container } = renderSettingsMenu({
+            entitled: true,
+            status: 'trialing',
+            plan: 'monthly',
+            expiresAt: '2026-07-25T10:00:00Z',
+            refreshedAt: new Date().toISOString(),
+        });
+
+        openSettings(container);
+
+        expect(await screen.findByText(/Active \(Trial\) — ends/)).toBeInTheDocument();
     });
 
     test('pro plan never shows the AI-unavailable warning in settings', async () => {

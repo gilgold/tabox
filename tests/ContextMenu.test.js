@@ -59,6 +59,23 @@ describe('ContextMenu', () => {
         expect(screen.getByText('No menu items configured')).toBeInTheDocument();
     });
 
+    test('renders a Pro badge at the end of a flagged menu row', () => {
+        const { container } = renderWithProviders(
+            <ContextMenu
+                menuItems={[{ id: 'share', text: 'Share…', action: jest.fn(), proBadge: true }]}
+            />,
+        );
+
+        fireEvent.click(container.querySelector('.menu-icon'));
+
+        const shareRow = screen.getByText('Share…').closest('.context-menu-item');
+        const badge = screen.getByLabelText('Tabox Pro feature');
+        expect(shareRow).toContainElement(badge);
+        expect(badge).toHaveTextContent('Pro');
+        expect(badge).toHaveClass('pro-badge');
+        expect(shareRow.lastElementChild).toBe(badge);
+    });
+
     test('closes when clicking outside the menu', async () => {
         const { container } = renderWithProviders(
             <div>

@@ -7,6 +7,7 @@ import SharedActionConfirmModal from '../app/SharedActionConfirmModal';
 import { sharedActionConfirmState } from '../app/atoms/sharedFoldersState';
 
 const FOLDER = { uid: 'f1', name: 'Team', shared: { folderId: 'f1', role: 'owner', members: [] } };
+const INVITE = { folderId: 'f2', folderName: 'Design', ownerEmail: 'owner@example.com', role: 'read' };
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -61,6 +62,39 @@ test('Confirm sends sharedLeaveFolder for the leave kind', async () => {
 
   await waitFor(() => expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'sharedLeaveFolder', folderId: 'f1' }));
   await waitFor(() => expect(onConfirmed).toHaveBeenCalled());
+});
+
+test('renders decline-invite copy from the invite object', () => {
+  const store = createStore();
+  store.set(sharedActionConfirmState, { kind: 'decline-invite', invite: INVITE });
+  render(<Provider store={store}><SharedActionConfirmModal onConfirmed={jest.fn()} /></Provider>);
+
+  expect(screen.getByText(/Decline the invite to "Design"\? The sender will see that you declined\./)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Decline' })).toBeInTheDocument();
+});
+
+test('Confirm sends sharedRespondInvite with accept:false and closes the modal', async () => {
+  browser.runtime.sendMessage.mockResolvedValue({ ok: true });
+  const store = createStore();
+  store.set(sharedActionConfirmState, { kind: 'decline-invite', invite: INVITE });
+  render(<Provider store={store}><SharedActionConfirmModal onConfirmed={jest.fn()} /></Provider>);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Decline' }));
+
+  await waitFor(() => expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'sharedRespondInvite', folderId: 'f2', accept: false }));
+  await waitFor(() => expect(store.get(sharedActionConfirmState)).toBeNull());
+});
+
+test('when decline returns { ok: false }, the modal stays open', async () => {
+  browser.runtime.sendMessage.mockResolvedValue({ ok: false, error: 'gone' });
+  const store = createStore();
+  store.set(sharedActionConfirmState, { kind: 'decline-invite', invite: INVITE });
+  render(<Provider store={store}><SharedActionConfirmModal onConfirmed={jest.fn()} /></Provider>);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Decline' }));
+
+  await waitFor(() => expect(browser.runtime.sendMessage).toHaveBeenCalled());
+  expect(store.get(sharedActionConfirmState)).toEqual({ kind: 'decline-invite', invite: INVITE });
 });
 
 test('Cancel does not send any message and closes the modal', () => {

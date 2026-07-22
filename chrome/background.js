@@ -1614,18 +1614,27 @@ try {
           return Promise.resolve(false);
         }
 
+        // The cached profile can be lost while the refresh token survives (partial
+        // sign-out, interrupted login, storage cleanup). Don't just report
+        // "reconnecting" — that state would never resolve on its own. Try to get a
+        // token: if that works, fall through to the normal flow below, which
+        // re-fetches and re-stores the profile via getGoogleUser().
         if (!googleUser && googleRefreshToken) {
-          logSyncOperation('info', 'Refresh token available but profile missing, reporting reconnecting state');
-          await updateSharedSyncSessionState({
-            status: SYNC_SESSION_STATUS.AUTH_REFRESHING,
-            hasRefreshToken: true,
-            user: null,
-            error: null
-          });
-          return Promise.resolve({
-            syncStatus: 'auth_refreshing',
-            hasRefreshToken: true
-          });
+          const recoveredToken = await getAuthToken();
+          if (recoveredToken === false) {
+            logSyncOperation('info', 'Refresh token available but profile missing and token refresh failed, reporting reconnecting state');
+            await updateSharedSyncSessionState({
+              status: SYNC_SESSION_STATUS.AUTH_REFRESHING,
+              hasRefreshToken: true,
+              user: null,
+              error: null
+            });
+            return Promise.resolve({
+              syncStatus: 'auth_refreshing',
+              hasRefreshToken: true
+            });
+          }
+          logSyncOperation('info', 'Refresh token available but profile missing, recovered a token and re-fetching profile');
         }
         
         // Check if there's a persistent auth error that requires user action.
@@ -2481,7 +2490,8 @@ try {
       await browser.storage.local.set({ 
         extensionInstalled: true,
         installTimestamp: Date.now(),
-        installedVersion: currentVersion
+        installedVersion: currentVersion,
+        onboardingEligible: true
       });
     }
     

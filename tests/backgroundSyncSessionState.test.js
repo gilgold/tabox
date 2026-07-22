@@ -44,6 +44,28 @@ describe('background shared sync session state', () => {
             hasRefreshToken: true
         }));
     });
+
+    test('recovers to active when googleUser is missing but the refresh token still yields a token', async () => {
+        const user = { displayName: 'Jane Doe', emailAddress: 'jane@example.com' };
+        global.getAuthToken = jest.fn(async () => 'valid-token');
+        global.getGoogleUser = jest.fn(async () => user);
+        global.getOrCreateSyncFile = jest.fn(async () => true);
+
+        require('../chrome/background.js');
+
+        const response = await browser.runtime.sendMessage({ type: 'checkSyncStatus' });
+
+        expect(response).toEqual(expect.objectContaining({ syncStatus: 'active' }));
+        expect(global.getGoogleUser).toHaveBeenCalledWith('valid-token');
+        expect(browser.storage.local._data.syncSessionState).toEqual(expect.objectContaining({
+            status: 'active',
+            hasRefreshToken: true,
+            user
+        }));
+
+        delete global.getGoogleUser;
+        delete global.getOrCreateSyncFile;
+    });
 });
 
 describe('background checkSyncStatus stale auth error recovery', () => {

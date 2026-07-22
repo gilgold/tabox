@@ -5,6 +5,7 @@ import CollectionListItem from '../app/CollectionListItem';
 import { dragSessionState } from '../app/atoms/animationsState';
 import { aiProcessingUidsState, aiProcessingCurrentUidState } from '../app/atoms/aiState';
 import { renderWithProviders } from './helpers/renderWithProviders';
+import { createCollectionMenuItems } from '../app/utils/contextMenuItems';
 
 let mockCollectionHandlers;
 const mockUseCollectionOperations = jest.fn(() => mockCollectionHandlers);
@@ -156,6 +157,7 @@ describe('CollectionListItem', () => {
         };
 
         mockUseCollectionOperations.mockClear();
+        createCollectionMenuItems.mockClear();
         mockStorageGet.mockImplementation(async (key) => {
             if (key === 'chkEnableAutoUpdate') {
                 return { chkEnableAutoUpdate: false };
@@ -178,6 +180,9 @@ describe('CollectionListItem', () => {
         const row = container.querySelector('.collection-list-item');
         expect(row).toBeInTheDocument();
         expect(contextMenuProps.last?.triggerRef?.current).toBe(row);
+        expect(createCollectionMenuItems).toHaveBeenCalledWith(
+            expect.objectContaining({ isPro: false }),
+        );
     });
 
     test('opens the detail panel from the row while keeping action buttons separate', async () => {

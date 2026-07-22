@@ -69,11 +69,13 @@ import { manageSubscriptionOpenState } from './atoms/premiumState';
 import { usePremiumEntitlement } from './usePremiumEntitlement';
 import NoPermissionModal from './NoPermissionModal';
 import SharedActionConfirmModal from './SharedActionConfirmModal';
+import NonChromeProConfirmModal from './NonChromeProConfirmModal';
 import { noPermissionOpenState, pendingInvitesState, pendingLinkJoinState, shareCollectionLinkModalState, shareFolderModalState } from './atoms/sharedFoldersState';
 import { guardFolderEdit, isSharedFolder } from './utils/sharedFolderUtils';
 import ShareFolderModal from './ShareFolderModal';
 import ShareCollectionLinkModal from './ShareCollectionLinkModal';
 import SharedInviteToastController from './SharedInviteToastController';
+import OnboardingGuide from './OnboardingGuide';
 
 // Migration system imports - wrapped in try/catch for compatibility
 const PERF_NAMESPACE = 'tabox:popup';
@@ -2217,12 +2219,13 @@ function App({ mode = 'popup' }) {
   );
 
   const tabSwitcherEl = <TabSwitcher />;
-  const aiToolsModalEl = <AIToolsModal updateRemoteData={updateRemoteData} />;
+  const aiToolsModalEl = <AIToolsModal updateRemoteData={updateRemoteData} onDataUpdate={refreshDataAfterFolderOperation} />;
   const manageSubscriptionModalEl = <ManageSubscriptionModal />;
   const shareFolderModalEl = <ShareFolderModal />;
   const shareCollectionLinkModalEl = <ShareCollectionLinkModal />;
   const noPermissionModalEl = <NoPermissionModal />;
   const sharedActionConfirmModalEl = <SharedActionConfirmModal onConfirmed={refreshDataAfterFolderOperation} />;
+  const nonChromeProConfirmModalEl = <NonChromeProConfirmModal />;
 
   if (isFullPage) {
     return <>
@@ -2244,6 +2247,7 @@ function App({ mode = 'popup' }) {
         {shareCollectionLinkModalEl}
         {noPermissionModalEl}
         {sharedActionConfirmModalEl}
+        {nonChromeProConfirmModalEl}
         <SharedInviteToastController onAccepted={refreshDataAfterFolderOperation} />
         <FPLayout
           folders={displayFolders}
@@ -2295,6 +2299,8 @@ function App({ mode = 'popup' }) {
       {shareCollectionLinkModalEl}
       {noPermissionModalEl}
       {sharedActionConfirmModalEl}
+      {nonChromeProConfirmModalEl}
+      <OnboardingGuide mode={mode} />
       <div className={`App${isFullPage ? ' fullpage' : ''}`}>
       <Header
         isFullPage={isFullPage}

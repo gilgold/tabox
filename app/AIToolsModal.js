@@ -9,6 +9,8 @@ import { isProState, premiumEntitlementState } from './atoms/premiumState';
 import TaboxProUpsell from './TaboxProUpsell';
 import { AI_TOOLS } from './ai/aiTasks';
 import { getAIAvailability } from './ai/aiClient';
+import { isChromeBrowser, getBrowserName } from './ai/browserSupport';
+import useProCheckout from './useProCheckout';
 import { readWindowStructure } from './ai/readWindowStructure';
 import { loadAllCollections } from './utils/storageUtils';
 import { buildCollectionFromSnapshot } from './utils/saveCollectionSnapshot';
@@ -41,7 +43,7 @@ const TASK_TO_TOOL = {
     'split-collection': 'split-collection',
 };
 
-function AIToolsModal({ updateRemoteData }) {
+function AIToolsModal({ updateRemoteData, onDataUpdate }) {
     const [isOpen, setIsOpen] = useAtom(aiToolsModalOpenState);
     const scope = useAtomValue(aiToolsScopeState);
     const viewContext = useAtomValue(viewContextState);
@@ -57,7 +59,15 @@ function AIToolsModal({ updateRemoteData }) {
     // (upgrade vs sign-in-first) and is loaded once on open.
     const isPro = useAtomValue(isProState);
     const setPremiumEntitlement = useSetAtom(premiumEntitlementState);
+    const startProCheckout = useProCheckout();
     const isToolLocked = (tool) => Boolean(tool && tool.premium && !isPro);
+    // Chrome-only gate: the command palette (and direct atom sets) can open
+    // this modal on any browser, so it must explain the limitation itself
+    // rather than rely on entry points being hidden.
+    const chromeSupported = isChromeBrowser();
+    const browserGateBody = chromeSupported ? null
+        : `You're using ${getBrowserName()}, which doesn't include Chrome's built-in on-device AI model. `
+        + 'Everything else in Tabox — including Pro features like shared folders — works here as usual.';
     // Optimistic default (assume signed-in) so the upsell shows the "Upgrade"
     // CTA immediately on click, before the async storage read resolves; it
     // flips to the "Sign in" CTA once we confirm the user is actually signed out.
@@ -126,6 +136,10 @@ function AIToolsModal({ updateRemoteData }) {
     // Synchronous re-entry guard — set before any await in handleRun so a
     // double-click cannot start two engine runs.
     const runStartedRef = useRef(false);
+    // When this run's duplicate scan started: sweep state stamped at/after this
+    // moment is fresh, so the interactive panel can open while the AI is still
+    // refining recommendations in the background. Infinity = no run this open.
+    const dupRunStartedAtRef = useRef(Infinity);
     // Once-guard: ensures the context-menu split route kicks off the scan only once per open.
     const splitScanStartedRef = useRef(false);
     // Synchronous re-entry guard so a double-click can't apply the same split twice.
@@ -239,6 +253,19 @@ function AIToolsModal({ updateRemoteData }) {
     const dispatchAiRun = useCallback((task, params) => browser.runtime.sendMessage({ type: 'aiRun', task, params }), []);
     const sendAiCancel = useCallback(() => browser.runtime.sendMessage({ type: 'aiCancel' }), []);
     const sendAiUndo = useCallback(() => browser.runtime.sendMessage({ type: 'aiUndo' }), []);
+    // Deterministic post-mutation refresh: reload the modal's own collections
+    // snapshot AND push App's collections+folders reload. The App-level
+    // storage.onChanged listener usually covers this, but it is debounced and
+    // fire-and-forget — an explicit refresh guarantees the list reflects an
+    // AI task's writes the moment it finishes (same pattern as Split Collection).
+    const refreshDataAfterAiWrite = useCallback(() => {
+        loadAllCollections().then(setCollections).catch(() => {});
+        if (typeof onDataUpdate === 'function') {
+            Promise.resolve(onDataUpdate()).catch((refreshError) => {
+                console.error('Tabox AI: refresh after AI write failed', refreshError);
+            });
+        }
+    }, [onDataUpdate]);
     const sendAiUndoItems = useCallback((uids) => browser.runtime.sendMessage({ type: 'aiUndoItems', uids }), []);
 
     // ── Split Collection ─────────────────────────────────────────────────────
@@ -628,7 +655,10 @@ function AIToolsModal({ updateRemoteData }) {
                 if (dead) return;
 
                 const { groupsCreated = 0, tabsAdded = 0, skipped: skippedCount = 0 } = applyResult || {};
-                const summary = `Created ${groupsCreated} groups · added ${tabsAdded} tabs to existing groups · ${skippedCount} left ungrouped`;
+                const summaryParts = [`Created ${groupsCreated} groups`];
+                if (tabsAdded > 0) summaryParts.push(`added ${tabsAdded} tabs to existing groups`);
+                summaryParts.push(`${skippedCount} left ungrouped`);
+                const summary = summaryParts.join(' · ');
                 setSoSummary(summary);
 
                 showUndoToast(
@@ -742,6 +772,12 @@ function AIToolsModal({ updateRemoteData }) {
             }
             if (status === 'cancelled') {
                 // Auto-Arrange has no partial-results panel — return to idle.
+                // A cancelled run has still applied the moves accumulated before
+                // the cancel, so refresh the list once for this run too.
+                if (completedTaskIdRef.current !== aiTaskState.taskId) {
+                    completedTaskIdRef.current = aiTaskState.taskId;
+                    refreshDataAfterAiWrite();
+                }
                 setPanelStatus('idle');
                 return;
             }
@@ -752,22 +788,24 @@ function AIToolsModal({ updateRemoteData }) {
             setAaSummary(summary);
             setPanelStatus('done');
 
-            // Fire the undo toast once per finished run.
+            // Fire the undo toast + explicit data refresh once per finished run.
             if (completedTaskIdRef.current !== aiTaskState.taskId) {
                 completedTaskIdRef.current = aiTaskState.taskId;
+                refreshDataAfterAiWrite();
                 showUndoToast(
                     <BsStars />,
                     'Arranged collections into folders',
                     'Tabox AI',
-                    () => sendAiUndo(),
+                    () => sendAiUndo().then(refreshDataAfterAiWrite),
                     UNDO_TIME,
                 );
             }
         }
-    }, [aiTaskState, activeToolId, sendAiUndo]);
+    }, [aiTaskState, activeToolId, sendAiUndo, refreshDataAfterAiWrite]);
 
     const handleAutoArrangeUndo = async () => {
         await sendAiUndo();
+        refreshDataAfterAiWrite();
         setAaSummary(null);
         setPanelStatus('idle');
     };
@@ -787,6 +825,7 @@ function AIToolsModal({ updateRemoteData }) {
         completedTaskIdRef.current = null;
         setPanelStatus('running');
         setError(null);
+        dupRunStartedAtRef.current = Date.now();
 
         // Pass uids from scope; empty array means "scan all"
         const uids = scope.type === 'selected' ? scope.uids : [];
@@ -806,7 +845,12 @@ function AIToolsModal({ updateRemoteData }) {
         const { status } = aiTaskState;
 
         if (status === 'running') {
-            setPanelStatus('running');
+            // The scan publishes the sweep state right after detection, before the
+            // AI finishes refining recommendations — switch to the interactive
+            // panel as soon as this run's state exists instead of waiting.
+            const st = duplicateSweep.state;
+            const fresh = st && Array.isArray(st.groups) && st.createdAt >= dupRunStartedAtRef.current;
+            setPanelStatus(fresh ? 'done' : 'running');
             return;
         }
 
@@ -825,7 +869,7 @@ function AIToolsModal({ updateRemoteData }) {
             }
             setPanelStatus('done');
         }
-    }, [aiTaskState, activeToolId]);
+    }, [aiTaskState, activeToolId, duplicateSweep.state]);
 
     const n = targets.length;
     const idleDescription = n === 1
@@ -872,7 +916,15 @@ function AIToolsModal({ updateRemoteData }) {
                     </button>
                 </div>
 
-                {!activeToolId && (
+                {!chromeSupported && (
+                    <div className="ai-tools-browser-gate" role="alert">
+                        <BsStars className="ai-tools-browser-gate-icon" size={36} aria-hidden="true" />
+                        <h3>Tabox AI is only available on Google Chrome</h3>
+                        <p>{browserGateBody}</p>
+                    </div>
+                )}
+
+                {chromeSupported && !activeToolId && (
                     <div className="ai-tools-list">
                         {AI_TOOLS.filter((t) => t.featured).map((tool) => {
                             const ToolIcon = tool.icon;
@@ -926,10 +978,10 @@ function AIToolsModal({ updateRemoteData }) {
                     </div>
                 )}
 
-                {activeToolId && isToolLocked(AI_TOOLS.find((t) => t.id === activeToolId)) && (
+                {chromeSupported && activeToolId && isToolLocked(AI_TOOLS.find((t) => t.id === activeToolId)) && (
                     <TaboxProUpsell
                         isSignedIn={isSignedIn}
-                        onUpgrade={() => browser.runtime.sendMessage({ type: 'openProCheckout' })}
+                        onUpgrade={() => startProCheckout()}
                         onSignIn={async () => {
                             const loggedIn = await browser.runtime.sendMessage({ type: 'login' });
                             if (!loggedIn) return;
@@ -941,7 +993,7 @@ function AIToolsModal({ updateRemoteData }) {
                     />
                 )}
 
-                {activeToolId && !isToolLocked(AI_TOOLS.find((t) => t.id === activeToolId)) && (
+                {chromeSupported && activeToolId && !isToolLocked(AI_TOOLS.find((t) => t.id === activeToolId)) && (
                     <>
                 {activeToolId === 'smart-organize' && (
                     <div className="ai-tool-panel">

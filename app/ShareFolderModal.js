@@ -20,6 +20,7 @@ import { saveContact, searchContacts } from './utils/contactsUtils';
 import { loadCollectionsIndex, loadMultipleCollections } from './utils/storageUtils';
 import { showSuccessToast, showErrorToast } from './toastHelpers';
 import AIUnavailableWarning from './AIUnavailableWarning';
+import useProCheckout from './useProCheckout';
 import './Modal.css';
 import './ShareFolderModal.css';
 
@@ -121,6 +122,7 @@ export default function ShareFolderModal() {
         : `${members.length} ${members.length === 1 ? 'person' : 'people'}`;
 
     const send = async (msg) => browser.runtime.sendMessage(msg);
+    const startProCheckout = useProCheckout();
 
     const toggleMemberSelection = (memberEmail) => {
         setSelectedEmails((current) => current.includes(memberEmail)
@@ -397,7 +399,7 @@ export default function ShareFolderModal() {
                     <MdWorkspacePremium size={28} />
                     <p>Sharing folders is a Tabox Pro feature.</p>
                     <AIUnavailableWarning />
-                    <button onClick={() => send({ type: 'openProCheckout' })}>Upgrade now</button>
+                    <button onClick={() => startProCheckout()}>Upgrade now</button>
                 </div>
             ) : (
                 <div className="share-modal-body">

@@ -56,6 +56,41 @@ test('shows done state when no pending groups remain', () => {
   expect(screen.getByText(/All duplicates handled/i)).toBeInTheDocument();
 });
 
+test('shows step counter and progress bar reflecting resolved groups', () => {
+  const twoGroups = {
+    ...sweep,
+    state: {
+      history: [{ actionId: '1' }],
+      groups: [
+        { ...sweep.state.groups[0], id: 'g1', status: 'resolved' },
+        { ...sweep.state.groups[0], id: 'g2', status: 'pending' },
+      ],
+    },
+  };
+  render(<DuplicateSweepPanel sweep={twoGroups} namesByUid={namesByUid} />);
+  expect(screen.getByText(/Step 2 of 2/i)).toBeInTheDocument();
+  const bar = screen.getByRole('progressbar');
+  expect(bar).toHaveAttribute('aria-valuenow', '1');
+  expect(bar).toHaveAttribute('aria-valuemax', '2');
+  expect(bar.querySelector('.dup-sweep-progress-fill')).toHaveStyle({ width: '50%' });
+});
+
+test('first group shows Step 1 with an empty bar', () => {
+  render(<DuplicateSweepPanel sweep={sweep} namesByUid={namesByUid} />);
+  expect(screen.getByText(/Step 1 of 1/i)).toBeInTheDocument();
+  expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0');
+});
+
+test('End sweep dismisses the session, keeping choices made so far', () => {
+  render(<DuplicateSweepPanel sweep={sweep} namesByUid={namesByUid} />);
+  const end = screen.getByRole('button', { name: /End sweep/i });
+  // explains itself via the shared rich tooltip, not native title
+  expect(end).not.toHaveAttribute('title');
+  expect(end).toHaveAttribute('data-tooltip-id', 'main-tooltip');
+  fireEvent.click(end);
+  expect(sweep.dismiss).toHaveBeenCalled();
+});
+
 test('reveals/hides the duplicated tabs with favicon, title, and url tooltip', () => {
   const s = {
     apply: jest.fn(), undo: jest.fn(), dismiss: jest.fn(),

@@ -66,7 +66,13 @@ const def = {
 
         // Live folder list: starts with the real existing folders and grows as chunks
         // create new ones, so a folder created for chunk 1 can be reused by chunk 2.
-        const existingFolders = Object.keys(fIndex).map((id) => ({ id, name: fIndex[id].name }));
+        // Shared folders are excluded entirely: their contents belong to every member,
+        // so a local AI task must never file collections into them. Excluding them
+        // here keeps them out of the prompt AND out of normalizeArrangePlan's valid
+        // target set, so even a hallucinated shared-folder id is rejected.
+        const existingFolders = Object.keys(fIndex)
+            .filter((id) => !fIndex[id]?.shared?.folderId)
+            .map((id) => ({ id, name: fIndex[id].name }));
         const state = { storage, palette: shuffledColors(), existingFolders, createdByLowerName: new Map(), createdFolderUids: [] };
 
         const moves = [];

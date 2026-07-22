@@ -862,6 +862,12 @@ const migrateLegacyStorageUnsafe = async () => {
             const lastUpdated = record.lastUpdated != null ? record.lastUpdated : (meta.lastUpdated != null ? meta.lastUpdated : createdOn);
             const order = record.order !== undefined ? record.order : (meta.order !== undefined ? meta.order : folderIndex);
 
+            // The shared marker MUST survive the rebuild (migration only augments,
+            // never destroys — see also sync-apply's identical carry-through).
+            const sharedMarker = record.shared?.folderId
+                ? record.shared
+                : (meta.shared?.folderId ? meta.shared : null);
+
             const normalizedFolder = {
                 uid,
                 name: record.name || meta.name || 'Untitled Folder',
@@ -871,6 +877,7 @@ const migrateLegacyStorageUnsafe = async () => {
                 createdOn,
                 lastUpdated,
                 order,
+                ...(sharedMarker ? { shared: sharedMarker } : {}),
             };
 
             const recordNeedsPatch = record.lastUpdated === undefined || record.order === undefined || record.createdOn === undefined;
@@ -888,6 +895,7 @@ const migrateLegacyStorageUnsafe = async () => {
                 createdOn: normalizedFolder.createdOn,
                 order: normalizedFolder.order,
                 size: JSON.stringify(normalizedFolder).length,
+                ...(sharedMarker ? { shared: sharedMarker } : {}),
             };
         });
 
@@ -1242,7 +1250,14 @@ export const saveSingleFolder = async (folder, forceUpdateTimestamp = false) => 
         // Calculate collection count from collections index
         const collectionsIndex = await loadCollectionsIndex();
         const collectionCount = Object.values(collectionsIndex).filter(c => c.parentId === folder.uid).length;
-        
+
+        // Preserve an existing shared marker when the caller passes a folder
+        // without one — overwriting the record would silently unshare it.
+        const { [folderKey]: existingRecord } = await browser.storage.local.get(folderKey);
+        const recordSharedMarker = folder.shared?.folderId
+            ? folder.shared
+            : (existingRecord?.shared?.folderId ? existingRecord.shared : null);
+
         // Save folder data
         await browser.storage.local.set({
             [folderKey]: {
@@ -1255,14 +1270,23 @@ export const saveSingleFolder = async (folder, forceUpdateTimestamp = false) => 
                 lastUpdated: lastUpdated,
                 collectionCount: collectionCount,
                 // Store any other folder properties
-                ...folder
+                ...folder,
+                ...(recordSharedMarker ? { shared: recordSharedMarker } : {})
             }
         });
         
         // Update folders index
         const foldersIndex = await loadFoldersIndex();
         const folderSize = JSON.stringify(folder).length;
-        
+
+        // The shared marker MUST survive the rebuild (delete guards, AI-task
+        // exclusion, and sync-apply's rematerialize all key off it). Prefer the
+        // saved folder's marker; fall back to the existing index entry so a
+        // caller passing a marker-less folder can't silently unshare it.
+        const sharedMarker = folder.shared?.folderId
+            ? folder.shared
+            : (foldersIndex[folder.uid]?.shared?.folderId ? foldersIndex[folder.uid].shared : null);
+
         foldersIndex[folder.uid] = {
             name: folder.name,
             type: 'folder',
@@ -1272,7 +1296,8 @@ export const saveSingleFolder = async (folder, forceUpdateTimestamp = false) => 
             lastUpdated: lastUpdated,
             createdOn: folder.createdOn || now,
             order: folder.order !== undefined ? folder.order : Object.keys(foldersIndex).length, // Maintain sort order
-            size: folderSize
+            size: folderSize,
+            ...(sharedMarker ? { shared: sharedMarker } : {})
         };
         
         await browser.storage.local.set({

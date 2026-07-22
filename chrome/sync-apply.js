@@ -140,7 +140,12 @@ function buildIndexedSyncPayload({ currentStorage = {}, syncData = {}, now = Dat
             lastUpdated: folder.lastUpdated,
             createdOn: folder.createdOn,
             size: JSON.stringify(folder).length,
-            order: folder.order
+            order: folder.order,
+            // Carry the shared marker through the rebuild - stripping it here would leave
+            // the folder unprotected on the NEXT pull (and trigger a destructive
+            // rematerialize in shared-folders.js). Only set the key when present so
+            // unshared entries stay clean.
+            ...(isSharedFolderRecord(folder) ? { shared: folder.shared } : {})
         };
         return index;
     }, {});

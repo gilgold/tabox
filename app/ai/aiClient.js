@@ -5,6 +5,8 @@
 
 // The Prompt API requires declared input/output languages to attest output
 // safety; omitting them logs a warning and can degrade output quality.
+import { isChromeBrowser } from './browserSupport';
+
 const LANGUAGE_OPTIONS = {
     expectedInputs: [{ type: 'text', languages: ['en'] }],
     expectedOutputs: [{ type: 'text', languages: ['en'] }],
@@ -16,12 +18,15 @@ const DEFAULT_TOP_K = 3;
 const DEFAULT_TEMPERATURE = 1;
 
 export function isAISupported() {
-    return typeof globalThis.LanguageModel !== 'undefined';
+    // Brand check first: Edge exposes its own LanguageModel global (a different
+    // model), which would otherwise make Tabox AI look supported there.
+    return isChromeBrowser() && typeof globalThis.LanguageModel !== 'undefined';
 }
 
-// Returns: 'unsupported' | 'unavailable' | 'downloadable' | 'downloading' | 'available'
+// Returns: 'unsupported-browser' | 'unsupported' | 'unavailable' | 'downloadable' | 'downloading' | 'available'
 export async function getAIAvailability() {
-    if (!isAISupported()) return 'unsupported';
+    if (!isChromeBrowser()) return 'unsupported-browser';
+    if (typeof globalThis.LanguageModel === 'undefined') return 'unsupported';
     try {
         return await globalThis.LanguageModel.availability(LANGUAGE_OPTIONS);
     } catch (error) {

@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback, lazy, Suspense } from 'react';
-import { createPortal } from 'react-dom';
 import { useAtom, useSetAtom, useAtomValue } from 'jotai';
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -8,7 +7,7 @@ import { sidebarNavigationState, sidebarCollapsedState } from '../atoms/fullpage
 import { commandPaletteOpenState } from '../atoms/commandPaletteState';
 import { searchState } from '../atoms/globalAppSettingsState';
 import { draggingCollectionState } from '../atoms/animationsState';
-import { noPermissionOpenState, shareFolderModalState, sharedActionConfirmState } from '../atoms/sharedFoldersState';
+import { noPermissionOpenState, shareFolderModalState, sharedActionConfirmState, pendingInvitesState } from '../atoms/sharedFoldersState';
 import { isProState } from '../atoms/premiumState';
 import { downloadTextFile } from '../utils';
 import { loadAllCollections } from '../utils/storageUtils';
@@ -19,11 +18,15 @@ import { useTrackedSync } from '../useTrackedSync';
 import { buildFolderUrlList, getCollectionUrls, copyToClipboard } from '../utils/index';
 import { reorderSidebarFolders } from './sidebarFolderReorder';
 import { dndPointerSensorOptions } from '../utils/dndShared';
-import { buildFolderMenuItems } from '../utils/folderMenuItems';
+import { createFolderMenuItems } from '../utils/contextMenuItems';
+import FPCtxMenu from './FPCtxMenu';
+import { isSharedFolder } from '../utils/sharedFolderUtils';
+import { respondToSharedInvite } from '../utils/sharedFolderActions';
 import {
     duplicateFolder,
     deleteFolder,
     updateFolderDetails,
+    stopTrackingFolderCollections,
 } from '../utils/folderOperations';
 import {
     MdSave,
@@ -32,31 +35,15 @@ import {
     MdCreateNewFolder,
     MdChevronLeft,
     MdChevronRight,
-    MdEdit,
-    MdDelete,
-    MdContentCopy,
     MdHistory,
     MdSearch,
     MdOpenInBrowser,
     MdStar,
-    MdPersonAdd,
-    MdLinkOff,
-    MdLogout,
+    MdFolderShared,
 } from 'react-icons/md';
-import { CiExport } from 'react-icons/ci';
 import { HiCollection } from 'react-icons/hi';
 import FPBadge from './FPBadge';
 import './FPSidebar.css';
-
-// Icons for the share/unshare/leave menu entries buildFolderMenuItems adds
-// (kept icon-free so it stays unit-testable); rendered here alongside the
-// hand-rolled fp-sidebar-ctx-item buttons.
-const FOLDER_MENU_ICONS = {
-    share: <MdPersonAdd size={16} />,
-    unshare: <MdLinkOff size={16} />,
-    'leave-shared': <MdLogout size={16} />,
-    delete: <MdDelete size={16} />,
-};
 
 const CreateFolderModal = lazy(() => import('../CreateFolderModal'));
 const FolderDeleteConfirmModal = lazy(() => import('../FolderDeleteConfirmModal'));
@@ -122,6 +109,7 @@ function SortableSidebarFolderItem({
 function FPSidebar({
     folders = [],
     collections = [],
+    trackedCollectionUids,
     sessionCount = 0,
     addCollection,
     addFolder,
@@ -216,7 +204,13 @@ function FPSidebar({
         return collections.reduce((sum, c) => sum + (c.tabs?.length || 0), 0);
     }, [collections]);
 
-    const sortableFolderIds = useMemo(() => folders.map((folder) => folder.uid), [folders]);
+    // Shared folders (owned-and-shared or shared-with-me) live in their own
+    // section above the regular Folders list and are not drag-sortable.
+    const sharedFolders = useMemo(() => folders.filter(isSharedFolder), [folders]);
+    const regularFolders = useMemo(() => folders.filter((folder) => !isSharedFolder(folder)), [folders]);
+    const pendingInvites = useAtomValue(pendingInvitesState);
+
+    const sortableFolderIds = useMemo(() => regularFolders.map((folder) => folder.uid), [regularFolders]);
     const folderSortSensors = useSensors(
         useSensor(PointerSensor, dndPointerSensorOptions),
     );
@@ -479,6 +473,49 @@ function FPSidebar({
         setSharedActionConfirm({ kind: 'unshare', folder });
     }, [ctxMenu, closeCtxMenu, setSharedActionConfirm]);
 
+    // Pending-invite ghost rows: Accept fires the runtime message directly
+    // (with a per-invite busy state); Decline opens the shared
+    // SharedActionConfirmModal via the same atom the leave/unshare flows use.
+    // The ghost disappears when App.js syncs pendingInvitesState from
+    // chrome.storage.onChanged; an accepted folder arrives via onDataUpdate.
+    const [inviteBusyId, setInviteBusyId] = useState(null);
+
+    const handleInviteAccept = useCallback(async (invite) => {
+        setInviteBusyId(invite.folderId);
+        try {
+            await respondToSharedInvite(invite, true, onDataUpdate);
+        } finally {
+            setInviteBusyId(null);
+        }
+    }, [onDataUpdate]);
+
+    const handleInviteDecline = useCallback((invite) => {
+        setSharedActionConfirm({ kind: 'decline-invite', invite });
+    }, [setSharedActionConfirm]);
+
+    // Whether any collection in the right-clicked folder is auto-tracked —
+    // gates the "Stop Auto Tracking Folder" menu entry.
+    const ctxHasTracked = useMemo(() => {
+        if (!ctxMenu || !trackedCollectionUids?.size) return false;
+        return collections.some((collection) => (
+            collection.parentId === ctxMenu.folder.uid && trackedCollectionUids.has(collection.uid)
+        ));
+    }, [ctxMenu, collections, trackedCollectionUids]);
+
+    const handleCtxStopTracking = useCallback(async () => {
+        if (!ctxMenu) return;
+        const folder = ctxMenu.folder;
+        closeCtxMenu();
+        try {
+            const count = await stopTrackingFolderCollections(folder.uid);
+            if (count > 0) {
+                showSuccessToast(`Stopped auto update for ${count} collection${count === 1 ? '' : 's'}`);
+            }
+        } catch {
+            showErrorToast('Failed to stop auto tracking');
+        }
+    }, [ctxMenu, closeCtxMenu]);
+
     const handleCtxDelete = useCallback(async () => {
         if (!ctxMenu) return;
         const folder = ctxMenu.folder;
@@ -536,6 +573,21 @@ function FPSidebar({
         ? `${isNoFolderHovered ? ' fp-sidebar-drop-over' : ' fp-sidebar-drop-active'}`
         : '';
 
+    const getFolderDragClasses = (folderUid) => {
+        const isSameFolder = draggingCollection?.collection?.parentId === folderUid;
+        const isDropTarget = isDraggingCollection && !isSameFolder;
+        const isHovered = isDropTarget && dragOverTargetId === folderUid;
+        return isDropTarget
+            ? `${isHovered ? ' fp-sidebar-drop-over' : ' fp-sidebar-drop-active'}`
+            : '';
+    };
+
+    const getFolderColor = (folder) => (
+        folder.color && folder.color !== 'default'
+            ? getColorValue(folder.color)
+            : 'var(--primary-color)'
+    );
+
     return (<>
         <aside className={`fp-sidebar ${collapsed ? 'fp-sidebar-collapsed' : ''}`}>
             {/* Collapse toggle */}
@@ -586,6 +638,87 @@ function FPSidebar({
                 })}
             </nav>
 
+            {/* Shared folders + pending invite ghosts */}
+            {!collapsed && (sharedFolders.length > 0 || pendingInvites.length > 0) && (
+                <div className="fp-sidebar-shared-section">
+                    <div className="fp-sidebar-folders-header">
+                        <span className="fp-sidebar-folders-title fp-sidebar-shared-title">
+                            <MdFolderShared size={16} className="fp-sidebar-shared-title-icon" aria-hidden="true" />
+                            Shared Folders
+                        </span>
+                        {pendingInvites.length > 0 && (
+                            <SidebarCounter
+                                value={pendingInvites.length}
+                                className="fp-sidebar-shared-pending-count"
+                            />
+                        )}
+                    </div>
+                    <div className="fp-sidebar-folder-list">
+                        {sharedFolders.map((folder) => (
+                            <div key={folder.uid} className="fp-sidebar-folder-row">
+                                <button
+                                    type="button"
+                                    className={`fp-sidebar-folder-item fp-sidebar-shared-folder-item ${navigation === folder.uid ? 'active' : ''}${getFolderDragClasses(folder.uid)}`}
+                                    onClick={() => setNavigation(folder.uid)}
+                                    onContextMenu={(e) => handleFolderContextMenu(e, folder)}
+                                >
+                                    <MdFolderShared
+                                        size={20}
+                                        className="fp-sidebar-folder-icon"
+                                        style={{ color: getFolderColor(folder) }}
+                                    />
+                                    <span className="fp-sidebar-folder-name">{folder.name}</span>
+                                    <SidebarCounter value={folderCounts[folder.uid] || 0} className="fp-sidebar-folder-count" />
+                                </button>
+                            </div>
+                        ))}
+                        {pendingInvites.map((invite) => {
+                            const isBusy = inviteBusyId === invite.folderId;
+                            return (
+                                <div
+                                    key={invite.folderId}
+                                    className={`fp-sidebar-ghost-row ${isBusy ? 'fp-sidebar-ghost-busy' : ''}`.trim()}
+                                >
+                                    <MdFolderShared size={20} className="fp-sidebar-folder-icon fp-sidebar-ghost-icon" aria-hidden="true" />
+                                    <span className="fp-sidebar-ghost-copy">
+                                        <span className="fp-sidebar-folder-name">{invite.folderName}</span>
+                                        <span className="fp-sidebar-ghost-owner">
+                                            {invite.ownerEmail}{invite.role === 'read' ? ' · View only' : ''}
+                                        </span>
+                                    </span>
+                                    <span className="fp-sidebar-ghost-actions">
+                                        <button
+                                            type="button"
+                                            className="fp-sidebar-ghost-btn fp-sidebar-ghost-accept"
+                                            disabled={isBusy}
+                                            onClick={() => handleInviteAccept(invite)}
+                                            aria-label={`Accept invite to "${invite.folderName}"`}
+                                            data-tooltip-id="main-tooltip"
+                                            data-tooltip-content={`Accept invite from ${invite.ownerEmail}`}
+                                            data-tooltip-class-name="small-tooltip"
+                                        >
+                                            {isBusy ? 'Accepting…' : 'Accept'}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="fp-sidebar-ghost-btn fp-sidebar-ghost-decline"
+                                            disabled={isBusy}
+                                            onClick={() => handleInviteDecline(invite)}
+                                            aria-label={`Decline invite to "${invite.folderName}"`}
+                                            data-tooltip-id="main-tooltip"
+                                            data-tooltip-content="Decline this invite"
+                                            data-tooltip-class-name="small-tooltip"
+                                        >
+                                            Decline
+                                        </button>
+                                    </span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
             {/* Folders */}
             {!collapsed && (
                 <div className="fp-sidebar-folders">
@@ -619,7 +752,7 @@ function FPSidebar({
                             </button>
                         </div>
                     </div>
-                    {folders.length > 0 ? (
+                    {regularFolders.length > 0 ? (
                         <DndContext
                             sensors={folderSortSensors}
                             collisionDetection={closestCenter}
@@ -630,32 +763,19 @@ function FPSidebar({
                                 strategy={verticalListSortingStrategy}
                             >
                                 <div className="fp-sidebar-folder-list">
-                                    {folders.map((folder) => {
-                                        const isActive = navigation === folder.uid;
-                                        const color = folder.color && folder.color !== 'default'
-                                            ? getColorValue(folder.color)
-                                            : 'var(--primary-color)';
-                                        const isSameFolder = draggingCollection?.collection?.parentId === folder.uid;
-                                        const isDropTarget = isDraggingCollection && !isSameFolder;
-                                        const isHovered = isDropTarget && dragOverTargetId === folder.uid;
-                                        const dragClasses = isDropTarget
-                                            ? `${isHovered ? ' fp-sidebar-drop-over' : ' fp-sidebar-drop-active'}`
-                                            : '';
-
-                                        return (
-                                            <SortableSidebarFolderItem
-                                                key={folder.uid}
-                                                folder={folder}
-                                                isActive={isActive}
-                                                color={color}
-                                                count={folderCounts[folder.uid] || 0}
-                                                dragClasses={dragClasses}
-                                                disableSorting={isDraggingCollection}
-                                                onSelect={setNavigation}
-                                                onContextMenu={handleFolderContextMenu}
-                                            />
-                                        );
-                                    })}
+                                    {regularFolders.map((folder) => (
+                                        <SortableSidebarFolderItem
+                                            key={folder.uid}
+                                            folder={folder}
+                                            isActive={navigation === folder.uid}
+                                            color={getFolderColor(folder)}
+                                            count={folderCounts[folder.uid] || 0}
+                                            dragClasses={getFolderDragClasses(folder.uid)}
+                                            disableSorting={isDraggingCollection}
+                                            onSelect={setNavigation}
+                                            onContextMenu={handleFolderContextMenu}
+                                        />
+                                    ))}
                                 </div>
                             </SortableContext>
                         </DndContext>
@@ -739,44 +859,27 @@ function FPSidebar({
             </Suspense>
         </aside>
 
-        {ctxMenu && createPortal(
-            <div
-                ref={ctxMenuRef}
-                className="fp-sidebar-ctx-menu"
-                style={{ top: ctxMenu.y, left: ctxMenu.x }}
-            >
-                {buildFolderMenuItems({
+        {ctxMenu && (
+            <FPCtxMenu
+                menuRef={ctxMenuRef}
+                x={ctxMenu.x}
+                y={ctxMenu.y}
+                items={createFolderMenuItems({
                     folder: ctxMenu.folder,
-                    onShare: handleCtxShare,
-                    onDelete: handleCtxDelete,
-                    onLeave: handleCtxLeaveShared,
-                    onUnshare: handleCtxUnshare,
                     isPro,
-                    existingItems: [
-                        { id: 'open-all', text: 'Open All Collections', icon: <MdOpenInBrowser size={16} />, action: handleCtxOpenAll, condition: true },
-                        { id: 'edit', text: 'Edit Folder', icon: <MdEdit size={16} />, action: handleCtxEdit, condition: true },
-                        { id: 'export', text: 'Export Folder', icon: <CiExport size={16} />, action: handleCtxExport, condition: true },
-                        { id: 'duplicate', text: 'Duplicate Folder', icon: <MdContentCopy size={16} />, action: handleCtxDuplicate, condition: true },
-                        { id: 'copy-folder-urls', text: 'Copy all URLs in folder', icon: <MdContentCopy size={16} />, action: handleCtxCopyUrls, condition: true },
-                    ],
-                }).map((item, index, items) => {
-                    const isGroupBStart = item.id === 'open-all';
-                    const groupCIds = ['unshare', 'leave-shared', 'delete'];
-                    const isGroupCStart = groupCIds.includes(item.id) && !groupCIds.includes(items[index - 1]?.id);
-                    return (
-                        <React.Fragment key={item.id}>
-                            {(isGroupBStart || isGroupCStart) && index > 0 && <div className="fp-sidebar-ctx-divider" />}
-                            <button
-                                className={`fp-sidebar-ctx-item ${item.className === 'danger' ? 'fp-sidebar-ctx-danger' : ''}`.trim()}
-                                onClick={item.action}
-                            >
-                                {item.icon || FOLDER_MENU_ICONS[item.id]} <span>{item.text}</span>
-                            </button>
-                        </React.Fragment>
-                    );
+                    hasTrackedCollections: ctxHasTracked,
+                    onOpenAll: handleCtxOpenAll,
+                    onEdit: handleCtxEdit,
+                    onExport: handleCtxExport,
+                    onDuplicate: handleCtxDuplicate,
+                    onCopyUrls: handleCtxCopyUrls,
+                    onStopTracking: handleCtxStopTracking,
+                    onShare: handleCtxShare,
+                    onUnshare: handleCtxUnshare,
+                    onLeave: handleCtxLeaveShared,
+                    onDelete: handleCtxDelete,
                 })}
-            </div>,
-            document.body
+            />
         )}
     </>
     );

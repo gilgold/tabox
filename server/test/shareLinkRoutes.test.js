@@ -47,14 +47,36 @@ describe('share-link routes', () => {
     expect(create.status).toBe(200);
     const { token, url } = await create.json();
     expect(url).toBe(`https://api/join/${token}`);
-    // guest (never Pro) joins
+    // guest (never Pro) joins a READ link — no downgrade involved
     const join = await worker.fetch(req('POST', '/shared/join-link', 't-guest', { token }), e);
     expect(join.status).toBe(200);
-    expect((await join.json()).folder.folderId).toBe('f1');
+    const joinBody = await join.json();
+    expect(joinBody.folder.folderId).toBe('f1');
+    expect(joinBody.folder.role).toBe('read');
+    expect(joinBody.roleDowngraded).toBeUndefined();
     // get + delete
     expect((await (await worker.fetch(req('GET', '/shared/folders/f1/link', 't-owner'), e)).json()).link.token).toBe(token);
     expect((await worker.fetch(req('DELETE', '/shared/folders/f1/link', 't-owner'), e)).status).toBe(200);
     expect((await (await worker.fetch(req('GET', '/shared/folders/f1/link', 't-owner'), e)).json()).link).toBe(null);
+  });
+
+  it('write link over HTTP: free joiner capped at read, Pro joiner gets write', async () => {
+    const e = env({ 'ent:g-owner': PRO_RECORD, 'ent:g-pro': PRO_RECORD }, db);
+    mockGoogle({
+      't-owner': { googleId: 'g-owner', email: 'owner@x.com' },
+      't-guest': { googleId: 'g-guest', email: 'guest@x.com' },
+      't-pro': { googleId: 'g-pro', email: 'pro@x.com' },
+    });
+    await worker.fetch(req('POST', '/shared/folders', 't-owner', { folderId: 'f1', name: 'T', collections: [] }), e);
+    const { token } = await (await worker.fetch(req('POST', '/shared/folders/f1/link', 't-owner', { role: 'write' }), e)).json();
+    const freeJoin = await (await worker.fetch(req('POST', '/shared/join-link', 't-guest', { token }), e)).json();
+    expect(freeJoin.folder.role).toBe('read');
+    expect(freeJoin.roleDowngraded).toBe(true);
+    // read-role member cannot push
+    expect((await worker.fetch(req('PUT', '/shared/folders/f1/collections/cX', 't-guest', { data: { name: 'X' } }), e)).status).toBe(403);
+    const proJoin = await (await worker.fetch(req('POST', '/shared/join-link', 't-pro', { token }), e)).json();
+    expect(proJoin.folder.role).toBe('write');
+    expect(proJoin.roleDowngraded).toBeUndefined();
   });
 
   it('collection link lifecycle over HTTP', async () => {

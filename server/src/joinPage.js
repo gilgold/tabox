@@ -54,7 +54,7 @@ export const JOIN_PAGE_HTML = `<!doctype html>
     if (info.kind === 'folder') {
       el('title').textContent = 'Join "' + info.name + '"';
       el('subtitle').textContent = info.ownerEmail + ' is sharing this folder with you.';
-      el('meta').textContent = info.collectionCount + ' collection' + (info.collectionCount === 1 ? '' : 's') + ' · you can ' + (info.role === 'write' ? 'view and edit' : 'view');
+      el('meta').textContent = info.collectionCount + ' collection' + (info.collectionCount === 1 ? '' : 's') + ' · you can ' + (info.role === 'write' ? 'view and edit (editing requires Tabox Pro)' : 'view');
     } else {
       el('title').textContent = 'Add "' + info.name + '"';
       el('subtitle').textContent = info.ownerEmail + ' shared a copy of this collection with you.';
@@ -98,7 +98,10 @@ export const JOIN_PAGE_HTML = `<!doctype html>
           show('retry');
           return;
         }
-        if (reply.status === 'joined') return setStatus('You joined "' + (reply.name || info.name) + '" ✓ — open Tabox to see it.', 'ok');
+        if (reply.status === 'joined') {
+          var note = reply.roleDowngraded ? ' with view-only access (editing requires Tabox Pro)' : '';
+          return setStatus('You joined "' + (reply.name || info.name) + '"' + note + ' ✓ — open Tabox to see it.', 'ok');
+        }
         if (reply.status === 'added') return setStatus('"' + (reply.name || info.name) + '" was added to your Tabox ✓', 'ok');
         if (reply.status === 'sign_in_required') {
           setStatus('Almost there — open Tabox, sign in with Google (Settings → Sync), then try again.', 'err');

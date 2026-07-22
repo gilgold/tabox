@@ -20,7 +20,7 @@ async function seed() {
   await createSharedFolder(db, OWNER, { folderId: 'f1', name: 'Team', collections: [{ uid: 'c1', data: { name: 'A' } }] }, 1000);
   await inviteMember(db, OWNER, 'f1', { email: 'w@x.com', role: 'write' }, 1000);
   await inviteMember(db, OWNER, 'f1', { email: 'r@x.com', role: 'read' }, 1000);
-  await respondInvite(db, WRITER, 'f1', true, 1001);
+  await respondInvite(db, WRITER, 'f1', true, 1001, { isPro: true });
   await respondInvite(db, READER, 'f1', true, 1001);
   return db;
 }
@@ -89,7 +89,7 @@ describe('revision protocol edges', () => {
     const db = makeDB();
     await createSharedFolder(db, OWNER, { folderId: 'f1', name: 'T', collections: [{ uid: 'c1', data: { v: 0 } }] }, 1000);
     await inviteMember(db, OWNER, 'f1', { email: 'w@x.com', role: 'write' }, 1000);
-    await respondInvite(db, WRITER, 'f1', true, 1001);
+    await respondInvite(db, WRITER, 'f1', true, 1001, { isPro: true });
     let lastRev = 1;
     for (let i = 0; i < 100; i++) {
       const who = i % 2 === 0 ? OWNER : WRITER;
@@ -156,7 +156,7 @@ describe('tombstone resurrection', () => {
     const db = makeDB();
     await createSharedFolder(db, OWNER, { folderId: 'f1', name: 'T', collections: [{ uid: 'c1', data: { v: 'orig' } }] }, 1000);
     await inviteMember(db, OWNER, 'f1', { email: 'w@x.com', role: 'write' }, 1000);
-    await respondInvite(db, WRITER, 'f1', true, 1001);
+    await respondInvite(db, WRITER, 'f1', true, 1001, { isPro: true });
     await putCollection(db, OWNER, 'f1', 'c1', { data: { v: 'updated-by-owner' }, baseRev: 1 }, 1500); // rev -> 2
     const del = await deleteCollection(db, WRITER, 'f1', 'c1', 2000);
     expect(del).toEqual({ ok: true, data: { revision: 3 } });
@@ -171,7 +171,7 @@ describe('tombstone resurrection', () => {
     const db = makeDB();
     await createSharedFolder(db, OWNER, { folderId: 'f1', name: 'T', collections: [{ uid: 'c1', data: { v: 'orig' } }] }, 1000);
     await inviteMember(db, OWNER, 'f1', { email: 'w@x.com', role: 'write' }, 1000);
-    await respondInvite(db, WRITER, 'f1', true, 1001);
+    await respondInvite(db, WRITER, 'f1', true, 1001, { isPro: true });
     await putCollection(db, OWNER, 'f1', 'c1', { data: { v: 'updated-by-owner' }, baseRev: 1 }, 1500); // rev -> 2
     expect(await deleteCollection(db, WRITER, 'f1', 'c1', 2000, 1)).toEqual({ ok: false, status: 409, error: 'conflict' });
     // The row survives untouched.
@@ -286,7 +286,7 @@ describe('invite/membership races (sequential simulation)', () => {
     await inviteMember(db, OWNER, 'fB', { email: 'g@x.com', role: 'write' }, 1000);
     const G = { googleId: 'gg', email: 'g@x.com' };
     await respondInvite(db, G, 'fA', true, 1100);
-    await respondInvite(db, G, 'fB', true, 1100);
+    await respondInvite(db, G, 'fB', true, 1100, { isPro: true });
     expect(await putCollection(db, G, 'fA', 'x', { data: {}, baseRev: 1 }, 1200))
       .toEqual({ ok: false, status: 403, error: 'forbidden' });
     expect(await putCollection(db, G, 'fB', 'x', { data: {}, baseRev: 1 }, 1200))

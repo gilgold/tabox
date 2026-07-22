@@ -11,7 +11,36 @@
     padding-right: 4px;
 }
 .dup-sweep-empty, .dup-sweep-done { padding: 24px 8px; text-align: center; opacity: 0.8; color: var(--text-color); }
-.dup-sweep-progress { font-size: 12px; opacity: 0.7; }
+/* Progress header: step counter + End-sweep on one line, thin bar below. */
+.dup-sweep-progress { display: flex; flex-direction: column; gap: 6px; }
+.dup-sweep-progress-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.dup-sweep-step { font-size: 12px; opacity: 0.7; }
+.dup-sweep-finish {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 12px;
+    color: var(--text-color);
+    opacity: 0.7;
+    cursor: pointer;
+    text-decoration: underline;
+}
+.dup-sweep-finish:hover { opacity: 1; }
+.dup-sweep-progress-bar {
+    height: 4px;
+    border-radius: 999px;
+    background: var(--divider-color);
+    overflow: hidden;
+}
+.dup-sweep-progress-fill {
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #322c7a, #0f8a8a);
+    transition: width 250ms ease;
+}
+@media (prefers-reduced-motion: reduce) {
+    .dup-sweep-progress-fill { transition: none; }
+}
 .dup-sweep-message { margin: 0; line-height: 1.4; }
 
 /* Reveal/hide the tabs this group is about. */

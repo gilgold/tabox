@@ -10,6 +10,10 @@ jest.mock('../app/ai/aiClient', () => ({
 jest.mock('../app/toastHelpers', () => ({
     showSuccessToast: jest.fn(),
 }));
+jest.mock('../app/ai/browserSupport', () => ({
+    getBrowserName: jest.fn().mockReturnValue('Microsoft Edge'),
+    isChromeBrowser: jest.fn().mockReturnValue(false),
+}));
 
 import { getAIAvailability, downloadModel } from '../app/ai/aiClient';
 import AIEnableModal from '../app/AIEnableModal';
@@ -51,6 +55,15 @@ describe('AIEnableModal', () => {
         render(<AIEnableModal isOpen={true} onClose={jest.fn()} />);
         fireEvent.click(screen.getByRole('button', { name: /enable tabox ai/i }));
         await waitFor(() => expect(screen.getByText(/does not meet the requirements/i)).toBeInTheDocument());
+        expect(browser.storage.local.set).not.toHaveBeenCalled();
+    });
+
+    test('shows the Chrome-only error and does not enable on non-Chrome browsers', async () => {
+        getAIAvailability.mockResolvedValue('unsupported-browser');
+        render(<AIEnableModal isOpen={true} onClose={jest.fn()} />);
+        fireEvent.click(screen.getByRole('button', { name: /enable tabox ai/i }));
+        await waitFor(() => expect(screen.getByText(/only available on Google Chrome/i)).toBeInTheDocument());
+        expect(screen.getByText(/won't work in Microsoft Edge/i)).toBeInTheDocument();
         expect(browser.storage.local.set).not.toHaveBeenCalled();
     });
 

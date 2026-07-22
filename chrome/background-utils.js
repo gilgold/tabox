@@ -550,7 +550,19 @@ const saveSingleFolderBG = async (folder, forceUpdateTimestamp = false) => {
         // Calculate collection count from collections index
         const collectionsIndex = await loadCollectionsIndexBG();
         const collectionCount = Object.values(collectionsIndex).filter(c => c.parentId === folder.uid).length;
-        
+
+        // Load index first so the shared marker can be preserved in both writes.
+        const foldersIndex = await loadFoldersIndexBG();
+        // Preserve an existing shared marker when the caller passes a folder
+        // without one — a rebuild must never silently unshare the folder
+        // (delete guards, AI-task exclusion and sync rematerialize key off it).
+        const { [folderKey]: existingRecord } = await browser.storage.local.get(folderKey);
+        const sharedMarker = folder.shared?.folderId
+            ? folder.shared
+            : (existingRecord?.shared?.folderId
+                ? existingRecord.shared
+                : (foldersIndex[folder.uid]?.shared?.folderId ? foldersIndex[folder.uid].shared : null));
+
         // Save folder data
         await browser.storage.local.set({
             [folderKey]: {
@@ -563,18 +575,18 @@ const saveSingleFolderBG = async (folder, forceUpdateTimestamp = false) => {
                 lastUpdated: lastUpdated,
                 collectionCount: collectionCount,
                 // Store any other folder properties
-                ...folder
+                ...folder,
+                ...(sharedMarker ? { shared: sharedMarker } : {})
             }
         });
-        
+
         // Update folders index
-        const foldersIndex = await loadFoldersIndexBG();
         const folderSize = JSON.stringify(folder).length;
-        
+
         // Preserve existing order if not provided in the folder data
         const existingOrder = foldersIndex[folder.uid]?.order;
         const folderOrder = folder.order !== undefined ? folder.order : existingOrder;
-        
+
         foldersIndex[folder.uid] = {
             name: folder.name,
             type: 'folder',
@@ -584,7 +596,8 @@ const saveSingleFolderBG = async (folder, forceUpdateTimestamp = false) => {
             lastUpdated: lastUpdated,
             createdOn: folder.createdOn || now,
             size: folderSize,
-            order: folderOrder // Include order in index for proper sorting
+            order: folderOrder, // Include order in index for proper sorting
+            ...(sharedMarker ? { shared: sharedMarker } : {})
         };
         
         await browser.storage.local.set({
@@ -1633,9 +1646,12 @@ async function updateRemote(token, collections = null, skipLock = false) {
         }
         
         // 🛡️ SAFETY CHECK: Prevent pushing empty data when server has data
-        // This prevents new/empty devices from accidentally wiping existing collections
+        // This prevents new/empty devices from accidentally wiping existing collections.
+        // Folders are Drive data too (foldersArray) - a payload with folders but no
+        // collections is a legitimate push, not an empty one.
         const localCollectionCount = dataToSync.tabsArray ? dataToSync.tabsArray.length : 0;
-        if (localCollectionCount === 0) {
+        const localFolderCount = dataToSync.foldersArray ? dataToSync.foldersArray.length : 0;
+        if (localCollectionCount === 0 && localFolderCount === 0) {
             // Check if server has data before we overwrite it with nothing
             const { syncFileId } = await browser.storage.sync.get('syncFileId');
             if (syncFileId) {
@@ -2160,17 +2176,40 @@ async function syncData(token) {
                 return false;
             }
         } else {
-            // Local data claims to be newer - but verify we actually have data before pushing
+            // Local data claims to be newer - but verify we actually have data before pushing.
+            // Count only NON-shared collections: shared folders/collections never enter the
+            // Drive payload (excludeSharedFromSyncData), so they must not count as "data"
+            // here either - otherwise a device whose only content is shared folders would
+            // pass this check and push an empty payload.
             const localCollections = await loadAllCollectionsBG(true);
-            const localCollectionCount = localCollections ? localCollections.length : 0;
-            
-            // 🛡️ SAFETY CHECK: If local is "newer" but EMPTY, and server has data,
-            // this is likely a new device with wrong timestamp - download instead
-            if (localCollectionCount === 0 && serverTimestamp > 0) {
+            const allLocalCollections = localCollections || [];
+            const allLocalFolders = (await loadAllFoldersBG()) || [];
+            let nonSharedCollectionCount = allLocalCollections.length;
+            let nonSharedFolderCount = allLocalFolders.length;
+            let sharedCollectionCount = 0;
+            /* istanbul ignore next */
+            const sharedFoldersHelpers = typeof require === 'function'
+                ? require('./shared-folders.js')
+                : globalThis.TaboxSharedFolders;
+            const partitionSharedUids = sharedFoldersHelpers && sharedFoldersHelpers.partitionSharedUids;
+            if (typeof partitionSharedUids === 'function') {
+                const { sharedFolderUids, sharedCollectionUids } = partitionSharedUids(allLocalFolders, allLocalCollections);
+                sharedCollectionCount = allLocalCollections.filter((collection) => sharedCollectionUids.has(collection.uid)).length;
+                nonSharedCollectionCount = allLocalCollections.length - sharedCollectionCount;
+                nonSharedFolderCount = allLocalFolders.filter((folder) => !sharedFolderUids.has(folder.uid)).length;
+            }
+
+            // 🛡️ SAFETY CHECK: If local is "newer" but EMPTY (from Drive's point of view),
+            // and server has data, this is likely a new device with wrong timestamp - download instead.
+            // Folders count as data too: they ride in the Drive payload's foldersArray, so a
+            // device whose only collections are shared but which just added a plain folder is
+            // NOT empty - forcing a download here would clobber that new folder as a stale key.
+            if (nonSharedCollectionCount === 0 && nonSharedFolderCount === 0 && serverTimestamp > 0) {
                 logSyncOperation('error', 'SAFETY BLOCK: Local claims newer but has no data while server has data - downloading instead', {
                     localTimestamp,
                     serverTimestamp,
                     localCollectionCount: 0,
+                    sharedCollectionCount,
                     action: 'Downloading from server to prevent data loss'
                 });
                 
@@ -2187,11 +2226,13 @@ async function syncData(token) {
                 return false;
             }
             
-            logSyncOperation('info', 'Local data is newer, updating remote', { 
-                serverTimestamp, 
+            logSyncOperation('info', 'Local data is newer, updating remote', {
+                serverTimestamp,
                 localTimestamp,
-                localCollectionCount,
-                isConflict 
+                localCollectionCount: nonSharedCollectionCount,
+                nonSharedFolderCount,
+                sharedCollectionCount,
+                isConflict
             });
             
             if (isConflict) {

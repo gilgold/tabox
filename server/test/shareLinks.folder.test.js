@@ -43,13 +43,53 @@ describe('folder links', () => {
 
   it('join makes the caller an active member and returns the invite-accept payload', async () => {
     const { data: { token } } = await createOrRotateFolderLink(db, owner, 'f1', { role: 'write' }, 2000);
-    const joined = await joinViaFolderLink(db, guest, token, 3000);
+    const joined = await joinViaFolderLink(db, guest, token, 3000, { isPro: true });
     expect(joined.ok).toBe(true);
     expect(joined.data.accepted).toBe(true);
+    expect(joined.data.roleDowngraded).toBeUndefined();
     expect(joined.data.folder).toMatchObject({ folderId: 'f1', role: 'write', ownerEmail: 'owner@x.com' });
     expect(joined.data.collections).toEqual([{ uid: 'c1', data: { name: 'A' } }]);
     const member = await db.prepare("SELECT * FROM shared_members WHERE folder_id='f1' AND email='guest@x.com'").bind().first();
     expect(member).toMatchObject({ status: 'active', role: 'write', google_id: 'g-guest' });
+  });
+
+  it('free (non-Pro) joiner of a write link is capped at read and flagged', async () => {
+    const { data: { token } } = await createOrRotateFolderLink(db, owner, 'f1', { role: 'write' }, 2000);
+    const joined = await joinViaFolderLink(db, guest, token, 3000); // isPro defaults to false
+    expect(joined.ok).toBe(true);
+    expect(joined.data.roleDowngraded).toBe(true);
+    expect(joined.data.folder).toMatchObject({ folderId: 'f1', role: 'read' });
+    const member = await db.prepare("SELECT * FROM shared_members WHERE folder_id='f1' AND email='guest@x.com'").bind().first();
+    expect(member).toMatchObject({ status: 'active', role: 'read' });
+  });
+
+  it('free joiner of a read link gets read with no downgrade flag', async () => {
+    const { data: { token } } = await createOrRotateFolderLink(db, owner, 'f1', { role: 'read' }, 2000);
+    const joined = await joinViaFolderLink(db, guest, token, 3000);
+    expect(joined.data.roleDowngraded).toBeUndefined();
+    expect(joined.data.folder).toMatchObject({ role: 'read' });
+  });
+
+  it('re-opening a link re-validates: a free member holding a stale write grant is downgraded', async () => {
+    const { data: { token } } = await createOrRotateFolderLink(db, owner, 'f1', { role: 'write' }, 2000);
+    await joinViaFolderLink(db, guest, token, 3000, { isPro: true }); // joined as write while Pro
+    const rejoin = await joinViaFolderLink(db, guest, token, 4000); // Pro lapsed
+    expect(rejoin.ok).toBe(true);
+    expect(rejoin.data.roleDowngraded).toBe(true);
+    expect(rejoin.data.folder).toMatchObject({ role: 'read' });
+    const member = await db.prepare("SELECT role FROM shared_members WHERE folder_id='f1' AND email='guest@x.com'").bind().first();
+    expect(member.role).toBe('read');
+  });
+
+  it('a Pro member re-opening a write link after a free join is upgraded back to write', async () => {
+    const { data: { token } } = await createOrRotateFolderLink(db, owner, 'f1', { role: 'write' }, 2000);
+    await joinViaFolderLink(db, guest, token, 3000); // free -> read
+    const rejoin = await joinViaFolderLink(db, guest, token, 4000, { isPro: true });
+    expect(rejoin.ok).toBe(true);
+    // Already-active member: the stored role stands (read); upgrading requires
+    // the owner to re-grant. What matters is nothing errors and no false flag.
+    expect(rejoin.data.folder.role).toBe('read');
+    expect(rejoin.data.roleDowngraded).toBeUndefined();
   });
 
   it('join is idempotent, blocks the owner, 404s unknown/rotated tokens, enforces the member cap', async () => {

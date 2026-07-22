@@ -52,7 +52,9 @@ describe('shared folders: cross-layer multi-device conflict harness', () => {
     memberB = makeDevice({ label: 'B', googleId: 'g-guest', email: 'guest@x.com', token: 't-guest' });
     harness = createHarness({
       db,
-      kvStore: { 'ent:g-owner': PRO_RECORD },
+      // Members who accept WRITE invites must be entitled too — a free
+      // acceptor is capped at read by the server (see sharedFolders.respondInvite).
+      kvStore: { 'ent:g-owner': PRO_RECORD, 'ent:g-guest': PRO_RECORD, 'ent:g-c3': PRO_RECORD },
       identities: {
         't-owner': { googleId: 'g-owner', email: 'owner@x.com' },
         't-owner-a2': { googleId: 'g-owner', email: 'owner@x.com' },

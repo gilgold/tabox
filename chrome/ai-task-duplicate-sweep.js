@@ -29,42 +29,82 @@ const def = {
                 || (a < b ? -1 : 1);
         })[0];
 
-        // Only groups whose copies have *conflicting* titles need the model. The
-        // rest get a deterministic keeper + templated message with no inference —
-        // this is what keeps a clean library's scan near-instant.
+        // Every group gets an immediate no-inference recommendation: within-groups a
+        // templated one, cross-groups a deterministic keeper. That makes the sweep
+        // fully usable the moment detection finishes — the model only *refines*
+        // title-conflicting groups afterwards.
+        for (const g of groups) {
+            if (g.kind === 'within') {
+                g.recommendation = {
+                    recommendedKeeperUid: g.collectionUids[0],
+                    message: `"${namesByUid[g.collectionUids[0]] || 'This collection'}" contains the same tab more than once.`,
+                    suggestedNewCollectionName: 'Shared Tabs',
+                    bestTitlePerUrl: [],
+                };
+            } else {
+                g.recommendation = planners.buildDeterministicDedupSuggestion(g, namesByUid, pickKeeper(g.collectionUids));
+            }
+        }
+
+        // Only groups whose copies have *conflicting* titles need the model.
         const aiGroups = groups.filter((g) => g.kind === 'cross' && planners.dedupGroupHasTitleConflict(g));
         await report({ total: aiGroups.length, filed: 0 });
+
+        if (isCancelled && await isCancelled()) {
+            return { summary: 'Duplicate scan cancelled', undo: null };
+        }
+
+        // Publish now — the panel opens immediately; AI refinements stream in below.
+        await localArea().set({
+            [DUPLICATE_SWEEP_KEY]: {
+                createdAt: Date.now(),
+                scope: scoped ? { type: 'selected', uids: params.uids } : { type: 'all' },
+                groups,
+                history: [],
+            },
+        });
+
+        // Persist one refined recommendation into the live sweep state. Routed
+        // through the sweep store's serialized mutations when available (the SW);
+        // falls back to a plain read-merge-write in isolated tests.
+        async function persistRecommendation(groupId, recommendation) {
+            const store = globalThis.TaboxDuplicateSweep;
+            if (store && store.updateDuplicateSweepRecommendation) {
+                return store.updateDuplicateSweepRecommendation({ groupId, recommendation });
+            }
+            const state = (await localArea().get(DUPLICATE_SWEEP_KEY))[DUPLICATE_SWEEP_KEY];
+            if (!state) return { ok: false, reason: 'missing' };
+            const g = state.groups.find((x) => x.id === groupId);
+            if (!g || g.status !== 'pending') return { ok: false, reason: 'not-pending' };
+            g.recommendation = recommendation;
+            await localArea().set({ [DUPLICATE_SWEEP_KEY]: state });
+            return { ok: true };
+        }
 
         let session = null;
         let processed = 0;
         try {
-            for (const g of groups) {
+            for (const g of aiGroups) {
                 if (isCancelled && await isCancelled()) break;
-                if (g.kind === 'within') {
-                    g.recommendation = {
-                        recommendedKeeperUid: g.collectionUids[0],
-                        message: `"${namesByUid[g.collectionUids[0]] || 'This collection'}" contains the same tab more than once.`,
-                        suggestedNewCollectionName: 'Shared Tabs',
-                        bestTitlePerUrl: [],
-                    };
-                    continue;
-                }
-                if (!planners.dedupGroupHasTitleConflict(g)) {
-                    // Unambiguous: same title everywhere — decide deterministically, no AI call.
-                    g.recommendation = planners.buildDeterministicDedupSuggestion(g, namesByUid, pickKeeper(g.collectionUids));
-                    continue;
-                }
                 await report({ filed: processed, currentLabel: g.collectionUids.map((u) => namesByUid[u]).filter(Boolean).join(', ') });
+                let clone = null;
                 try {
                     if (!session) {
                         session = await client.createAISession({ systemPrompt: 'You help tidy saved browser tabs. Be concise and concrete.', temperature: 0 });
                     }
-                    const raw = await client.promptForJSON(session, planners.buildDedupPrompt(g, namesByUid), planners.DEDUP_SCHEMA);
-                    g.recommendation = planners.normalizeDedupSuggestion(raw, g, namesByUid);
+                    // Prompt on a fresh clone per group: a shared session accumulates
+                    // every previous prompt+response in its context, so each inference
+                    // gets slower than the last on large libraries.
+                    clone = (typeof session.clone === 'function') ? await session.clone() : null;
+                    const raw = await client.promptForJSON(clone || session, planners.buildDedupPrompt(g, namesByUid), planners.DEDUP_SCHEMA);
+                    const res = await persistRecommendation(g.id, planners.normalizeDedupSuggestion(raw, g, namesByUid));
+                    if (res && res.reason === 'missing') break; // user ended the sweep — stop refining
                 } catch (err) {
                     if (err && err.name === 'AbortError') break;
+                    // The deterministic recommendation is already live — nothing to repair.
                     console.error('Tabox AI: dedup suggestion failed for', g.id, err);
-                    g.recommendation = planners.normalizeDedupSuggestion(null, g, namesByUid); // deterministic fallback
+                } finally {
+                    if (clone && typeof clone.destroy === 'function') clone.destroy();
                 }
                 processed += 1;
                 await report({ filed: processed });
@@ -74,18 +114,11 @@ const def = {
         }
 
         if (isCancelled && await isCancelled()) {
+            await localArea().remove(DUPLICATE_SWEEP_KEY);
             return { summary: 'Duplicate scan cancelled', undo: null };
         }
 
         const totalDupes = groups.reduce((n, g) => n + g.urls.reduce((m, u) => m + u.occurrences.length, 0), 0);
-        await localArea().set({
-            [DUPLICATE_SWEEP_KEY]: {
-                createdAt: Date.now(),
-                scope: scoped ? { type: 'selected', uids: params.uids } : { type: 'all' },
-                groups,
-                history: [],
-            },
-        });
         await report({ filed: aiGroups.length });
         return { summary: groups.length ? `Found ${groups.length} duplicate group${groups.length === 1 ? '' : 's'} (${totalDupes} tabs)` : 'No duplicate tabs found', undo: null };
     },

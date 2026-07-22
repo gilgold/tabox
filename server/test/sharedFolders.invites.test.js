@@ -43,11 +43,31 @@ describe('invites', () => {
     const db = makeDB();
     await seed(db);
     await inviteMember(db, OWNER, 'f1', { email: 'guest@x.com', role: 'write' }, NOW);
-    const res = await respondInvite(db, GUEST, 'f1', true, NOW + 5);
+    const res = await respondInvite(db, GUEST, 'f1', true, NOW + 5, { isPro: true });
     expect(res.data.accepted).toBe(true);
+    expect(res.data.roleDowngraded).toBeUndefined();
     expect(res.data.folder).toMatchObject({ folderId: 'f1', name: 'Team', role: 'write', revision: 1 });
     expect(res.data.collections).toEqual([{ uid: 'c1', data: { name: 'A' } }]);
     expect((await listInvites(db, GUEST)).data.invites).toEqual([]);
+  });
+  it('free (non-Pro) user accepting a write invite is downgraded to read', async () => {
+    const db = makeDB();
+    await seed(db);
+    await inviteMember(db, OWNER, 'f1', { email: 'guest@x.com', role: 'write' }, NOW);
+    const res = await respondInvite(db, GUEST, 'f1', true, NOW + 5); // isPro defaults to false
+    expect(res.data.accepted).toBe(true);
+    expect(res.data.roleDowngraded).toBe(true);
+    expect(res.data.folder).toMatchObject({ folderId: 'f1', role: 'read' });
+    const row = await db.prepare("SELECT role, status FROM shared_members WHERE folder_id='f1' AND email='guest@x.com'").bind().first();
+    expect(row).toMatchObject({ role: 'read', status: 'active' });
+  });
+  it('free user accepting a read invite is unaffected (no downgrade flag)', async () => {
+    const db = makeDB();
+    await seed(db);
+    await inviteMember(db, OWNER, 'f1', { email: 'guest@x.com', role: 'read' }, NOW);
+    const res = await respondInvite(db, GUEST, 'f1', true, NOW + 5);
+    expect(res.data.roleDowngraded).toBeUndefined();
+    expect(res.data.folder).toMatchObject({ role: 'read' });
   });
   it('decline marks declined; stranger cannot respond', async () => {
     const db = makeDB();
