@@ -2,13 +2,9 @@ import { render, act } from '@testing-library/react';
 import Header from '../app/Header';
 import { Provider } from 'jotai';
 
-// Real getAIAvailability() would resolve 'unsupported' in jsdom (no
-// LanguageModel global) and render the AI-unavailable warning banner inside
-// SettingsMenu's Tabox Pro section — mock it so this snapshot stays focused
-// on Header, not on Tabox AI device support.
+// Mock the AI client so these unrelated tests never touch the network.
 jest.mock('../app/ai/aiClient', () => ({
     getAIAvailability: jest.fn().mockResolvedValue(undefined),
-    downloadModel: jest.fn(),
 }));
 
 describe('Header -- Sync disabled', () => {

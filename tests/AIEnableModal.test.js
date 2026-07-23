@@ -3,77 +3,47 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { browser } from '../static/globals';
 
-jest.mock('../app/ai/aiClient', () => ({
-    getAIAvailability: jest.fn(),
-    downloadModel: jest.fn(),
-}));
 jest.mock('../app/toastHelpers', () => ({
     showSuccessToast: jest.fn(),
 }));
-jest.mock('../app/ai/browserSupport', () => ({
-    getBrowserName: jest.fn().mockReturnValue('Microsoft Edge'),
-    isChromeBrowser: jest.fn().mockReturnValue(false),
-}));
 
-import { getAIAvailability, downloadModel } from '../app/ai/aiClient';
 import AIEnableModal from '../app/AIEnableModal';
 
 describe('AIEnableModal', () => {
     beforeEach(() => {
         browser.storage.local.set.mockReset();
-        getAIAvailability.mockReset();
-        downloadModel.mockReset();
     });
 
-    test('shows the system requirements', () => {
+    test('explains cloud processing before enabling', () => {
         render(<AIEnableModal isOpen={true} onClose={jest.fn()} />);
-        expect(screen.getByText(/22 GB of free disk space/i)).toBeInTheDocument();
-        expect(screen.getByText(/never leave your computer/i)).toBeInTheDocument();
+        expect(screen.getByText(/DeepSeek V4 Flash/i)).toBeInTheDocument();
+        expect(screen.getByText(/sent to OpenRouter for processing/i)).toBeInTheDocument();
     });
 
-    test('enables directly when the model is already available', async () => {
-        getAIAvailability.mockResolvedValue('available');
+    test('enable writes the setting and closes', async () => {
+        browser.storage.local.set.mockResolvedValue();
         const onClose = jest.fn();
         render(<AIEnableModal isOpen={true} onClose={onClose} />);
         fireEvent.click(screen.getByRole('button', { name: /enable tabox ai/i }));
         await waitFor(() => expect(browser.storage.local.set).toHaveBeenCalledWith({ chkTaboxAI: true }));
-        expect(downloadModel).not.toHaveBeenCalled();
         expect(onClose).toHaveBeenCalled();
     });
 
-    test('downloads the model first when downloadable', async () => {
-        getAIAvailability.mockResolvedValue('downloadable');
-        downloadModel.mockResolvedValue();
-        render(<AIEnableModal isOpen={true} onClose={jest.fn()} />);
+    test('shows an error and re-enables the button when the save fails', async () => {
+        browser.storage.local.set.mockRejectedValue(new Error('quota'));
+        const onClose = jest.fn();
+        render(<AIEnableModal isOpen={true} onClose={onClose} />);
         fireEvent.click(screen.getByRole('button', { name: /enable tabox ai/i }));
-        await waitFor(() => expect(downloadModel).toHaveBeenCalled());
-        await waitFor(() => expect(browser.storage.local.set).toHaveBeenCalledWith({ chkTaboxAI: true }));
-    });
-
-    test('shows an error and does not enable on unsupported devices', async () => {
-        getAIAvailability.mockResolvedValue('unavailable');
-        render(<AIEnableModal isOpen={true} onClose={jest.fn()} />);
-        fireEvent.click(screen.getByRole('button', { name: /enable tabox ai/i }));
-        await waitFor(() => expect(screen.getByText(/does not meet the requirements/i)).toBeInTheDocument());
-        expect(browser.storage.local.set).not.toHaveBeenCalled();
-    });
-
-    test('shows the Chrome-only error and does not enable on non-Chrome browsers', async () => {
-        getAIAvailability.mockResolvedValue('unsupported-browser');
-        render(<AIEnableModal isOpen={true} onClose={jest.fn()} />);
-        fireEvent.click(screen.getByRole('button', { name: /enable tabox ai/i }));
-        await waitFor(() => expect(screen.getByText(/only available on Google Chrome/i)).toBeInTheDocument());
-        expect(screen.getByText(/won't work in Microsoft Edge/i)).toBeInTheDocument();
-        expect(browser.storage.local.set).not.toHaveBeenCalled();
-    });
-
-    test('shows download-failed error and re-enables the button when download rejects', async () => {
-        getAIAvailability.mockResolvedValue('downloadable');
-        downloadModel.mockRejectedValue(new Error('network'));
-        render(<AIEnableModal isOpen={true} onClose={jest.fn()} />);
-        fireEvent.click(screen.getByRole('button', { name: /enable tabox ai/i }));
-        await waitFor(() => expect(screen.getByText(/download failed/i)).toBeInTheDocument());
-        expect(browser.storage.local.set).not.toHaveBeenCalled();
+        await waitFor(() => expect(screen.getByText(/could not save the setting/i)).toBeInTheDocument());
+        expect(onClose).not.toHaveBeenCalled();
         expect(screen.getByRole('button', { name: /enable tabox ai/i })).not.toBeDisabled();
+    });
+
+    test('cancel closes without enabling', () => {
+        const onClose = jest.fn();
+        render(<AIEnableModal isOpen={true} onClose={onClose} />);
+        fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+        expect(onClose).toHaveBeenCalled();
+        expect(browser.storage.local.set).not.toHaveBeenCalled();
     });
 });

@@ -2,7 +2,7 @@ require('jest-webextension-mock');
 const { installStatefulLocalStorage } = require('./helpers/statefulLocalStorage');
 installStatefulLocalStorage();
 const registry = require('../chrome/ai-registry.js');
-const { createEngine } = require('../chrome/ai-engine.js');
+const { createEngine, finalizeInterrupted } = require('../chrome/ai-engine.js');
 
 beforeEach(async () => { await browser.storage.local.clear(); registry._reset(); });
 
@@ -106,6 +106,37 @@ test('undoItems nulls the undo snapshot once every rename is reverted', async ()
   const st = (await browser.storage.local.get('aiTaskState')).aiTaskState;
   expect(st.undo).toBeNull();
   expect(st.results).toEqual([{ uid: 'a', reverted: true }]);
+});
+
+test('finalizeInterrupted converts a stale running state to a terminal error, preserving type/results', async () => {
+  await browser.storage.local.set({ aiTaskState: {
+    taskId: 'duplicate-sweep-1', type: 'duplicate-sweep', status: 'running',
+    filed: 2, total: 5, results: [{ id: 'g1' }], skipped: [], cancelRequested: false,
+  } });
+  const st = await finalizeInterrupted();
+  expect(st.status).toBe('error');
+  expect(st.type).toBe('duplicate-sweep'); // preserved so the modal can still route
+  expect(st.results).toEqual([{ id: 'g1' }]);
+  expect(st.cancelRequested).toBe(false);
+  expect(typeof st.finishedAt).toBe('number');
+  expect(typeof st.summary).toBe('string');
+});
+
+test('finalizeInterrupted can finalize a stale running state as cancelled', async () => {
+  await browser.storage.local.set({ aiTaskState: { type: 'duplicate-sweep', status: 'running' } });
+  const st = await finalizeInterrupted({ status: 'cancelled' });
+  expect(st.status).toBe('cancelled');
+});
+
+test('finalizeInterrupted is a no-op when the state is already terminal or absent', async () => {
+  await browser.storage.local.set({ aiTaskState: { type: 'demo', status: 'done', summary: 'ok' } });
+  const done = await finalizeInterrupted();
+  expect(done.status).toBe('done'); // untouched
+  expect(done.summary).toBe('ok');
+
+  await browser.storage.local.remove('aiTaskState');
+  const empty = await finalizeInterrupted();
+  expect(empty.status).toBeUndefined();
 });
 
 test('undoItems is a no-op without a snapshot or with empty uids', async () => {

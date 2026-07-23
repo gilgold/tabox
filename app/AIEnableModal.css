@@ -92,31 +92,6 @@
     gap: 4px;
 }
 
-.ai-enable-progress {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.ai-enable-progress-track {
-    height: 6px;
-    border-radius: 3px;
-    background: rgba(124, 58, 237, 0.15);
-    overflow: hidden;
-}
-
-.ai-enable-progress-fill {
-    height: 100%;
-    border-radius: 3px;
-    background: linear-gradient(135deg, #7c3aed 0%, #2563eb 100%);
-    transition: width 0.2s ease;
-}
-
-.ai-enable-progress-label {
-    font-size: 12px;
-    opacity: 0.8;
-}
-
 .ai-enable-error {
     color: #dc2626;
     font-size: 13px;

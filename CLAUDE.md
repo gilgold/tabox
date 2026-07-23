@@ -63,6 +63,7 @@ webpack.js            # Webpack config
      "clientSecret": "<CLIENT_SECRET>"
    }
    ```
+   The OpenRouter key (Tabox AI) is NOT stored here and must never ship in the extension bundle — it lives only as the `OPENROUTER_API_KEY` secret on the Cloudflare Worker (`server/`), which proxies all AI calls via `POST /ai/complete`.
 3. `yarn dev` to start watch mode
 4. Load the `build/` folder as an unpacked extension in `chrome://extensions` (enable Developer mode)
 
@@ -92,7 +93,7 @@ webpack.js            # Webpack config
 - AI Tools modal actions open `AIToolsModal` pre-navigated to a tool via the `aiToolsInitialToolState` atom (App's `cmdOpenAiTool` → `onOpenAiTool` prop). Add a new AI tool to `AI_TOOLS` and it should also get an `AI_ACTIONS` keyword entry so it surfaces in the palette.
 
 ### AI tasks (MUST run in the service worker)
-- AI features use Chrome's built-in Gemini Nano (`globalThis.LanguageModel`, wrapped in `app/ai/aiClient.js`). That global is available in the MV3 service worker, not only the popup.
+- AI features use DeepSeek V4 Flash via OpenRouter, proxied through the Tabox Worker's `POST /ai/complete` (`server/src/aiProxy.js`) — the extension NEVER holds the OpenRouter key. The Worker authenticates the caller's Google token, rate-limits per user, and pins the model/max_tokens server-side. `chrome/ai-client.js` (SW) calls the Worker with `getAuthToken()`; `app/ai/aiClient.js` (popup) relays through the SW via the `aiComplete` message — keep the two session interfaces in sync. Tabox AI works in every Chromium browser but requires being signed in to Tabox (availability `'sign-in-required'`).
 - **Every AI task's long-running work must execute in the service worker** (`chrome/background.js` / `background-utils.js`), driven by `browser.runtime.sendMessage` from the popup — so closing the popup does NOT abort it. The popup only initiates the task, observes progress, and renders results; it is a detachable observer, never the owner of the work.
 - Persist progress/state to `chrome.storage.local` (like `SMART_ORGANIZE_UNDO_KEY` / `AUTO_ARRANGE_UNDO_KEY`) so a reopened popup can reattach and re-render progress. Push updates back via messages / `storage.onChanged`.
 - Follow the existing `smartOrganizeApply` handler (`background-utils.js`) as the reference pattern. Respect MV3 SW constraints: keep the message handler awaiting the work; never defer it to a standalone `setTimeout` (the worker can be discarded).

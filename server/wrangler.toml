@@ -18,7 +18,7 @@ database_name = "tabox-shared"
 database_id = "3485b44f-32bd-4007-b0fd-9c79dc199290"
 migrations_dir = "migrations"
 
-# Secrets (set via `wrangler secret put`): PADDLE_WEBHOOK_SECRET, JWT_SECRET, PADDLE_API_KEY
+# Secrets (set via `wrangler secret put`): PADDLE_WEBHOOK_SECRET, JWT_SECRET, PADDLE_API_KEY, OPENROUTER_API_KEY
 # Sandbox environment: deploy with `wrangler deploy --env sandbox`;
 # secrets set per-env via `wrangler secret put <NAME> --env sandbox`.
 

@@ -18,6 +18,26 @@ function writeState(patch) {
     return _writeChain;
 }
 async function clearState() { await localArea().remove(AI_TASK_STATE_KEY); }
+// Route cancellation through the same serialized write chain as report(), so a
+// running task's in-flight report() (read-merge-write) can't clobber the flag
+// back to false. Bypassing writeState here would reintroduce that race.
+async function requestCancel() { await writeState({ cancelRequested: true }); }
+// Recover a stuck 'running' state whose owning service worker was discarded
+// mid-run (MV3): with no live worker there's nothing to write the terminal
+// status, so the popup would reattach to a dead run forever. Only touches a
+// running state — a genuinely terminal state is left as-is. Merges through the
+// write chain so `type`/`results` survive for the modal.
+async function finalizeInterrupted({ status = 'error', summary } = {}) {
+    const cur = await readState();
+    if (cur.status !== 'running') return cur;
+    await writeState({
+        status,
+        summary: summary != null ? summary : 'Tabox AI stopped unexpectedly. Please try again.',
+        finishedAt: Date.now(),
+        cancelRequested: false,
+    });
+    return await readState();
+}
 
 function createEngine({ registry, ctx }) {
     async function runTask({ id, params = {}, signal }) {
@@ -62,7 +82,7 @@ function createEngine({ registry, ctx }) {
     return { runTask, undoLast, undoItems };
 }
 
-const api = { createEngine, AI_TASK_STATE_KEY };
+const api = { createEngine, requestCancel, finalizeInterrupted, AI_TASK_STATE_KEY };
 /* istanbul ignore next */ if (typeof globalThis !== 'undefined') globalThis.TaboxAIEngine = api;
 /* istanbul ignore next */ if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })();

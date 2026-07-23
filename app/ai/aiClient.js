@@ -1,66 +1,41 @@
-// Thin wrapper around Chrome's built-in Prompt API (the LanguageModel global,
-// stable for extensions since Chrome 138). Every Tabox AI feature goes through
-// this module so the underlying API — or the execution context (e.g. moving
-// inference to the service worker) — can change without touching feature code.
-
-// The Prompt API requires declared input/output languages to attest output
-// safety; omitting them logs a warning and can degrade output quality.
-import { isChromeBrowser } from './browserSupport';
-
-const LANGUAGE_OPTIONS = {
-    expectedInputs: [{ type: 'text', languages: ['en'] }],
-    expectedOutputs: [{ type: 'text', languages: ['en'] }],
-};
-
-// Defaults used to satisfy the Prompt API's "both temperature and topK, or
-// neither" rule when a caller specifies only one of them.
-const DEFAULT_TOP_K = 3;
-const DEFAULT_TEMPERATURE = 1;
+// Thin popup-side AI wrapper. Inference runs in the service worker
+// (`aiComplete` message → chrome/ai-client.js → the Tabox Worker's
+// /ai/complete proxy → OpenRouter DeepSeek V4 Flash), so the popup never
+// handles auth tokens and the OpenRouter API key never ships in the
+// extension. Every Tabox AI feature goes through this module so the
+// underlying provider or execution context can change without touching
+// feature code. Keep the session/prompt interface in sync with
+// chrome/ai-client.js.
+import { browser } from '../../static/globals';
 
 export function isAISupported() {
-    // Brand check first: Edge exposes its own LanguageModel global (a different
-    // model), which would otherwise make Tabox AI look supported there.
-    return isChromeBrowser() && typeof globalThis.LanguageModel !== 'undefined';
+    // Cloud inference works in every Chromium browser Tabox ships to.
+    return true;
 }
 
-// Returns: 'unsupported-browser' | 'unsupported' | 'unavailable' | 'downloadable' | 'downloading' | 'available'
+// Returns: 'available' | 'sign-in-required' | 'unavailable'
 export async function getAIAvailability() {
-    if (!isChromeBrowser()) return 'unsupported-browser';
-    if (typeof globalThis.LanguageModel === 'undefined') return 'unsupported';
     try {
-        return await globalThis.LanguageModel.availability(LANGUAGE_OPTIONS);
-    } catch (error) {
-        console.error('Tabox AI availability check failed:', error);
+        const availability = await browser.runtime.sendMessage({ type: 'aiAvailability' });
+        return availability || 'unavailable';
+    } catch {
         return 'unavailable';
     }
 }
 
-// Creating a session triggers the model download. Must be called from a user
-// gesture. onProgress receives an integer percentage (0-100).
-export async function downloadModel(onProgress) {
-    const session = await globalThis.LanguageModel.create({
-        ...LANGUAGE_OPTIONS,
-        monitor(m) {
-            m.addEventListener('downloadprogress', (e) => {
-                if (onProgress) onProgress(e.total ? Math.floor((e.loaded / e.total) * 100) : 0);
-            });
-        },
-    });
-    session.destroy();
-}
-
+// Sessions are stateless request builders: each prompt sends only the system
+// prompt + that prompt (no accumulated context), so repeated prompts on one
+// session don't get slower or costlier over a long run.
 export async function createAISession({ systemPrompt, temperature, topK, signal } = {}) {
-    const options = { ...LANGUAGE_OPTIONS };
-    if (systemPrompt) options.initialPrompts = [{ role: 'system', content: systemPrompt }];
-    // The Prompt API requires temperature and topK together (or neither); pair a
-    // default for whichever a caller omitted so a one-sided value doesn't throw
-    // NotSupportedError.
-    if (temperature !== undefined || topK !== undefined) {
-        options.temperature = temperature !== undefined ? temperature : DEFAULT_TEMPERATURE;
-        options.topK = topK !== undefined ? topK : DEFAULT_TOP_K;
-    }
-    if (signal) options.signal = signal;
-    return globalThis.LanguageModel.create(options);
+    return {
+        prompt: (text, options = {}) => requestCompletion(
+            { systemPrompt, temperature, topK },
+            text,
+            { ...options, signal: options.signal || signal },
+        ),
+        clone: () => createAISession({ systemPrompt, temperature, topK, signal }),
+        destroy: () => {},
+    };
 }
 
 export async function promptForJSON(session, prompt, schema, signal) {
@@ -69,5 +44,39 @@ export async function promptForJSON(session, prompt, schema, signal) {
     const startedAt = Date.now();
     const raw = await session.prompt(prompt, options);
     console.debug(`Tabox AI: inference ${Date.now() - startedAt}ms`);
-    return JSON.parse(raw);
+    return parseJSONContent(raw);
+}
+
+async function requestCompletion(config, text, { responseConstraint, signal } = {}) {
+    throwIfAborted(signal);
+    const result = await browser.runtime.sendMessage({
+        type: 'aiComplete',
+        payload: {
+            systemPrompt: config.systemPrompt,
+            temperature: config.temperature,
+            topK: config.topK,
+            prompt: text,
+            responseConstraint,
+        },
+    });
+    // The SW request can't be cancelled through sendMessage — for these small
+    // one-shot prompts we just discard the result after an abort.
+    throwIfAborted(signal);
+    if (!result || !result.ok) throw new Error((result && result.error) || 'Tabox AI: request failed');
+    return result.content;
+}
+
+function throwIfAborted(signal) {
+    if (signal && signal.aborted) {
+        const error = new Error('Tabox AI: aborted');
+        error.name = 'AbortError';
+        throw error;
+    }
+}
+
+// Models occasionally wrap JSON in a markdown fence even under json_schema.
+function parseJSONContent(raw) {
+    const trimmed = raw.trim();
+    const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
+    return JSON.parse(fenced ? fenced[1] : trimmed);
 }

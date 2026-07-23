@@ -529,7 +529,7 @@ exports[`Header -- Sync disabled Header renders correctly - sync disabled 1`] = 
                   >
                     <span
                       data-tooltip-class-name="small-tooltip"
-                      data-tooltip-content="AI runs locally in Chrome — your data never leaves your device"
+                      data-tooltip-content="Powered by DeepSeek V4 Flash via OpenRouter"
                       data-tooltip-id="main-tooltip"
                     >
                       <input

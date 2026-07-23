@@ -37,12 +37,10 @@ function WelcomeScene({ active }) {
                 </div>
                 <div className="browser-page-lines"><i /><i /><i /></div>
             </div>
-            <div className="welcome-saved-box"><MdFolder /><strong>Project tabs</strong><span>5 tabs saved</span></div>
+            <div className="welcome-saved-box"><MdFolder /><strong>Project tabs</strong><span>5 tabs saved</span><MdCheck className="welcome-saved-check" /></div>
             <div className="welcome-tabox-ui">
                 <div className="welcome-tabox-header"><strong>Tabox</strong><span>Collections</span></div>
                 <div className="welcome-tabox-search"><MdSearch /></div>
-                <div className="welcome-tabox-placeholder" />
-                <div className="welcome-tabox-target"><MdFolder /><strong>Project tabs</strong><small>5 tabs</small><MdCheck /></div>
             </div>
         </div>
     );
@@ -94,15 +92,37 @@ function CollectionScene({ active }) {
 function OrganizeScene({ active }) {
     return (
         <div className={`onboarding-scene organize-scene${active ? ' is-active' : ''}`} aria-hidden="true">
-            <div className="organize-board">
-                <div className="organize-folder organize-folder-one"><MdFolder /><strong>Work</strong><span><i /><i /><i /></span></div>
-                <div className="organize-folder organize-folder-two"><MdFolder /><strong>Ideas</strong><span><i /><i /></span></div>
-                <div className="organize-folder organize-folder-three"><MdFolder /><strong>Personal</strong><span><i /><i /><i /></span></div>
-                <div className="organize-collection organize-collection-one"><MdStar /> Daily dashboard</div>
-                <div className="organize-collection organize-collection-two"><MdStar /> Inspiration</div>
+            <div className="organize-tabox-window">
+                <div className="organize-tabox-header">
+                    <strong>Tabox</strong>
+                    <span>Colors</span>
+                    <div className="organize-palette"><i /><i /><i /><i /></div>
+                </div>
+                <div className="organize-tabox-content">
+                    <div className="organize-folder-row organize-color-item">
+                        <MdFolder />
+                        <span><strong>Creative work</strong><small>3 collections</small></span>
+                        <b>⌄</b>
+                    </div>
+                    <div className="organize-folder-collections">
+                        <div className="organize-collection-row organize-collection-one organize-color-item">
+                            <i className="organize-collection-swatch" />
+                            <span><strong>Design research</strong><small>8 tabs</small></span>
+                            <MdStar className="organize-muted-star" />
+                        </div>
+                        <div className="organize-collection-row organize-collection-two organize-color-item">
+                            <i className="organize-collection-swatch" />
+                            <span><strong>Inspiration</strong><small>12 tabs</small></span>
+                            <MdStar className="organize-favorite-star" />
+                        </div>
+                        <div className="organize-collection-row organize-collection-three organize-color-item">
+                            <i className="organize-collection-swatch" />
+                            <span><strong>Launch assets</strong><small>5 tabs</small></span>
+                            <MdStar className="organize-muted-star" />
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div className="organize-palette"><i /><i /><i /><i /></div>
-            <span className="organize-paint-sweep" />
         </div>
     );
 }

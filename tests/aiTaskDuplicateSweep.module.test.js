@@ -15,34 +15,38 @@ const detect = require('../chrome/duplicate-detect.js');
 require('../chrome/ai-task-duplicate-sweep.js');
 const task = global.__task;
 
+// The duplicate-sweep task is pure local code: detection + deterministic
+// recommendations, no model call. Any client method being invoked is a bug.
+const noClient = {
+  createAISession: async () => { throw new Error('duplicate-sweep must not create an AI session'); },
+  promptForJSON: async () => { throw new Error('duplicate-sweep must not call the model'); },
+};
+
 const ctx = {
   planners, detect,
-  client: {
-    createAISession: async () => ({ destroy() {} }),
-    promptForJSON: async () => ({ recommendedKeeper: 2, message: 'Keep in D.', suggestedNewCollectionName: 'Shared', titles: [] }),
-  },
+  client: noClient,
   loadCollections: async () => ([
-    { uid: 'A', name: 'A', tabs: [{ uid: 'a1', url: 'https://x.com', title: 'X' }] },
-    { uid: 'D', name: 'D', tabs: [{ uid: 'd1', url: 'https://x.com', title: 'X home' }] },
+    { uid: 'A', name: 'A', lastUpdated: 10, tabs: [{ uid: 'a1', url: 'https://x.com', title: 'X' }] },
+    { uid: 'D', name: 'D', lastUpdated: 99, tabs: [{ uid: 'd1', url: 'https://x.com', title: 'X home' }] },
   ]),
 };
 
 beforeEach(() => { _store = {}; });
 
-test('detects, enriches cross groups with AI recommendation, writes duplicateSweep, no mutation', async () => {
+test('detects cross-collection duplicates and writes a deterministic recommendation, no mutation', async () => {
   const reports = [];
   const out = await task.run({ ctx, params: {}, report: async (p) => reports.push(p) });
   const st = _store.duplicateSweep;
   expect(st.groups).toHaveLength(1);
+  // deterministic keeper = freshest collection (D, lastUpdated 99)
   expect(st.groups[0].recommendation.recommendedKeeperUid).toBe('D');
   expect(st.groups[0].status).toBe('pending');
   expect(out.summary).toContain('duplicate');
   expect(reports.length).toBeGreaterThan(0);
 });
 
-test('within-only duplicates get a templated recommendation (no AI call)', async () => {
+test('within-only duplicates get a templated recommendation', async () => {
   const withinCtx = { ...ctx,
-    client: { createAISession: async () => { throw new Error('should not be called'); }, promptForJSON: async () => { throw new Error('no'); } },
     loadCollections: async () => ([
       { uid: 'A', name: 'A', tabs: [
         { uid: 'a1', url: 'https://x.com', title: 'X' },
@@ -71,8 +75,7 @@ test('params.uids scopes detection to selected collections', async () => {
 });
 
 test('cancelled run does not write partial sweep state', async () => {
-  let calls = 0;
-  const cancelCtx = { ...ctx, isCancelled: async () => { calls += 1; return calls > 0; } };
+  const cancelCtx = { ...ctx, isCancelled: async () => true };
   // seed a stale sweep to prove it is cleared
   _store.duplicateSweep = { createdAt: 0, scope: { type: 'all' }, groups: [{ id: 'stale' }], history: [] };
   const out = await task.run({ ctx: cancelCtx, params: {}, report: async () => {} });
@@ -80,97 +83,16 @@ test('cancelled run does not write partial sweep state', async () => {
   expect(out.summary).toMatch(/cancel/i);
 });
 
-test('publishes the sweep with a deterministic recommendation before the AI responds, then upgrades it', async () => {
-  let stateWhenAIRuns;
-  const c = { ...ctx, client: {
-    createAISession: async () => ({ destroy() {} }),
-    promptForJSON: async () => {
-      stateWhenAIRuns = JSON.parse(JSON.stringify(_store.duplicateSweep));
-      return { recommendedKeeper: 1, message: 'AI says keep in A.', suggestedNewCollectionName: 'Shared', titles: [] };
-    },
-  } };
-  await task.run({ ctx: c, params: {}, report: async () => {} });
-  // Sweep state was live (and usable) while inference was still in flight.
-  expect(stateWhenAIRuns).toBeTruthy();
-  expect(stateWhenAIRuns.groups[0].status).toBe('pending');
-  expect(stateWhenAIRuns.groups[0].recommendation.recommendedKeeperUid).toBeTruthy();
-  // The AI result replaced the deterministic placeholder afterwards.
-  expect(_store.duplicateSweep.groups[0].recommendation.message).toBe('AI says keep in A.');
-  expect(_store.duplicateSweep.groups[0].recommendation.recommendedKeeperUid).toBe('A');
-});
-
-test('prompts on a fresh session clone per group so context never accumulates', async () => {
-  const prompted = [];
-  const base = { clone: jest.fn(async () => ({ __clone: true, destroy: jest.fn() })), destroy: jest.fn() };
-  const c = { ...ctx, client: {
-    createAISession: async () => base,
-    promptForJSON: async (session) => { prompted.push(session); return { recommendedKeeper: 2, message: 'm', suggestedNewCollectionName: 'S', titles: [] }; },
-  } };
-  await task.run({ ctx: c, params: {}, report: async () => {} });
-  expect(base.clone).toHaveBeenCalledTimes(1);
-  expect(prompted).toHaveLength(1);
-  expect(prompted[0].__clone).toBe(true);
-});
-
-test('does not overwrite a group the user resolved while the AI was thinking', async () => {
-  const c = { ...ctx, client: {
-    createAISession: async () => ({ destroy() {} }),
-    promptForJSON: async () => {
-      // Simulate the user acting on the group mid-inference.
-      _store.duplicateSweep.groups[0].status = 'resolved';
-      return { recommendedKeeper: 2, message: 'late AI opinion', suggestedNewCollectionName: 'S', titles: [] };
-    },
-  } };
-  await task.run({ ctx: c, params: {}, report: async () => {} });
-  expect(_store.duplicateSweep.groups[0].status).toBe('resolved');
-  expect(_store.duplicateSweep.groups[0].recommendation.message).not.toBe('late AI opinion');
-});
-
-test('stops refining when the user ends the sweep mid-run', async () => {
-  const promptForJSON = jest.fn(async () => {
-    // Simulate "End sweep" while the first inference is in flight.
-    delete _store.duplicateSweep;
-    return { recommendedKeeper: 2, message: 'm', suggestedNewCollectionName: 'S', titles: [] };
-  });
+test('cross-collection duplicates with differing titles still get a deterministic keeper (no model call)', async () => {
   const c = { ...ctx,
-    client: { createAISession: async () => ({ destroy() {} }), promptForJSON },
     loadCollections: async () => ([
-      { uid: 'A', name: 'A', tabs: [
-        { uid: 'a1', url: 'https://x.com', title: 'X' },
-        { uid: 'a2', url: 'https://y.com', title: 'Y' },
-      ] },
-      { uid: 'D', name: 'D', tabs: [
-        { uid: 'd1', url: 'https://x.com', title: 'X home' },
-        { uid: 'd2', url: 'https://y.com', title: 'Y home' },
-      ] },
-      { uid: 'E', name: 'E', tabs: [{ uid: 'e1', url: 'https://y.com', title: 'Y other' }] },
+      { uid: 'A', name: 'Work', lastUpdated: 10, tabs: [{ uid: 'a1', url: 'https://x.com', title: 'X' }] },
+      { uid: 'D', name: 'Reference', lastUpdated: 99, tabs: [{ uid: 'd1', url: 'https://x.com', title: 'X Home' }] },
     ]),
   };
   await task.run({ ctx: c, params: {}, report: async () => {} });
-  expect(promptForJSON).toHaveBeenCalledTimes(1);
-  expect(_store.duplicateSweep).toBeUndefined();
-});
-
-test('skips the AI entirely for cross groups whose copies share the same title', async () => {
-  const noAiCtx = {
-    planners, detect,
-    client: {
-      createAISession: async () => { throw new Error('AI should not be called for identical titles'); },
-      promptForJSON: async () => { throw new Error('AI should not be called for identical titles'); },
-    },
-    loadCollections: async () => ([
-      { uid: 'A', name: 'Work', lastUpdated: 10, tabs: [{ uid: 'a1', url: 'https://x.com', title: 'Same Title' }] },
-      { uid: 'D', name: 'Reference', lastUpdated: 99, tabs: [{ uid: 'd1', url: 'https://x.com', title: 'Same Title' }] },
-    ]),
-  };
-  const reports = [];
-  const out = await task.run({ ctx: noAiCtx, params: {}, report: async (p) => reports.push(p) });
   const st = _store.duplicateSweep;
   expect(st.groups).toHaveLength(1);
-  // deterministic keeper = freshest collection (D, lastUpdated 99)
   expect(st.groups[0].recommendation.recommendedKeeperUid).toBe('D');
   expect(st.groups[0].recommendation.message).toContain('Reference');
-  // total reported is 0 AI groups
-  expect(reports[0]).toEqual({ total: 0, filed: 0 });
-  expect(out.summary).toContain('duplicate');
 });

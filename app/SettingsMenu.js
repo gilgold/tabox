@@ -16,7 +16,6 @@ import { ManageSubscriptionControls } from './ManageSubscriptionModal';
 import { useOrphanRecoveryContext } from './OrphanRecoveryContext';
 import { buildOrphanRecoveryMenuItem } from './orphanRecoveryMenuItem';
 import { loadBrowserSessions, subscribeToBrowserSessions } from './utils/browserSessions';
-import AIUnavailableWarning from './AIUnavailableWarning';
 import useProCheckout from './useProCheckout';
 import TaboxProOverview from './TaboxProOverview';
 import { RiFolderAddFill, RiEdit2Line, RiSettings5Fill } from 'react-icons/ri';
@@ -319,9 +318,6 @@ export default function SettingsMenu(props) {
                 onClick: undefined,
                 content: proStatusLabel,
             },
-            ...(!isPro
-                ? [{ type: 'custom', key: 'pro-ai-warning', content: <AIUnavailableWarning /> }]
-                : []),
             isPro
                 ? {
                     type: 'button',
@@ -433,12 +429,12 @@ export default function SettingsMenu(props) {
                     type: 'switch',
                     key: 'chkTaboxAI',
                     title: 'Tabox AI',
-                    description: 'Enable on-device AI tools like auto-naming collections. Requires a one-time model download.',
+                    description: 'Enable AI tools like auto-naming and auto-organizing collections.',
                     switchProps: {
                         id: 'chkTaboxAI',
                         onBeforeChange: handleTaboxAIBeforeChange,
                         'data-tooltip-id': 'main-tooltip',
-                        'data-tooltip-content': 'AI runs locally in Chrome — your data never leaves your device',
+                        'data-tooltip-content': 'Powered by DeepSeek V4 Flash via OpenRouter',
                         textOn: <span><BsStars size="14" style={{ marginRight: '8px' }} />Tabox AI: <strong>Enabled</strong></span>,
                         textOff: <span><BsStars size="14" style={{ marginRight: '8px' }} />Tabox AI: <strong>Disabled</strong></span>,
                     },

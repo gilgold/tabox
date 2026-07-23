@@ -9,7 +9,6 @@ import { isProState, premiumEntitlementState } from './atoms/premiumState';
 import TaboxProUpsell from './TaboxProUpsell';
 import { AI_TOOLS } from './ai/aiTasks';
 import { getAIAvailability } from './ai/aiClient';
-import { isChromeBrowser, getBrowserName } from './ai/browserSupport';
 import useProCheckout from './useProCheckout';
 import { readWindowStructure } from './ai/readWindowStructure';
 import { loadAllCollections } from './utils/storageUtils';
@@ -61,13 +60,6 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
     const setPremiumEntitlement = useSetAtom(premiumEntitlementState);
     const startProCheckout = useProCheckout();
     const isToolLocked = (tool) => Boolean(tool && tool.premium && !isPro);
-    // Chrome-only gate: the command palette (and direct atom sets) can open
-    // this modal on any browser, so it must explain the limitation itself
-    // rather than rely on entry points being hidden.
-    const chromeSupported = isChromeBrowser();
-    const browserGateBody = chromeSupported ? null
-        : `You're using ${getBrowserName()}, which doesn't include Chrome's built-in on-device AI model. `
-        + 'Everything else in Tabox — including Pro features like shared folders — works here as usual.';
     // Optimistic default (assume signed-in) so the upsell shows the "Upgrade"
     // CTA immediately on click, before the async storage read resolves; it
     // flips to the "Sign in" CTA once we confirm the user is actually signed out.
@@ -187,8 +179,8 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
             console.error('Tabox AI: failed to load collections', loadError);
             setCollections([]);
         });
-        // Warm the on-device model so the first AI task starts faster. Fire-and-forget;
-        // the SW creates+destroys a throwaway session to load the model into memory.
+        // Warm the AI client so the first task starts faster. Fire-and-forget;
+        // the SW creates a throwaway session, which prefetches the API key.
         browser.runtime.sendMessage({ type: 'aiWarmup' }).catch(() => {});
     }, [isOpen, setAiProcessingUids, setAiProcessingCurrentUid]);
 
@@ -397,7 +389,9 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
         if (availability !== 'available') {
             // Pre-flight failed — allow retry
             runStartedRef.current = false;
-            setError('Tabox AI is not ready on this device. Check the Tabox AI setting.');
+            setError(availability === 'sign-in-required'
+                ? 'Sign in to Tabox with Google (in Settings) to use Tabox AI.'
+                : 'Tabox AI is not available right now. Please try again later.');
             return;
         }
 
@@ -573,7 +567,9 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
         const availability = await getAIAvailability();
         if (availability !== 'available') {
             runStartedRef.current = false;
-            setError('Tabox AI is not ready on this device. Check the Tabox AI setting.');
+            setError(availability === 'sign-in-required'
+                ? 'Sign in to Tabox with Google (in Settings) to use Tabox AI.'
+                : 'Tabox AI is not available right now. Please try again later.');
             return;
         }
 
@@ -710,7 +706,9 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
         const availability = await getAIAvailability();
         if (availability !== 'available') {
             runStartedRef.current = false;
-            setError('Tabox AI is not ready on this device. Check the Tabox AI setting.');
+            setError(availability === 'sign-in-required'
+                ? 'Sign in to Tabox with Google (in Settings) to use Tabox AI.'
+                : 'Tabox AI is not available right now. Please try again later.');
             return;
         }
 
@@ -818,7 +816,9 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
         const availability = await getAIAvailability();
         if (availability !== 'available') {
             runStartedRef.current = false;
-            setError('Tabox AI is not ready on this device. Check the Tabox AI setting.');
+            setError(availability === 'sign-in-required'
+                ? 'Sign in to Tabox with Google (in Settings) to use Tabox AI.'
+                : 'Tabox AI is not available right now. Please try again later.');
             return;
         }
 
@@ -873,8 +873,8 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
 
     const n = targets.length;
     const idleDescription = n === 1
-        ? 'Automatically rename 1 collection using on-device AI. You can review and undo afterwards.'
-        : `Automatically rename ${n} collections using on-device AI. You can review and undo afterwards.`;
+        ? 'Automatically rename 1 collection using AI. You can review and undo afterwards.'
+        : `Automatically rename ${n} collections using AI. You can review and undo afterwards.`;
 
     const idleDisabledHint = n === 0
         ? (scope.type === 'selected'
@@ -916,15 +916,7 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
                     </button>
                 </div>
 
-                {!chromeSupported && (
-                    <div className="ai-tools-browser-gate" role="alert">
-                        <BsStars className="ai-tools-browser-gate-icon" size={36} aria-hidden="true" />
-                        <h3>Tabox AI is only available on Google Chrome</h3>
-                        <p>{browserGateBody}</p>
-                    </div>
-                )}
-
-                {chromeSupported && !activeToolId && (
+                {!activeToolId && (
                     <div className="ai-tools-list">
                         {AI_TOOLS.filter((t) => t.featured).map((tool) => {
                             const ToolIcon = tool.icon;
@@ -978,7 +970,7 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
                     </div>
                 )}
 
-                {chromeSupported && activeToolId && isToolLocked(AI_TOOLS.find((t) => t.id === activeToolId)) && (
+                {activeToolId && isToolLocked(AI_TOOLS.find((t) => t.id === activeToolId)) && (
                     <TaboxProUpsell
                         isSignedIn={isSignedIn}
                         onUpgrade={() => startProCheckout()}
@@ -993,7 +985,7 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
                     />
                 )}
 
-                {chromeSupported && activeToolId && !isToolLocked(AI_TOOLS.find((t) => t.id === activeToolId)) && (
+                {activeToolId && !isToolLocked(AI_TOOLS.find((t) => t.id === activeToolId)) && (
                     <>
                 {activeToolId === 'smart-organize' && (
                     <div className="ai-tool-panel">

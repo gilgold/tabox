@@ -26,8 +26,8 @@ const NAME_SCHEMA = {
     additionalProperties: false,
 };
 
-function buildNamePrompt(collection) {
-    const lines = (collection.tabs || []).slice(0, MAX_TABS).map((tab) => {
+function tabLines(collection, cap) {
+    return (collection.tabs || []).slice(0, cap).map((tab) => {
         let domain = '';
         try {
             domain = new URL(tab.url).hostname.replace(/^www\./, '');
@@ -37,7 +37,46 @@ function buildNamePrompt(collection) {
         const title = tab.title || domain || 'Untitled';
         return `- ${title}${domain ? ` (${domain})` : ''}`;
     });
-    return `Suggest a short, descriptive name for a group of browser tabs.\n\nTabs:\n${lines.join('\n')}\n\nRespond with JSON: {"name": "..."}`;
+}
+
+function buildNamePrompt(collection) {
+    return `Suggest a short, descriptive name for a group of browser tabs.\n\nTabs:\n${tabLines(collection, MAX_TABS).join('\n')}\n\nRespond with JSON: {"name": "..."}`;
+}
+
+// Batch naming: name many collections in ONE request to cut round-trips and
+// stay under the Worker's per-user request limit on large libraries. Fewer
+// titles per collection than the single-collection prompt keep the combined
+// prompt bounded and the model focused on one group at a time.
+const BATCH_NAME_SIZE = 10; // collections per request
+const MAX_BATCH_TABS = 12; // titles listed per collection inside a batch
+
+// The model must echo each collection's `index` so we can map names back to the
+// right collection even if it reorders, omits, or invents entries.
+const BATCH_NAME_SCHEMA = {
+    type: 'object',
+    properties: {
+        names: {
+            type: 'array',
+            items: {
+                type: 'object',
+                properties: {
+                    index: { type: 'integer' },
+                    name: { type: 'string', maxLength: MAX_NAME_LENGTH },
+                },
+                required: ['index', 'name'],
+                additionalProperties: false,
+            },
+        },
+    },
+    required: ['names'],
+    additionalProperties: false,
+};
+
+// `collections` are the batch's items in order; each is labelled by its
+// position (0-based) so the response can be mapped back deterministically.
+function buildBatchNamePrompt(collections) {
+    const blocks = collections.map((c, index) => `Collection ${index}:\n${tabLines(c, MAX_BATCH_TABS).join('\n')}`);
+    return `Suggest a short, descriptive name for EACH group of browser tabs below. Name every collection independently based only on its own tabs.\n\n${blocks.join('\n\n')}\n\nRespond with JSON: {"names": [{"index": 0, "name": "..."}, ...]} — exactly one entry per collection, echoing each collection's index.`;
 }
 
 // ---------------------------------------------------------------------------
@@ -262,95 +301,15 @@ function normalizeOrganizePlan(raw, capped, existingGroups) {
 }
 
 // ---------------------------------------------------------------------------
-// duplicate-sweep constants + builders + normalizer
+// duplicate-sweep constants + builder
 // ---------------------------------------------------------------------------
 
 const DEDUP_NEW_NAME_MAX = 40;
 const DEDUP_MESSAGE_MAX = 240;
 
-const DEDUP_SCHEMA = {
-    type: 'object',
-    properties: {
-        recommendedKeeper: { type: 'integer' }, // 1-based index into the collection set
-        message: { type: 'string', maxLength: DEDUP_MESSAGE_MAX },
-        suggestedNewCollectionName: { type: 'string', maxLength: DEDUP_NEW_NAME_MAX },
-        titles: {
-            type: 'array',
-            items: {
-                type: 'object',
-                properties: { urlIndex: { type: 'integer' }, title: { type: 'string' } },
-                required: ['urlIndex', 'title'],
-                additionalProperties: false,
-            },
-        },
-    },
-    required: ['recommendedKeeper', 'message'],
-    additionalProperties: false,
-};
-
-function buildDedupPrompt(group, collectionNamesByUid) {
-    const colLines = group.collectionUids.map((uid, i) => `${i + 1}. "${collectionNamesByUid[uid] || 'Untitled'}"`);
-    const urlLines = group.urls.map((u, i) => {
-        const titles = u.occurrences
-            .map((o) => `${collectionNamesByUid[o.collectionUid] || '?'}: "${o.title || 'Untitled'}"`)
-            .join('; ');
-        return `${i + 1}. ${u.normalizedUrl}\n   titles: ${titles}`;
-    });
-    return [
-        'These collections all contain the same tab(s). Recommend which SINGLE collection is the best home for them.',
-        'Pick the clearest title for each shared tab when titles differ.',
-        'Write one short, friendly sentence explaining the recommendation, e.g. "These tabs appear in Work, Read Later and Reference — consider keeping them in Reference only and removing them from the others."',
-        'Also suggest a short Title Case name for a new collection in case the user prefers to split them out.',
-        '',
-        'Collections (referenced by number):',
-        colLines.join('\n'),
-        '',
-        'Shared tabs (referenced by number):',
-        urlLines.join('\n'),
-        '',
-        'Respond with JSON: { "recommendedKeeper": 1, "message": "...", "suggestedNewCollectionName": "...", "titles": [ { "urlIndex": 1, "title": "..." } ] }.',
-    ].join('\n');
-}
-
-function normalizeDedupSuggestion(raw, group, collectionNamesByUid = {}) {
-    const uids = group.collectionUids;
-    const idx = raw && Number.isInteger(raw.recommendedKeeper) ? raw.recommendedKeeper - 1 : -1;
-    const recommendedKeeperUid = (idx >= 0 && idx < uids.length) ? uids[idx] : uids[0];
-    const namesForMsg = uids.map((u) => collectionNamesByUid[u] || u).join(', ');
-    const message = (raw && typeof raw.message === 'string' && raw.message.trim())
-        ? raw.message.trim().slice(0, DEDUP_MESSAGE_MAX)
-        : `These tabs appear in ${namesForMsg} — consider keeping them in one collection only.`;
-    const suggestedNewCollectionName = (raw && raw.suggestedNewCollectionName && String(raw.suggestedNewCollectionName).trim())
-        ? String(raw.suggestedNewCollectionName).trim().slice(0, DEDUP_NEW_NAME_MAX)
-        : 'Shared Tabs';
-    const bestTitlePerUrl = [];
-    for (const t of (raw && Array.isArray(raw.titles) ? raw.titles : [])) {
-        const ui = Number.isInteger(t.urlIndex) ? t.urlIndex - 1 : -1;
-        if (ui >= 0 && ui < group.urls.length && t.title && String(t.title).trim()) {
-            bestTitlePerUrl.push({ normalizedUrl: group.urls[ui].normalizedUrl, title: String(t.title).trim() });
-        }
-    }
-    return { recommendedKeeperUid, message, suggestedNewCollectionName, bestTitlePerUrl };
-}
-
-// True when at least one shared URL in the group has two or more *different*
-// (non-empty) titles across its copies — i.e. a case where which copy to keep is
-// genuinely ambiguous and worth an AI opinion. When false, the keeper can be
-// chosen deterministically with no model call (the common "same page, same
-// title, saved in several collections" case).
-function dedupGroupHasTitleConflict(group) {
-    const norm = (t) => String(t || '').trim().replace(/\s+/g, ' ').toLowerCase();
-    return (group.urls || []).some((u) => {
-        const titles = new Set((u.occurrences || []).map((o) => norm(o.title)));
-        titles.delete('');
-        return titles.size > 1;
-    });
-}
-
-// Deterministic, no-AI recommendation for an unambiguous group. Reads naturally
-// in the same style as the AI message, so the UI is consistent whether or not
-// the model was consulted. `keeperUid` is chosen by the caller (e.g. freshest
-// collection); falls back to the first collection if not in the set.
+// Deterministic recommendation for a duplicate group. `keeperUid` is chosen by
+// the caller (e.g. freshest collection); falls back to the first collection if
+// not in the set.
 function buildDeterministicDedupSuggestion(group, collectionNamesByUid = {}, keeperUid) {
     const uids = group.collectionUids;
     const keeper = uids.includes(keeperUid) ? keeperUid : uids[0];
@@ -392,6 +351,113 @@ const SPLIT_SCHEMA = {
     required: ['groups'],
     additionalProperties: false,
 };
+
+// Two-phase split for large collections. A single-shot split's OUTPUT is
+// O(tabs) — the model must emit a partition of every tab, generated serially —
+// so big collections make the one call very slow. Instead: (1) one small call
+// proposes 2-4 theme names from an evenly-spaced tab sample; (2) all tabs are
+// assigned to those fixed themes in parallel batches with compact outputs.
+// Collections at or under SPLIT_SINGLE_SHOT_MAX keep the one-call path (a
+// single round-trip is already optimal there).
+const SPLIT_SINGLE_SHOT_MAX = 50;
+const SPLIT_THEME_SAMPLE_MAX = 50; // tabs shown to the theme-proposal call
+const SPLIT_ASSIGN_BATCH = 40;     // tabs assigned per phase-2 request
+
+const SPLIT_THEMES_SCHEMA = {
+    type: 'object',
+    properties: {
+        themes: {
+            type: 'array',
+            minItems: SPLIT_MIN_GROUPS,
+            maxItems: SPLIT_MAX_GROUPS,
+            items: {
+                type: 'object',
+                properties: { name: { type: 'string', maxLength: SPLIT_NAME_MAX } },
+                required: ['name'],
+                additionalProperties: false,
+            },
+        },
+    },
+    required: ['themes'],
+    additionalProperties: false,
+};
+
+function buildSplitThemesPrompt({ name, tabs }) {
+    // Evenly-spaced sample so late tabs shape the themes too, not just the head.
+    const all = tabs || [];
+    const step = Math.max(1, Math.ceil(all.length / SPLIT_THEME_SAMPLE_MAX));
+    const sample = all.filter((_, i) => i % step === 0);
+    const lines = sample.map((tab) => {
+        const domain = domainOf(tab.url);
+        const title = (tab.title || domain || 'Untitled').slice(0, TITLE_TRUNC);
+        return `- ${title}${domain ? ` (${domain})` : ''}`;
+    });
+    return [
+        `Propose ${SPLIT_MIN_GROUPS} to ${SPLIT_MAX_GROUPS} theme names for splitting the saved tab collection "${name || 'Untitled'}" into sub-collections.`,
+        'Themes must be distinct, short Title Case names (2-4 words), no quotes or emojis.',
+        'Below is a sample of the collection\'s tabs:',
+        '',
+        lines.join('\n'),
+        '',
+        'Respond with JSON: { "themes": [ { "name": "..." } ] }.',
+    ].join('\n');
+}
+
+const SPLIT_ASSIGN_SCHEMA = {
+    type: 'object',
+    properties: {
+        assignments: {
+            type: 'array',
+            items: {
+                type: 'object',
+                properties: {
+                    tab: { type: 'integer' },
+                    theme: { type: 'integer' },
+                },
+                required: ['tab', 'theme'],
+                additionalProperties: false,
+            },
+        },
+    },
+    required: ['assignments'],
+    additionalProperties: false,
+};
+
+// `startIndex` is the 0-based offset of this batch's first tab in the full
+// collection; tabs are numbered GLOBALLY (startIndex+1…) so assignments from
+// different batches can be merged without translation.
+function buildSplitAssignPrompt({ themes, tabs, startIndex }) {
+    const themeLines = themes.map((t, i) => `${i + 1}. ${t}`);
+    const tabLinesNumbered = (tabs || []).map((tab, i) => {
+        const domain = domainOf(tab.url);
+        const title = (tab.title || domain || 'Untitled').slice(0, TITLE_TRUNC);
+        return `${startIndex + i + 1}. ${title}${domain ? ` (${domain})` : ''}`;
+    });
+    return [
+        'Assign each tab below to exactly ONE of these themes.',
+        '',
+        'Themes (referenced by number):',
+        themeLines.join('\n'),
+        '',
+        'Tabs (referenced by number):',
+        tabLinesNumbered.join('\n'),
+        '',
+        'Respond with JSON: { "assignments": [ { "tab": <tab number>, "theme": <theme number> } ] } — one entry per tab.',
+    ].join('\n');
+}
+
+// Merge batch assignments into the raw {groups} shape normalizeSplitPlan
+// expects (1-based tab indices). Malformed entries and unknown theme numbers
+// are dropped — normalizeSplitPlan's Misc sweep picks those tabs up.
+function splitAssignmentsToRawGroups(themes, assignments) {
+    const groups = themes.map((name) => ({ name, tabIndices: [] }));
+    for (const a of Array.isArray(assignments) ? assignments : []) {
+        if (!a || !Number.isInteger(a.tab) || !Number.isInteger(a.theme)) continue;
+        const g = groups[a.theme - 1];
+        if (g) g.tabIndices.push(a.tab);
+    }
+    return { groups: groups.filter((g) => g.tabIndices.length > 0) };
+}
 
 function buildSplitPrompt({ name, tabs }) {
     const tabLines = (tabs || []).map((tab, i) => {
@@ -466,6 +532,10 @@ const taboxAIPlannersApi = {
     MAX_TABS,
     NAME_SCHEMA,
     buildNamePrompt,
+    BATCH_NAME_SIZE,
+    MAX_BATCH_TABS,
+    BATCH_NAME_SCHEMA,
+    buildBatchNamePrompt,
     // autoArrangeCollections
     MAX_COLLECTIONS,
     MAX_TITLES_PER_COLLECTION,
@@ -484,6 +554,14 @@ const taboxAIPlannersApi = {
     // split-collection
     SPLIT_MIN_TABS,
     SPLIT_MAX_GROUPS,
+    SPLIT_SINGLE_SHOT_MAX,
+    SPLIT_THEME_SAMPLE_MAX,
+    SPLIT_ASSIGN_BATCH,
+    SPLIT_THEMES_SCHEMA,
+    buildSplitThemesPrompt,
+    SPLIT_ASSIGN_SCHEMA,
+    buildSplitAssignPrompt,
+    splitAssignmentsToRawGroups,
     SPLIT_MIN_GROUPS,
     SPLIT_SCHEMA,
     buildSplitPrompt,
@@ -491,10 +569,6 @@ const taboxAIPlannersApi = {
     // duplicate-sweep
     DEDUP_NEW_NAME_MAX,
     DEDUP_MESSAGE_MAX,
-    DEDUP_SCHEMA,
-    buildDedupPrompt,
-    normalizeDedupSuggestion,
-    dedupGroupHasTitleConflict,
     buildDeterministicDedupSuggestion,
 };
 

@@ -15,7 +15,6 @@ const taboxProOverviewCss = fs.readFileSync(path.join(__dirname, '../app/TaboxPr
 // this test focused and fast (mirrors SettingsMenuTaboxAI.test.js).
 jest.mock('../app/ai/aiClient', () => ({
     getAIAvailability: jest.fn(),
-    downloadModel: jest.fn(),
 }));
 jest.mock('../app/toastHelpers', () => ({
     showSuccessToast: jest.fn(),
@@ -241,24 +240,6 @@ describe('SettingsMenu — Tabox Pro section', () => {
         ).toBeGreaterThanOrEqual(2);
     });
 
-    test('free plan shows the AI-unavailable warning above the upgrade button', async () => {
-        getAIAvailability.mockResolvedValue('unavailable');
-        const { container } = renderSettingsMenu(null);
-        openSettings(container);
-        const alert = await screen.findByRole('alert');
-        expect(alert).toHaveTextContent("Tabox AI won't work on this computer.");
-        const cta = screen.getByRole('button', { name: /upgrade — start free 7-day trial/i });
-        expect(alert.compareDocumentPosition(cta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    });
-
-    test('free plan shows no warning when Tabox AI works', async () => {
-        getAIAvailability.mockResolvedValue('available');
-        const { container } = renderSettingsMenu(null);
-        openSettings(container);
-        await screen.findByRole('button', { name: /upgrade — start free 7-day trial/i });
-        expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    });
-
     test('opening settings refreshes a cached entitlement so external changes show up', async () => {
         browser.runtime.sendMessage.mockImplementation(async (message) => {
             if (message.type === 'refreshProEntitlement') {
@@ -316,16 +297,4 @@ describe('SettingsMenu — Tabox Pro section', () => {
         expect(await screen.findByText(/Active \(Trial\) — ends/)).toBeInTheDocument();
     });
 
-    test('pro plan never shows the AI-unavailable warning in settings', async () => {
-        getAIAvailability.mockResolvedValue('unavailable');
-        const { container } = renderSettingsMenu({
-            entitled: true,
-            status: 'active',
-            plan: 'monthly',
-            refreshedAt: new Date().toISOString(),
-        });
-        openSettings(container);
-        await screen.findByRole('button', { name: /manage subscription/i });
-        expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    });
 });

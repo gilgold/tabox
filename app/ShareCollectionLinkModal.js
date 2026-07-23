@@ -6,7 +6,6 @@ import { browser } from '../static/globals';
 import { shareCollectionLinkModalState } from './atoms/sharedFoldersState';
 import { isProState } from './atoms/premiumState';
 import { showSuccessToast, showErrorToast } from './toastHelpers';
-import AIUnavailableWarning from './AIUnavailableWarning';
 import useProCheckout from './useProCheckout';
 import './Modal.css';
 import './ShareCollectionLinkModal.css';
@@ -137,7 +136,6 @@ export default function ShareCollectionLinkModal() {
                 <div className="share-upgrade">
                     <MdWorkspacePremium size={28} />
                     <p>Sharing collections is a Tabox Pro feature.</p>
-                    <AIUnavailableWarning />
                     <button onClick={() => startProCheckout()}>Upgrade now</button>
                 </div>
             ) : (

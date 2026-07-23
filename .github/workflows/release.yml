@@ -57,6 +57,8 @@ jobs:
           set -euo pipefail
           # Empty keys would build fine but ship a release with broken Drive
           # sync, so fail loudly here instead. Google API keys start with AIza.
+          # (The OpenRouter key is NOT bundled — Tabox AI calls go through the
+          # Worker's /ai/complete proxy, which holds the key as a secret.)
           if [ -z "${GOOGLE_API_KEY}" ] || [ -z "${GOOGLE_CLIENT_SECRET}" ]; then
             echo "GOOGLE_API_KEY / GOOGLE_CLIENT_SECRET secrets are missing or empty"; exit 1
           fi
@@ -78,6 +80,8 @@ jobs:
             || { echo "bundled googleDrive key is empty or malformed"; exit 1; }
           jq -e '.clientSecret | length > 0' build/api-keys.json > /dev/null \
             || { echo "bundled clientSecret is empty"; exit 1; }
+          jq -e 'has("openRouter") | not' build/api-keys.json > /dev/null \
+            || { echo "bundled api-keys.json must NOT carry an OpenRouter key (it belongs in the Worker secret)"; exit 1; }
           echo "Bundled api-keys.json is present and populated"
       - name: Package extension
         id: package

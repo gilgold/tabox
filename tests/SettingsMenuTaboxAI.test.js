@@ -5,10 +5,9 @@ import { browser } from '../static/globals';
 import SettingsMenu from '../app/SettingsMenu';
 import { getAIAvailability } from '../app/ai/aiClient';
 
-// AIEnableModal lazily imports these — mock them to keep tests fast.
+// Mock the AI client so these tests never touch the network.
 jest.mock('../app/ai/aiClient', () => ({
     getAIAvailability: jest.fn(),
-    downloadModel: jest.fn(),
 }));
 jest.mock('../app/toastHelpers', () => ({
     showSuccessToast: jest.fn(),
@@ -59,7 +58,7 @@ describe('SettingsMenu — Tabox AI section', () => {
         });
 
         // The modal should appear (AIEnableModal is lazy — wait for it)
-        expect(await screen.findByText(/22 GB of free disk space/i)).toBeInTheDocument();
+        expect(await screen.findByText(/sent to OpenRouter for processing/i)).toBeInTheDocument();
 
         // Storage must NOT have been called with the enabled flag
         const setCalls = browser.storage.local.set.mock.calls;
@@ -103,7 +102,7 @@ describe('SettingsMenu — Tabox AI section', () => {
         });
 
         // No modal should have appeared
-        expect(screen.queryByText(/22 GB of free disk space/i)).not.toBeInTheDocument();
+        expect(screen.queryByText(/sent to OpenRouter for processing/i)).not.toBeInTheDocument();
 
         // Storage must have been written with the disabled flag
         await waitFor(() => {

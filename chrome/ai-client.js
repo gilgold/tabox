@@ -1,57 +1,48 @@
+/* eslint-disable no-undef */
 // chrome/ai-client.js
-// Plain-JS port of app/ai/aiClient.js for the service worker. The SW loads this
-// via importScripts and cannot import the ES-module original. Keep the two in
-// sync — both wrap globalThis.LanguageModel.
+// Service-worker AI client. All inference goes through the Tabox Worker's
+// POST /ai/complete proxy (OpenRouter, DeepSeek V4 Flash) so the OpenRouter
+// API key never ships in the extension — the Worker holds it as a secret and
+// authenticates callers by their Google token. The popup's app/ai/aiClient.js
+// relays through here via the `aiComplete` message; keep the session/prompt
+// interface of the two in sync.
+//
+// Loaded via importScripts in background.js after background-utils.js
+// (getAuthToken) and pro-config.js (PRO_API_BASE); the require/globalThis
+// guards let Jest pull it in directly (mirrors chrome/shared-folders.js).
 (() => {
-const LANGUAGE_OPTIONS = {
-    expectedInputs: [{ type: 'text', languages: ['en'] }],
-    expectedOutputs: [{ type: 'text', languages: ['en'] }],
-};
+const aiClientBgUtils = typeof require === 'function'
+    ? require('./background-utils')
+    : globalThis.TaboxBackgroundUtils;
+const AI_API_BASE = typeof require === 'function'
+    ? require('./pro-config').PRO_API_BASE
+    : PRO_API_BASE;
 
-// Defaults used to satisfy the Prompt API's "both temperature and topK, or
-// neither" rule when a caller specifies only one of them.
-const DEFAULT_TOP_K = 3;
-const DEFAULT_TEMPERATURE = 1;
-
-// Mirror of app/ai/browserSupport.js — Tabox AI is Chrome-only. Edge exposes
-// its own incompatible LanguageModel global, so brand-check before feature-
-// detecting; unidentified Chromium fails open (the feature check still gates).
-function isChromeBrowser() {
-    const nav = globalThis.navigator;
-    if (!nav) return true;
-    if (nav.brave) return false;
-    const brands = ((nav.userAgentData && nav.userAgentData.brands) || []).map((entry) => entry.brand);
-    if (brands.includes('Microsoft Edge') || brands.includes('Opera') || brands.includes('Brave')) return false;
-    const ua = nav.userAgent || '';
-    return !(/\bEdg(?:e|A|iOS)?\//.test(ua) || /\bOPR\//.test(ua) || /\bVivaldi\//.test(ua));
-}
-
+// Returns: 'available' | 'sign-in-required'
 async function aiAvailability() {
-    if (!isChromeBrowser()) return 'unsupported-browser';
-    if (typeof globalThis.LanguageModel === 'undefined') return 'unsupported';
     try {
-        return await globalThis.LanguageModel.availability(LANGUAGE_OPTIONS);
-    } catch (error) {
-        console.error('Tabox AI (SW) availability check failed:', error);
-        return 'unavailable';
+        const token = await aiClientBgUtils.getAuthToken();
+        return token ? 'available' : 'sign-in-required';
+    } catch {
+        return 'sign-in-required';
     }
 }
 
+// Sessions are stateless request builders: each prompt sends only the system
+// prompt + that prompt (no accumulated context), so repeated prompts on one
+// session don't get slower or costlier over a long run.
 async function createAISession({ systemPrompt, temperature, topK, signal } = {}) {
-    if (!isChromeBrowser() || typeof globalThis.LanguageModel === 'undefined') {
-        throw new Error('Tabox AI: LanguageModel is unavailable in this context');
-    }
-    const options = { ...LANGUAGE_OPTIONS };
-    if (systemPrompt) options.initialPrompts = [{ role: 'system', content: systemPrompt }];
-    // The Prompt API requires temperature and topK together (or neither); pair a
-    // default for whichever a caller omitted so a one-sided value doesn't throw
-    // NotSupportedError.
-    if (temperature !== undefined || topK !== undefined) {
-        options.temperature = temperature !== undefined ? temperature : DEFAULT_TEMPERATURE;
-        options.topK = topK !== undefined ? topK : DEFAULT_TOP_K;
-    }
-    if (signal) options.signal = signal;
-    return globalThis.LanguageModel.create(options);
+    // Prefetch/refresh the auth token so the first prompt doesn't pay for it.
+    aiClientBgUtils.getAuthToken().catch(() => {});
+    return {
+        prompt: (text, options = {}) => requestCompletion(
+            { systemPrompt, temperature, topK },
+            text,
+            { ...options, signal: options.signal || signal },
+        ),
+        clone: () => createAISession({ systemPrompt, temperature, topK, signal }),
+        destroy: () => {},
+    };
 }
 
 async function promptForJSON(session, prompt, schema, signal) {
@@ -60,7 +51,77 @@ async function promptForJSON(session, prompt, schema, signal) {
     const startedAt = Date.now();
     const raw = await session.prompt(prompt, options);
     console.debug(`Tabox AI: inference ${Date.now() - startedAt}ms`);
-    return JSON.parse(raw);
+    return parseJSONContent(raw);
+}
+
+// Hard per-request deadline. Without one, a stalled upstream (Worker or
+// OpenRouter) hangs its fetch forever and freezes the whole task's progress —
+// tasks can only observe failures between requests. A timeout turns the hang
+// into a normal per-item error (rename skip / split Misc sweep). Generous vs
+// observed inference times (a few seconds) so it never clips a slow-but-live
+// completion.
+const AI_REQUEST_TIMEOUT_MS = 90_000;
+
+async function requestCompletion(config, text, { responseConstraint, signal } = {}) {
+    const token = await aiClientBgUtils.getAuthToken();
+    if (!token) throw new Error('Tabox AI: sign in to Tabox to use AI features');
+    // One internal controller drives the fetch; the caller's signal and the
+    // deadline both funnel into it. Manual wiring (no AbortSignal.timeout/any —
+    // Chrome 89 baseline). `timedOut` disambiguates the two abort sources so a
+    // deadline surfaces as TimeoutError (per-item failure), never as AbortError
+    // (which tasks treat as cancellation).
+    const controller = new AbortController();
+    let timedOut = false;
+    const onCallerAbort = () => controller.abort();
+    if (signal) {
+        if (signal.aborted) controller.abort();
+        else signal.addEventListener('abort', onCallerAbort, { once: true });
+    }
+    const timer = setTimeout(() => { timedOut = true; controller.abort(); }, AI_REQUEST_TIMEOUT_MS);
+    const messages = [];
+    if (config.systemPrompt) messages.push({ role: 'system', content: config.systemPrompt });
+    messages.push({ role: 'user', content: text });
+    const body = { messages };
+    if (config.temperature !== undefined) body.temperature = config.temperature;
+    if (config.topK !== undefined) body.top_k = config.topK;
+    if (responseConstraint) {
+        body.response_format = {
+            type: 'json_schema',
+            json_schema: { name: 'response', strict: true, schema: responseConstraint },
+        };
+    }
+    let response;
+    try {
+        response = await fetch(`${AI_API_BASE}/ai/complete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify(body),
+            signal: controller.signal,
+        });
+    } catch (err) {
+        if (timedOut) {
+            const e = new Error(`Tabox AI: request timed out after ${AI_REQUEST_TIMEOUT_MS / 1000}s`);
+            e.name = 'TimeoutError';
+            throw e;
+        }
+        throw err;
+    } finally {
+        clearTimeout(timer);
+        if (signal) signal.removeEventListener('abort', onCallerAbort);
+    }
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        throw new Error(`Tabox AI: request failed (${response.status}): ${data.error || 'request_failed'}`);
+    }
+    if (typeof data.content !== 'string' || !data.content) throw new Error('Tabox AI: empty completion');
+    return data.content;
+}
+
+// Models occasionally wrap JSON in a markdown fence even under json_schema.
+function parseJSONContent(raw) {
+    const trimmed = raw.trim();
+    const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
+    return JSON.parse(fenced ? fenced[1] : trimmed);
 }
 
 const aiClientApi = { aiAvailability, createAISession, promptForJSON };

@@ -1,6 +1,7 @@
 const {
     buildNamePrompt, buildArrangePrompt, normalizeArrangePlan,
     normalizeOrganizePlan, CATCHALL_FOLDER_NAME, GROUP_COLORS,
+    buildBatchNamePrompt, BATCH_NAME_SCHEMA, BATCH_NAME_SIZE, MAX_BATCH_TABS,
 } = require('../chrome/ai-planners.js');
 
 describe('ai-planners module', () => {
@@ -8,6 +9,31 @@ describe('ai-planners module', () => {
         const p = buildNamePrompt({ tabs: [{ title: 'Docs', url: 'https://example.com/x' }] });
         expect(p).toContain('Docs');
         expect(p).toContain('example.com');
+    });
+
+    test('buildBatchNamePrompt labels each collection by index and lists its tabs', () => {
+        const p = buildBatchNamePrompt([
+            { tabs: [{ title: 'React', url: 'https://react.dev' }] },
+            { tabs: [{ title: 'BBC', url: 'https://bbc.com' }] },
+        ]);
+        expect(p).toContain('Collection 0:');
+        expect(p).toContain('Collection 1:');
+        expect(p).toContain('React');
+        expect(p).toContain('BBC');
+        expect(p).toContain('"index"'); // instructs the model to echo indexes
+    });
+
+    test('buildBatchNamePrompt caps tabs per collection at MAX_BATCH_TABS', () => {
+        const tabs = Array.from({ length: MAX_BATCH_TABS + 5 }, (_, i) => ({ title: `T${i}`, url: `https://e${i}.com` }));
+        const p = buildBatchNamePrompt([{ tabs }]);
+        expect(p).toContain(`T${MAX_BATCH_TABS - 1}`);
+        expect(p).not.toContain(`T${MAX_BATCH_TABS}`);
+    });
+
+    test('BATCH_NAME_SCHEMA requires index+name entries and a sane batch size', () => {
+        expect(BATCH_NAME_SCHEMA.properties.names.items.required).toEqual(['index', 'name']);
+        expect(BATCH_NAME_SCHEMA.properties.names.items.additionalProperties).toBe(false);
+        expect(BATCH_NAME_SIZE).toBeGreaterThan(1);
     });
 
     test('normalizeArrangePlan forces exactly one target per folder block and falls back to Misc', () => {

@@ -1,7 +1,6 @@
 import React from 'react';
 import { BsStars } from 'react-icons/bs';
 import { MdCheck, MdFolderShared, MdVerifiedUser, MdWorkspacePremium } from 'react-icons/md';
-import AIUnavailableWarning from './AIUnavailableWarning';
 import './TaboxProOverview.css';
 
 const BENEFITS = [
@@ -74,8 +73,6 @@ export default function TaboxProOverview({ statusLabel, onUpgrade }) {
                             </div>
                         </div>
                     </div>
-
-                    <AIUnavailableWarning />
 
                     <button type="button" className="menu-button fp-settings-menu-button fp-pro-upgrade-button" onClick={onUpgrade}>
                         <MdWorkspacePremium aria-hidden="true" />

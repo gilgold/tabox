@@ -49,10 +49,20 @@ function SplitCollectionPanel({
 
     // ── Running ──────────────────────────────────────────────────────────────
     if (status === 'running') {
+        // Two-phase scans report per-batch progress (filed/total tabs); show it
+        // once assignment starts. filed stays 0 through the themes call, so the
+        // counter never renders as a static "0/N".
+        const filed = aiTaskState?.filed || 0;
+        const total = aiTaskState?.total || 0;
         return (
             <div className="split-panel split-panel--running">
                 <SplitScanAnimation />
-                <p className="split-panel-status">Scanning tabs and proposing sub-collections…</p>
+                <p className="split-panel-status">
+                    Scanning tabs and proposing sub-collections…
+                    {filed > 0 && total > 0 && (
+                        <span className="split-panel-progress">{` ${Math.min(filed, total)}/${total} tabs`}</span>
+                    )}
+                </p>
             </div>
         );
     }

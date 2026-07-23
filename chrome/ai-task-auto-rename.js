@@ -1,39 +1,83 @@
 // chrome/ai-task-auto-rename.js
 // AI task: batch-rename collections. Domain logic only — driven by the engine.
 (() => {
+// Name many collections per request (one prompt lists a whole batch), then run
+// a few batches in flight at once. Batching is the dominant win: it cuts both
+// round-trips AND the number of requests, so a large library stays well under
+// the Worker's 20-req/60s per-user burst limit instead of tripping it.
+const BATCH_CONCURRENCY = 3;
+
 const def = {
     id: 'auto-rename',
-    async run({ ctx, params, report }) {
+    async run({ ctx, params, report, signal }) {
         const { planners, client, storage, loadCollections, triggerSync, isCancelled } = ctx;
         const all = await loadCollections();
         const targets = all.filter((c) => params.uids.includes(c.uid));
         await report({ total: targets.length, filed: 0 });
-        const renames = [];
-        const skipped = [];
-        let session = null; // created lazily, reused across the whole loop
-        try {
-            for (let i = 0; i < targets.length; i++) {
-                if (await isCancelled()) break;
-                const c = targets[i];
-                await report({ filed: i, currentLabel: c.name, currentUid: c.uid });
-                let name;
+        // Index-keyed by GLOBAL target position so results keep original order
+        // regardless of which batch finishes first; compacted with filter(Boolean).
+        const renameByIndex = new Array(targets.length).fill(null);
+        const skippedByIndex = new Array(targets.length).fill(null);
+        const orderedRenames = () => renameByIndex.filter(Boolean);
+        const orderedSkipped = () => skippedByIndex.filter(Boolean);
+        // Contiguous slices; `start` is the global index of the batch's first item.
+        const size = planners.BATCH_NAME_SIZE;
+        const batches = [];
+        for (let i = 0; i < targets.length; i += size) batches.push({ start: i, items: targets.slice(i, i + size) });
+
+        let completed = 0;
+        let aborted = false;
+        let next = 0;
+        // One session shared across workers: each prompt is a stateless request
+        // (system prompt + that batch only), so concurrent use is safe. The run's
+        // abort signal rides along so aiCancel aborts in-flight fetches too, not
+        // just future batches.
+        const session = await client.createAISession({ systemPrompt: 'You name groups of browser tabs. Names are short (2-4 words), specific, and in Title Case. Never include quotes or emojis.', temperature: 0, signal });
+
+        async function worker() {
+            for (;;) {
+                if (aborted) return;
+                if (await isCancelled()) { aborted = true; return; }
+                const b = next++;
+                if (b >= batches.length) return;
+                const { start, items } = batches[b];
+                await report({ currentLabel: items[0].name, currentUid: items[0].uid });
+                let names;
                 try {
-                    if (!session) {
-                        session = await client.createAISession({ systemPrompt: 'You name groups of browser tabs. Names are short (2-4 words), specific, and in Title Case. Never include quotes or emojis.', temperature: 0 });
-                    }
-                    ({ name } = await client.promptForJSON(session, planners.buildNamePrompt(c), planners.NAME_SCHEMA));
+                    ({ names } = await client.promptForJSON(session, planners.buildBatchNamePrompt(items), planners.BATCH_NAME_SCHEMA, signal));
                 } catch (err) {
-                    if (err.name === 'AbortError') break;
-                    console.error('Tabox AI: rename suggestion failed for', c.uid, err);
-                    skipped.push({ uid: c.uid, reason: 'error' });
+                    if (err.name === 'AbortError') { aborted = true; return; }
+                    console.error('Tabox AI: batch rename failed for', items.map((c) => c.uid), err);
+                    for (let k = 0; k < items.length; k++) skippedByIndex[start + k] = { uid: items[k].uid, reason: 'error' };
+                    completed += items.length;
+                    await report({ filed: completed, results: orderedRenames(), skipped: orderedSkipped() });
                     continue;
                 }
-                name = String(name).trim().slice(0, 50);
-                if (name && name !== c.name) renames.push({ uid: c.uid, oldName: c.name, newName: name });
+                // Map each name back by the echoed local index — never by array
+                // position — so a reordered/partial response can't misassign names.
+                const nameByLocalIndex = new Map();
+                for (const entry of Array.isArray(names) ? names : []) {
+                    if (entry && Number.isInteger(entry.index)) nameByLocalIndex.set(entry.index, entry.name);
+                }
+                for (let k = 0; k < items.length; k++) {
+                    const c = items[k];
+                    const suggested = nameByLocalIndex.get(k);
+                    if (suggested == null) { skippedByIndex[start + k] = { uid: c.uid, reason: 'error' }; continue; }
+                    const name = String(suggested).trim().slice(0, 50);
+                    if (name && name !== c.name) renameByIndex[start + k] = { uid: c.uid, oldName: c.name, newName: name };
+                }
+                completed += items.length;
+                await report({ filed: completed, results: orderedRenames(), skipped: orderedSkipped() });
             }
-        } finally {
-            if (session) session.destroy();
         }
+
+        try {
+            await Promise.all(Array.from({ length: Math.min(BATCH_CONCURRENCY, batches.length) }, () => worker()));
+        } finally {
+            session.destroy();
+        }
+        const renames = orderedRenames();
+        const skipped = orderedSkipped();
         await report({ filed: targets.length, results: renames, skipped });
         if (renames.length) { await storage.renameCollectionsBG(renames); await triggerSync(); }
         return { summary: `Renamed ${renames.length} collection${renames.length === 1 ? '' : 's'} with AI`, undo: { task: 'auto-rename', renames } };

@@ -23,6 +23,7 @@ import {
   upsertCollectionLink, listCollectionLinks, deleteCollectionLink, getPublicLinkInfo,
 } from './shareLinks.js';
 import { JOIN_PAGE_HTML } from './joinPage.js';
+import { validateAIRequest, completeAI } from './aiProxy.js';
 
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -192,6 +193,38 @@ async function applyEntitlement(env, googleId, record) {
   if (shouldApply(existing, record)) {
     await env.ENTITLEMENTS.put(key, JSON.stringify(record));
   }
+}
+
+// AI completion proxy — signed-in users only, rate-limited per user (burst +
+// daily). Body caps and field allowlisting live in validateAIRequest.
+async function handleAIComplete(request, env) {
+  const identity = await authenticate(request, env);
+  if (!identity) return json({ error: 'invalid_token' }, 401);
+  const declaredLen = Number(request.headers.get('content-length') || 0);
+  if (declaredLen > MAX_BODY_BYTES) return json({ error: 'payload_too_large' }, 413);
+  const now = Date.now();
+  // Check the burst window first and short-circuit: checkRateLimit increments
+  // as it checks, so a request already rejected by the burst limit must not
+  // also consume daily quota.
+  const burstOk = await checkRateLimit(env, identity.googleId, 'ai', 20, 60, now);
+  const dayOk = burstOk && (await checkRateLimit(env, identity.googleId, 'ai-day', 500, 86400, now));
+  if (!burstOk || !dayOk) return json({ error: 'rate_limited' }, 429);
+
+  const text = await request.text();
+  if (text.length > MAX_BODY_BYTES) return json({ error: 'payload_too_large' }, 413);
+  let body;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    body = null;
+  }
+  const validated = validateAIRequest(body);
+  if (!validated.ok) {
+    return json({ error: validated.error }, validated.error === 'payload_too_large' ? 413 : 400);
+  }
+  const result = await completeAI(env, validated);
+  if (!result.ok) return json({ error: result.error }, result.status);
+  return json({ content: result.content });
 }
 
 // Sentinel thrown by body() when the real request text exceeds MAX_BODY_BYTES;
@@ -378,6 +411,7 @@ export default {
       });
     }
     if (request.method === 'GET' && url.pathname === '/entitlement') return handleEntitlement(request, env);
+    if (request.method === 'POST' && url.pathname === '/ai/complete') return handleAIComplete(request, env);
     if (request.method === 'GET' && url.pathname === '/subscription') return handleGetSubscription(request, env);
     if (request.method === 'POST' && url.pathname === '/subscription/cancel') return handleCancelSubscription(request, env);
     if (request.method === 'POST' && url.pathname === '/subscription/resume') return handleResumeSubscription(request, env);

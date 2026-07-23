@@ -231,7 +231,7 @@ describe('AIToolsModal – Auto-Rename driven by the service worker', () => {
     });
 
     test('pre-flight failure shows error and does not dispatch aiRun', async () => {
-        getAIAvailability.mockResolvedValue('downloadable');
+        getAIAvailability.mockResolvedValue('unavailable');
         await renderOpenModal();
         fireEvent.click(screen.getByText('Auto rename collections'));
         await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
@@ -240,7 +240,7 @@ describe('AIToolsModal – Auto-Rename driven by the service worker', () => {
             fireEvent.click(screen.getByRole('button', { name: /auto-rename/i }));
         });
 
-        await waitFor(() => expect(screen.getByText(/tabox ai is not ready/i)).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText(/tabox ai is not available/i)).toBeInTheDocument());
         expect(browser.runtime.sendMessage.mock.calls.find((c) => c[0].type === 'aiRun')).toBeUndefined();
     });
 

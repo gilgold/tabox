@@ -10,10 +10,6 @@ jest.mock('../app/toastHelpers', () => ({
     showSuccessToast: jest.fn(),
     showErrorToast: jest.fn(),
 }));
-// Chrome so the paywall's Upgrade CTA goes straight to checkout (no
-// NonChromeProConfirmModal detour, which App renders — not this component).
-jest.mock('../app/ai/browserSupport', () => ({ isChromeBrowser: () => true }));
-
 const PRO = { entitled: true, refreshedAt: new Date().toISOString() };
 
 function Harness() {

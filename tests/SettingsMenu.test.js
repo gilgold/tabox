@@ -7,12 +7,9 @@ import SettingsMenu from '../app/SettingsMenu';
 import { isLoggedInState, themeState } from '../app/atoms/globalAppSettingsState';
 import { getAIAvailability } from '../app/ai/aiClient';
 
-// Real getAIAvailability() would resolve 'unsupported' in jsdom (no
-// LanguageModel global) and render the AI-unavailable warning banner in the
-// Tabox Pro section — mock it so these unrelated tests stay focused.
+// Mock the AI client so these unrelated tests never touch the network.
 jest.mock('../app/ai/aiClient', () => ({
     getAIAvailability: jest.fn(),
-    downloadModel: jest.fn(),
 }));
 
 const seedBrowserStorage = (overrides = {}) => {

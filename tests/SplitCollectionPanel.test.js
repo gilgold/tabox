@@ -47,6 +47,22 @@ test('clicking a picker card header expands its tab preview without scanning', (
     expect(onStartScan).not.toHaveBeenCalled();
 });
 
+test('running state shows tab progress once batches start reporting', () => {
+    setup({
+        aiTaskState: { type: 'split-collection', status: 'running', filed: 80, total: 200 },
+    });
+    expect(screen.getByText(/Scanning tabs/)).toBeInTheDocument();
+    expect(screen.getByText(/80\/200 tabs/)).toBeInTheDocument();
+});
+
+test('running state omits the counter before any progress is filed', () => {
+    setup({
+        aiTaskState: { type: 'split-collection', status: 'running', filed: 0, total: 200 },
+    });
+    expect(screen.getByText(/Scanning tabs/)).toBeInTheDocument();
+    expect(screen.queryByText(/0\/200/)).not.toBeInTheDocument();
+});
+
 test('review state shows proposed sub-collections and a folder checkbox (default on)', () => {
     setup({
         aiTaskState: { type: 'split-collection', status: 'done', results: { ok: true, uid: 'big', name: 'Big', groups: [

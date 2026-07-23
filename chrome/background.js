@@ -2272,16 +2272,44 @@ try {
       return Promise.resolve(result); // engine maps throw/abort to status:error/cancelled
     }
     if (request.type === 'aiCancel') {
-      if (globalThis.__aiAbort) globalThis.__aiAbort.abort();
-      const cur = (await browser.storage.local.get('aiTaskState')).aiTaskState || {};
-      await browser.storage.local.set({ aiTaskState: { ...cur, cancelRequested: true } });
+      if (globalThis.__aiAbort) {
+        globalThis.__aiAbort.abort();
+        // A task is live in this worker — abort its fetches and flag it; the
+        // run loop observes the flag and writes the terminal 'cancelled' state.
+        // Merge the flag through the serialized write chain so the task's
+        // concurrent report() writes can't clobber it back to false.
+        await globalThis.TaboxAIEngine.requestCancel();
+      } else {
+        // No live run in THIS worker. Either the owning worker was discarded
+        // mid-run (stuck 'running' with nobody to observe the flag) or the run
+        // already ended — finalize directly so the UI can't stay stuck.
+        await globalThis.TaboxAIEngine.finalizeInterrupted({ status: 'cancelled', summary: '' });
+      }
       return Promise.resolve({ ok: true });
     }
+    if (request.type === 'aiAvailability') {
+      return Promise.resolve(await globalThis.TaboxAIClient.aiAvailability());
+    }
+    if (request.type === 'aiComplete') {
+      // Popup-relayed one-shot completion (suggest collection/folder name).
+      // Long-running multi-step tasks go through aiRun instead.
+      const payload = request.payload || {};
+      try {
+        const session = await globalThis.TaboxAIClient.createAISession({
+          systemPrompt: payload.systemPrompt,
+          temperature: payload.temperature,
+          topK: payload.topK,
+        });
+        const content = await session.prompt(payload.prompt, { responseConstraint: payload.responseConstraint });
+        return Promise.resolve({ ok: true, content });
+      } catch (error) {
+        return Promise.resolve({ ok: false, error: error?.message || String(error) });
+      }
+    }
     if (request.type === 'aiWarmup') {
-      // Fire-and-forget model warm-up: creating then destroying a session loads the
-      // model weights into memory so the first real AI task's session-create + first
-      // decode are faster. The warm cost persists past destroy(). Errors (model not
-      // downloaded / unavailable) are swallowed — there's simply nothing to warm.
+      // Fire-and-forget warm-up: creating a session prefetches/refreshes the
+      // Google auth token so the first real AI task doesn't pay for it.
+      // Errors (signed out) are swallowed — there's simply nothing to warm.
       try {
         const warmSession = await globalThis.TaboxAIClient.createAISession({});
         warmSession.destroy();
@@ -2291,7 +2319,16 @@ try {
       return Promise.resolve({ ok: true });
     }
     if (request.type === 'aiGetState') {
-      return Promise.resolve((await browser.storage.local.get('aiTaskState')).aiTaskState || null);
+      let state = (await browser.storage.local.get('aiTaskState')).aiTaskState || null;
+      // A 'running' state with no live abort controller means the worker that
+      // owned the run was discarded (MV3) — the task isn't executing. Finalize
+      // it so the popup doesn't reattach to (and auto-navigate into) a dead run
+      // on every open. __aiAbort is set synchronously before the run flips the
+      // status to 'running', so within a live worker the two never disagree.
+      if (state && state.status === 'running' && !globalThis.__aiAbort) {
+        state = await globalThis.TaboxAIEngine.finalizeInterrupted();
+      }
+      return Promise.resolve(state || null);
     }
 
   });

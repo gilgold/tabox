@@ -392,16 +392,6 @@ test('a non-owner (role "write") shared folder does not render the member-manage
   expect(browser.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'sharedGetMembers' }));
 });
 
-test('non-Pro upgrade prompt warns when the device cannot run Tabox AI', async () => {
-  getAIAvailability.mockResolvedValue('unavailable');
-  renderModal(FOLDER, { entitled: false });
-  const alert = await screen.findByRole('alert');
-  expect(alert).toHaveTextContent("Tabox AI won't work on this computer.");
-  const cta = screen.getByRole('button', { name: /upgrade now/i });
-  expect(alert.compareDocumentPosition(cta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  await act(async () => {});
-});
-
 test('non-Pro upgrade prompt shows no warning when Tabox AI works', async () => {
   renderModal(FOLDER, { entitled: false });
   await act(async () => {});

@@ -72,8 +72,6 @@ describe('Collection List Options tests', () => {
 
   test('renders the AI button in the toolbar when Tabox AI is enabled', async () => {
     browser.storage.local.get.mockResolvedValue({ chkTaboxAI: true });
-    // Simulate Prompt API availability so AIButton does not render null
-    globalThis.LanguageModel = { availability: jest.fn() };
 
     let container;
     await act(async () => {
@@ -87,7 +85,5 @@ describe('Collection List Options tests', () => {
     await waitFor(() => {
       expect(container.querySelector('.collections-toolbar .ai-button')).toBeInTheDocument();
     });
-
-    delete globalThis.LanguageModel;
   });
 });
