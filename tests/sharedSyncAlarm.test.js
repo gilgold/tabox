@@ -158,6 +158,93 @@ describe('shared sync adaptive alarm + push wiring', () => {
         });
     });
 
+    describe('push subscription established as part of ensureSharedSyncAlarm (login wiring)', () => {
+        // ensureSharedSyncAlarm() must call ensurePushSubscription() as its
+        // FIRST step, so every caller that (re)evaluates the alarm -
+        // onInstalled/onStartup, interactive login, and every
+        // chrome/shared-folders.js call site - also (re)establishes push.
+        // These mocks simulate a real ensurePushSubscription() that flips
+        // the stored healthy state, which isPushHealthy() then reads back -
+        // exercising the actual call-order dependency, not just presence.
+        test('subscribe succeeds: alarm lands at the 60-minute healthy period', async () => {
+            let healthy = false;
+            global.ensurePushSubscription = jest.fn(async () => {
+                healthy = true;
+                return true;
+            });
+            global.isPushHealthy = jest.fn(async () => healthy);
+
+            require('../chrome/background.js');
+            await browser.runtime.onStartup.trigger();
+
+            expect(global.ensurePushSubscription).toHaveBeenCalled();
+            expect(browser.alarms.create).toHaveBeenCalledWith(
+                'shared-folders-sync',
+                expect.objectContaining({ delayInMinutes: 60, periodInMinutes: 60 })
+            );
+        });
+
+        test('subscribe fails: alarm lands at the 1-minute fallback period', async () => {
+            let healthy = false;
+            global.ensurePushSubscription = jest.fn(async () => {
+                healthy = false;
+                return false;
+            });
+            global.isPushHealthy = jest.fn(async () => healthy);
+
+            require('../chrome/background.js');
+            await browser.runtime.onStartup.trigger();
+
+            expect(global.ensurePushSubscription).toHaveBeenCalled();
+            expect(browser.alarms.create).toHaveBeenCalledWith(
+                'shared-folders-sync',
+                expect.objectContaining({ delayInMinutes: 1, periodInMinutes: 1 })
+            );
+        });
+
+        test('interactive login (request.type === "login") ends up establishing the push subscription', async () => {
+            let healthy = false;
+            global.ensurePushSubscription = jest.fn(async () => {
+                healthy = true;
+                return true;
+            });
+            global.isPushHealthy = jest.fn(async () => healthy);
+
+            // Stub the background-utils.js globals the login handler needs
+            // (importScripts is mocked as a no-op above).
+            global.createAuthEndpoint = jest.fn(() => 'https://accounts.google.com/o/oauth2/auth');
+            global.getTokens = jest.fn(async () => 'token-123');
+            global.getOrCreateSyncFile = jest.fn(async () => 'file-123');
+            global.getGoogleUser = jest.fn(async () => ({ displayName: 'Test User', email: 'a@x.com' }));
+            global.loadAllCollectionsBG = jest.fn(async () => []);
+            global.ensureBackgroundSyncAlarm = jest.fn(async () => {});
+            global.SYNC_SESSION_STATUS = {
+                SYNCING: 'syncing', ACTIVE: 'active', ERROR: 'error', USER_INFO_ERROR: 'user_info_error'
+            };
+            browser.identity = {
+                launchWebAuthFlow: jest.fn(async () => 'https://redirect.example.com/?code=abc')
+            };
+
+            require('../chrome/background.js');
+            const result = await browser.runtime.sendMessage({ type: 'login' });
+
+            expect(result).toEqual({ displayName: 'Test User', email: 'a@x.com' });
+            expect(global.ensurePushSubscription).toHaveBeenCalled();
+            expect(browser.alarms.create).toHaveBeenCalledWith(
+                'shared-folders-sync',
+                expect.objectContaining({ periodInMinutes: 60 })
+            );
+
+            delete global.createAuthEndpoint;
+            delete global.getTokens;
+            delete global.getOrCreateSyncFile;
+            delete global.getGoogleUser;
+            delete global.loadAllCollectionsBG;
+            delete global.ensureBackgroundSyncAlarm;
+            delete global.SYNC_SESSION_STATUS;
+        });
+    });
+
     describe('sign-in/sign-out lifecycle wiring', () => {
         test('onStartup ensures the push subscription before (re)evaluating the shared sync alarm', async () => {
             require('../chrome/background.js');

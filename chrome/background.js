@@ -149,6 +149,16 @@ async function ensureBackgroundSyncAlarm() {
 // invites. Cleared when signed out, mirroring ensureBackgroundSyncAlarm's
 // create/clear shape above.
 async function ensureSharedSyncAlarm() {
+  // Establish/refresh the push subscription here so EVERY caller that
+  // (re)evaluates this alarm — onInstalled/onStartup, interactive login,
+  // and every shared-folders.js call site — also (re)establishes push.
+  // ensurePushSubscription() is cheap and never throws by contract
+  // (signed-out: fast false; healthy <24h: short-circuit true; failure:
+  // healthy:false), but guard for jest harnesses that don't stub the global.
+  if (typeof ensurePushSubscription === 'function') {
+    await ensurePushSubscription();
+  }
+
   const { googleRefreshToken } = await browser.storage.local.get('googleRefreshToken');
   const alarms = await browser.alarms.getAll();
   const existingAlarm = alarms.find(alarm => alarm.name === SHARED_SYNC_ALARM);
@@ -1985,7 +1995,11 @@ try {
         }
 
         await ensureBackgroundSyncAlarm();
-        
+        // ensureSharedSyncAlarm() now also (re)establishes the push
+        // subscription as its first step, so interactive login stops the
+        // session from being stuck on 1-minute polling forever.
+        if (typeof ensureSharedSyncAlarm === 'function') await ensureSharedSyncAlarm();
+
         return Promise.resolve(user);
       } catch (error) {
         console.error('Exception during login:', error);
