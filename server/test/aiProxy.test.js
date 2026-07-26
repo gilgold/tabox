@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import worker from '../src/index.js';
-import { validateAIRequest } from '../src/aiProxy.js';
+import { validateAIRequest, completeAI } from '../src/aiProxy.js';
 
 const makeKV = (store = {}) => ({
   get: vi.fn(async (k) => (k in store ? String(store[k]) : null)),
@@ -138,5 +138,54 @@ describe('validateAIRequest', () => {
     });
     expect(out.ok).toBe(true);
     expect(out.request).toEqual({ messages: [{ role: 'user', content: 'hi' }] });
+  });
+});
+
+// Bursts of empty completions come from OpenRouter's multi-provider routing:
+// a provider can 200 with empty content, and parallel requests all routed to
+// it fail together. completeAI retries (re-rolling the provider route) before
+// surfacing empty_completion; the rate limit was already charged once at the
+// route layer, so retries never touch the user's quota.
+describe('completeAI empty-completion retry', () => {
+  const E = { OPENROUTER_API_KEY: 'sk-or-secret' };
+  const VALIDATED = { ok: true, request: { messages: [{ role: 'user', content: 'hi' }] } };
+  const resp = (content) => ({ ok: true, status: 200, json: async () => ({ choices: [{ message: { content } }] }) });
+
+  it('retries an empty completion and succeeds on the second attempt', async () => {
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(resp(''))
+      .mockResolvedValueOnce(resp('{"name":"X"}'));
+    const sleepImpl = vi.fn(async () => {});
+    const result = await completeAI(E, VALIDATED, fetchImpl, sleepImpl);
+    expect(result).toEqual({ ok: true, content: '{"name":"X"}' });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(sleepImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives up after three empty attempts with 502 empty_completion', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(resp(''));
+    const sleepImpl = vi.fn(async () => {});
+    const result = await completeAI(E, VALIDATED, fetchImpl, sleepImpl);
+    expect(result).toEqual({ ok: false, status: 502, error: 'empty_completion' });
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(sleepImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry upstream errors', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
+    const sleepImpl = vi.fn(async () => {});
+    const result = await completeAI(E, VALIDATED, fetchImpl, sleepImpl);
+    expect(result).toEqual({ ok: false, status: 502, error: 'upstream_error' });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(sleepImpl).not.toHaveBeenCalled();
+  });
+
+  it('does not sleep when the first attempt succeeds', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(resp('ok'));
+    const sleepImpl = vi.fn(async () => {});
+    const result = await completeAI(E, VALIDATED, fetchImpl, sleepImpl);
+    expect(result).toEqual({ ok: true, content: 'ok' });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(sleepImpl).not.toHaveBeenCalled();
   });
 });

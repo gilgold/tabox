@@ -49,24 +49,40 @@ export function validateAIRequest(body) {
   return { ok: true, request };
 }
 
-export async function completeAI(env, validated, fetchImpl = fetch) {
+// OpenRouter fans the pinned model out across several providers, and a
+// provider can answer 200 with an empty message. Retrying re-rolls the
+// provider route, so empty completions get EMPTY_RETRY_BACKOFF_MS.length
+// extra attempts before surfacing 502 empty_completion. Upstream errors are
+// NOT retried. The caller charged the user's rate-limit bucket once before
+// calling this, so retries never consume quota.
+const EMPTY_RETRY_BACKOFF_MS = [250, 750];
+
+const defaultSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export async function completeAI(env, validated, fetchImpl = fetch, sleepImpl = defaultSleep) {
   if (!env.OPENROUTER_API_KEY) return { ok: false, status: 500, error: 'not_configured' };
-  let res;
-  try {
-    res = await fetchImpl(OPENROUTER_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.OPENROUTER_API_KEY}` },
-      body: JSON.stringify({ model: MODEL, max_tokens: MAX_OUTPUT_TOKENS, ...validated.request }),
-    });
-  } catch {
-    return { ok: false, status: 502, error: 'upstream_error' };
+  for (let attempt = 0; ; attempt++) {
+    let res;
+    try {
+      res = await fetchImpl(OPENROUTER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.OPENROUTER_API_KEY}` },
+        body: JSON.stringify({ model: MODEL, max_tokens: MAX_OUTPUT_TOKENS, ...validated.request }),
+      });
+    } catch {
+      return { ok: false, status: 502, error: 'upstream_error' };
+    }
+    if (!res.ok) {
+      console.error('ai proxy: upstream error', res.status);
+      return { ok: false, status: 502, error: 'upstream_error' };
+    }
+    const data = await res.json().catch(() => null);
+    const content = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    if (typeof content === 'string' && content) return { ok: true, content };
+    if (attempt >= EMPTY_RETRY_BACKOFF_MS.length) {
+      return { ok: false, status: 502, error: 'empty_completion' };
+    }
+    console.warn('ai proxy: empty completion, retrying', { attempt: attempt + 1 });
+    await sleepImpl(EMPTY_RETRY_BACKOFF_MS[attempt]);
   }
-  if (!res.ok) {
-    console.error('ai proxy: upstream error', res.status);
-    return { ok: false, status: 502, error: 'upstream_error' };
-  }
-  const data = await res.json().catch(() => null);
-  const content = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-  if (typeof content !== 'string' || !content) return { ok: false, status: 502, error: 'empty_completion' };
-  return { ok: true, content };
 }
