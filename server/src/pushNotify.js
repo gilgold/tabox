@@ -124,7 +124,11 @@ export async function notifyFolderMembers(env, db, folderId, { exceptEmail, payl
       : memberEmails;
     const except = String(exceptEmail || '').toLowerCase();
     const emails = allEmails.filter((e) => e.toLowerCase() !== except);
-    await notifyEmails(env, db, [...emails, ...extraEmails], payload);
+    // extraEmails must go through the same exceptEmail filter — otherwise a
+    // future caller passing the actor's own email in extraEmails would
+    // reintroduce the self-tickle this function is meant to prevent.
+    const filteredExtra = extraEmails.filter((e) => String(e || '').toLowerCase() !== except);
+    await notifyEmails(env, db, [...emails, ...filteredExtra], payload);
   } catch (err) {
     console.error('notifyFolderMembers failed:', err);
   }

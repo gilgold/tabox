@@ -260,6 +260,19 @@ describe('notifyFolderMembers', () => {
     ]);
   });
 
+  it('filters extraEmails through the same exceptEmail check, so the actor cannot re-add themselves', async () => {
+    const db = makePushDB();
+    await seedFolder(db);
+    // Defense-in-depth: even if a future caller mistakenly passes the actor's
+    // own email inside extraEmails, they must still be excluded.
+    await notifyFolderMembers(vapid.env, db, 'f1', {
+      exceptEmail: 'A@x.com', payload: { type: 'tickle' }, extraEmails: ['a@x.com', 'f@x.com'],
+    });
+    expect(fetchMock.mock.calls.map((c) => c[0]).sort()).toEqual([
+      'https://push.example.com/b', 'https://push.example.com/c', 'https://push.example.com/f',
+    ]);
+  });
+
   it('never throws when the folder does not exist', async () => {
     const db = makePushDB();
     await expect(notifyFolderMembers(vapid.env, db, 'nope', { payload: { type: 'tickle' } })).resolves.toBeUndefined();
