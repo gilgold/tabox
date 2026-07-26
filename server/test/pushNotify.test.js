@@ -76,11 +76,11 @@ async function decryptWebPush(bodyBuf, ua) {
   decipher.setAuthTag(tag);
   let record = Buffer.concat([decipher.update(data), decipher.final()]);
 
-  // Strip zero padding then the 0x02 (last-record) / 0x01 delimiter.
+  // Strip zero padding then the 0x02 (last-record) delimiter.
   let end = record.length;
   while (end > 0 && record[end - 1] === 0x00) end -= 1;
   const delim = record[end - 1];
-  if (delim !== 0x02 && delim !== 0x01) throw new Error(`bad pad delimiter: ${delim}`);
+  if (delim !== 0x02) throw new Error(`bad pad delimiter: ${delim}`);
   return { plaintext: record.subarray(0, end - 1).toString('utf8'), rs, asPublicLength: idlen };
 }
 
@@ -94,14 +94,6 @@ async function verifyVapidJwt(token, publicRaw) {
 
 function makePushDB() {
   const db = makeDB();
-  db._raw.exec(`CREATE TABLE IF NOT EXISTS push_subscriptions (
-    endpoint TEXT PRIMARY KEY,
-    user_email TEXT NOT NULL,
-    p256dh TEXT NOT NULL,
-    auth TEXT NOT NULL,
-    created_at INTEGER NOT NULL,
-    last_ok_at INTEGER
-  );`);
   return db;
 }
 
