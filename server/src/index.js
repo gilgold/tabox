@@ -24,6 +24,7 @@ import {
 } from './shareLinks.js';
 import { JOIN_PAGE_HTML } from './joinPage.js';
 import { validateAIRequest, completeAI } from './aiProxy.js';
+import { handlePushSubscribe, handlePushUnsubscribe } from './pushRoutes.js';
 
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -382,6 +383,20 @@ async function handleShared(request, env, url) {
   }
 }
 
+async function handlePush(request, env) {
+  const identity = await authenticate(request, env);
+  if (!identity) return json({ error: 'invalid_token' }, 401);
+  if (!identity.email) return json({ error: 'email_unavailable' }, 403);
+  const allowed = await checkRateLimit(env, identity.googleId, 'writes', 120, 60, Date.now());
+  if (!allowed) return json({ error: 'rate_limited' }, 429);
+  let body;
+  try { body = JSON.parse(await request.text()); } catch { body = {}; }
+  const r = request.method === 'POST'
+    ? await handlePushSubscribe(env.SHARED_DB, identity, body, Date.now())
+    : await handlePushUnsubscribe(env.SHARED_DB, identity, body);
+  return r.ok === false ? json({ error: r.error }, r.status) : json(r.data, 200);
+}
+
 // Public, unauthenticated token resolution for the join page and the extension.
 // The unguessable token is the only credential; rate-limit per client IP to
 // blunt token scanning. Folder links expose metadata only (see getPublicLinkInfo).
@@ -421,6 +436,9 @@ export default {
       return new Response(JOIN_PAGE_HTML, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
     }
     if (url.pathname.startsWith('/shared/')) return handleShared(request, env, url);
+    if (url.pathname === '/push/subscribe' && (request.method === 'POST' || request.method === 'DELETE')) {
+      return handlePush(request, env);
+    }
     if (request.method === 'POST' && url.pathname === '/webhooks/paddle') return handlePaddleWebhook(request, env);
     return json({ error: 'not_found' }, 404);
   },
