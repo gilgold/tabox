@@ -265,4 +265,47 @@ describe('notifyFolderMembers', () => {
     await expect(notifyFolderMembers(vapid.env, db, 'nope', { payload: { type: 'tickle' } })).resolves.toBeUndefined();
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it('includes the folder owner even though the owner has no shared_members row', async () => {
+    const db = makePushDB();
+    // Owner-only folder: owner_email set on shared_folders, but NO
+    // corresponding shared_members row for the owner (only guests are
+    // members) — mirrors real production data.
+    db._raw.prepare(`INSERT INTO shared_folders
+      (id, owner_google_id, owner_email, name, revision, created_at, updated_at, updated_by)
+      VALUES ('f2','g-owner','owner@x.com','Team',1,1,1,'owner@x.com')`).run();
+    db._raw.prepare(`INSERT INTO shared_members
+      (folder_id, email, google_id, role, status, invited_at) VALUES ('f2',?,?,?,?,1)`)
+      .run('guest@x.com', 'g-guest', 'write', 'active');
+    await addSub(db, 'https://push.example.com/owner2', 'owner@x.com', await makeUaKeys());
+    await addSub(db, 'https://push.example.com/guest2', 'guest@x.com', await makeUaKeys());
+
+    // A member (not the owner) triggers the tickle — owner must be notified.
+    await notifyFolderMembers(vapid.env, db, 'f2', {
+      exceptEmail: 'guest@x.com', payload: { type: 'tickle' },
+    });
+    expect(fetchMock.mock.calls.map((c) => c[0]).sort()).toEqual([
+      'https://push.example.com/owner2',
+    ]);
+  });
+
+  it('excludes an owner-actor from their own tickle even when owner_email case differs', async () => {
+    const db = makePushDB();
+    db._raw.prepare(`INSERT INTO shared_folders
+      (id, owner_google_id, owner_email, name, revision, created_at, updated_at, updated_by)
+      VALUES ('f3','g-owner','Owner@X.com','Team',1,1,1,'Owner@X.com')`).run();
+    db._raw.prepare(`INSERT INTO shared_members
+      (folder_id, email, google_id, role, status, invited_at) VALUES ('f3',?,?,?,?,1)`)
+      .run('guest@x.com', 'g-guest', 'write', 'active');
+    await addSub(db, 'https://push.example.com/owner3', 'owner@x.com', await makeUaKeys());
+    await addSub(db, 'https://push.example.com/guest3', 'guest@x.com', await makeUaKeys());
+
+    // Owner is the actor: must not receive their own tickle, guest still does.
+    await notifyFolderMembers(vapid.env, db, 'f3', {
+      exceptEmail: 'owner@x.com', payload: { type: 'tickle' },
+    });
+    expect(fetchMock.mock.calls.map((c) => c[0]).sort()).toEqual([
+      'https://push.example.com/guest3',
+    ]);
+  });
 });

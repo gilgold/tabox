@@ -325,16 +325,23 @@ async function handleShared(request, env, url, ctx) {
         return out(r);
       }
       if (method === 'DELETE') {
-        // Capture active member emails BEFORE deleting — shared_members rows
-        // CASCADE away with the folder, so notifyFolderMembers would find none.
+        // Capture active member emails (+ owner) BEFORE deleting —
+        // shared_members rows and the shared_folders row itself CASCADE away
+        // with the folder, so notifyFolderMembers would find none afterward.
+        // The owner isn't a shared_members row, so it's pulled separately
+        // from shared_folders here (usually the owner IS the acting user on
+        // this route, but an admin/future path shouldn't silently skip them).
         const { results: preMembers } = await db.prepare(
           "SELECT email FROM shared_members WHERE folder_id = ? AND status = 'active'"
         ).bind(folderId).all();
+        const preFolder = await db.prepare('SELECT owner_email FROM shared_folders WHERE id = ?')
+          .bind(folderId).first();
         const r = await deleteSharedFolder(db, identity, folderId);
         if (r.ok !== false) {
-          const emails = (preMembers || [])
-            .map((m) => m.email)
-            .filter((e) => e.toLowerCase() !== identity.email.toLowerCase());
+          const except = identity.email.toLowerCase();
+          const rawEmails = (preMembers || []).map((m) => m.email);
+          if (preFolder && preFolder.owner_email) rawEmails.push(preFolder.owner_email);
+          const emails = rawEmails.filter((e) => e.toLowerCase() !== except);
           if (ctx && emails.length) ctx.waitUntil(notifyEmails(env, db, emails, { folderId }));
         }
         return out(r);
@@ -404,7 +411,10 @@ async function handleShared(request, env, url, ctx) {
       }
       if (method === 'DELETE') {
         const r = await removeMember(db, identity, folderId, email, now);
-        if (r.ok !== false) tickle(folderId, { extraEmails: [email] });
+        // Self-leave: the departing user is the actor, so don't tickle them
+        // for their own removal (extraEmails would re-add them past exceptEmail).
+        const selfLeave = email.toLowerCase() === identity.email.toLowerCase();
+        if (r.ok !== false) tickle(folderId, selfLeave ? {} : { extraEmails: [email] });
         return out(r);
       }
     }

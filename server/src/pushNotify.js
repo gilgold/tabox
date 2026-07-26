@@ -113,8 +113,17 @@ export async function notifyFolderMembers(env, db, folderId, { exceptEmail, payl
     const { results } = await db.prepare(
       "SELECT email FROM shared_members WHERE folder_id = ? AND status = 'active'"
     ).bind(folderId).all();
+    // The owner is NOT a shared_members row (only guests are) — owner_email
+    // lives on shared_folders — so union it in here before the exceptEmail
+    // filter, or the owner never gets tickled for other members' edits.
+    const folder = await db.prepare('SELECT owner_email FROM shared_folders WHERE id = ?')
+      .bind(folderId).first();
+    const memberEmails = (results || []).map((r) => r.email);
+    const allEmails = folder && folder.owner_email
+      ? [...memberEmails, folder.owner_email]
+      : memberEmails;
     const except = String(exceptEmail || '').toLowerCase();
-    const emails = (results || []).map((r) => r.email).filter((e) => e.toLowerCase() !== except);
+    const emails = allEmails.filter((e) => e.toLowerCase() !== except);
     await notifyEmails(env, db, [...emails, ...extraEmails], payload);
   } catch (err) {
     console.error('notifyFolderMembers failed:', err);

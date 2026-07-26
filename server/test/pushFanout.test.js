@@ -140,23 +140,41 @@ describe('push tickle fan-out on shared-folder mutations', () => {
     vi.restoreAllMocks();
   });
 
-  it('1: PUT collection by member A sends exactly one push, to member B only', async () => {
-    const e = await env(db, vapid, { 'ent:g-owner': PRO_RECORD, 'ent:g-guest': PRO_RECORD });
+  it('1: PUT collection by member A sends pushes to the owner and member B, never to the acting member A', async () => {
+    // Actor here is an ACTIVE MEMBER (not the owner) with a write role, so
+    // this actually exercises exceptEmail's case-insensitive match against a
+    // shared_members row — using the owner as actor (as before) can't fail
+    // even if exceptEmail is broken, since the owner isn't unioned in unless
+    // finding 1's fix is present. This also pins that owner-union fix: the
+    // owner has no shared_members row at all, only shared_folders.owner_email,
+    // yet must still receive the tickle.
+    const uaOwner = await makeUaKeys();
+    const identities = {
+      't-owner': { googleId: 'g-owner', email: 'owner@x.com' },
+      't-a': { googleId: 'g-a', email: 'a@x.com' },
+      't-b': { googleId: 'g-b', email: 'b@x.com' },
+    };
+    mockFetch(identities);
+    const e = await env(db, vapid, {
+      'ent:g-owner': PRO_RECORD, 'ent:g-a': PRO_RECORD, 'ent:g-b': PRO_RECORD,
+    });
     await worker.fetch(req('POST', '/shared/folders', 't-owner', { folderId: 'f1', name: 'T', collections: [] }), e);
-    await worker.fetch(req('POST', '/shared/folders/f1/invites', 't-owner', { email: 'guest@x.com', role: 'write' }), e);
-    await worker.fetch(req('POST', '/shared/invites/f1/respond', 't-guest', { accept: true }), e);
-    // owner is not a shared_members row (only guest is); subscribe both anyway
-    // so we can assert the actor (owner) never receives their own tickle.
-    addSub(db, 'https://push.example.com/owner', 'owner@x.com', uaA);
-    addSub(db, 'https://push.example.com/guest', 'guest@x.com', uaB);
+    await worker.fetch(req('POST', '/shared/folders/f1/invites', 't-owner', { email: 'a@x.com', role: 'write' }), e);
+    await worker.fetch(req('POST', '/shared/invites/f1/respond', 't-a', { accept: true }), e);
+    await worker.fetch(req('POST', '/shared/folders/f1/invites', 't-owner', { email: 'b@x.com', role: 'write' }), e);
+    await worker.fetch(req('POST', '/shared/invites/f1/respond', 't-b', { accept: true }), e);
+    addSub(db, 'https://push.example.com/owner', 'owner@x.com', uaOwner);
+    addSub(db, 'https://push.example.com/a', 'a@x.com', uaA);
+    addSub(db, 'https://push.example.com/b', 'b@x.com', uaB);
 
     const { ctx, flush } = makeCtx();
-    const res = await worker.fetch(req('PUT', '/shared/folders/f1/collections/c1', 't-owner', { data: { name: 'A' } }), e, ctx);
+    // Actor is member A (an active member, not the owner).
+    const res = await worker.fetch(req('PUT', '/shared/folders/f1/collections/c1', 't-a', { data: { name: 'A' } }), e, ctx);
     expect(res.status).toBe(200);
     await flush();
 
-    expect(pushSends).toHaveLength(1);
-    expect(pushSends[0].endpoint).toBe('https://push.example.com/guest');
+    const endpoints = pushSends.map((p) => p.endpoint).sort();
+    expect(endpoints).toEqual(['https://push.example.com/b', 'https://push.example.com/owner']);
   });
 
   it('2: failed mutation (stale baseRev conflict) sends zero pushes', async () => {
@@ -238,6 +256,7 @@ describe('push tickle fan-out on shared-folder mutations', () => {
     await worker.fetch(req('POST', '/shared/folders/f1/invites', 't-owner', { email: 'guest@x.com', role: 'write' }), e);
     await worker.fetch(req('POST', '/shared/invites/f1/respond', 't-guest', { accept: true }), e);
     addSub(db, 'https://push.example.com/guest', 'guest@x.com', uaB);
+    const pushAttempts = [];
     globalThis.fetch = vi.fn(async (url, opts) => {
       const u = String(url);
       if (u.includes('tokeninfo')) return { ok: true, json: async () => ({ aud: 'cid' }) };
@@ -246,6 +265,7 @@ describe('push tickle fan-out on shared-folder mutations', () => {
         const id = { 't-owner': { googleId: 'g-owner', email: 'owner@x.com' }, 't-guest': { googleId: 'g-guest', email: 'guest@x.com' } }[token];
         return { ok: true, json: async () => ({ user: { permissionId: id.googleId, emailAddress: id.email } }) };
       }
+      pushAttempts.push(u);
       return { status: 500 };
     });
 
@@ -255,5 +275,8 @@ describe('push tickle fan-out on shared-folder mutations', () => {
     );
     expect(res.status).toBe(200);
     await expect(flush()).resolves.toBeDefined();
+    // Must actually prove a send was attempted (and to the right recipient) —
+    // otherwise a broken/no-op tickle would vacuously pass this test too.
+    expect(pushAttempts).toEqual(['https://push.example.com/guest']);
   });
 });
