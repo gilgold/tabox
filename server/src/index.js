@@ -25,6 +25,7 @@ import {
 import { JOIN_PAGE_HTML } from './joinPage.js';
 import { validateAIRequest, completeAI } from './aiProxy.js';
 import { handlePushSubscribe, handlePushUnsubscribe } from './pushRoutes.js';
+import { notifyEmails, notifyFolderMembers } from './pushNotify.js';
 
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -232,7 +233,7 @@ async function handleAIComplete(request, env) {
 // caught by handleShared's error boundary below and mapped to a 413 response.
 class PayloadTooLargeError extends Error {}
 
-async function handleShared(request, env, url) {
+async function handleShared(request, env, url, ctx) {
   try {
     const identity = await authenticate(request, env);
     if (!identity) return json({ error: 'invalid_token' }, 401);
@@ -259,6 +260,15 @@ async function handleShared(request, env, url) {
       try { return JSON.parse(text); } catch { return {}; }
     };
     const out = (r) => (r.ok === false ? json({ error: r.error }, r.status) : json(r.data, 200));
+    // Content-free push tickles: fire-and-forget via ctx.waitUntil so they
+    // never delay or fail the response. Guarded with `ctx &&` so tests that
+    // call handleShared without a ctx still pass.
+    const tickle = (folderId, opts = {}) =>
+      ctx && ctx.waitUntil(notifyFolderMembers(env, db, folderId, {
+        exceptEmail: identity.email, payload: { folderId }, ...opts,
+      }));
+    const tickleInvite = (email) =>
+      ctx && ctx.waitUntil(notifyEmails(env, db, [email], { invite: true }));
 
     if (seg[1] === 'invites') {
       if (method === 'GET' && seg.length === 2) return out(await listInvites(db, identity));
@@ -266,7 +276,9 @@ async function handleShared(request, env, url) {
         const { accept } = await body();
         // The ACCEPTING user's entitlement caps the granted role (free -> read).
         const opts = accept === true ? { isPro: await isProUser(env, identity.googleId) } : {};
-        return out(await respondInvite(db, identity, seg[2], accept === true, now, opts));
+        const r = await respondInvite(db, identity, seg[2], accept === true, now, opts);
+        if (r.ok !== false) tickle(seg[2]);
+        return out(r);
       }
       return json({ error: 'not_found' }, 404);
     }
@@ -276,7 +288,9 @@ async function handleShared(request, env, url) {
     if (seg[1] === 'join-link' && method === 'POST' && seg.length === 2) {
       // The JOINING user's entitlement caps the granted role (free -> read).
       const isPro = await isProUser(env, identity.googleId);
-      return out(await joinViaFolderLink(db, identity, (await body()).token, now, { isPro }));
+      const r = await joinViaFolderLink(db, identity, (await body()).token, now, { isPro });
+      if (r.ok !== false) tickle(r.data.folder.folderId);
+      return out(r);
     }
     if (seg[1] === 'collection-link' && seg.length === 2 && method === 'PUT') {
       if (!(await isProUser(env, identity.googleId))) return json({ error: 'pro_required' }, 403);
@@ -305,8 +319,26 @@ async function handleShared(request, env, url) {
     const folderId = decodeURIComponent(seg[2] || '');
     if (seg.length === 3) {
       if (method === 'GET') return out(await getFolderDelta(db, identity, folderId, url.searchParams.get('sinceRev')));
-      if (method === 'PATCH') return out(await updateFolderMeta(db, identity, folderId, await body(), now));
-      if (method === 'DELETE') return out(await deleteSharedFolder(db, identity, folderId));
+      if (method === 'PATCH') {
+        const r = await updateFolderMeta(db, identity, folderId, await body(), now);
+        if (r.ok !== false) tickle(folderId);
+        return out(r);
+      }
+      if (method === 'DELETE') {
+        // Capture active member emails BEFORE deleting — shared_members rows
+        // CASCADE away with the folder, so notifyFolderMembers would find none.
+        const { results: preMembers } = await db.prepare(
+          "SELECT email FROM shared_members WHERE folder_id = ? AND status = 'active'"
+        ).bind(folderId).all();
+        const r = await deleteSharedFolder(db, identity, folderId);
+        if (r.ok !== false) {
+          const emails = (preMembers || [])
+            .map((m) => m.email)
+            .filter((e) => e.toLowerCase() !== identity.email.toLowerCase());
+          if (ctx && emails.length) ctx.waitUntil(notifyEmails(env, db, emails, { folderId }));
+        }
+        return out(r);
+      }
     }
     if (seg.length === 4 && seg[3] === 'link') {
       if (method === 'POST') {
@@ -324,7 +356,10 @@ async function handleShared(request, env, url) {
     }
     if (seg.length === 4 && seg[3] === 'invites' && method === 'POST') {
       if (!(await isProUser(env, identity.googleId))) return json({ error: 'pro_required' }, 403);
-      return out(await inviteMember(db, identity, folderId, await body(), now));
+      const invitePayload = await body();
+      const r = await inviteMember(db, identity, folderId, invitePayload, now);
+      if (r.ok !== false) tickleInvite(invitePayload.email);
+      return out(r);
     }
     if (seg.length === 4 && seg[3] === 'activity' && method === 'GET') {
       // beforeId/limit: absent -> defaults; present-but-garbage -> 400 inside
@@ -347,23 +382,39 @@ async function handleShared(request, env, url) {
         // Membership is checked inside postComment first (non-members 404);
         // the POSTING user's live entitlement gates posting (403 pro_required).
         const isPro = await isProUser(env, identity.googleId);
-        return out(await postComment(db, identity, folderId, await body(), now, { isPro }));
+        const r = await postComment(db, identity, folderId, await body(), now, { isPro });
+        if (r.ok !== false) tickle(folderId);
+        return out(r);
       }
     }
     if (seg.length === 5 && seg[3] === 'comments' && method === 'DELETE') {
-      return out(await deleteComment(db, identity, folderId, decodeURIComponent(seg[4])));
+      const r = await deleteComment(db, identity, folderId, decodeURIComponent(seg[4]));
+      if (r.ok !== false) tickle(folderId);
+      return out(r);
     }
     if (seg.length === 4 && seg[3] === 'members' && method === 'GET') {
       return out(await getMembers(db, identity, folderId));
     }
     if (seg.length === 5 && seg[3] === 'members') {
       const email = decodeURIComponent(seg[4]);
-      if (method === 'PATCH') return out(await updateMemberRole(db, identity, folderId, email, (await body()).role, now));
-      if (method === 'DELETE') return out(await removeMember(db, identity, folderId, email, now));
+      if (method === 'PATCH') {
+        const r = await updateMemberRole(db, identity, folderId, email, (await body()).role, now);
+        if (r.ok !== false) tickle(folderId, { extraEmails: [email] });
+        return out(r);
+      }
+      if (method === 'DELETE') {
+        const r = await removeMember(db, identity, folderId, email, now);
+        if (r.ok !== false) tickle(folderId, { extraEmails: [email] });
+        return out(r);
+      }
     }
     if (seg.length === 5 && seg[3] === 'collections') {
       const uid = decodeURIComponent(seg[4]);
-      if (method === 'PUT') return out(await putCollection(db, identity, folderId, uid, await body(), now));
+      if (method === 'PUT') {
+        const r = await putCollection(db, identity, folderId, uid, await body(), now);
+        if (r.ok !== false) tickle(folderId);
+        return out(r);
+      }
       if (method === 'DELETE') {
         // B5: DELETE has no body, so an optional conflict-check baseRev rides
         // as a query param instead. Absent -> undefined (delete always wins,
@@ -372,7 +423,9 @@ async function handleShared(request, env, url) {
         // returns the same 400 putCollection would for a garbage baseRev.
         const rawBaseRev = url.searchParams.get('baseRev');
         const baseRev = rawBaseRev === null ? undefined : Number(rawBaseRev);
-        return out(await deleteCollection(db, identity, folderId, uid, now, baseRev));
+        const r = await deleteCollection(db, identity, folderId, uid, now, baseRev);
+        if (r.ok !== false) tickle(folderId);
+        return out(r);
       }
     }
     return json({ error: 'not_found' }, 404);
@@ -410,7 +463,7 @@ async function handlePublicLink(request, env, url) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     // CORS preflight — the extension popup / any browser caller sends OPTIONS
     // before a GET that carries an Authorization header.
@@ -435,7 +488,7 @@ export default {
     if (request.method === 'GET' && url.pathname.startsWith('/join/')) {
       return new Response(JOIN_PAGE_HTML, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
     }
-    if (url.pathname.startsWith('/shared/')) return handleShared(request, env, url);
+    if (url.pathname.startsWith('/shared/')) return handleShared(request, env, url, ctx);
     if (url.pathname === '/push/subscribe' && (request.method === 'POST' || request.method === 'DELETE')) {
       return handlePush(request, env);
     }
