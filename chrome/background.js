@@ -8,6 +8,7 @@ try {
   importScripts('sync-throttle.js');
   importScripts('background-utils.js');
   importScripts('pro-config.js');
+  importScripts('push-client.js');
   importScripts('pro-entitlement.js');
   importScripts('shared-folders.js');
   importScripts('ai-client.js');
@@ -71,6 +72,7 @@ const BACKGROUND_SYNC_PERIOD_MINUTES = 6 * 60;
 const TOOLBAR_FULLPAGE_SETTING_KEY = 'chkToolbarIconOpensFullPage';
 const SHARED_SYNC_ALARM = 'shared-folders-sync';
 const SHARED_SYNC_PERIOD_MINUTES = 1;
+const SHARED_SYNC_FALLBACK_PERIOD_MINUTES = 60; // safety net while web push is healthy
 
 async function updateSharedSyncSessionState(overrides = {}) {
   const { googleUser, googleRefreshToken } = await browser.storage.local.get(['googleUser', 'googleRefreshToken']);
@@ -148,21 +150,43 @@ async function ensureBackgroundSyncAlarm() {
 // create/clear shape above.
 async function ensureSharedSyncAlarm() {
   const { googleRefreshToken } = await browser.storage.local.get('googleRefreshToken');
-
   const alarms = await browser.alarms.getAll();
   const existingAlarm = alarms.find(alarm => alarm.name === SHARED_SYNC_ALARM);
 
   if (googleRefreshToken) {
-    if (!existingAlarm) {
+    // Web push (chrome/push-client.js) delivers change tickles when healthy,
+    // so the poll relaxes to a slow safety net; without push this stays the
+    // 1-minute cadence that IS the sync mechanism.
+    const period = (await isPushHealthy())
+      ? SHARED_SYNC_FALLBACK_PERIOD_MINUTES
+      : SHARED_SYNC_PERIOD_MINUTES;
+    if (!existingAlarm || existingAlarm.periodInMinutes !== period) {
+      await browser.alarms.clear(SHARED_SYNC_ALARM);
       browser.alarms.create(SHARED_SYNC_ALARM, {
-        delayInMinutes: 1,
-        periodInMinutes: SHARED_SYNC_PERIOD_MINUTES
+        delayInMinutes: period,
+        periodInMinutes: period
       });
     }
   } else if (existingAlarm) {
     await browser.alarms.clear(SHARED_SYNC_ALARM);
   }
 }
+
+// MV3: push listeners must be registered synchronously at service-worker
+// startup (top level) so the browser can wake the SW for a push event even
+// after it was discarded. Content-free tickle: the payload is ignored; the
+// authenticated pull cycle (syncSharedFolders) fetches whatever actually
+// changed. Named so it's directly testable without dispatching a real
+// PushEvent (which jsdom/jest can't construct).
+function handlePushEvent(event) {
+  event.waitUntil(syncSharedFolders());
+}
+self.addEventListener('push', handlePushEvent);
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil(
+    ensurePushSubscription({ force: true }).then(() => ensureSharedSyncAlarm())
+  );
+});
 
 // Perf: event-driven push for shared folders. Every local data change already
 // flows through the 'updateRemote' message (Drive path, below) — piggyback a
@@ -2107,6 +2131,7 @@ try {
     if (request.type === 'logout') {
       const token = await getAuthToken();
       await browser.alarms.clear(BACKGROUND_SYNC_ALARM);
+      await teardownPushSubscription();
       if (token === false) {
         await browser.storage.local.remove(['googleUser', 'googleToken', 'googleRefreshToken', 'tokenExpiryTime', 'syncAuthError']);
         await updateSharedSyncSessionState({
@@ -2538,6 +2563,7 @@ try {
   await handleBadge();
   await handleAutoBackupAlarm();
   await ensureBackgroundSyncAlarm();
+  await ensurePushSubscription();
   await ensureSharedSyncAlarm();
   if (typeof ensureProEntitlementAlarm === 'function') await ensureProEntitlementAlarm();
 
@@ -2556,6 +2582,7 @@ try {
     await applyToolbarLaunchBehavior();
     await handleAutoBackupAlarm();
     await ensureBackgroundSyncAlarm();
+    await ensurePushSubscription();
     await ensureSharedSyncAlarm();
     if (typeof ensureProEntitlementAlarm === 'function') await ensureProEntitlementAlarm();
   });

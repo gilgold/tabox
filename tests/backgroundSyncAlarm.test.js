@@ -21,6 +21,12 @@ describe('background sync alarm', () => {
         global.getAuthToken = jest.fn(async () => 'token-123');
         global.syncData = jest.fn(async () => true);
         global.logSyncOperation = jest.fn();
+        // push-client.js is loaded via importScripts (mocked as a no-op above) -
+        // stub its bare identifiers directly, mirroring the other cross-file
+        // globals above (Task 5: adaptive shared-sync alarm + push wiring).
+        global.isPushHealthy = jest.fn(async () => false);
+        global.ensurePushSubscription = jest.fn(async () => true);
+        global.teardownPushSubscription = jest.fn(async () => undefined);
     });
 
     afterEach(() => {
@@ -32,6 +38,9 @@ describe('background sync alarm', () => {
         delete global.getAuthToken;
         delete global.syncData;
         delete global.logSyncOperation;
+        delete global.isPushHealthy;
+        delete global.ensurePushSubscription;
+        delete global.teardownPushSubscription;
     });
 
     test('creates a recurring background sync alarm on startup when sync is enabled', async () => {
