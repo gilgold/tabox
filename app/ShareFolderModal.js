@@ -106,6 +106,7 @@ export default function ShareFolderModal() {
         () => filteredMembers.filter((member) => member.status !== 'declined'),
         [filteredMembers]
     );
+    const startProCheckout = useProCheckout();
 
     if (!folder) return null;
     const busy = Boolean(busyAction);
@@ -121,7 +122,6 @@ export default function ShareFolderModal() {
         : `${members.length} ${members.length === 1 ? 'person' : 'people'}`;
 
     const send = async (msg) => browser.runtime.sendMessage(msg);
-    const startProCheckout = useProCheckout();
 
     const toggleMemberSelection = (memberEmail) => {
         setSelectedEmails((current) => current.includes(memberEmail)

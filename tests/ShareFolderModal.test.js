@@ -507,3 +507,21 @@ test('non-owner members do not see the link section', async () => {
   expect(screen.queryByText('Share with link')).not.toBeInTheDocument();
   expect(browser.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'sharedGetFolderLink' }));
 });
+
+// Regression: React error #310 (hooks-order violation). The modal renders
+// `null` while closed (folder atom null); every hook must therefore run
+// BEFORE that early return, or the closed->open transition renders more
+// hooks than the previous render and React throws.
+test('opening the modal after a closed render does not violate the hooks order', async () => {
+  browser.runtime.sendMessage.mockResolvedValue({ ok: true, data: { members: [] } });
+  const store = createStore();
+  store.set(shareFolderModalState, null);
+  store.set(premiumEntitlementState, PRO);
+  render(<Provider store={store}><ShareFolderModal /></Provider>);
+
+  await act(async () => {
+    store.set(shareFolderModalState, FOLDER);
+  });
+
+  expect(await screen.findByText(/share folder/i)).toBeInTheDocument();
+});
