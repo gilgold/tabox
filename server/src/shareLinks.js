@@ -4,6 +4,7 @@
 import {
   requireFolderAccess, MAX_MEMBERS_PER_FOLDER, ROLES,
   safeCollectionSize, MAX_COLLECTION_BYTES, MAX_NAME_LENGTH,
+  bumpRevision,
 } from './sharedFolders.js';
 import { recordActivity } from './sharedActivity.js';
 
@@ -18,23 +19,49 @@ export function generateLinkToken() {
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-export async function createOrRotateFolderLink(db, identity, folderId, { role, rotate = false } = {}, nowMs) {
+// Changing the link's role re-grades every active member who joined through
+// the link (via_link = 1) right away — members the owner invited directly or
+// whose role the owner set explicitly (updateMemberRole clears via_link) are
+// untouched. Upgrades to 'write' respect the same entitlement gate as the
+// join itself: `isProMember(googleId)` decides per member; without a checker
+// nobody is upgraded (safe default), while downgrades always apply.
+export async function createOrRotateFolderLink(db, identity, folderId, { role, rotate = false } = {}, nowMs, { isProMember } = {}) {
   const access = await requireFolderAccess(db, identity, folderId, 'owner');
   if (access.ok === false) return access;
   if (!ROLES.includes(role)) return err(400, 'invalid_role');
   const existing = await db.prepare('SELECT * FROM folder_links WHERE folder_id = ?').bind(folderId).first();
-  if (existing && !rotate) {
-    if (existing.role !== role) {
-      await db.prepare('UPDATE folder_links SET role = ? WHERE folder_id = ?').bind(role, folderId).run();
-    }
-    return { ok: true, data: { token: existing.token, role } };
+  const roleChanged = existing != null && existing.role !== role;
+  let token = existing && !rotate ? existing.token : null;
+  if (!token) {
+    token = generateLinkToken();
+    await db.prepare(
+      `INSERT INTO folder_links (folder_id, token, role, created_at) VALUES (?,?,?,?)
+       ON CONFLICT(folder_id) DO UPDATE SET token = excluded.token, role = excluded.role, created_at = excluded.created_at`
+    ).bind(folderId, token, role, nowMs).run();
+  } else if (roleChanged) {
+    await db.prepare('UPDATE folder_links SET role = ? WHERE folder_id = ?').bind(role, folderId).run();
   }
-  const token = generateLinkToken();
-  await db.prepare(
-    `INSERT INTO folder_links (folder_id, token, role, created_at) VALUES (?,?,?,?)
-     ON CONFLICT(folder_id) DO UPDATE SET token = excluded.token, role = excluded.role, created_at = excluded.created_at`
-  ).bind(folderId, token, role, nowMs).run();
-  return { ok: true, data: { token, role } };
+  const updatedMembers = roleChanged
+    ? await regradeLinkMembers(db, identity, folderId, role, nowMs, isProMember)
+    : [];
+  return { ok: true, data: { token, role, ...(updatedMembers.length ? { updatedMembers } : {}) } };
+}
+
+async function regradeLinkMembers(db, identity, folderId, role, nowMs, isProMember) {
+  const { results } = await db.prepare(
+    "SELECT email, google_id, role FROM shared_members WHERE folder_id = ? AND status = 'active' AND via_link = 1"
+  ).bind(folderId).all();
+  const updated = [];
+  for (const m of results) {
+    const effectiveRole = role === 'write' && !(isProMember && await isProMember(m.google_id)) ? 'read' : role;
+    if (m.role === effectiveRole) continue;
+    await db.prepare('UPDATE shared_members SET role = ? WHERE folder_id = ? AND email = ?')
+      .bind(effectiveRole, folderId, m.email).run();
+    await recordActivity(db, folderId, identity.email, 'role_changed', m.email, { role: effectiveRole }, nowMs);
+    updated.push({ email: m.email, role: effectiveRole });
+  }
+  if (updated.length) await bumpRevision(db, folderId, identity, nowMs);
+  return updated;
 }
 
 export async function getFolderLink(db, identity, folderId) {
@@ -79,10 +106,10 @@ export async function joinViaFolderLink(db, identity, token, nowMs, { isPro = fa
   const effectiveRole = link.link_role === 'write' && !isPro ? 'read' : link.link_role;
   if (!existing || existing.status !== 'active') {
     await db.prepare(
-      `INSERT INTO shared_members (folder_id, email, google_id, role, status, invited_at, responded_at)
-       VALUES (?,?,?,?,'active',?,?)
+      `INSERT INTO shared_members (folder_id, email, google_id, role, status, invited_at, responded_at, via_link)
+       VALUES (?,?,?,?,'active',?,?,1)
        ON CONFLICT(folder_id, email) DO UPDATE SET role = excluded.role, status = 'active',
-         google_id = excluded.google_id, responded_at = excluded.responded_at`
+         google_id = excluded.google_id, responded_at = excluded.responded_at, via_link = 1`
     ).bind(link.folder_id, email, identity.googleId, effectiveRole, nowMs, nowMs).run();
   }
   let memberRow = await db.prepare(

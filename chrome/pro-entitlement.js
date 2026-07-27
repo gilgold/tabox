@@ -8,16 +8,23 @@ const PRO_ENTITLEMENT_ALARM = 'pro-entitlement-refresh';
 const PRO_CHECKOUT_POLL_ALARM = 'pro-checkout-poll';
 const PRO_CHECKOUT_PENDING_MS = 30 * 60 * 1000;
 
+// Returns the stored entitlement record on success, null when signed out or on
+// transient network/HTTP failure, and { authError: true } when the user LOOKS
+// signed in (googleUser present) but re-authentication is required (refresh
+// token missing or revoked). The authError record is never persisted — the
+// cached entitlement must survive so the `cached &&` guards keep working.
 async function refreshProEntitlement() {
-  const { googleRefreshToken } = await browser.storage.local.get('googleRefreshToken');
-  if (!googleRefreshToken) return null;
+  const { googleUser, googleRefreshToken } =
+    await browser.storage.local.get(['googleUser', 'googleRefreshToken']);
+  const looksSignedIn = Boolean(googleUser);
+  if (!googleRefreshToken) return looksSignedIn ? { authError: true } : null;
   let accessToken;
   try {
     accessToken = await getAuthToken();
   } catch {
-    return null;
+    return looksSignedIn ? { authError: true } : null;
   }
-  if (!accessToken) return null;
+  if (!accessToken) return looksSignedIn ? { authError: true } : null;
   let response;
   try {
     response = await fetch(`${PRO_API_BASE}/entitlement`, { headers: { Authorization: `Bearer ${accessToken}` } });

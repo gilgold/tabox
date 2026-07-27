@@ -321,7 +321,20 @@ export default function ShareFolderModal() {
             if (res?.ok) {
                 setLink(res.data);
                 setLinkCopied(false);
-                showSuccessToast(rotate ? 'New link created — the old one no longer works.' : 'Share link ready.');
+                // A link role change re-grades everyone who joined via the
+                // link server-side; mirror the new roles in the member list.
+                const regraded = res.data.updatedMembers;
+                if (regraded?.length) {
+                    const newRoles = new Map(regraded.map((u) => [u.email, u.role]));
+                    setMembers((m) => m.map((x) => (newRoles.has(x.email) ? { ...x, role: newRoles.get(x.email) } : x)));
+                }
+                if (rotate) {
+                    showSuccessToast('New link created — the old one no longer works.');
+                } else if (regraded?.length) {
+                    showSuccessToast(`Link updated — access changed for ${regraded.length} ${regraded.length === 1 ? 'person' : 'people'} who joined via this link.`);
+                } else {
+                    showSuccessToast('Share link ready.');
+                }
             } else {
                 showErrorToast(ERROR_TEXT[res?.error] || 'Could not create the link. Please try again.');
             }

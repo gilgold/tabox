@@ -20,6 +20,15 @@
     opacity: 0.85;
 }
 
+.pro-upsell-session-expired {
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: rgba(230, 81, 0, 0.12);
+    color: var(--warning-color, #e65100);
+    font-size: 13px;
+    font-weight: 500;
+}
+
 .pro-upsell-cta {
     padding: 8px 20px;
     border: none;

@@ -42,6 +42,32 @@ describe('refreshProEntitlement', () => {
     expect(STORAGE.premiumEntitlement).toEqual(record);
   });
 
+  it('returns an authError record when signed in but the refresh token is missing (no network, cache untouched)', async () => {
+    STORAGE.googleUser = { permissionId: 'g-123', emailAddress: 'a@b.c' };
+    const cached = { entitled: true, status: 'active', plan: 'monthly', refreshedAt: new Date().toISOString() };
+    STORAGE.premiumEntitlement = cached;
+    const { refreshProEntitlement } = load();
+    expect(await refreshProEntitlement()).toEqual({ authError: true });
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(STORAGE.premiumEntitlement).toEqual(cached);
+  });
+
+  it('returns an authError record when signed in and getAuthToken fails (revoked token)', async () => {
+    STORAGE.googleUser = { permissionId: 'g-123', emailAddress: 'a@b.c' };
+    STORAGE.googleRefreshToken = 'rt';
+    global.getAuthToken = jest.fn(async () => { throw new Error('invalid_grant'); });
+    const { refreshProEntitlement } = load();
+    expect(await refreshProEntitlement()).toEqual({ authError: true });
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(STORAGE.premiumEntitlement).toBeUndefined();
+  });
+
+  it('returns null (not authError) when fully signed out with no refresh token', async () => {
+    const { refreshProEntitlement } = load();
+    expect(await refreshProEntitlement()).toBeNull();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   it('returns null and stores nothing on HTTP error or network failure', async () => {
     STORAGE.googleRefreshToken = 'rt';
     global.fetch.mockResolvedValue({ ok: false });

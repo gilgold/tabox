@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { makeDB } from './helpers/d1Mock.js';
-import { createSharedFolder } from '../src/sharedFolders.js';
+import { createSharedFolder, inviteMember, respondInvite, updateMemberRole } from '../src/sharedFolders.js';
 import {
   generateLinkToken, createOrRotateFolderLink, getFolderLink, deleteFolderLink, joinViaFolderLink,
 } from '../src/shareLinks.js';
@@ -109,10 +109,107 @@ describe('folder links', () => {
     expect((await joinViaFolderLink(db, { googleId: 'g-new', email: 'new@x.com' }, fresh, 7000)).error).toBe('member_limit');
   });
 
+  it('marks link joiners with via_link so link role changes can find them', async () => {
+    const { data: { token } } = await createOrRotateFolderLink(db, owner, 'f1', { role: 'read' }, 2000);
+    await joinViaFolderLink(db, guest, token, 3000);
+    const member = await db.prepare("SELECT via_link FROM shared_members WHERE folder_id='f1' AND email='guest@x.com'").bind().first();
+    expect(member.via_link).toBe(1);
+  });
+
   it('delete removes the link', async () => {
     const { data: { token } } = await createOrRotateFolderLink(db, owner, 'f1', { role: 'read' }, 2000);
     await deleteFolderLink(db, owner, 'f1');
     expect((await getFolderLink(db, owner, 'f1')).data.link).toBe(null);
     expect((await joinViaFolderLink(db, guest, token, 3000)).status).toBe(404);
+  });
+});
+
+describe('link role changes propagate to link-joined members', () => {
+  let db;
+  const invitee = { googleId: 'g-invitee', email: 'invitee@x.com' };
+  const memberRole = async (email) => (await db.prepare(
+    'SELECT role FROM shared_members WHERE folder_id = ? AND email = ?'
+  ).bind('f1', email).first()).role;
+
+  beforeEach(async () => {
+    db = makeDB();
+    await createSharedFolder(db, owner, { folderId: 'f1', name: 'Team', collections: [] }, 1000);
+  });
+
+  it('downgrading the link downgrades link-joined members but not invited ones', async () => {
+    const { data: { token } } = await createOrRotateFolderLink(db, owner, 'f1', { role: 'write' }, 2000);
+    await joinViaFolderLink(db, guest, token, 3000, { isPro: true });
+    await inviteMember(db, owner, 'f1', { email: invitee.email, role: 'write' }, 4000);
+    await respondInvite(db, invitee, 'f1', true, 5000, { isPro: true });
+    const res = await createOrRotateFolderLink(db, owner, 'f1', { role: 'read' }, 6000);
+    expect(res.ok).toBe(true);
+    expect(res.data.updatedMembers).toEqual([{ email: 'guest@x.com', role: 'read' }]);
+    expect(await memberRole('guest@x.com')).toBe('read');
+    expect(await memberRole('invitee@x.com')).toBe('write');
+    const folder = await db.prepare("SELECT revision FROM shared_folders WHERE id='f1'").bind().first();
+    expect(folder.revision).toBeGreaterThan(1);
+    const act = await db.prepare(
+      "SELECT * FROM shared_activity WHERE folder_id='f1' AND action='role_changed' AND subject='guest@x.com'"
+    ).bind().first();
+    expect(act).toBeTruthy();
+  });
+
+  it('upgrading the link raises Pro members to write but keeps free members at read', async () => {
+    const { data: { token } } = await createOrRotateFolderLink(db, owner, 'f1', { role: 'read' }, 2000);
+    await joinViaFolderLink(db, guest, token, 3000, { isPro: true });
+    const freeGuest = { googleId: 'g-free', email: 'free@x.com' };
+    await joinViaFolderLink(db, freeGuest, token, 3500);
+    const res = await createOrRotateFolderLink(db, owner, 'f1', { role: 'write' }, 4000, {
+      isProMember: async (googleId) => googleId === 'g-guest',
+    });
+    expect(res.ok).toBe(true);
+    expect(res.data.updatedMembers).toEqual([{ email: 'guest@x.com', role: 'write' }]);
+    expect(await memberRole('guest@x.com')).toBe('write');
+    expect(await memberRole('free@x.com')).toBe('read');
+  });
+
+  it('a member whose role the owner set explicitly is detached from link changes', async () => {
+    const { data: { token } } = await createOrRotateFolderLink(db, owner, 'f1', { role: 'write' }, 2000);
+    await joinViaFolderLink(db, guest, token, 3000, { isPro: true });
+    await updateMemberRole(db, owner, 'f1', 'guest@x.com', 'write', 4000);
+    const res = await createOrRotateFolderLink(db, owner, 'f1', { role: 'read' }, 5000);
+    expect(res.ok).toBe(true);
+    expect(res.data.updatedMembers ?? []).toEqual([]);
+    expect(await memberRole('guest@x.com')).toBe('write');
+  });
+
+  it('re-inviting a link-joined member clears via_link and detaches them from link changes', async () => {
+    const { data: { token } } = await createOrRotateFolderLink(db, owner, 'f1', { role: 'write' }, 2000);
+    await joinViaFolderLink(db, guest, token, 3000, { isPro: true });
+    // Owner explicitly re-invites (re-grants) the link-joined member.
+    await inviteMember(db, owner, 'f1', { email: guest.email, role: 'write' }, 4000);
+    const member = await db.prepare(
+      "SELECT via_link, status FROM shared_members WHERE folder_id='f1' AND email='guest@x.com'"
+    ).bind().first();
+    expect(member.via_link).toBe(0);
+    expect(member.status).toBe('active'); // already-active member stays active
+    // A subsequent link role change must not touch the explicitly-granted role.
+    const res = await createOrRotateFolderLink(db, owner, 'f1', { role: 'read' }, 5000);
+    expect(res.ok).toBe(true);
+    expect(res.data.updatedMembers ?? []).toEqual([]);
+    expect(await memberRole('guest@x.com')).toBe('write');
+  });
+
+  it('rotating with the same role leaves member roles alone', async () => {
+    const { data: { token } } = await createOrRotateFolderLink(db, owner, 'f1', { role: 'write' }, 2000);
+    await joinViaFolderLink(db, guest, token, 3000, { isPro: true });
+    const res = await createOrRotateFolderLink(db, owner, 'f1', { role: 'write', rotate: true }, 4000);
+    expect(res.ok).toBe(true);
+    expect(res.data.updatedMembers ?? []).toEqual([]);
+    expect(await memberRole('guest@x.com')).toBe('write');
+  });
+
+  it('rotating while changing the role still updates link-joined members', async () => {
+    const { data: { token } } = await createOrRotateFolderLink(db, owner, 'f1', { role: 'write' }, 2000);
+    await joinViaFolderLink(db, guest, token, 3000, { isPro: true });
+    const res = await createOrRotateFolderLink(db, owner, 'f1', { role: 'read', rotate: true }, 4000);
+    expect(res.ok).toBe(true);
+    expect(res.data.updatedMembers).toEqual([{ email: 'guest@x.com', role: 'read' }]);
+    expect(await memberRole('guest@x.com')).toBe('read');
   });
 });

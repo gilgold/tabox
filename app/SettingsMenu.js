@@ -73,7 +73,13 @@ export default function SettingsMenu(props) {
     const refreshPremiumOnOpen = useEffectEvent(async () => {
         if (!premium) return;
         const fresh = await browser.runtime.sendMessage({ type: 'refreshProEntitlement' });
-        if (fresh && isMountedRef.current) setPremium(fresh);
+        if (!fresh || !isMountedRef.current) return;
+        // authError = re-auth needed, not a lost entitlement: keep the cached
+        // record (and its plan details) and just flag it. Never fabricate a
+        // record when there is none — a truthy record would defeat the
+        // zero-Worker-calls guards for never-entitled users.
+        if (fresh.authError) setPremium((prev) => (prev ? { ...prev, authError: true } : prev));
+        else setPremium(fresh);
     });
 
     const openMenu = () => {

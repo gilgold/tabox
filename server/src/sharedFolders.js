@@ -145,6 +145,7 @@ export async function inviteMember(db, identity, folderId, { email, role }, nowM
   await db.prepare(
     `INSERT INTO shared_members (folder_id, email, role, status, invited_at) VALUES (?,?,?,'invited',?)
      ON CONFLICT(folder_id, email) DO UPDATE SET role = excluded.role,
+       via_link = 0,
        status = CASE WHEN shared_members.status = 'active' THEN 'active' ELSE 'invited' END,
        invited_at = excluded.invited_at, responded_at = NULL`
   ).bind(folderId, target, role, nowMs).run();
@@ -194,7 +195,7 @@ export async function respondInvite(db, identity, folderId, accept, nowMs, { isP
   };
 }
 
-async function bumpRevision(db, folderId, identity, nowMs) {
+export async function bumpRevision(db, folderId, identity, nowMs) {
   await db.prepare('UPDATE shared_folders SET revision = revision + 1, updated_at = ?, updated_by = ? WHERE id = ?')
     .bind(nowMs, identity.email.toLowerCase(), folderId).run();
   const row = await db.prepare('SELECT revision FROM shared_folders WHERE id = ?').bind(folderId).first();
@@ -299,7 +300,9 @@ export async function updateMemberRole(db, identity, folderId, email, role, nowM
   const access = await requireFolderAccess(db, identity, folderId, 'owner');
   if (access.ok === false) return access;
   if (!ROLES.includes(role)) return err(400, 'invalid_role');
-  const res = await db.prepare('UPDATE shared_members SET role = ? WHERE folder_id = ? AND email = ?')
+  // An explicit per-member grant detaches the member from the share link:
+  // later link role changes must not clobber what the owner set by hand.
+  const res = await db.prepare('UPDATE shared_members SET role = ?, via_link = 0 WHERE folder_id = ? AND email = ?')
     .bind(role, folderId, String(email).toLowerCase()).run();
   if (res.meta.changes === 0) return err(404, 'not_found');
   await bumpRevision(db, folderId, identity, nowMs);

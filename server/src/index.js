@@ -350,8 +350,17 @@ async function handleShared(request, env, url, ctx) {
     if (seg.length === 4 && seg[3] === 'link') {
       if (method === 'POST') {
         if (!(await isProUser(env, identity.googleId))) return json({ error: 'pro_required' }, 403);
-        const r = await createOrRotateFolderLink(db, identity, folderId, await body(), now);
-        if (r.ok) r.data.url = joinUrl(r.data.token);
+        // Each re-graded member's OWN entitlement caps upgrades (free -> read),
+        // mirroring the join-time gate in joinViaFolderLink.
+        const r = await createOrRotateFolderLink(db, identity, folderId, await body(), now, {
+          isProMember: (googleId) => isProUser(env, googleId),
+        });
+        if (r.ok) {
+          r.data.url = joinUrl(r.data.token);
+          if (r.data.updatedMembers?.length) {
+            tickle(folderId, { extraEmails: r.data.updatedMembers.map((m) => m.email) });
+          }
+        }
         return out(r);
       }
       if (method === 'GET') {

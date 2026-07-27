@@ -979,7 +979,7 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
                             if (!loggedIn) return;
                             setIsSignedIn(true);
                             const entitlement = await browser.runtime.sendMessage({ type: 'refreshProEntitlement' });
-                            if (entitlement) setPremiumEntitlement(entitlement);
+                            if (entitlement && !entitlement.authError) setPremiumEntitlement(entitlement);
                         }}
                         onEntitlementRefreshed={setPremiumEntitlement}
                     />

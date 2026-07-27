@@ -453,6 +453,32 @@ test('changing the link role re-sends sharedCreateFolderLink with the new role',
   await waitFor(() => expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'sharedCreateFolderLink', folderId: 'f1', role: 'write' }));
 });
 
+test('a link role change re-grades link-joined members in the list and says so', async () => {
+  const MEMBERS = [
+    { email: 'via-link@x.com', role: 'write', status: 'active' },
+    { email: 'invited@x.com', role: 'write', status: 'active' },
+  ];
+  mockMessagesByType({
+    sharedGetMembers: () => ({ ok: true, data: { members: MEMBERS } }),
+    sharedGetFolderLink: () => ({ ok: true, data: { link: { ...LINK, role: 'write' } } }),
+    sharedCreateFolderLink: (msg) => ({
+      ok: true,
+      data: {
+        token: 't1', role: msg.role, url: 'https://api/join/t1',
+        updatedMembers: [{ email: 'via-link@x.com', role: 'read' }],
+      },
+    }),
+  });
+  renderModal({ ...FOLDER, shared: { folderId: 'f1', role: 'owner', members: MEMBERS } });
+  await act(async () => {});
+  fireEvent.change(await screen.findByLabelText(/permission for people joining/i), { target: { value: 'read' } });
+  await waitFor(() => expect(showSuccessToast).toHaveBeenCalledWith(
+    expect.stringMatching(/access changed for 1 person who joined via this link/i)
+  ));
+  expect(screen.getByLabelText('Permission for via-link@x.com')).toHaveValue('read');
+  expect(screen.getByLabelText('Permission for invited@x.com')).toHaveValue('write');
+});
+
 test('"New link" rotates (sends rotate: true) and shows the fresh url', async () => {
   mockMessagesByType({
     sharedGetMembers: () => ({ ok: true, data: { members: [] } }),
