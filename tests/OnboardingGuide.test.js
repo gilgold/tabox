@@ -209,4 +209,26 @@ describe('OnboardingGuide', () => {
         await waitFor(() => expect(global.browser.storage.local.get).not.toHaveBeenCalled());
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
+
+    test('manual show-onboarding event reopens the guide even after completion', async () => {
+        const { SHOW_ONBOARDING_EVENT } = require('../app/OnboardingGuide');
+        renderGuide({ onboardingEligible: false, onboardingCompleted: true });
+
+        await waitFor(() => expect(global.browser.storage.local.get).toHaveBeenCalled());
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+        fireEvent(window, new CustomEvent(SHOW_ONBOARDING_EVENT));
+
+        expect(await screen.findByRole('dialog', { name: 'Welcome to Tabox' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Your tabs, finally under control.' })).toBeInTheDocument();
+    });
+
+    test('manual show-onboarding event works in full-page mode (parity)', async () => {
+        const { SHOW_ONBOARDING_EVENT } = require('../app/OnboardingGuide');
+        renderGuide({ onboardingCompleted: true }, { mode: 'fullpage' });
+
+        fireEvent(window, new CustomEvent(SHOW_ONBOARDING_EVENT));
+
+        expect(await screen.findByRole('dialog', { name: 'Welcome to Tabox' })).toBeInTheDocument();
+    });
 });

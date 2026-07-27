@@ -2245,6 +2245,7 @@ function App({ mode = 'popup' }) {
         {shareCollectionLinkModalEl}
         {noPermissionModalEl}
         {sharedActionConfirmModalEl}
+        <OnboardingGuide mode={mode} />
         <SharedInviteToastController onAccepted={refreshDataAfterFolderOperation} />
         <FPLayout
           folders={displayFolders}

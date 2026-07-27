@@ -21,7 +21,8 @@ import useProCheckout from './useProCheckout';
 import TaboxProOverview from './TaboxProOverview';
 import { RiFolderAddFill, RiEdit2Line, RiSettings5Fill } from 'react-icons/ri';
 import { ImNewTab } from 'react-icons/im';
-import { MdOutlineSyncAlt, MdSettingsBackupRestore, MdClose, MdExpandMore, MdExpandLess, MdBugReport, MdFileDownload, MdHistory, MdWorkspacePremium, MdContentCopy } from 'react-icons/md';
+import { MdOutlineSyncAlt, MdSettingsBackupRestore, MdClose, MdExpandMore, MdExpandLess, MdBugReport, MdFileDownload, MdHistory, MdWorkspacePremium, MdContentCopy, MdOutlineTour } from 'react-icons/md';
+import { SHOW_ONBOARDING_EVENT } from './OnboardingGuide';
 import { FaRegCheckCircle } from 'react-icons/fa';
 import { IoMoon, IoSunny } from 'react-icons/io5';
 import { BsStars } from 'react-icons/bs';
@@ -269,6 +270,11 @@ export default function SettingsMenu(props) {
         closeMenu();
     };
 
+    const handleShowOnboarding = () => {
+        closeMenu();
+        window.dispatchEvent(new CustomEvent(SHOW_ONBOARDING_EVENT));
+    };
+
     const handleTaboxAIBeforeChange = (nextChecked) => {
         if (nextChecked) {
             // Enabling requires acknowledgment — only AIEnableModal's Enable
@@ -482,6 +488,19 @@ export default function SettingsMenu(props) {
                         textOn: <span>When opening Tabox launch in: <strong>new tab</strong></span>,
                         textOff: <span>When opening Tabox launch in: <strong>popup</strong></span>,
                     },
+                },
+                {
+                    type: 'button',
+                    key: 'show-onboarding',
+                    title: 'Show onboarding',
+                    description: 'Replay the welcome tour that introduces Tabox features.',
+                    onClick: handleShowOnboarding,
+                    content: (
+                        <>
+                            <MdOutlineTour size="14" style={{ marginRight: '8px' }} />
+                            Show onboarding
+                        </>
+                    ),
                 },
             ],
         },

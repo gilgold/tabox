@@ -553,6 +553,7 @@ async function setInitialOptions() {
     chkEnableTabDiscard,
     currentSortValue,
     currentSortAscending,
+    chkTaboxAI,
   } = await browser.storage.local.get([
     'tabsArray',
     'chkOpenNewWindow',
@@ -562,6 +563,7 @@ async function setInitialOptions() {
     'chkEnableTabDiscard',
     'currentSortValue',
     'currentSortAscending',
+    'chkTaboxAI',
   ]);
   if (tabsArray == null) {
     // Only default tabsArray to empty if indexed storage also has no data,
@@ -594,6 +596,12 @@ async function setInitialOptions() {
   }
   if (currentSortAscending === undefined) {
     await browser.storage.local.set({ currentSortAscending: true });
+  }
+  if (chkTaboxAI == null) {
+    // Tabox AI defaults ON. Users who explicitly turned it off keep their
+    // choice (the key exists as false), and the switch still gates re-enabling
+    // behind AIEnableModal in the settings UI.
+    await browser.storage.local.set({ chkTaboxAI: true });
   }
 }
 
@@ -2565,12 +2573,30 @@ try {
         // This ensures migrations run in the proper context with full access to utilities
         
         // Set a flag to indicate an update occurred
-        await browser.storage.local.set({ 
+        await browser.storage.local.set({
           extensionUpdated: true,
           updateTimestamp: Date.now(),
           previousVersion: previousVersion,
           currentVersion: currentVersion
         });
+
+        // Existing users crossing the 4.2 boundary see the onboarding once,
+        // unless they've already completed (or dismissed) it before.
+        const ONBOARDING_INTRO_VERSION = '4.2';
+        const versionAtLeast = (version, target) => {
+          const a = String(version || '0').split('.').map((n) => parseInt(n, 10) || 0);
+          const b = String(target).split('.').map((n) => parseInt(n, 10) || 0);
+          for (let i = 0; i < Math.max(a.length, b.length); i++) {
+            if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0);
+          }
+          return true;
+        };
+        if (!versionAtLeast(previousVersion, ONBOARDING_INTRO_VERSION) && versionAtLeast(currentVersion, ONBOARDING_INTRO_VERSION)) {
+          const { onboardingCompleted } = await browser.storage.local.get('onboardingCompleted');
+          if (onboardingCompleted !== true) {
+            await browser.storage.local.set({ onboardingEligible: true });
+          }
+        }
       }
     } else if (reason === "install") {
       // Mark as fresh install - no migration needed

@@ -31,9 +31,11 @@ import {
     MdWorkspacePremium,
     MdFolderShared,
     MdForum,
+    MdOutlineTour,
 } from 'react-icons/md';
 import { CiExport } from 'react-icons/ci';
 import { AI_TOOLS } from './ai/aiTasks';
+import { SHOW_ONBOARDING_EVENT } from './OnboardingGuide';
 import './CommandPalette.css';
 
 export const EXTENSION_ACTIONS = [
@@ -50,6 +52,7 @@ export const EXTENSION_ACTIONS = [
     // requiresGoogleUser: only meaningful once signed in (the id comes from the
     // cached googleUser record) — also surfaced in Settings → Tabox Pro.
     { id: 'copy-google-id', label: 'Copy Google Account ID', keywords: 'google id account copy identifier pro support premium grant googleid', icon: MdContentCopy, requiresGoogleUser: true },
+    { id: 'show-onboarding', label: 'Show Onboarding', keywords: 'onboarding welcome tour guide intro tutorial getting started replay help walkthrough', icon: MdOutlineTour },
 ];
 
 const SETTINGS_TOGGLES = [
@@ -406,6 +409,9 @@ function CommandPalette({
             case 'open-shared-panel': setSharedPanelOpen(true); break;
             case 'copy-google-id':
                 if (googleUser?.permissionId) copyToClipboard(googleUser.permissionId).catch(() => {});
+                break;
+            case 'show-onboarding':
+                window.dispatchEvent(new CustomEvent(SHOW_ONBOARDING_EVENT));
                 break;
         }
     }, [close, onCreateFolder, onImport, onExportAll, onOpenFullPage, onRestoreSession, onManageSubscription, focusInput, setSharedPanelOpen, googleUser]);

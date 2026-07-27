@@ -21,6 +21,8 @@ import './OnboardingGuide.css';
 
 const ONBOARDING_ELIGIBLE_KEY = 'onboardingEligible';
 const ONBOARDING_COMPLETED_KEY = 'onboardingCompleted';
+// Dispatched (window) by Settings / the command palette to replay the guide on demand.
+const SHOW_ONBOARDING_EVENT = 'tabox:show-onboarding';
 // TEMPORARY TESTING SWITCH: set to false before release to restore the
 // fresh-install-only storage gate below.
 const FORCE_ONBOARDING_FOR_POPUP_TESTING = false;
@@ -237,6 +239,16 @@ export default function OnboardingGuide({ mode = 'popup' }) {
         return () => { cancelled = true; };
     }, [mode]);
 
+    useEffect(() => {
+        const handleShowRequest = () => {
+            setStep(0);
+            setSceneRun((current) => current + 1);
+            setIsOpen(true);
+        };
+        window.addEventListener(SHOW_ONBOARDING_EVENT, handleShowRequest);
+        return () => window.removeEventListener(SHOW_ONBOARDING_EVENT, handleShowRequest);
+    }, []);
+
     const complete = useCallback(async () => {
         setIsOpen(false);
         await browser.storage.local.set({
@@ -348,4 +360,4 @@ export default function OnboardingGuide({ mode = 'popup' }) {
     );
 }
 
-export { ONBOARDING_ELIGIBLE_KEY, ONBOARDING_COMPLETED_KEY };
+export { ONBOARDING_ELIGIBLE_KEY, ONBOARDING_COMPLETED_KEY, SHOW_ONBOARDING_EVENT };
