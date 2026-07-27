@@ -18,6 +18,7 @@ const STORAGE_KEYS = {
 // Google OAuth token exchanges go through the Tabox Worker (which holds the
 // client secret); resolve the base URL from pro-config.js in both the
 // classic-script (importScripts) world and Jest/CommonJS.
+/* global PRO_API_BASE */
 const AUTH_API_BASE = typeof require === 'function'
     ? require('./pro-config').PRO_API_BASE
     : PRO_API_BASE;
