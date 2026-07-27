@@ -41,7 +41,6 @@ chrome/               # Extension files
   manifest.json       # Manifest v3
   background.js       # Service worker
   background-utils.js # Background script helpers
-  api-keys.json       # API keys (gitignored — see setup below)
 static/               # Entry points and static assets
   index.js            # React entry point
   index.html          # Popup HTML template
@@ -63,15 +62,10 @@ webpack.js            # Webpack config
 ## Development Setup
 
 1. `yarn install`
-2. Copy API keys into `chrome/api-keys.json` (gitignored):
-   ```json
-   {
-     "googleDrive": "<GOOGLE_API_KEY>",
-     "clientSecret": "<CLIENT_SECRET>"
-   }
-   ```
-3. `yarn dev` to start watch mode
-4. Load the `build/` folder as an unpacked extension in `chrome://extensions` (enable Developer mode)
+2. `yarn dev` to start watch mode
+3. Load the `build/` folder as an unpacked extension in `chrome://extensions` (enable Developer mode)
+
+No API keys are bundled with the extension. All secrets live only as wrangler secrets on the Cloudflare Worker (`server/`): Google OAuth token exchanges go through `POST /auth/token` (secret `GOOGLE_CLIENT_SECRET`).
 
 ## Architecture
 
@@ -150,8 +144,7 @@ webpack.js            # Webpack config
 
 ## Important Notes
 
-- `chrome/api-keys.json` is gitignored — never commit real API keys
-- CI injects API keys via secrets during build
+- The extension bundle carries NO credentials — Google OAuth token exchanges run on the Worker (`POST /auth/token`, wrangler secret `GOOGLE_CLIENT_SECRET`)
 - The extension targets Chrome 89+ (Manifest v3)
 - Webpack splits vendor chunks (React, UI libs, dnd-kit)
 - Release builds strip `console.log` via Terser

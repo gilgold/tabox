@@ -46,43 +46,18 @@ jobs:
           cache: yarn
       - name: Install dependencies
         run: yarn install --immutable
-      - name: Inject API keys
-        # webpack's CopyPlugin copies chrome/api-keys.json into the bundle
-        # (see webpack.js), so this file must exist BEFORE the build runs.
-        # It is gitignored, so CI recreates it from repository secrets.
-        env:
-          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-        run: |
-          set -euo pipefail
-          # Empty keys would build fine but ship a release with broken Drive
-          # sync, so fail loudly here instead. Google API keys start with AIza.
-          # (The OpenRouter key is NOT bundled — Tabox AI calls go through the
-          # Worker's /ai/complete proxy, which holds the key as a secret.)
-          if [ -z "${GOOGLE_API_KEY}" ] || [ -z "${GOOGLE_CLIENT_SECRET}" ]; then
-            echo "GOOGLE_API_KEY / GOOGLE_CLIENT_SECRET secrets are missing or empty"; exit 1
-          fi
-          case "${GOOGLE_API_KEY}" in
-            AIza*) ;;
-            *) echo "GOOGLE_API_KEY does not look like a Google API key (expected AIza... prefix)"; exit 1 ;;
-          esac
-          jq -n --arg key "$GOOGLE_API_KEY" --arg secret "$GOOGLE_CLIENT_SECRET" \
-            '{googleDrive: $key, clientSecret: $secret}' > chrome/api-keys.json
       - name: Build release bundle
         run: yarn build:release
-      - name: Verify API keys made it into the bundle
-        # webpack copies chrome/api-keys.json into build/; double-check the
-        # zip we are about to publish carries real (non-empty) credentials.
+      - name: Verify no credentials are bundled
+        # The Google OAuth token exchange runs on the Tabox Worker (wrangler
+        # secret GOOGLE_CLIENT_SECRET backing POST /auth/token), so the bundle
+        # must not carry api-keys.json or any credential material.
         run: |
           set -euo pipefail
-          test -f build/api-keys.json || { echo "build/api-keys.json missing from bundle"; exit 1; }
-          jq -e '.googleDrive | startswith("AIza")' build/api-keys.json > /dev/null \
-            || { echo "bundled googleDrive key is empty or malformed"; exit 1; }
-          jq -e '.clientSecret | length > 0' build/api-keys.json > /dev/null \
-            || { echo "bundled clientSecret is empty"; exit 1; }
-          jq -e 'has("openRouter") | not' build/api-keys.json > /dev/null \
-            || { echo "bundled api-keys.json must NOT carry an OpenRouter key (it belongs in the Worker secret)"; exit 1; }
-          echo "Bundled api-keys.json is present and populated"
+          if [ -f build/api-keys.json ]; then
+            echo "build/api-keys.json must no longer be bundled"; exit 1
+          fi
+          echo "Bundle is credential-free"
       - name: Package extension
         id: package
         run: |
