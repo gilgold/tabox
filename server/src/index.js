@@ -1,5 +1,5 @@
 import { decideEntitlement } from './entitlement.js';
-import { verifyGoogleToken } from './googleAuth.js';
+import { verifyGoogleToken, exchangeGoogleToken } from './googleAuth.js';
 import { verifyPaddleSignature, buildSubscriptionRecord, extractTransactionLink, shouldApply } from './paddleWebhook.js';
 import { signEntitlementToken } from './jwt.js';
 import {
@@ -481,6 +481,24 @@ async function handlePublicLink(request, env, url) {
   return r.ok === false ? json({ error: r.error }, r.status) : json(r.data, 200);
 }
 
+// Server-side OAuth token exchange for the extension. Unauthenticated by
+// design (this IS the login step) — the unguessable auth code / refresh token
+// is the credential. Per-IP rate limit blunts brute-force / abuse of the
+// proxy; Google validates the actual grant.
+async function handleAuthToken(request, env) {
+  if (!env.GOOGLE_CLIENT_SECRET) return json({ error: 'not_configured' }, 500);
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const allowed = await checkRateLimit(env, `ip:${ip}`, 'auth', 30, 60, Date.now());
+  if (!allowed) return json({ error: 'rate_limited' }, 429);
+  let body;
+  try { body = JSON.parse(await request.text()); } catch { body = null; }
+  const result = await exchangeGoogleToken(body, {
+    clientId: env.GOOGLE_CLIENT_ID,
+    clientSecret: env.GOOGLE_CLIENT_SECRET,
+  });
+  return json(result.body, result.status);
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -497,6 +515,7 @@ export default {
         },
       });
     }
+    if (request.method === 'POST' && url.pathname === '/auth/token') return handleAuthToken(request, env);
     if (request.method === 'GET' && url.pathname === '/entitlement') return handleEntitlement(request, env);
     if (request.method === 'POST' && url.pathname === '/ai/complete') return handleAIComplete(request, env);
     if (request.method === 'GET' && url.pathname === '/subscription') return handleGetSubscription(request, env);
