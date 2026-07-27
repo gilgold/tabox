@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { verifyGoogleToken } from '../src/googleAuth.js';
+import { verifyGoogleToken, exchangeGoogleToken } from '../src/googleAuth.js';
 
 const CLIENT_ID = 'test-client-id.apps.googleusercontent.com';
 const okJson = (body) => ({ ok: true, json: async () => body });
@@ -43,5 +43,70 @@ describe('verifyGoogleToken', () => {
   it('resolves null when tokeninfo body is malformed (json() rejects)', async () => {
     const fetchImpl = vi.fn().mockResolvedValueOnce({ ok: true, json: async () => { throw new Error('bad json'); } });
     await expect(verifyGoogleToken('tok', CLIENT_ID, fetchImpl)).resolves.toBeNull();
+  });
+});
+
+const CREDS = { clientId: CLIENT_ID, clientSecret: 'shh' };
+
+describe('exchangeGoogleToken', () => {
+  it('exchanges an authorization code, forwarding client credentials', async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce({ status: 200, json: async () => ({ access_token: 'at', refresh_token: 'rt' }) });
+    const r = await exchangeGoogleToken(
+      { grant_type: 'authorization_code', code: 'c0de', redirect_uri: 'https://abc.chromiumapp.org/' },
+      CREDS, fetchImpl
+    );
+    expect(r).toEqual({ status: 200, body: { access_token: 'at', refresh_token: 'rt' } });
+    expect(fetchImpl.mock.calls[0][0]).toBe('https://oauth2.googleapis.com/token');
+    const sent = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(sent).toEqual({
+      grant_type: 'authorization_code', code: 'c0de', redirect_uri: 'https://abc.chromiumapp.org/',
+      client_id: CLIENT_ID, client_secret: 'shh',
+    });
+  });
+
+  it('exchanges a refresh token', async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce({ status: 200, json: async () => ({ access_token: 'at2', expires_in: 3600 }) });
+    const r = await exchangeGoogleToken({ grant_type: 'refresh_token', refresh_token: 'rt' }, CREDS, fetchImpl);
+    expect(r.status).toBe(200);
+    const sent = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(sent).toEqual({ grant_type: 'refresh_token', refresh_token: 'rt', client_id: CLIENT_ID, client_secret: 'shh' });
+  });
+
+  it('passes Google error status/body through (invalid_grant)', async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce({ status: 400, json: async () => ({ error: 'invalid_grant' }) });
+    const r = await exchangeGoogleToken({ grant_type: 'refresh_token', refresh_token: 'expired' }, CREDS, fetchImpl);
+    expect(r).toEqual({ status: 400, body: { error: 'invalid_grant' } });
+  });
+
+  it('rejects unknown grant types and missing fields without calling Google', async () => {
+    const fetchImpl = vi.fn();
+    for (const params of [
+      { grant_type: 'password' },
+      { grant_type: 'authorization_code', code: '', redirect_uri: 'https://abc.chromiumapp.org/' },
+      { grant_type: 'authorization_code', code: 'c' }, // no redirect_uri
+      { grant_type: 'refresh_token' },
+      null,
+    ]) {
+      expect(await exchangeGoogleToken(params, CREDS, fetchImpl)).toEqual({ status: 400, body: { error: 'invalid_request' } });
+    }
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('rejects redirect_uri outside *.chromiumapp.org', async () => {
+    const fetchImpl = vi.fn();
+    for (const uri of ['https://evil.com/', 'https://xchromiumapp.org/', 'http://abc.chromiumapp.org/', 'not-a-url']) {
+      expect(await exchangeGoogleToken(
+        { grant_type: 'authorization_code', code: 'c', redirect_uri: uri }, CREDS, fetchImpl
+      )).toEqual({ status: 400, body: { error: 'invalid_request' } });
+    }
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('returns 502 upstream_error when fetch rejects or body is malformed', async () => {
+    expect(await exchangeGoogleToken({ grant_type: 'refresh_token', refresh_token: 'rt' }, CREDS,
+      vi.fn().mockRejectedValue(new Error('network')))).toEqual({ status: 502, body: { error: 'upstream_error' } });
+    expect(await exchangeGoogleToken({ grant_type: 'refresh_token', refresh_token: 'rt' }, CREDS,
+      vi.fn().mockResolvedValueOnce({ status: 200, json: async () => { throw new Error('bad'); } })))
+      .toEqual({ status: 502, body: { error: 'upstream_error' } });
   });
 });
