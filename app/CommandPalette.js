@@ -9,6 +9,7 @@ import { sidebarNavigationState } from './atoms/fullpageState';
 import { isSharedFolder } from './utils/sharedFolderUtils';
 import { getColorValue } from './utils/colorMigration';
 import { escapeRegex, highlightText } from './utils/searchUtils';
+import { copyToClipboard } from './utils/clipboardUtils';
 import { browser } from '../static/globals';
 import {
     MdSearch,
@@ -46,6 +47,9 @@ export const EXTENSION_ACTIONS = [
     // fullpageOnly: the Activity & comments panel is inherently view-bound to
     // the full-page layout — the sanctioned reason for a parity divergence.
     { id: 'open-shared-panel', label: 'Open Activity & Comments', keywords: 'activity comments shared folder discussion feed log panel', icon: MdForum, fullpageOnly: true },
+    // requiresGoogleUser: only meaningful once signed in (the id comes from the
+    // cached googleUser record) — also surfaced in Settings → Tabox Pro.
+    { id: 'copy-google-id', label: 'Copy Google Account ID', keywords: 'google id account copy identifier pro support premium grant googleid', icon: MdContentCopy, requiresGoogleUser: true },
 ];
 
 const SETTINGS_TOGGLES = [
@@ -150,6 +154,8 @@ function CommandPalette({
 
     // Settings toggle values (loaded from storage when palette opens)
     const [settingValues, setSettingValues] = useState({});
+    // Signed-in Google account (gates the copy-google-id action)
+    const [googleUser, setGoogleUser] = useState(null);
 
     const inputRef = useRef(null);
     const renameInputRef = useRef(null);
@@ -169,7 +175,8 @@ function CommandPalette({
     // Load all setting values from storage when palette opens
     const loadSettingValues = useCallback(async () => {
         const keys = SETTINGS_TOGGLES.map(s => s.key === 'theme' ? 'theme' : s.key);
-        const data = await browser.storage.local.get(keys);
+        const data = await browser.storage.local.get([...keys, 'googleUser']);
+        setGoogleUser(data.googleUser || null);
         const vals = {};
         SETTINGS_TOGGLES.forEach(s => {
             if (s.key === 'theme') {
@@ -279,6 +286,7 @@ function CommandPalette({
             if (action.fullpageOnly && !isFullPage) return;
             if (action.id === 'open-shared-panel' && !selectedSharedFolder) return;
             if (action.proOnly && !isPro) return;
+            if (action.requiresGoogleUser && !googleUser?.permissionId) return;
             if (q) {
                 const haystack = `${action.label} ${action.keywords}`.toLowerCase();
                 if (!haystack.includes(q.toLowerCase())) return;
@@ -321,7 +329,7 @@ function CommandPalette({
         }
 
         return items;
-    }, [query, collections, folderNameMap, activeCollection, isFullPage, settingValues, isPro, selectedSharedFolder]);
+    }, [query, collections, folderNameMap, activeCollection, isFullPage, settingValues, isPro, selectedSharedFolder, googleUser]);
 
     const subActions = useMemo(() => {
         if (!activeCollection || renameMode || folderPickMode) return [];
@@ -396,8 +404,11 @@ function CommandPalette({
             case 'restore-session': onRestoreSession?.(); break;
             case 'manage-subscription': onManageSubscription?.(); break;
             case 'open-shared-panel': setSharedPanelOpen(true); break;
+            case 'copy-google-id':
+                if (googleUser?.permissionId) copyToClipboard(googleUser.permissionId).catch(() => {});
+                break;
         }
-    }, [close, onCreateFolder, onImport, onExportAll, onOpenFullPage, onRestoreSession, onManageSubscription, focusInput, setSharedPanelOpen]);
+    }, [close, onCreateFolder, onImport, onExportAll, onOpenFullPage, onRestoreSession, onManageSubscription, focusInput, setSharedPanelOpen, googleUser]);
 
     const toggleSetting = useCallback(async (settingKey) => {
         const newVal = !settingValues[settingKey];

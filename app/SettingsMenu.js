@@ -8,7 +8,8 @@ import { themeState, isLoggedInState, listKeyState } from './atoms/globalAppSett
 import { premiumEntitlementState, isProState, manageSubscriptionOpenState } from './atoms/premiumState';
 import { useAtomValue, useSetAtom, useAtom } from 'jotai';
 import { browser } from '../static/globals';
-import { showUndoToast, setToastViewContext } from './toastHelpers';
+import { showUndoToast, showSuccessToast, showErrorToast, setToastViewContext } from './toastHelpers';
+import { copyToClipboard } from './utils/clipboardUtils';
 import { UNDO_TIME } from './constants';
 import { downloadTextFile } from './utils';
 import SyncDebugRecoveryPanel from './SyncDebugRecoveryPanel';
@@ -20,7 +21,7 @@ import useProCheckout from './useProCheckout';
 import TaboxProOverview from './TaboxProOverview';
 import { RiFolderAddFill, RiEdit2Line, RiSettings5Fill } from 'react-icons/ri';
 import { ImNewTab } from 'react-icons/im';
-import { MdOutlineSyncAlt, MdSettingsBackupRestore, MdClose, MdExpandMore, MdExpandLess, MdBugReport, MdFileDownload, MdHistory, MdWorkspacePremium } from 'react-icons/md';
+import { MdOutlineSyncAlt, MdSettingsBackupRestore, MdClose, MdExpandMore, MdExpandLess, MdBugReport, MdFileDownload, MdHistory, MdWorkspacePremium, MdContentCopy } from 'react-icons/md';
 import { FaRegCheckCircle } from 'react-icons/fa';
 import { IoMoon, IoSunny } from 'react-icons/io5';
 import { BsStars } from 'react-icons/bs';
@@ -43,6 +44,7 @@ export default function SettingsMenu(props) {
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [activeCategory, setActiveCategory] = useState('general');
     const [showSubscriptionControls, setShowSubscriptionControls] = useState(false);
+    const [googleUser, setGoogleUser] = useState(null);
     const isMountedRef = useRef(true);
     const [expandedSections, setExpandedSections] = useState({
         general: true,
@@ -95,6 +97,9 @@ export default function SettingsMenu(props) {
         const { chkEnableAutoUpdate, chkPerformanceMode } = await browser.storage.local.get(['chkEnableAutoUpdate', 'chkPerformanceMode']);
         setAutoUpdateEnabled(chkEnableAutoUpdate || false);
         setPerformanceModeEnabled(chkPerformanceMode || false);
+
+        const { googleUser: storedGoogleUser } = await browser.storage.local.get('googleUser');
+        setGoogleUser(storedGoogleUser || null);
 
         const { theme } = await browser.storage.local.get('theme');
         const isDarkMode = theme === 'dark';
@@ -305,13 +310,57 @@ export default function SettingsMenu(props) {
 
     const handleProUpgrade = () => startProCheckout({ ensureLogin: true });
 
+    const handleCopyGoogleId = async () => {
+        if (!googleUser?.permissionId) return;
+        try {
+            await copyToClipboard(googleUser.permissionId);
+            showSuccessToast('Google account ID copied to clipboard');
+        } catch {
+            showErrorToast('Could not copy the ID — please select and copy it manually.');
+        }
+    };
+
+    const googleIdItem = {
+        type: 'button',
+        key: 'pro-google-id',
+        title: 'Google account ID',
+        description: googleUser?.permissionId
+            ? `The ID of your signed-in Google account${googleUser.emailAddress ? ` (${googleUser.emailAddress})` : ''}. Send it to Tabox support when asked — for example, to receive a Pro grant.`
+            : 'Sign in to Tabox to view your account ID.',
+        disabled: !googleUser?.permissionId,
+        onClick: handleCopyGoogleId,
+        buttonProps: {
+            'data-tooltip-id': 'main-tooltip',
+            'data-tooltip-content': googleUser?.permissionId ? 'Copy to clipboard' : undefined,
+            'data-tooltip-class-name': 'small-tooltip',
+        },
+        // The popup renders only this content (titles/descriptions are
+        // full-page-only), so it must be self-describing.
+        content: googleUser?.permissionId
+            ? (
+                <>
+                    <MdContentCopy size="14" style={{ marginRight: '8px' }} />
+                    Google ID: {googleUser.permissionId}
+                </>
+            )
+            : 'Google ID — sign in to view',
+    };
+
     const proSection = {
         key: 'tabox-pro',
         title: 'Tabox Pro',
         icon: MdWorkspacePremium,
         description: 'Manage your Tabox Pro subscription and unlock premium features.',
+        // Free users get the benefit-led overview instead of the items list, so
+        // the Google ID row (needed pre-purchase, e.g. for manual Pro grants)
+        // renders explicitly beneath it.
         renderFullPageContent: !isPro
-            ? () => <TaboxProOverview statusLabel={proStatusLabel} onUpgrade={handleProUpgrade} />
+            ? () => (
+                <>
+                    <TaboxProOverview statusLabel={proStatusLabel} onUpgrade={handleProUpgrade} />
+                    {renderFullPageItem(googleIdItem)}
+                </>
+            )
             : undefined,
         items: [
             {
@@ -358,6 +407,7 @@ export default function SettingsMenu(props) {
                         </>
                     ),
                 },
+            googleIdItem,
         ],
     };
 
@@ -706,6 +756,7 @@ export default function SettingsMenu(props) {
                     className={`menu-button${item.variant === 'status' ? ' menu-button-status' : ''}`}
                     onClick={item.onClick}
                     disabled={item.disabled}
+                    {...(item.buttonProps || {})}
                 >
                     {item.content}
                 </button>
@@ -754,6 +805,7 @@ export default function SettingsMenu(props) {
                         className={`menu-button fp-settings-menu-button${item.variant === 'status' ? ' menu-button-status' : ''}`}
                         onClick={item.onClick}
                         disabled={item.disabled}
+                        {...(item.buttonProps || {})}
                     >
                         {item.content}
                     </button>

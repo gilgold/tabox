@@ -234,6 +234,14 @@ exports[`Header -- Sync disabled Header renders correctly - sync disabled 1`] = 
                     </svg>
                     Upgrade — start free 7-day trial
                   </button>
+                  <button
+                    class="menu-button"
+                    data-tooltip-class-name="small-tooltip"
+                    data-tooltip-id="main-tooltip"
+                    disabled=""
+                  >
+                    Google ID — sign in to view
+                  </button>
                 </div>
               </div>
               <div
