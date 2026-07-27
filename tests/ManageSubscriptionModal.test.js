@@ -6,7 +6,7 @@ import '@testing-library/jest-dom';
 import { Provider, createStore } from 'jotai';
 import { browser } from '../static/globals';
 import ManageSubscriptionModal, { formatAmount } from '../app/ManageSubscriptionModal';
-import { manageSubscriptionOpenState } from '../app/atoms/premiumState';
+import { manageSubscriptionOpenState, premiumEntitlementState } from '../app/atoms/premiumState';
 
 jest.mock('../app/toastHelpers', () => ({
     showSuccessToast: jest.fn(),
@@ -23,9 +23,10 @@ const SUB = {
 
 const manageSubscriptionCss = fs.readFileSync(path.join(__dirname, '../app/ManageSubscriptionModal.css'), 'utf8');
 
-const renderModal = () => {
+const renderModal = ({ entitlement } = {}) => {
     const store = createStore();
     store.set(manageSubscriptionOpenState, true);
+    if (entitlement) store.set(premiumEntitlementState, entitlement);
     render(
         <Provider store={store}>
             <ManageSubscriptionModal />
@@ -134,6 +135,15 @@ describe('ManageSubscriptionModal', () => {
         renderModal();
         expect(await screen.findByText(/no active subscription/i)).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
+    });
+
+    test('entitled user with no Paddle subscription sees the manual-grant notice', async () => {
+        browser.runtime.sendMessage.mockResolvedValue({ ok: false, error: 'no_subscription' });
+        renderModal({ entitlement: { entitled: true, plan: 'annual', refreshedAt: new Date().toISOString() } });
+
+        expect(await screen.findByText(/granted manually — nothing to bill/i)).toBeInTheDocument();
+        expect(screen.queryByText(/no active subscription/i)).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
     });
 });
 

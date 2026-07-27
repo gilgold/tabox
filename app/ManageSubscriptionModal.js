@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import Modal from 'react-modal';
-import { useAtom } from 'jotai';
+import { useAtom, useAtomValue } from 'jotai';
 import { MdClose, MdWorkspacePremium, MdOpenInNew } from 'react-icons/md';
 import { browser } from '../static/globals';
-import { manageSubscriptionOpenState } from './atoms/premiumState';
+import { manageSubscriptionOpenState, isProState } from './atoms/premiumState';
 import { showSuccessToast } from './toastHelpers';
 import './Modal.css';
 import './ManageSubscriptionModal.css';
@@ -47,6 +47,8 @@ export function ManageSubscriptionControls({ active = true, onBack, onBusyChange
     // 'main' | 'confirm-cancel' | 'confirm-switch'
     const [view, setView] = useState('main');
     const [preview, setPreview] = useState(null);
+    const [manualGrant, setManualGrant] = useState(false);
+    const isPro = useAtomValue(isProState);
 
     const loadSubscription = async () => {
         setLoading(true);
@@ -54,6 +56,10 @@ export function ManageSubscriptionControls({ active = true, onBack, onBusyChange
         const result = await browser.runtime.sendMessage({ type: 'proGetSubscription' });
         if (result?.ok) {
             setSubscription(result.data);
+        } else if (result?.error === 'no_subscription' && isPro) {
+            // Entitled but no Paddle subscription — Pro was granted manually,
+            // so there is no billing to manage and nothing to retry.
+            setManualGrant(true);
         } else {
             setError(errorMessage(result));
         }
@@ -66,6 +72,7 @@ export function ManageSubscriptionControls({ active = true, onBack, onBusyChange
             setView('main');
             setPreview(null);
             setError(null);
+            setManualGrant(false);
             loadSubscription();
         }
     }, [active]);
@@ -257,6 +264,12 @@ export function ManageSubscriptionControls({ active = true, onBack, onBusyChange
                                 </button>
                             </div>
                         </>
+                    )}
+
+                    {!loading && manualGrant && (
+                        <div className="manage-sub-notice">
+                            Your Pro access was granted manually — nothing to bill.
+                        </div>
                     )}
 
                     {error && <div className="manage-sub-error">{error}</div>}
