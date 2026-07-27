@@ -5,6 +5,11 @@ on:
     branches: [main]
     paths: ['server/**']
   workflow_dispatch:
+    inputs:
+      migrations_only:
+        description: 'Apply D1 migrations without deploying the worker'
+        type: boolean
+        default: false
 
 jobs:
   deploy:
@@ -20,7 +25,23 @@ jobs:
       - run: corepack enable
       - run: yarn install --immutable
       - run: yarn test
-      - uses: cloudflare/wrangler-action@v3
+      - name: Apply D1 migrations (production)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: server
+          command: d1 migrations apply SHARED_DB --remote
+      - name: Apply D1 migrations (sandbox)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: server
+          command: d1 migrations apply SHARED_DB --env sandbox --remote
+      - name: Deploy worker
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.migrations_only != true }}
+        uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
