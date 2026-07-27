@@ -48,18 +48,48 @@ const VALID_BODY = {
   response_format: { type: 'json_schema', json_schema: { name: 'response', strict: true, schema: { type: 'object' } } },
 };
 
+// AI is Pro-only: an active entitlement for the default mocked user.
+const PRO_KV = () => ({ 'ent:g-user': JSON.stringify({ status: 'active', plan: 'annual' }) });
+
 describe('POST /ai/complete', () => {
   afterEach(() => { vi.restoreAllMocks(); });
 
   it('rejects unauthenticated callers', async () => {
     mockFetch();
-    const res = await worker.fetch(req('t-bad', VALID_BODY), env());
+    const res = await worker.fetch(req('t-bad', VALID_BODY), env(PRO_KV()));
     expect(res.status).toBe(401);
+  });
+
+  it('rejects signed-in users without a Pro entitlement', async () => {
+    const calls = mockFetch();
+    const res = await worker.fetch(req('t-user', VALID_BODY), env());
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: 'pro_required' });
+    expect(calls.openrouter).toHaveLength(0);
+  });
+
+  it('rejects users whose entitlement has lapsed', async () => {
+    const calls = mockFetch();
+    const res = await worker.fetch(
+      req('t-user', VALID_BODY),
+      env({ 'ent:g-user': JSON.stringify({ status: 'canceled', plan: 'monthly' }) }),
+    );
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: 'pro_required' });
+    expect(calls.openrouter).toHaveLength(0);
+  });
+
+  it('does not consume rate-limit quota on pro_required rejections', async () => {
+    mockFetch();
+    const e = env();
+    await worker.fetch(req('t-user', VALID_BODY), e);
+    const writes = e.ENTITLEMENTS.put.mock.calls.filter(([k]) => k.startsWith('rl:'));
+    expect(writes).toHaveLength(0);
   });
 
   it('proxies a valid request with the pinned model and server-held key', async () => {
     const calls = mockFetch({ completion: '{"name":"Research"}' });
-    const res = await worker.fetch(req('t-user', VALID_BODY), env());
+    const res = await worker.fetch(req('t-user', VALID_BODY), env(PRO_KV()));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ content: '{"name":"Research"}' });
     expect(calls.openrouter).toHaveLength(1);
@@ -74,7 +104,7 @@ describe('POST /ai/complete', () => {
 
   it('a client-supplied model is ignored — the server pin always wins', async () => {
     const calls = mockFetch();
-    const res = await worker.fetch(req('t-user', { ...VALID_BODY, model: 'openai/o5-pro' }), env());
+    const res = await worker.fetch(req('t-user', { ...VALID_BODY, model: 'openai/o5-pro' }), env(PRO_KV()));
     expect(res.status).toBe(200);
     expect(JSON.parse(calls.openrouter[0].opts.body).model).toBe('deepseek/deepseek-v4-flash');
   });
@@ -89,7 +119,7 @@ describe('POST /ai/complete', () => {
       { messages: [{ role: 'user', content: 'x' }], top_k: 0 },
       { messages: [{ role: 'user', content: 'x' }], response_format: { type: 'text' } },
     ]) {
-      const res = await worker.fetch(req('t-user', bad), env());
+      const res = await worker.fetch(req('t-user', bad), env(PRO_KV()));
       expect(res.status).toBe(400);
     }
     expect(calls.openrouter).toHaveLength(0);
@@ -99,14 +129,14 @@ describe('POST /ai/complete', () => {
     mockFetch();
     const res = await worker.fetch(
       req('t-user', { messages: [{ role: 'user', content: 'x'.repeat(300_001) }] }),
-      env(),
+      env(PRO_KV()),
     );
     expect(res.status).toBe(413);
   });
 
   it('rate-limits per user (burst bucket)', async () => {
     mockFetch();
-    const e = env();
+    const e = env(PRO_KV());
     let lastStatus = 200;
     for (let i = 0; i < 21; i++) {
       lastStatus = (await worker.fetch(req('t-user', VALID_BODY), e)).status;
@@ -116,14 +146,14 @@ describe('POST /ai/complete', () => {
 
   it('maps upstream failures to 502 without leaking detail', async () => {
     mockFetch({ upstreamOk: false });
-    const res = await worker.fetch(req('t-user', VALID_BODY), env());
+    const res = await worker.fetch(req('t-user', VALID_BODY), env(PRO_KV()));
     expect(res.status).toBe(502);
     expect(await res.json()).toEqual({ error: 'upstream_error' });
   });
 
   it('returns 500 not_configured when the secret is missing', async () => {
     mockFetch();
-    const res = await worker.fetch(req('t-user', VALID_BODY), env({}, { OPENROUTER_API_KEY: undefined }));
+    const res = await worker.fetch(req('t-user', VALID_BODY), env(PRO_KV(), { OPENROUTER_API_KEY: undefined }));
     expect(res.status).toBe(500);
     expect(await res.json()).toEqual({ error: 'not_configured' });
   });

@@ -208,11 +208,14 @@ async function applyEntitlement(env, googleId, record) {
   }
 }
 
-// AI completion proxy — signed-in users only, rate-limited per user (burst +
+// AI completion proxy — Pro users only, rate-limited per user (burst +
 // daily). Body caps and field allowlisting live in validateAIRequest.
 async function handleAIComplete(request, env) {
   const identity = await authenticate(request, env);
   if (!identity) return json({ error: 'invalid_token' }, 401);
+  // Entitlement gate before the rate limit: a pro_required rejection must not
+  // consume quota (checkRateLimit increments as it checks).
+  if (!(await isProUser(env, identity.googleId))) return json({ error: 'pro_required' }, 403);
   const declaredLen = Number(request.headers.get('content-length') || 0);
   if (declaredLen > MAX_BODY_BYTES) return json({ error: 'payload_too_large' }, 413);
   const now = Date.now();
