@@ -27,6 +27,10 @@ import { validateAIRequest, completeAI } from './aiProxy.js';
 import { handlePushSubscribe, handlePushUnsubscribe } from './pushRoutes.js';
 import { notifyEmails, notifyFolderMembers } from './pushNotify.js';
 
+// How long an unlinked subscription event stays parked awaiting its transaction.
+// Paddle retries webhooks for ~3 days; 30 days leaves ample slack.
+const SUBPENDING_TTL_SECONDS = 30 * 24 * 60 * 60;
+
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
@@ -85,6 +89,7 @@ async function handlePaddleWebhook(request, env) {
       const pendingRaw = await env.ENTITLEMENTS.get(`subpending:${link.subscription_id}`);
       if (pendingRaw) {
         await applyEntitlement(env, link.googleId, JSON.parse(pendingRaw).record);
+        await env.ENTITLEMENTS.delete(`subpending:${link.subscription_id}`);
       }
     }
   } else if (eventType.startsWith('subscription.')) {
@@ -99,7 +104,13 @@ async function handlePaddleWebhook(request, env) {
         const pendingRaw = await env.ENTITLEMENTS.get(`subpending:${built.subscription_id}`);
         const pending = pendingRaw ? JSON.parse(pendingRaw).record : null;
         if (shouldApply(pending, built.record)) {
-          await env.ENTITLEMENTS.put(`subpending:${built.subscription_id}`, JSON.stringify({ record: built.record }));
+          // TTL backstop: if the linking transaction never arrives, the parked
+          // record self-expires instead of accumulating in KV forever.
+          await env.ENTITLEMENTS.put(
+            `subpending:${built.subscription_id}`,
+            JSON.stringify({ record: built.record }),
+            { expirationTtl: SUBPENDING_TTL_SECONDS }
+          );
         }
       }
     }

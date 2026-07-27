@@ -4,6 +4,7 @@ import worker from '../src/index.js';
 const makeKV = (store = {}) => ({
   get: vi.fn(async (k) => (k in store ? JSON.stringify(store[k]) : null)),
   put: vi.fn(async (k, v) => { store[k] = JSON.parse(v); }),
+  delete: vi.fn(async (k) => { delete store[k]; }),
   _store: store,
 });
 
@@ -121,6 +122,26 @@ describe('POST /webhooks/paddle', () => {
     await post(subEvent, kv);      // stashed, pending googleId
     await post(txnEvent, kv);      // supplies googleId -> flush
     expect(kv._store['ent:g-123']).toMatchObject({ status: 'trialing', plan: 'monthly', subscription_id: 'sub_1' });
+  });
+
+  it('deletes the parked subpending record once the linking transaction flushes it', async () => {
+    const kv = makeKV();
+    await post(subEvent, kv);
+    expect(kv._store['subpending:sub_1']).toBeDefined();
+    await post(txnEvent, kv);
+    expect(kv._store['ent:g-123']).toMatchObject({ status: 'trialing', subscription_id: 'sub_1' });
+    expect(kv._store['subpending:sub_1']).toBeUndefined();
+    expect(kv.delete).toHaveBeenCalledWith('subpending:sub_1');
+  });
+
+  it('parks subpending records with an expiration TTL so orphans cannot accumulate forever', async () => {
+    const kv = makeKV();
+    await post(subEvent, kv);
+    expect(kv.put).toHaveBeenCalledWith(
+      'subpending:sub_1',
+      expect.any(String),
+      expect.objectContaining({ expirationTtl: expect.any(Number) })
+    );
   });
 
   it('resolves entitlement when the transaction event arrives before the subscription event', async () => {
