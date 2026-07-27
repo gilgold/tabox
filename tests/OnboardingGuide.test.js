@@ -45,7 +45,7 @@ describe('OnboardingGuide', () => {
         expect(screen.getAllByRole('button', { name: /go to step/i })).toHaveLength(6);
     });
 
-    test('temporarily shows for an existing user whenever the popup opens', async () => {
+    test('stays hidden for an existing user who already completed onboarding', async () => {
         renderGuide({
             extensionUpdated: true,
             extensionInstalled: true,
@@ -53,8 +53,19 @@ describe('OnboardingGuide', () => {
             onboardingCompleted: true
         });
 
-        expect(await screen.findByRole('dialog', { name: 'Welcome to Tabox' })).toBeInTheDocument();
-        expect(global.browser.storage.local.get).not.toHaveBeenCalled();
+        await waitFor(() => {
+            expect(global.browser.storage.local.get).toHaveBeenCalled();
+        });
+        expect(screen.queryByRole('dialog', { name: 'Welcome to Tabox' })).not.toBeInTheDocument();
+    });
+
+    test('stays hidden when the fresh-install eligibility marker is absent', async () => {
+        renderGuide({});
+
+        await waitFor(() => {
+            expect(global.browser.storage.local.get).toHaveBeenCalled();
+        });
+        expect(screen.queryByRole('dialog', { name: 'Welcome to Tabox' })).not.toBeInTheDocument();
     });
 
     test('walks through the requested feature education with fluid step controls', async () => {

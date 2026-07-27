@@ -3,7 +3,11 @@
 //   'production' — live Paddle catalog (real payments)
 //   'sandbox'    — Paddle sandbox catalog (test cards, E2E runs)
 // Release builds MUST ship with PRO_ENV = 'production'.
-const PRO_ENV = 'sandbox'; // TESTING — revert to 'production' before release
+// NOTE: switching to 'sandbox' also requires re-adding the sandbox worker URL
+// (https://tabox-api-sandbox.gilgold13.workers.dev) to host_permissions and
+// externally_connectable in chrome/manifest.json — release manifests ship
+// production-only entries, so sandbox calls fail at the network layer without it.
+const PRO_ENV = 'production';
 
 const PRO_API_BASES = {
   production: 'https://tabox-api.gilgold13.workers.dev',

@@ -23,7 +23,7 @@ const ONBOARDING_ELIGIBLE_KEY = 'onboardingEligible';
 const ONBOARDING_COMPLETED_KEY = 'onboardingCompleted';
 // TEMPORARY TESTING SWITCH: set to false before release to restore the
 // fresh-install-only storage gate below.
-const FORCE_ONBOARDING_FOR_POPUP_TESTING = true;
+const FORCE_ONBOARDING_FOR_POPUP_TESTING = false;
 
 function WelcomeScene({ active }) {
     return (
