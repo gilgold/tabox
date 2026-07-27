@@ -1,0 +1,48 @@
+name: Deploy Entitlement Worker
+
+on:
+  push:
+    branches: [main]
+    paths: ['server/**']
+  workflow_dispatch:
+    inputs:
+      migrations_only:
+        description: 'Apply D1 migrations without deploying the worker'
+        type: boolean
+        default: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: corepack enable
+      - run: yarn install --immutable
+      - run: yarn test
+      - name: Apply D1 migrations (production)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: server
+          command: d1 migrations apply SHARED_DB --remote
+      - name: Apply D1 migrations (sandbox)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: server
+          command: d1 migrations apply SHARED_DB --env sandbox --remote
+      - name: Deploy worker
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.migrations_only != true }}
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: server
