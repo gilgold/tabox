@@ -176,7 +176,6 @@ module.exports = (env, argv) => {
           { from: "static/globals.js", to: "[name][ext]" },
           { from: "static/deferedLoading.*", to: "[name][ext]" },
           { from: "chrome/*.js", to: "[name][ext]" },
-          { from: "chrome/api-keys.json", to: "[name][ext]" },
           {
             from: 'node_modules/webextension-polyfill/dist/browser-polyfill.min.*',
             to: "[name][ext]"

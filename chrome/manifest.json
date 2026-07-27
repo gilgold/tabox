@@ -72,11 +72,6 @@
       "https://tabox-api.gilgold13.workers.dev/*"
     ]
   },
-  "web_accessible_resources": [{
-    "resources": ["api-keys.json"],
-    "matches": [],
-    "extension_ids": []
-  }],
   "oauth2": {
     "client_id": "701423091804-t6v1r6mkl4jdptge49gb7sfstj4holfr.apps.googleusercontent.com",
     "scopes": [
