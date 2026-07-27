@@ -34,8 +34,43 @@ async function refreshProEntitlement() {
   if (!response.ok) return null;
   const data = await response.json();
   const record = { ...data, refreshedAt: new Date().toISOString() };
+  // Stamp the cache with its owner so an account switch can't inherit it
+  // (getProEntitlementForUser drops records whose ownerId mismatches the
+  // current googleUser). googleUser can be transiently absent during sync
+  // recovery — then the record is simply left unstamped (legacy-compatible).
+  if (googleUser && googleUser.permissionId) record.ownerId = googleUser.permissionId;
   await browser.storage.local.set({ [PRO_ENTITLEMENT_KEY]: record });
   return record;
+}
+
+// Reads the cached entitlement, but only honors it for the account that
+// cached it. Handles the two stale-cache cases the time-based isEntitled()
+// window can't see:
+// - fully signed out (no googleUser AND no refresh token): drop the record —
+//   entitlement never outlives the session it belongs to. The transient
+//   recovery state (!googleUser but refresh token present) is NOT a sign-out
+//   and keeps the cache, matching the `cached &&` grace guards.
+// - signed in as a DIFFERENT account than the record's ownerId: drop the
+//   stale record and refresh once for the current user. This is the only
+//   extra Worker call and it only fires on an actual account switch, so the
+//   zero-calls-for-free/signed-out-installs constraint holds.
+// Records without an ownerId (written before stamping existed) are honored
+// as before; the next successful refresh stamps them.
+async function getProEntitlementForUser() {
+  const { [PRO_ENTITLEMENT_KEY]: cached, googleUser, googleRefreshToken } =
+    await browser.storage.local.get([PRO_ENTITLEMENT_KEY, 'googleUser', 'googleRefreshToken']);
+  if (!cached) return null;
+  if (!googleUser && !googleRefreshToken) {
+    await browser.storage.local.remove(PRO_ENTITLEMENT_KEY);
+    return null;
+  }
+  const currentId = googleUser && googleUser.permissionId;
+  if (cached.ownerId && currentId && cached.ownerId !== currentId) {
+    await browser.storage.local.remove(PRO_ENTITLEMENT_KEY);
+    const fresh = await refreshProEntitlement();
+    return fresh && !fresh.authError ? fresh : null;
+  }
+  return cached;
 }
 
 // Authenticated call to the Worker's subscription-management routes.
@@ -144,6 +179,7 @@ async function ensureProEntitlementAlarm() {
 if (typeof module !== 'undefined') {
   module.exports = {
     refreshProEntitlement,
+    getProEntitlementForUser,
     proSubscriptionRequest,
     handleProSubscriptionMessage,
     openProCheckout,

@@ -1611,6 +1611,11 @@ try {
     }
 
     if (request.type === 'getProEntitlement') {
+      // Ownership-checked read (pro-entitlement.js): a record cached by a
+      // different Google account than the current one is stale and dropped.
+      if (typeof getProEntitlementForUser === 'function') {
+        return getProEntitlementForUser();
+      }
       const { premiumEntitlement } = await browser.storage.local.get('premiumEntitlement');
       return Promise.resolve(premiumEntitlement || null);
     }
@@ -2147,7 +2152,10 @@ try {
       await browser.alarms.clear(BACKGROUND_SYNC_ALARM);
       await teardownPushSubscription();
       if (token === false) {
-        await browser.storage.local.remove(['googleUser', 'googleToken', 'googleRefreshToken', 'tokenExpiryTime', 'syncAuthError']);
+        // premiumEntitlement/proCheckoutPendingUntil belong to the signed-out
+      // account — clearing them here prevents the next account from inheriting
+      // the previous user's Pro entitlement (isEntitled() is time-based only).
+      await browser.storage.local.remove(['googleUser', 'googleToken', 'googleRefreshToken', 'tokenExpiryTime', 'syncAuthError', 'premiumEntitlement', 'proCheckoutPendingUntil']);
         await updateSharedSyncSessionState({
           status: SYNC_SESSION_STATUS.DISABLED,
           isEnabled: false,
@@ -2158,7 +2166,10 @@ try {
         await browser.storage.sync.remove('syncFileId');
         return Promise.resolve(true);
       }
-      await browser.storage.local.remove(['googleUser', 'googleToken', 'googleRefreshToken', 'tokenExpiryTime', 'syncAuthError']);
+      // premiumEntitlement/proCheckoutPendingUntil belong to the signed-out
+      // account — clearing them here prevents the next account from inheriting
+      // the previous user's Pro entitlement (isEntitled() is time-based only).
+      await browser.storage.local.remove(['googleUser', 'googleToken', 'googleRefreshToken', 'tokenExpiryTime', 'syncAuthError', 'premiumEntitlement', 'proCheckoutPendingUntil']);
       await updateSharedSyncSessionState({
         status: SYNC_SESSION_STATUS.DISABLED,
         isEnabled: false,
