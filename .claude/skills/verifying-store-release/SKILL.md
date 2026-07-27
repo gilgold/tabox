@@ -17,14 +17,15 @@ Create a todo per section. All output must be from commands you ran this session
 
 ### 1. Production, not sandbox
 
-The environment switch is a hardcoded constant copied verbatim into the bundle — no webpack define, no env var. Four switches, four checks:
+The environment switch is a hardcoded constant copied verbatim into the bundle — no webpack define, no env var:
 
 ```bash
 grep -n "PRO_ENV = " chrome/pro-config.js                                   # must be 'production'
-grep -n "PADDLE_ENV = " server/checkout-page/tabox-pro-checkout.html        # must be 'production'
 grep -n "PADDLE_ENVIRONMENT\|PADDLE_CLIENT_TOKEN =" site/pricing/velo-pro-page.js  # 'production' + live_ token
 grep -n "FORCE_ONBOARDING_FOR_POPUP_TESTING" app/OnboardingGuide.js         # must be false
 ```
+
+`server/checkout-page/tabox-pro-checkout.html` is a sandbox-only E2E harness, never served in production (the real checkout is built from `site/pricing/pricing.template.html`) — its `PADDLE_ENV = 'sandbox'` is correct; do not flag it.
 
 Then network surfaces and placeholders:
 

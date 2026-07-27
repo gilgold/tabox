@@ -1,7 +1,10 @@
-<!-- Tabox Pro checkout embed. Paste into a Wix "Custom Code" / embed element on tabox.co/pro.
-     Fill TOKENS with the client-side tokens from each environment's Paddle dashboard
-     (Developer Tools > Authentication > Client-side tokens): live_... for production,
-     test_... for sandbox. -->
+<!-- SANDBOX-ONLY checkout test harness. NOT the live checkout page.
+     The real production checkout on tabox.co/pro is built from
+     site/pricing/pricing.template.html (via site/pricing/build-pricing.mjs) and
+     pasted into Wix Settings > Custom Code — do not paste this file there.
+     This file is served locally as http://localhost:8787/sandbox-checkout.html
+     (the "sandbox-checkout" launch config) for Paddle sandbox E2E runs; see
+     docs/superpowers/2026-07-16-sandbox-e2e-runbook.md and chrome/pro-config.js. -->
 <div id="tabox-pro-checkout">
   <div class="plan-toggle">
     <button id="plan-monthly" class="plan-btn active">Monthly — $5.99/mo</button>
@@ -12,15 +15,12 @@
 </div>
 <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
 <script>
-  var PADDLE_ENV = 'production'; // 'sandbox' while testing
+  // Sandbox-only: this harness never talks to the live Paddle environment.
+  var PADDLE_ENV = 'sandbox';
 
-  // Env-specific brand color: purple in production, orange in sandbox — so a
-  // sandbox page is never mistaken for the real checkout during testing.
-  var BRAND_COLORS = {
-    production: { brand: '#6a5acd', tint: '#f0edff', disabled: '#b7b3d9' },
-    sandbox:    { brand: '#f97316', tint: '#fff1e6', disabled: '#f5c9a8' }
-  };
-  var brand = BRAND_COLORS[PADDLE_ENV];
+  // Orange sandbox branding (production is purple) — so this page is never
+  // mistaken for the real checkout during testing.
+  var brand = { brand: '#f97316', tint: '#fff1e6', disabled: '#f5c9a8' };
   var rootEl = document.getElementById('tabox-pro-checkout');
   rootEl.style.setProperty('--brand', brand.brand);
   rootEl.style.setProperty('--brand-tint', brand.tint);
@@ -39,21 +39,20 @@
     document.getElementById('tabox-pro-checkout').innerHTML =
       '<h3>You\'re in! 🎉</h3><p>Return to the Tabox extension — Pro unlocks automatically within a minute.</p>';
   } else {
+    // Paddle sandbox catalog only — no live token or live price IDs belong in
+    // this file. The live equivalents live in site/pricing/ (Wix Custom Code).
     var TOKENS = {
-      production: 'REPLACE_WITH_LIVE_CLIENT_SIDE_TOKEN',
       sandbox: 'test_4961f5d3c7b833606638b5c40cd'
     };
     var PRICES = {
-      production: { monthly: 'pri_01kxk6xwxdgmtr2eat3xqacs3z', annual: 'pri_01kxk6xx37e1h9pdjvmvy457br' },
-      sandbox:    { monthly: 'pri_01kxmrtyxwk2x1qt6kxvbc57m1', annual: 'pri_01kxmrtz4894fc464tm48qjmvy' }
+      sandbox: { monthly: 'pri_01kxmrtyxwk2x1qt6kxvbc57m1', annual: 'pri_01kxmrtz4894fc464tm48qjmvy' }
     };
-    // Post-payment redirect. Production is the Wix page at /pro; sandbox is the
-    // locally-served file itself (there is no /pro route on localhost).
-    var SUCCESS_PATHS = { production: '/pro', sandbox: '/sandbox-checkout.html' };
+    // Post-payment redirect: the locally-served file itself.
+    var SUCCESS_PATHS = { sandbox: '/sandbox-checkout.html' };
 
     var paddleAvailable = typeof Paddle !== 'undefined';
     if (paddleAvailable) {
-      if (PADDLE_ENV === 'sandbox') Paddle.Environment.set('sandbox');
+      Paddle.Environment.set('sandbox');
       Paddle.Initialize({ token: TOKENS[PADDLE_ENV] });
     }
 
