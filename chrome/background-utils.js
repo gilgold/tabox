@@ -15,6 +15,13 @@ const STORAGE_KEYS = {
     STORAGE_VERSION: 'tabox_storage_version'
 };
 
+// Google OAuth token exchanges go through the Tabox Worker (which holds the
+// client secret); resolve the base URL from pro-config.js in both the
+// classic-script (importScripts) world and Jest/CommonJS.
+const AUTH_API_BASE = typeof require === 'function'
+    ? require('./pro-config').PRO_API_BASE
+    : PRO_API_BASE;
+
 // Deferred-loading URL helpers.
 // SYNCHRONIZED WITH app/utils/urlUtils.js (unwrapDeferredUrl / isDeferredLoadingUrl).
 // The service worker loads its scripts via importScripts and cannot import the app ES
@@ -1252,67 +1259,30 @@ async function readWindowForAI(windowId) {
 
 async function getNewAccessToken() {
     try {
-        const { oauth2 } = browser.runtime.getManifest();
-        const clientId = oauth2.client_id;
-        const keysUrl = browser.runtime.getURL('api-keys.json');
-        
-        let clientSecret;
-        try {
-            const response = await fetch(keysUrl);
-            if (!response.ok) {
-                logSyncOperation('error', 'Failed to load api-keys.json - sync credentials not configured', {
-                    status: response.status
-                });
-                return false;
-            }
-            const keys = await response.json();
-            clientSecret = keys.clientSecret;
-            
-            // Check if credentials are actually configured
-            if (!clientSecret || clientSecret.trim() === '') {
-                logSyncOperation('error', 'OAuth client secret is not configured in api-keys.json - sync will not work until credentials are added', {
-                    hint: 'For development, add your Google OAuth credentials to chrome/api-keys.json'
-                });
-                await browser.storage.local.set({ 
-                    syncAuthError: {
-                        type: 'missing_credentials',
-                        message: 'Sync credentials not configured. Please contact the developer or configure api-keys.json for development.',
-                        timestamp: Date.now()
-                    }
-                });
-                return false;
-            }
-        } catch (fetchError) {
-            logSyncOperation('error', 'Failed to fetch api-keys.json', { error: fetchError.message });
-            return false;
-        }
-        
         const { googleRefreshToken } = await browser.storage.local.get('googleRefreshToken');
-        
+
         if (!googleRefreshToken) {
             logSyncOperation('error', 'No refresh token available, user needs to re-authenticate');
             return false;
         }
-        
-        const requestBody = {
-            client_id: clientId,
-            client_secret: clientSecret,
-            refresh_token: googleRefreshToken,
-            grant_type: 'refresh_token',
-        }
-        
+
         const options = {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(requestBody)
+            body: JSON.stringify({
+                grant_type: 'refresh_token',
+                refresh_token: googleRefreshToken,
+            })
         }
-        
+
         logSyncOperation('info', 'Requesting new access token with refresh token');
-        
-        // Use direct fetch instead of handleRequest to avoid unnecessary retries
-        const tokenResponse = await fetch('https://oauth2.googleapis.com/token', options);
+
+        // The exchange runs on the Tabox Worker, which holds the OAuth client
+        // secret. Use direct fetch instead of handleRequest to avoid
+        // unnecessary retries.
+        const tokenResponse = await fetch(`${AUTH_API_BASE}/auth/token`, options);
         
         if (tokenResponse.ok) {
             const tokenData = await tokenResponse.json();
@@ -1453,9 +1423,6 @@ async function getAuthToken() {
 async function getGoogleUser(token) {
     const { googleUser } = await browser.storage.local.get('googleUser');
     if (googleUser) return googleUser;
-    const url = browser.runtime.getURL('api-keys.json');
-    const fileResponse = await fetch(url);
-    const { googleDrive: googleApiKey } = await fileResponse.json();
     const init = {
         method: 'GET',
         async: true,
@@ -1465,8 +1432,10 @@ async function getGoogleUser(token) {
         },
         'contentType': 'json'
     };
+    // The OAuth Bearer token authorizes the request on its own — no separate
+    // Drive API key is needed (or bundled) anymore.
     const response = await handleRequest(
-        `https://www.googleapis.com/drive/v3/about?alt=json&fields=user&prettyPrint=false&key=${googleApiKey}`,
+        'https://www.googleapis.com/drive/v3/about?alt=json&fields=user&prettyPrint=false',
         init)
     if (response) {
         await browser.storage.local.set({ googleUser: response.user });
@@ -1903,52 +1872,38 @@ async function updateLocalDataFromServer(token, force = false, skipLock = false)
 
 async function getTokens(code) {
     const redirectURL = browser.identity.getRedirectURL();
-    const { oauth2 } = browser.runtime.getManifest();
-    const clientId = oauth2.client_id;
-    const keysUrl = browser.runtime.getURL('api-keys.json');
-    
-    let clientSecret;
-    try {
-        const response = await fetch(keysUrl);
-        if (!response.ok) {
-            console.error('Failed to load api-keys.json - sync credentials not configured');
-            return false;
-        }
-        const keys = await response.json();
-        clientSecret = keys.clientSecret;
-        
-        if (!clientSecret || clientSecret.trim() === '') {
-            console.error('OAuth client secret is not configured in api-keys.json - login will fail');
-            logSyncOperation('error', 'Cannot complete login - OAuth credentials not configured', {
-                hint: 'Add Google OAuth credentials to chrome/api-keys.json'
-            });
-            return false;
-        }
-    } catch (fetchError) {
-        console.error('Failed to fetch api-keys.json:', fetchError);
-        return false;
-    }
-    
-    const requestBody = {
-        code: code,
-        client_id: clientId,
-        client_secret: clientSecret,
-        grant_type: 'authorization_code',
-        redirect_uri: redirectURL,
-    }
     const options = {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify({
+            grant_type: 'authorization_code',
+            code: code,
+            redirect_uri: redirectURL,
+        })
     }
-    const data = await handleRequest('https://oauth2.googleapis.com/token', options);
-    if (data && data.access_token) {
-        await browser.storage.local.set({ googleToken: data.access_token, googleRefreshToken: data.refresh_token });
-        return data.access_token;
+    // The code→token exchange runs on the Tabox Worker, which holds the OAuth
+    // client secret — the extension bundle no longer ships any credentials.
+    // Direct fetch, no retries: authorization codes are single-use, so a
+    // rejected exchange can never succeed on retry.
+    try {
+        const response = await fetch(`${AUTH_API_BASE}/auth/token`, options);
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error('Login token exchange failed:', response.status, errorData.error || '');
+            return false;
+        }
+        const data = await response.json();
+        if (data && data.access_token) {
+            await browser.storage.local.set({ googleToken: data.access_token, googleRefreshToken: data.refresh_token });
+            return data.access_token;
+        }
+        return false;
+    } catch (error) {
+        console.error('Login token exchange failed with network error:', error);
+        return false;
     }
-    return false;
 }
 
 function createAuthEndpoint() {
@@ -2723,6 +2678,7 @@ const backgroundUtilsApi = {
     migrateIncomingSyncData,
     prepareSyncDataForUpload,
     getNewAccessToken,
+    getTokens,
     validateToken,
     getAuthToken,
     getGoogleUser,

@@ -6,8 +6,8 @@ try {
   importScripts('sync-merge.js');
   importScripts('sync-apply.js');
   importScripts('sync-throttle.js');
-  importScripts('background-utils.js');
   importScripts('pro-config.js');
+  importScripts('background-utils.js');
   importScripts('push-client.js');
   importScripts('pro-entitlement.js');
   importScripts('shared-folders.js');
