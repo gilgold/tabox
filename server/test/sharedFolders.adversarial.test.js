@@ -332,8 +332,11 @@ describe('input hostility', () => {
   it('a moderately deep (but well within byte cap) nested JSON payload round-trips fine', async () => {
     const db = makeDB();
     await createSharedFolder(db, OWNER, { folderId: 'f1', name: 'T', collections: [] }, 1000);
+    // Depth kept engine-portable: 5000 levels overflows V8's default stack on
+    // some Node versions (e.g. Node 22 CI runners), where the worker correctly
+    // rejects the payload — but that's not what this round-trip test asserts.
     let nested = { v: 1 };
-    for (let i = 0; i < 5000; i++) nested = { child: nested };
+    for (let i = 0; i < 1000; i++) nested = { child: nested };
     const put = await putCollection(db, OWNER, 'f1', 'deep', { data: nested, baseRev: 1 }, 2000);
     expect(put.ok).toBe(true);
     const delta = await getFolderDelta(db, OWNER, 'f1', 0);
