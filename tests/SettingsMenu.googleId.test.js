@@ -68,25 +68,25 @@ describe('SettingsMenu — Google account ID row', () => {
         const { container } = renderSettingsMenu();
         openSettings(container);
 
-        const copyButton = await screen.findByRole('button', { name: new RegExp(`Google ID: ${GOOGLE_ID}`) });
+        expect(await screen.findByText(GOOGLE_ID)).toBeInTheDocument();
+        const copyButton = screen.getByRole('button', { name: /copy google account id/i });
 
         fireEvent.click(copyButton);
         await waitFor(() => expect(writeText).toHaveBeenCalledWith(GOOGLE_ID));
         await waitFor(() => expect(showSuccessToast).toHaveBeenCalled());
     });
 
-    test('popup, signed out: shows sign-in prompt on a disabled button', async () => {
+    test('popup, signed out: shows a sign-in prompt and no copy button', async () => {
         browser.storage.local.get.mockImplementation(async () => ({}));
         const { container } = renderSettingsMenu();
         openSettings(container);
 
-        const button = await screen.findByRole('button', { name: /google id — sign in to view/i });
-        expect(button).toBeDisabled();
-        fireEvent.click(button);
+        expect(await screen.findByText(/sign in to view/i)).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /copy google account id/i })).not.toBeInTheDocument();
         expect(writeText).not.toHaveBeenCalled();
     });
 
-    test('full page: shows the row title and signed-in account email', async () => {
+    test('full page: shows the compact row (email in tooltip) and copies the id', async () => {
         browser.storage.local.get.mockImplementation(async () => ({
             googleUser: { permissionId: GOOGLE_ID, emailAddress: 'darkstorm13@gmail.com' },
         }));
@@ -94,9 +94,9 @@ describe('SettingsMenu — Google account ID row', () => {
         openSettings(container);
         fireEvent.click(screen.getByRole('button', { name: 'Tabox Pro' }));
 
-        expect(await screen.findByText('Google account ID')).toBeInTheDocument();
-        expect(screen.getByText(/darkstorm13@gmail\.com/)).toBeInTheDocument();
-        const copyButton = screen.getByRole('button', { name: new RegExp(GOOGLE_ID) });
+        const idValue = await screen.findByText(GOOGLE_ID);
+        expect(idValue).toHaveAttribute('data-tooltip-content', expect.stringContaining('darkstorm13@gmail.com'));
+        const copyButton = screen.getByRole('button', { name: /copy google account id/i });
         fireEvent.click(copyButton);
         await waitFor(() => expect(writeText).toHaveBeenCalledWith(GOOGLE_ID));
     });

@@ -320,30 +320,40 @@ export default function SettingsMenu(props) {
         }
     };
 
+    // Compact one-line row (custom type renders the same markup in the popup
+    // and the full page). Users send this id to Tabox support, e.g. to
+    // receive a manual Pro grant.
     const googleIdItem = {
-        type: 'button',
+        type: 'custom',
         key: 'pro-google-id',
-        title: 'Google account ID',
-        description: googleUser?.permissionId
-            ? `The ID of your signed-in Google account${googleUser.emailAddress ? ` (${googleUser.emailAddress})` : ''}. Send it to Tabox support when asked — for example, to receive a Pro grant.`
-            : 'Sign in to Tabox to view your account ID.',
-        disabled: !googleUser?.permissionId,
-        onClick: handleCopyGoogleId,
-        buttonProps: {
-            'data-tooltip-id': 'main-tooltip',
-            'data-tooltip-content': googleUser?.permissionId ? 'Copy to clipboard' : undefined,
-            'data-tooltip-class-name': 'small-tooltip',
-        },
-        // The popup renders only this content (titles/descriptions are
-        // full-page-only), so it must be self-describing.
-        content: googleUser?.permissionId
-            ? (
-                <>
-                    <MdContentCopy size="14" style={{ marginRight: '8px' }} />
-                    Google ID: {googleUser.permissionId}
-                </>
-            )
-            : 'Google ID — sign in to view',
+        content: (
+            <div className="google-id-row">
+                <span className="google-id-label">Google ID</span>
+                {googleUser?.permissionId
+                    ? (
+                        <>
+                            <code
+                                className="google-id-value"
+                                data-tooltip-id="main-tooltip"
+                                data-tooltip-content={`Your Tabox account ID${googleUser.emailAddress ? ` (${googleUser.emailAddress})` : ''} — send it to Tabox support when asked, e.g. for a Pro grant.`}
+                            >
+                                {googleUser.permissionId}
+                            </code>
+                            <button
+                                className="google-id-copy"
+                                aria-label="Copy Google account ID"
+                                onClick={handleCopyGoogleId}
+                                data-tooltip-id="main-tooltip"
+                                data-tooltip-content="Copy to clipboard"
+                                data-tooltip-class-name="small-tooltip"
+                            >
+                                <MdContentCopy size="13" />
+                            </button>
+                        </>
+                    )
+                    : <span className="google-id-signin">Sign in to view</span>}
+            </div>
+        ),
     };
 
     const proSection = {
