@@ -92,6 +92,28 @@ test('declined-then-re-invited folder notifies a second time', async () => {
   expect(stored[SHARED_PENDING_INVITES_KEY].notifiedFolderIds).toContain('f1');
 });
 
+test('pollInvites no-ops the notification cleanly when browser.notifications is undefined', async () => {
+  // `notifications` is an OPTIONAL permission since v4.2 — until the user
+  // grants it (and the SW restarts) the namespace is entirely absent. The
+  // poll must still store the invite (the in-app banner path) without throwing.
+  const invite = { folderId: 'f1', folderName: 'Team', ownerEmail: 'o@x.com', role: 'read', invitedAt: 1 };
+  global.fetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ invites: [invite] }) });
+
+  const savedNotifications = browser.notifications;
+  delete browser.notifications;
+  try {
+    const res = await pollInvites();
+    expect(res.ok).toBe(true);
+  } finally {
+    browser.notifications = savedNotifications;
+  }
+
+  const { [SHARED_PENDING_INVITES_KEY]: stored } = await browser.storage.local.get(SHARED_PENDING_INVITES_KEY);
+  expect(stored.invites).toEqual([invite]);
+  expect(stored.notifiedFolderIds).toContain('f1');
+  expect(browser.notifications.create).not.toHaveBeenCalled();
+});
+
 test('still-open invite across two polls notifies once', async () => {
   const invite = { folderId: 'f1', folderName: 'Team', ownerEmail: 'o@x.com', role: 'read', invitedAt: 1 };
 

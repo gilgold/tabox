@@ -18,6 +18,7 @@ import { isProState } from './atoms/premiumState';
 import { saveContact, searchContacts } from './utils/contactsUtils';
 import { loadCollectionsIndex, loadMultipleCollections } from './utils/storageUtils';
 import { showSuccessToast, showErrorToast } from './toastHelpers';
+import { ensureNotificationsPermission } from './utils/notificationsPermission';
 import ShareProPaywall from './ShareProPaywall';
 import './Modal.css';
 import './ShareFolderModal.css';
@@ -152,6 +153,9 @@ export default function ShareFolderModal() {
     const handleShare = async () => {
         const target = email.trim().toLowerCase();
         if (!target) return;
+        // Sharing is the user's first shared-folder interaction — ask for the
+        // optional notifications permission (fire-and-forget; never blocks).
+        ensureNotificationsPermission();
         setBusyAction({ type: 'share' });
         try {
             let res;
@@ -292,6 +296,9 @@ export default function ShareFolderModal() {
         }
     };
     const handleCreateOrUpdateLink = async (linkRole, rotate = false) => {
+        // Creating a join link shares the folder — same optional-permission
+        // moment as an email invite (fire-and-forget; never blocks).
+        ensureNotificationsPermission();
         setLinkBusy(true);
         try {
             if (!isShared) {

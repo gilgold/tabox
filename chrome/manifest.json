@@ -59,13 +59,14 @@
    "unlimitedStorage",
    "contextMenus",
    "system.display",
-   "alarms",
-   "notifications"
+   "alarms"
+  ],
+  "optional_permissions": [
+    "notifications"
   ],
   "host_permissions": [
     "https://www.googleapis.com/",
-    "https://oauth2.googleapis.com/",
-    "https://tabox-api.gilgold13.workers.dev/"
+    "https://oauth2.googleapis.com/"
   ],
   "externally_connectable": {
     "matches": [

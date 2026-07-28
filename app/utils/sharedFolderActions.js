@@ -8,6 +8,7 @@
  */
 import { browser } from '../../static/globals';
 import { showInfoToast, showErrorToast, showSuccessToast } from '../toastHelpers';
+import { ensureNotificationsPermission } from './notificationsPermission';
 
 /**
  * Leave a shared folder the caller is a member of. Keeps a local copy.
@@ -44,6 +45,9 @@ export async function leaveSharedFolder(folder, onDataUpdate) {
  */
 export async function respondToSharedInvite(invite, accept, onDataUpdate) {
     try {
+        // First shared-folder interaction — ask for the optional notifications
+        // permission (fire-and-forget; declining never blocks the flow).
+        if (accept) ensureNotificationsPermission();
         const res = await browser.runtime.sendMessage({ type: 'sharedRespondInvite', folderId: invite.folderId, accept });
         if (!res?.ok) {
             showErrorToast('Could not respond to the invite. Please try again.');
@@ -70,6 +74,9 @@ export async function respondToSharedInvite(invite, accept, onDataUpdate) {
  */
 export async function joinSharedFolderLink(stash, onDataUpdate) {
     try {
+        // First shared-folder interaction — ask for the optional notifications
+        // permission (fire-and-forget; declining never blocks the flow).
+        ensureNotificationsPermission();
         const res = await browser.runtime.sendMessage({ type: 'sharedJoinLink', token: stash.token });
         if (!res?.ok) {
             showErrorToast(res?.status === 'sign_in_required'

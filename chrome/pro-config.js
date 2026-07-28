@@ -3,10 +3,15 @@
 //   'production' — live Paddle catalog (real payments)
 //   'sandbox'    — Paddle sandbox catalog (test cards, E2E runs)
 // Release builds MUST ship with PRO_ENV = 'production'.
-// NOTE: switching to 'sandbox' also requires re-adding the sandbox worker URL
-// (https://tabox-api-sandbox.gilgold13.workers.dev) to host_permissions and
-// externally_connectable in chrome/manifest.json — release manifests ship
-// production-only entries, so sandbox calls fail at the network layer without it.
+// NOTE: Worker API calls need NO host_permissions entry (in either env) — the
+// Worker answers CORS preflights and sends `Access-Control-Allow-Origin: *` on
+// every JSON route (see server/src/index.js), and our calls use bearer tokens,
+// not cookies. Do NOT re-add the worker URL to host_permissions: a new host
+// permission hard-disables the extension on auto-update until users re-approve.
+// Switching to 'sandbox' still requires adding the sandbox worker URL
+// (https://tabox-api-sandbox.gilgold13.workers.dev) to externally_connectable
+// in chrome/manifest.json for the join-link handshake — release manifests ship
+// the production entry only.
 const PRO_ENV = 'production';
 
 const PRO_API_BASES = {

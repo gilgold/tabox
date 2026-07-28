@@ -414,12 +414,17 @@ async function pollInvites() {
         notifiedFolderIds.push(inv.folderId);
         prunedNotifiedIds.add(inv.folderId);
         try {
-          await browser.notifications.create(`shared-invite-${inv.folderId}`, {
-            type: 'basic',
-            iconUrl: 'icons/icon128.png',
-            title: 'Tabox — shared folder invite',
-            message: `${inv.ownerEmail} wants to share the folder "${inv.folderName}" with you`,
-          });
+          // `notifications` is an optional permission — the namespace itself is
+          // undefined until the user grants it (and the SW restarts), so check
+          // availability explicitly. The in-app banner is the guaranteed path.
+          if (browser.notifications?.create) {
+            await browser.notifications.create(`shared-invite-${inv.folderId}`, {
+              type: 'basic',
+              iconUrl: 'icons/icon128.png',
+              title: 'Tabox — shared folder invite',
+              message: `${inv.ownerEmail} wants to share the folder "${inv.folderName}" with you`,
+            });
+          }
         } catch { /* notifications may be unavailable; the in-app banner still shows */ }
       }
     }
