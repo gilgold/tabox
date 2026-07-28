@@ -17,6 +17,7 @@
 
 import { initializePaddle } from '@paddle/paddle-js';
 import { currentMember } from 'wix-members-frontend';
+import wixLocation from 'wix-location';
 
 // ---- Config (edit here) ---------------------------------------------------
 const PADDLE_ENVIRONMENT = 'production'; // 'production' | 'sandbox'
@@ -78,15 +79,27 @@ function setError(msg) {
 }
 
 async function openCheckout() {
+  // The extension opens /pro?uid=<googleId>&email=<address> — the Worker's
+  // Paddle webhook keys the entitlement on customData.googleId. Without it the
+  // subscription parks as subpending:* in KV and the buyer never gets Pro, so
+  // never open a checkout we can't link.
+  const { uid, email: queryEmail } = wixLocation.query;
+  if (!uid) {
+    setError('To upgrade, please start the checkout from the Tabox extension (Settings → Upgrade to Pro) so we can link Pro to your account.');
+    return;
+  }
+
   let email;
   try {
     const member = await currentMember.getMember();
     email = member && member.loginEmail; // prefill if signed in
-  } catch (_) { /* not logged in — Paddle collects the email at checkout */ }
+  } catch (_) { /* not logged in — fall back to the extension-provided email */ }
+  if (!email) email = queryEmail;
 
   paddle.Checkout.open({
     items: [{ priceId: PRICE_IDS[cadence], quantity: 1 }],
     customer: email ? { email } : undefined,
+    customData: { googleId: uid },
     settings: {
       displayMode: 'overlay',
       variant: 'one-page',

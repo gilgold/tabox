@@ -136,6 +136,20 @@
       return (typeof e === "string" && e.indexOf("@") > 0) ? e : null;
     }
 
+    // The extension opens this page as /pro?uid=<googleId>&email=<address>
+    // (chrome/pro-entitlement.js openProCheckout). The Worker's Paddle webhook
+    // keys the entitlement on checkout customData.googleId — without it the
+    // subscription parks in KV as subpending:* and the buyer never gets Pro.
+    // This script runs in the top frame (Wix Custom Code), so location.search
+    // is the real page URL's query string.
+    var pageQuery = new URLSearchParams(window.location.search);
+    var checkoutGoogleId = pageQuery.get("uid") || "";
+    var checkoutEmail = pageQuery.get("email") || "";
+    function prefillEmail() {
+      var e = signedInEmail() || checkoutEmail;
+      return (typeof e === "string" && e.indexOf("@") > 0) ? e : null;
+    }
+
     if (typeof Paddle === "undefined") { showError("Could not load Paddle. Please refresh."); return; }
 
     // Environment must be explicit. Production is Paddle.js's default; set sandbox only when asked.
@@ -169,10 +183,17 @@
 
     function openCheckout(tier) {
       var priceId = tier.priceId[cadence];
-      var email = signedInEmail();
+      if (!checkoutGoogleId) {
+        // Never take a payment we can't link to a Google account — the
+        // entitlement would be undeliverable (see webhook subpending flow).
+        showError("To upgrade, please start the checkout from the Tabox extension (Settings → Upgrade to Pro) so we can link Pro to your account.");
+        return;
+      }
+      var email = prefillEmail();
       Paddle.Checkout.open({
         items: [{ priceId: priceId, quantity: 1 }],
         customer: email ? { email: email } : undefined,
+        customData: { googleId: checkoutGoogleId },
         settings: {
           displayMode: "overlay",
           variant: "one-page",
