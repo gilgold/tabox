@@ -71,9 +71,21 @@ function buildIndexedSyncPayload({ currentStorage = {}, syncData = {}, now = Dat
         Object.keys(localCollectionIndex).filter((uid) => localSharedFolderUids.has(localCollectionIndex[uid].parentId))
     );
 
+    // Incoming collections whose uid the local shared engine already manages are
+    // dropped here (the local shared copies are reinstated verbatim below). But an
+    // incoming collection the shared engine does NOT know that merely points at a
+    // locally-shared folder (e.g. a pre-4.2 device added it into the folder before
+    // this device shared it) must not be discarded - dropping it here would omit it
+    // from this device's next authoritative upload and destroy it fleet-wide.
+    // Re-home it to the root (parentId: null, the same convention background.js's
+    // overwriteBackupSelection uses) instead of injecting it into the shared folder,
+    // whose contents stay server-authoritative.
     const rawIncomingCollections = Array.isArray(syncData.tabsArray)
-        ? syncData.tabsArray.filter((collection) =>
-            !localSharedCollectionUids.has(collection.uid) && !localSharedFolderUids.has(collection.parentId))
+        ? syncData.tabsArray
+            .filter((collection) => !localSharedCollectionUids.has(collection.uid))
+            .map((collection) => (localSharedFolderUids.has(collection.parentId)
+                ? { ...collection, parentId: null }
+                : collection))
         : [];
     const rawIncomingFolders = Array.isArray(syncData.foldersArray)
         ? syncData.foldersArray.filter((folder) => !localSharedFolderUids.has(folder.uid))

@@ -224,7 +224,16 @@ describe('chrome/sync-apply.js protects shared folders/collections from Drive pu
         expect(byUid.c2).toEqual(expect.objectContaining({ name: 'Ours (local)', parentId: 'f2' }));
     });
 
-    test('drops a brand new incoming collection that targets a locally shared folder', () => {
+    // F1 (adversarial pre-release review): a mixed-version fleet can legitimately
+    // produce a Drive snapshot containing a collection parented to a folder this
+    // device has since shared (a 4.1 device added it into the folder, unaware of
+    // sharing). Discarding it destroys it everywhere: this device's next
+    // authoritative upload omits it, and the 4.1 device then deletes it locally.
+    // It must instead be re-homed to the root (parentId: null) — NOT injected into
+    // the shared folder (that would bypass the shared engine's server authority) —
+    // so it survives locally and re-enters subsequent Drive uploads (the upload
+    // filter keys off parentId, which is now null).
+    test('re-homes a brand new incoming collection that targets a locally shared folder to root instead of dropping it', () => {
         const currentStorage = {
             folders_index: {
                 f2: { name: 'Team', type: 'folder', shared: { folderId: 'f2', role: 'owner' } },
@@ -248,7 +257,14 @@ describe('chrome/sync-apply.js protects shared folders/collections from Drive pu
 
         const payload = buildIndexedSyncPayload({ currentStorage, syncData });
 
-        expect(payload.collections.map((c) => c.uid).sort()).toEqual(['c1', 'c2']);
+        expect(payload.collections.map((c) => c.uid).sort()).toEqual(['c-foreign', 'c1', 'c2']);
+        // The unknown incoming collection survives, at the root — never inside the
+        // shared folder, whose contents stay server-authoritative (c2 untouched).
+        expect(payload.setPayload['collection_c-foreign']).toEqual(expect.objectContaining({
+            uid: 'c-foreign', name: 'Injected', parentId: null,
+        }));
+        expect(payload.setPayload.collections_index['c-foreign']).toEqual(expect.objectContaining({ parentId: null }));
+        expect(payload.setPayload.collection_c2).toEqual(expect.objectContaining({ name: 'Ours', parentId: 'f2' }));
         expect(payload.removeKeys).toEqual([]);
     });
 

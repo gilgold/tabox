@@ -447,9 +447,10 @@ async function pollInvites() {
 // Materializes (creates or wholesale-overwrites) a shared folder + its
 // non-deleted collections as LOCAL records: folder_<folderId>,
 // collection_<uid> per collection, both indexes rewritten, in ONE atomic
-// storage.local.set, followed by a remove() for any stale local collection
-// that used to belong to this folder but is no longer in the fresh set
-// (keeps collectionCount and the index from drifting). The whole record is
+// storage.local.set. A local collection still parented to this folder whose
+// uid is NOT in the fresh server set is re-homed to the root rather than
+// removed (see the F2 comment in the body — it may be the user's local-only
+// data). The whole record is
 // treated as server-authoritative, so a clean overwrite is correct even when
 // a stale local copy already exists (e.g. re-accepting an invite, or C2's
 // multi-device rematerialization below finding a folder that was pruned/
@@ -474,11 +475,34 @@ async function materializeSharedFolderLocally({ folderId, name, color, role, own
     // Identify fresh collections from the server response
     const freshCollectionUids = new Set(collections.map((c) => c.uid));
 
-    // Find and remove stale local collections (parentId matches this folder, but uid not in fresh response)
-    for (const uid of Object.keys(cIndex)) {
-      if (cIndex[uid].parentId === folderId && !freshCollectionUids.has(uid)) {
-        delete cIndex[uid];
-        removals.push(`collection_${uid}`);
+    // F2 data-loss fix: a local collection still parented to this folder whose uid
+    // the server does NOT know is not ours to destroy — it can be the user's own
+    // local-only addition made while the folder was temporarily plain-local
+    // (member revoked then re-invited, or a transient Worker 403/404 on a pull
+    // unmarking the folder before the next cycle rematerializes it). Re-home it to
+    // the root (parentId: null — the exact convention overwriteBackupSelection in
+    // chrome/background.js uses to "never orphan or destroy user data") instead of
+    // removing it. Uids the server DOES know are still wholesale-overwritten with
+    // server content below. Legitimate server-side deletions are handled by
+    // applyDeltaLocally's tombstones, never by this materialization path. The
+    // re-homed record's lastUpdated is bumped so Drive sync treats it as dirty and
+    // uploads it; with parentId now null it is naturally outside
+    // excludeSharedFromSyncData's shared-collection partition.
+    const rehomeUids = Object.keys(cIndex).filter(
+      (uid) => cIndex[uid].parentId === folderId && !freshCollectionUids.has(uid)
+    );
+    if (rehomeUids.length) {
+      const rehomeGot = await browser.storage.local.get(rehomeUids.map((uid) => `collection_${uid}`));
+      for (const uid of rehomeUids) {
+        const record = rehomeGot[`collection_${uid}`];
+        if (!record) {
+          // Index entry with no backing record — nothing to preserve.
+          delete cIndex[uid];
+          removals.push(`collection_${uid}`);
+          continue;
+        }
+        updates[`collection_${uid}`] = { ...record, parentId: null, lastUpdated: now };
+        cIndex[uid] = { ...cIndex[uid], parentId: null, lastUpdated: now };
       }
     }
 

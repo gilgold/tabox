@@ -132,6 +132,73 @@ test('(b) folder present locally WITH a live marker is left untouched by remater
   expect(res.data).toEqual({ pulled: 0, pushed: 0, revoked: 0 });
 });
 
+// F2 regression (adversarial pre-release review): revoke → local edit → re-invite
+// must never destroy the member's local-only collections. Scenario: the member was
+// revoked (folder converted to plain local via unmarkLocalFolderShared), added a
+// collection into their now-local copy, then got re-invited — the folder record is
+// present locally WITHOUT a live marker, so rematerialization kicks in. The local-only
+// collection (uid unknown to the server) must survive, re-homed to the root
+// (parentId: null, same convention as overwriteBackupSelection), while uids the
+// server DOES know about are still overwritten with server content.
+test('(d) rematerialization after revoke → local add → re-invite re-homes the local-only collection to root instead of destroying it', async () => {
+  await browser.storage.local.set({
+    googleUser: { emailAddress: 'me@x.com', permissionId: 'g-me' },
+    // Folder exists locally but with NO live shared marker (it was unmarked on revoke).
+    folders_index: { f1: { uid: 'f1', name: 'Team' } },
+    folder_f1: { uid: 'f1', name: 'Team', type: 'folder' },
+    collections_index: {
+      // Server-known collection: overwritten by server content on rematerialize.
+      c1: { uid: 'c1', name: 'A (local stale)', parentId: 'f1', lastUpdated: 100 },
+      // Local-only collection added while the folder was plain local: MUST survive.
+      'c-local': { uid: 'c-local', name: 'My Research', parentId: 'f1', lastUpdated: 200 },
+    },
+    collection_c1: { uid: 'c1', name: 'A (local stale)', parentId: 'f1', tabs: [], lastUpdated: 100 },
+    'collection_c-local': { uid: 'c-local', name: 'My Research', parentId: 'f1', tabs: [{ url: 'https://example.com' }], lastUpdated: 200 },
+  });
+
+  global.fetch.mockImplementation(async (url) => {
+    if (url.includes('/shared/invites')) return invitesResponse;
+    if (url.endsWith('/shared/folders')) {
+      return {
+        ok: true, status: 200,
+        json: async () => ({
+          folders: [{ folderId: 'f1', name: 'Team', color: '#f00', revision: 5, role: 'write', ownerEmail: 'owner@x.com', members: [] }],
+        }),
+      };
+    }
+    if (url.includes('/shared/folders/f1')) {
+      return {
+        ok: true, status: 200,
+        json: async () => ({
+          revision: 5, role: 'write',
+          folder: { name: 'Team', color: '#f00', updatedBy: 'owner@x.com' },
+          members: [],
+          collections: [{ uid: 'c1', data: { name: 'A (server)', tabs: [] }, rev: 2, deleted: 0, updatedBy: 'owner@x.com', updatedAt: 300 }],
+        }),
+      };
+    }
+    throw new Error(`unexpected fetch: ${url}`);
+  });
+
+  const res = await syncSharedFolders();
+  expect(res.ok).toBe(true);
+
+  const store = await browser.storage.local.get([
+    'folder_f1', 'collection_c1', 'collection_c-local', 'collections_index', SHARED_SYNC_STATE_KEY,
+  ]);
+  // Server-known uid: overwritten by server content, still inside the folder.
+  expect(store.collection_c1).toMatchObject({ uid: 'c1', name: 'A (server)', parentId: 'f1' });
+  // Local-only uid: preserved (record AND index entry), re-homed to root.
+  expect(store['collection_c-local']).toMatchObject({
+    uid: 'c-local', name: 'My Research', parentId: null,
+    tabs: [{ url: 'https://example.com' }],
+  });
+  expect(store.collections_index['c-local']).toMatchObject({ uid: 'c-local', parentId: null });
+  // knownUids only tracks what the server owns — the re-homed uid must not be
+  // treated as a pending local removal (which would push a DELETE) later.
+  expect(store[SHARED_SYNC_STATE_KEY].f1.knownUids).toEqual(['c1']);
+});
+
 test('(c) the /shared/folders list call failing does not abort the sync cycle', async () => {
   await browser.storage.local.set({
     googleUser: { emailAddress: 'me@x.com', permissionId: 'g-me' },

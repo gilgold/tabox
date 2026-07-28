@@ -174,7 +174,15 @@ test('accepting overwrites an existing local folder/collection cleanly (indexes 
   expect(Object.keys(store.collections_index)).toEqual(['c1']);
 });
 
-test('re-accept with shrunken collection set removes stale local collection records', async () => {
+// F2 (adversarial pre-release review): materialization must never destroy a local
+// collection whose uid the server doesn't know — it may be the user's own local-only
+// addition made while the folder was temporarily unshared (revoke → re-invite, or a
+// transient 403/404 unmark). Instead of removing it, it is re-homed to the root
+// (parentId: null, the same convention overwriteBackupSelection uses). Trade-off: a
+// collection genuinely deleted server-side while this device was away resurfaces at
+// root rather than staying deleted — preservation beats destruction here, and the
+// normal delta path (applyDeltaLocally) still applies legitimate tombstones.
+test('re-accept with shrunken collection set re-homes the server-unknown local collection to root', async () => {
   // Set up: folder f1 has collections c1, c2, c3 locally
   await browser.storage.local.set({
     folder_f1: { uid: 'f1', name: 'Team', type: 'folder', color: '#f00', shared: { folderId: 'f1', role: 'write' } },
@@ -204,11 +212,11 @@ test('re-accept with shrunken collection set removes stale local collection reco
 
   await respondToInvite({ folderId: 'f1', accept: true });
 
-  // Verify: c3 was removed from storage and index, c1/c2 remain
+  // Verify: c1/c2 overwritten with server content, c3 preserved but re-homed to root
   const store = await browser.storage.local.get(['collection_c1', 'collection_c2', 'collection_c3', 'collections_index']);
-  expect(store.collection_c1).toBeDefined();
-  expect(store.collection_c2).toBeDefined();
-  expect(store.collection_c3).toBeUndefined(); // stale collection removed
-  expect(Object.keys(store.collections_index).sort()).toEqual(['c1', 'c2']); // c3 removed from index
-  expect(store.collections_index.c3).toBeUndefined();
+  expect(store.collection_c1).toMatchObject({ uid: 'c1', name: 'A (updated)', parentId: 'f1' });
+  expect(store.collection_c2).toMatchObject({ uid: 'c2', name: 'B (updated)', parentId: 'f1' });
+  expect(store.collection_c3).toMatchObject({ uid: 'c3', name: 'C', parentId: null }); // preserved, re-homed
+  expect(Object.keys(store.collections_index).sort()).toEqual(['c1', 'c2', 'c3']);
+  expect(store.collections_index.c3).toMatchObject({ parentId: null });
 });
