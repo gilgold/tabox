@@ -11,10 +11,10 @@ export const TIERS = [
     name: 'Pro',
     description: 'Everything in Tabox, unlocked.',
     features: [
-      'Unlimited saved collections',
-      'Cloud sync across all your devices',
-      'Automatic backups',
-      'Priority support',
+      'Tabox AI: organize, rename, and arrange collections automatically',
+      'Shared Folders: collaborate on live-syncing folders with your team',
+      'Share links to collections: send any collection with a single link',
+      '7-day free trial, cancel anytime',
     ],
     priceId: {
       month: 'pri_01kxk6xwxdgmtr2eat3xqacs3z', // Tabox Pro — monthly (live)
