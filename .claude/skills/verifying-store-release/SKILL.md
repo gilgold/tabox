@@ -21,7 +21,7 @@ The environment switch is a hardcoded constant copied verbatim into the bundle �
 
 ```bash
 grep -n "PRO_ENV = " chrome/pro-config.js                                   # must be 'production'
-grep -n "PADDLE_ENVIRONMENT\|PADDLE_CLIENT_TOKEN =" site/pricing/velo-pro-page.js  # 'production' + live_ token
+grep -n "PADDLE_ENVIRONMENT\|PADDLE_CLIENT_TOKEN =" site/pricing/pricing.html  # 'production' + live_ token; if the (gitignored) file is missing, rebuild: PADDLE_ENV=production PADDLE_CLIENT_TOKEN=live_… node site/pricing/build-pricing.mjs — the deployed copy lives in the Wix Custom Code block, updated only by manual re-paste
 grep -n "FORCE_ONBOARDING_FOR_POPUP_TESTING" app/OnboardingGuide.js         # must be false
 ```
 
