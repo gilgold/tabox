@@ -1,5 +1,7 @@
 /** @jest-environment jsdom */
 // Snapshot-link modal: create/copy/update/stop-sharing a collection link.
+import fs from 'fs';
+import path from 'path';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { Provider, createStore } from 'jotai';
@@ -20,6 +22,15 @@ const COLLECTION = {
   uid: 'c1', name: 'Research', color: null, parentId: 'folder-x', lastOpened: 42,
   tabs: [{ url: 'https://a.com' }], chromeGroups: [],
 };
+const shareFolderModalCss = fs.readFileSync(path.join(__dirname, '../app/ShareFolderModal.css'), 'utf8');
+const shareCollectionModalCss = fs.readFileSync(path.join(__dirname, '../app/ShareCollectionLinkModal.css'), 'utf8');
+
+test('matches the share-folder modal width', () => {
+  const folderWidth = shareFolderModalCss.match(/\.share-folder-modal\s*{[^}]*width:\s*(\d+px)/)?.[1];
+  const collectionWidth = shareCollectionModalCss.match(/\.share-collection-link-modal\s*{[^}]*width:\s*(\d+px)/)?.[1];
+
+  expect(collectionWidth).toBe(folderWidth);
+});
 
 const renderModal = (collection = COLLECTION, entitlement = PRO) => {
   const store = createStore();
@@ -45,10 +56,26 @@ beforeEach(() => {
 
 test('shows the Pro upsell when not Pro', async () => {
   renderModal(COLLECTION, { entitled: false });
-  expect(screen.getByText(/Tabox Pro/i)).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: /upgrade now/i })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Meet Tabox Pro' })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Organize tabs in seconds' })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Share folders & collections' })).toBeInTheDocument();
+  expect(screen.getByText('7 days free')).toBeInTheDocument();
+  expect(screen.getByText('Cancel anytime')).toBeInTheDocument();
+  expect(document.querySelector('.share-collection-link-modal')).toHaveClass('share-modal--upsell');
   expect(screen.queryByRole('button', { name: /create link/i })).not.toBeInTheDocument();
   await act(async () => {});
+});
+
+test('signed-in free user can start checkout from the shared paywall', async () => {
+  browser.storage.local.get = jest.fn().mockResolvedValue({
+    googleUser: { permissionId: 'g-1' },
+  });
+  browser.runtime.sendMessage.mockResolvedValue(true);
+
+  renderModal(COLLECTION, { entitled: false });
+  fireEvent.click(await screen.findByRole('button', { name: /start my free 7-day trial/i }));
+
+  await waitFor(() => expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'openProCheckout' }));
 });
 
 test('creates a link: sends a parentId-free snapshot and shows the url', async () => {

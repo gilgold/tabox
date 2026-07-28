@@ -44,6 +44,7 @@ function WelcomeScene({ active }) {
                 <div className="welcome-tabox-header"><strong>Tabox</strong><span>Collections</span></div>
                 <div className="welcome-tabox-search"><MdSearch /></div>
             </div>
+            <div className="welcome-scene-intro">Welcome</div>
         </div>
     );
 }
@@ -291,7 +292,7 @@ export default function OnboardingGuide({ mode = 'popup' }) {
                         <div className="onboarding-track" style={{ transform: `translate3d(-${step * 100}%, 0, 0)` }}>
                             {STEPS.map(({ eyebrow, title, body, isPro }, index) => (
                                 <article
-                                    className={`onboarding-slide${isPro ? ' onboarding-slide--pro' : ''}`}
+                                    className={`onboarding-slide${index === 0 ? ' onboarding-slide--welcome' : ''}${isPro ? ' onboarding-slide--pro' : ''}`}
                                     key={title}
                                     aria-hidden={index !== step}
                                 >
@@ -305,7 +306,6 @@ export default function OnboardingGuide({ mode = 'popup' }) {
                                                 <div className="onboarding-pro-features">
                                                     <span><MdAutoAwesome /> Tabox AI</span>
                                                     <span><MdFolderShared /> Share folders &amp; collections</span>
-                                                    <span><MdTab /> Tab switcher</span>
                                                 </div>
                                             </>
                                         )}

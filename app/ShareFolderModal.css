@@ -826,41 +826,26 @@
     font-size: 11px;
 }
 
-.share-upgrade {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 10px;
-    padding: 34px 24px;
-    color: var(--text-color);
-    text-align: center;
+.share-modal--upsell {
+    width: 560px;
+    max-width: min(94vw, 560px);
 }
 
-.share-upgrade > svg {
-    color: #7c3aed;
-}
-
-.share-upgrade p {
-    margin: 0;
-    color: var(--share-muted);
-    font-size: 13px;
-}
-
-.share-upgrade button {
-    padding: 10px 18px;
-    border: 0;
-    border-radius: 9px;
-    color: #fff;
-    background: linear-gradient(135deg, #7c3aed, #2563eb);
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
+.share-pro-paywall {
+    min-height: 0;
+    padding: 16px 20px 18px;
+    overflow-x: hidden;
+    overflow-y: auto;
 }
 
 @media (max-width: 520px) {
     .share-folder-modal {
         max-height: 92vh;
         border-radius: 15px;
+    }
+
+    .share-pro-paywall {
+        padding: 12px 15px 15px;
     }
 
     .share-modal-header,

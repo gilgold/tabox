@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import Modal from 'react-modal';
 import { useAtom, useAtomValue } from 'jotai';
-import { MdClose, MdLink, MdWorkspacePremium } from 'react-icons/md';
+import { MdClose, MdLink } from 'react-icons/md';
 import { browser } from '../static/globals';
 import { shareCollectionLinkModalState } from './atoms/sharedFoldersState';
 import { isProState } from './atoms/premiumState';
 import { showSuccessToast, showErrorToast } from './toastHelpers';
-import useProCheckout from './useProCheckout';
+import ShareProPaywall from './ShareProPaywall';
 import './Modal.css';
 import './ShareCollectionLinkModal.css';
 
@@ -30,7 +30,6 @@ function toSnapshot(collection) {
 export default function ShareCollectionLinkModal() {
     const [collection, setCollection] = useAtom(shareCollectionLinkModalState);
     const isPro = useAtomValue(isProState);
-    const startProCheckout = useProCheckout();
     const [link, setLink] = useState(null); // { token, url } | null
     const [loaded, setLoaded] = useState(false);
     const [busy, setBusy] = useState(false);
@@ -115,7 +114,7 @@ export default function ShareCollectionLinkModal() {
             onRequestClose={close}
             contentLabel={`Share ${collection.name} via link`}
             ariaHideApp={false}
-            className="modal-content share-collection-link-modal"
+            className={`modal-content share-collection-link-modal${!isPro ? ' share-modal--upsell' : ''}`}
             overlayClassName="modal-overlay"
             shouldCloseOnOverlayClick={!busy}
             shouldCloseOnEsc={!busy}
@@ -133,11 +132,7 @@ export default function ShareCollectionLinkModal() {
                 </button>
             </div>
             {!isPro ? (
-                <div className="share-upgrade">
-                    <MdWorkspacePremium size={28} />
-                    <p>Sharing collections is a Tabox Pro feature.</p>
-                    <button onClick={() => startProCheckout()}>Upgrade now</button>
-                </div>
+                <ShareProPaywall />
             ) : (
                 <div className="share-collection-link-body">
                     <p className="share-collection-link-hint">

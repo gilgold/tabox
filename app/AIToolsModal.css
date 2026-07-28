@@ -32,6 +32,11 @@
     overflow: hidden;
 }
 
+.ai-tools-modal-content--upsell {
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
 /* Animated AI gradient border via a mask-composite ring — renders clean
  * rounded corners (unlike the background-clip border-box trick). */
 .ai-tools-modal-content::before {

@@ -1,9 +1,10 @@
 /* Share-collection-via-link modal. Reuses the global share-modal header,
    .share-link-* styles, and the modal surface + --share-* variables from
-   ShareFolderModal.css (always bundled via App); only narrows the width. */
+   ShareFolderModal.css (always bundled via App). Keep its width in parity
+   with the folder-sharing modal. */
 .share-collection-link-modal {
-    width: 420px;
-    max-width: min(94vw, 420px);
+    width: 560px;
+    max-width: min(94vw, 560px);
 }
 
 .share-collection-link-body {

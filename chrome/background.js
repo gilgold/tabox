@@ -2013,6 +2013,20 @@ try {
         // session from being stuck on 1-minute polling forever.
         if (typeof ensureSharedSyncAlarm === 'function') await ensureSharedSyncAlarm();
 
+        // Sign-out wipes the cached Pro entitlement, and the `cached &&`
+        // zero-Worker-calls guards mean nothing would ever restore it — a Pro
+        // user signing back in would look free until a manual refresh. One
+        // refresh per interactive sign-in restores the record (and flips any
+        // open UI via the popup's storage.onChanged listener). Never let a
+        // Worker hiccup fail an otherwise-successful login.
+        if (typeof refreshProEntitlement === 'function') {
+          try {
+            await refreshProEntitlement();
+          } catch (entitlementError) {
+            console.error('Entitlement refresh after login failed:', entitlementError);
+          }
+        }
+
         return Promise.resolve(user);
       } catch (error) {
         console.error('Exception during login:', error);

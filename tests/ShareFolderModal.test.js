@@ -63,7 +63,14 @@ test('batch toolbar stays on one row at popup width and only wraps on very narro
 
 test('non-Pro sees the upgrade prompt instead of the share form', async () => {
   renderModal(FOLDER, { entitled: false });
-  expect(screen.getByText(/Tabox Pro/i)).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Meet Tabox Pro' })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Organize tabs in seconds' })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Share folders & collections' })).toBeInTheDocument();
+  expect(document.querySelector('.pro-upsell-hero-image')).toHaveAttribute(
+    'src',
+    './images/tabox-pro-ai-sharing-hero.png'
+  );
+  expect(document.querySelector('.share-folder-modal')).toHaveClass('share-modal--upsell');
   expect(screen.queryByPlaceholderText(/email/i)).not.toBeInTheDocument();
   // flush the un-awaited contacts-suggestions effect so it doesn't settle after the test ends
   await act(async () => {});

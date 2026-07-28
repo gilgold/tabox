@@ -3,8 +3,6 @@ import ReactDOM from 'react-dom';
 import { useAtom, useAtomValue } from 'jotai';
 import { tabSwitcherOpenState } from './atoms/tabSwitcherState';
 import { viewContextState } from './atoms/globalAppSettingsState';
-import { isProState } from './atoms/premiumState';
-import useProCheckout from './useProCheckout';
 import { highlightText } from './utils/searchUtils';
 import {
     loadTabEntries,
@@ -28,7 +26,6 @@ import {
     MdOpenInNew,
     MdClose,
     MdVisibilityOff,
-    MdWorkspacePremium,
 } from 'react-icons/md';
 import './TabSwitcher.css';
 
@@ -105,8 +102,6 @@ function TabPreviewPane({ entry }) {
 function TabSwitcher() {
     const [isOpen, setIsOpen] = useAtom(tabSwitcherOpenState);
     const viewContext = useAtomValue(viewContextState);
-    const isPro = useAtomValue(isProState);
-    const startProCheckout = useProCheckout();
     const [query, setQuery] = useState('');
     const [entries, setEntries] = useState([]);
     const inputRef = useRef(null);
@@ -164,14 +159,14 @@ function TabSwitcher() {
     });
 
     useEffect(() => {
-        if (!isOpen || !isPro) return;
+        if (!isOpen) return;
         setQuery('');
         didInitialSelectRef.current = false;
         refreshEntries();
         requestAnimationFrame(() => {
             requestAnimationFrame(() => inputRef.current?.focus());
         });
-    }, [isOpen, isPro, refreshEntries]);
+    }, [isOpen, refreshEntries]);
 
     // Once entries first land for an empty query, preselect the "previous" tab.
     // Runs only once per open — later refreshEntries() calls (pin/mute/close
@@ -234,32 +229,6 @@ function TabSwitcher() {
     }, [close]);
 
     if (!isOpen) return null;
-
-    // Pro gate: the switcher opens from every entry point (header button,
-    // ⌘⇧S, full-page top bar), so the paywall lives here rather than in each
-    // trigger — free users always land on the same upsell.
-    if (!isPro) {
-        return ReactDOM.createPortal(
-            <div
-                className="tab-switcher-overlay"
-                onClick={handleOverlayClick}
-                onKeyDown={(e) => { if (e.key === 'Escape') close(); }}
-                tabIndex={-1}
-                ref={(el) => el?.focus()}
-            >
-                <div className={`tab-switcher-card paywall ${viewContext === 'fullpage' ? 'fullpage' : 'popup'}`}>
-                    <div className="tab-switcher-upgrade" data-testid="tab-switcher-paywall">
-                        <MdWorkspacePremium size={30} />
-                        <h3>Quick Tab Switcher</h3>
-                        <p>Search and jump between all your open tabs in every window, without leaving Tabox. The tab switcher is a Tabox Pro feature.</p>
-                        <button type="button" onClick={() => startProCheckout()}>Upgrade to Pro</button>
-                        <kbd className="tab-switcher-esc-hint">Esc</kbd>
-                    </div>
-                </div>
-            </div>,
-            document.body
-        );
-    }
 
     const selectedEntry = visibleResults[selectedIndex] || null;
 

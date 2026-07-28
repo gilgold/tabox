@@ -30,6 +30,18 @@ export function usePremiumEntitlement() {
                 else setPremium(fresh);
             }
         })();
-        return () => { cancelled = true; };
+        // Live updates: the SW's checkout poll / refresh alarms write the
+        // entitlement record to storage.local — adopt it immediately so an
+        // open popup or full-page view flips to Pro the moment an upgrade
+        // lands, without any extra Worker calls. Removal (sign-out) clears it.
+        const onStorageChanged = (changes, area) => {
+            if (area !== 'local' || !changes.premiumEntitlement) return;
+            setPremium(changes.premiumEntitlement.newValue || null);
+        };
+        browser.storage.onChanged.addListener(onStorageChanged);
+        return () => {
+            cancelled = true;
+            browser.storage.onChanged.removeListener(onStorageChanged);
+        };
     }, [setPremium]);
 }

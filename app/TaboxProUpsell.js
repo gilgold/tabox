@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { MdWorkspacePremium } from 'react-icons/md';
+import { MdAutoAwesome, MdFolderShared } from 'react-icons/md';
 import { browser } from '../static/globals';
 import './TaboxProUpsell.css';
 
@@ -50,27 +50,57 @@ export default function TaboxProUpsell({ isSignedIn, onUpgrade, onSignIn, onEnti
     };
 
     return (
-        <div className="pro-upsell">
-            <MdWorkspacePremium className="pro-upsell-icon" />
-            <h3>Tabox Pro</h3>
-            <p>AI tools are part of Tabox Pro. Start a free 7-day trial — cancel anytime.</p>
-            <ul className="pro-upsell-features">
-                <li>Smart tab grouping</li>
-                <li>Auto-rename &amp; auto-arrange collections</li>
-                <li>Duplicate sweep &amp; collection splitting</li>
-            </ul>
+        <section className="pro-upsell" aria-labelledby="pro-upsell-title">
+            <div className="pro-upsell-hero" aria-hidden="true">
+                <img
+                    className="pro-upsell-hero-image"
+                    src="./images/tabox-pro-ai-sharing-hero.png"
+                    alt=""
+                />
+            </div>
+
+            <div className="pro-upsell-heading">
+                <h3 id="pro-upsell-title">Meet Tabox Pro</h3>
+                <p>Work smarter. Share anything.</p>
+            </div>
+
+            <div className="pro-upsell-benefits">
+                <article className="pro-upsell-benefit pro-upsell-benefit--ai">
+                    <span className="pro-upsell-benefit-icon" aria-hidden="true"><MdAutoAwesome /></span>
+                    <div className="pro-upsell-benefit-copy">
+                        <span className="pro-upsell-benefit-label">AI powered</span>
+                        <h4>Organize tabs in seconds</h4>
+                        <p>Auto-rename, smart group, split duplicates, and arrange collections with AI.</p>
+                    </div>
+                </article>
+                <article className="pro-upsell-benefit pro-upsell-benefit--share">
+                    <span className="pro-upsell-benefit-icon" aria-hidden="true"><MdFolderShared /></span>
+                    <div className="pro-upsell-benefit-copy">
+                        <span className="pro-upsell-benefit-label">Share &amp; collaborate</span>
+                        <h4>Share folders &amp; collections</h4>
+                        <p>Send a clean link to any saved workspace and keep everyone aligned.</p>
+                    </div>
+                </article>
+            </div>
+
+            <div className="pro-upsell-offer" aria-label="Free trial terms">
+                <strong>7 days free</strong>
+                <span aria-hidden="true">•</span>
+                <strong>Cancel anytime</strong>
+            </div>
+
             {sessionExpired ? (
                 <>
                     <div className="pro-upsell-session-expired" role="alert">
                         Your session expired — sign in again to restore your Tabox Pro access.
                     </div>
-                    <button className="pro-upsell-cta" onClick={handleReSignIn}>Sign in again</button>
+                    <button type="button" className="pro-upsell-cta" onClick={handleReSignIn}>Sign in again</button>
                 </>
             ) : isSignedIn ? (
-                <button className="pro-upsell-cta" onClick={onUpgrade}>Upgrade — start free trial</button>
+                <button type="button" className="pro-upsell-cta" onClick={onUpgrade}>Start my free 7-day trial</button>
             ) : (
-                <button className="pro-upsell-cta" onClick={onSignIn}>Sign in with Google to start</button>
+                <button type="button" className="pro-upsell-cta" onClick={onSignIn}>Sign in with Google to start</button>
             )}
-        </div>
+        </section>
     );
 }

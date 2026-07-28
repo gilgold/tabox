@@ -881,6 +881,10 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
             ? 'None of the selected collections can be renamed.'
             : 'No collections with tabs to rename.')
         : null;
+    const activeTool = activeToolId
+        ? AI_TOOLS.find((tool) => tool.id === activeToolId)
+        : null;
+    const showProUpsell = Boolean(activeTool && isToolLocked(activeTool));
 
     return (
         <Modal
@@ -893,7 +897,7 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
             shouldCloseOnOverlayClick={!busy}
             shouldCloseOnEsc={!busy}
         >
-            <div className="ai-tools-modal-content">
+            <div className={`ai-tools-modal-content${showProUpsell ? ' ai-tools-modal-content--upsell' : ''}`}>
                 <div className="ai-tools-modal-header">
                     <div className="ai-tools-modal-title">
                         {activeToolId ? (
@@ -909,7 +913,7 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
                         ) : (
                             <BsStars className="ai-tools-title-icon" size={18} />
                         )}
-                        <span>{activeToolId ? AI_TOOLS.find((tool) => tool.id === activeToolId)?.title : 'Tabox AI'}</span>
+                        <span>{activeTool?.title || 'Tabox AI'}</span>
                     </div>
                     <button className="ai-tools-modal-close" onClick={close} type="button" disabled={busy} aria-label="Close">
                         <MdClose />
@@ -970,7 +974,7 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
                     </div>
                 )}
 
-                {activeToolId && isToolLocked(AI_TOOLS.find((t) => t.id === activeToolId)) && (
+                {showProUpsell && (
                     <TaboxProUpsell
                         isSignedIn={isSignedIn}
                         onUpgrade={() => startProCheckout()}
@@ -985,7 +989,7 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
                     />
                 )}
 
-                {activeToolId && !isToolLocked(AI_TOOLS.find((t) => t.id === activeToolId)) && (
+                {activeToolId && !showProUpsell && (
                     <>
                 {activeToolId === 'smart-organize' && (
                     <div className="ai-tool-panel">

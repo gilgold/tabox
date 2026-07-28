@@ -1,12 +1,15 @@
 /** @jest-environment jsdom */
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor, act } from '@testing-library/react';
 import { Provider, createStore } from 'jotai';
 import { createElement } from 'react';
 
 jest.mock('../static/globals', () => ({
     browser: {
         runtime: { sendMessage: jest.fn() },
-        storage: { local: { get: jest.fn().mockResolvedValue({}) } },
+        storage: {
+            local: { get: jest.fn().mockResolvedValue({}) },
+            onChanged: { addListener: jest.fn(), removeListener: jest.fn() },
+        },
     },
 }));
 
@@ -81,5 +84,58 @@ describe('usePremiumEntitlement', () => {
     it('isProState is false with no record', () => {
         const store = createStore();
         expect(store.get(isProState)).toBe(false);
+    });
+
+    describe('live storage.onChanged updates (upgrade flips UI immediately)', () => {
+        const getListener = () => {
+            expect(browser.storage.onChanged.addListener).toHaveBeenCalled();
+            return browser.storage.onChanged.addListener.mock.calls[0][0];
+        };
+
+        it('flips to Pro when the SW writes an entitled record (checkout poll / alarm)', async () => {
+            browser.runtime.sendMessage.mockResolvedValueOnce(null); // getProEntitlement — free user
+            const store = createStore();
+            renderHook(() => usePremiumEntitlement(), { wrapper: wrapperFor(store) });
+            await waitFor(() => expect(browser.runtime.sendMessage).toHaveBeenCalledTimes(1));
+            expect(store.get(isProState)).toBe(false);
+
+            const listener = getListener();
+            act(() => listener({ premiumEntitlement: { newValue: FRESH } }, 'local'));
+            expect(store.get(premiumEntitlementState)).toEqual(FRESH);
+            expect(store.get(isProState)).toBe(true);
+        });
+
+        it('clears the atom when the record is removed (sign-out)', async () => {
+            browser.runtime.sendMessage.mockResolvedValueOnce(FRESH);
+            const store = createStore();
+            renderHook(() => usePremiumEntitlement(), { wrapper: wrapperFor(store) });
+            await waitFor(() => expect(store.get(isProState)).toBe(true));
+
+            const listener = getListener();
+            act(() => listener({ premiumEntitlement: { oldValue: FRESH } }, 'local'));
+            expect(store.get(premiumEntitlementState)).toBe(null);
+            expect(store.get(isProState)).toBe(false);
+        });
+
+        it('ignores other keys and non-local areas', async () => {
+            browser.runtime.sendMessage.mockResolvedValueOnce(FRESH);
+            const store = createStore();
+            renderHook(() => usePremiumEntitlement(), { wrapper: wrapperFor(store) });
+            await waitFor(() => expect(store.get(isProState)).toBe(true));
+
+            const listener = getListener();
+            act(() => listener({ someOtherKey: { newValue: 1 } }, 'local'));
+            act(() => listener({ premiumEntitlement: { oldValue: FRESH } }, 'sync'));
+            expect(store.get(premiumEntitlementState)).toEqual(FRESH);
+        });
+
+        it('removes the listener on unmount', async () => {
+            browser.runtime.sendMessage.mockResolvedValueOnce(null);
+            const { unmount } = renderHook(() => usePremiumEntitlement(), { wrapper: wrapperFor(createStore()) });
+            await waitFor(() => expect(browser.storage.onChanged.addListener).toHaveBeenCalled());
+            const listener = getListener();
+            unmount();
+            expect(browser.storage.onChanged.removeListener).toHaveBeenCalledWith(listener);
+        });
     });
 });

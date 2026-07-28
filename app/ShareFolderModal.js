@@ -11,7 +11,6 @@ import {
     MdPerson,
     MdPersonAdd,
     MdSearch,
-    MdWorkspacePremium,
 } from 'react-icons/md';
 import { browser } from '../static/globals';
 import { shareFolderModalState } from './atoms/sharedFoldersState';
@@ -19,7 +18,7 @@ import { isProState } from './atoms/premiumState';
 import { saveContact, searchContacts } from './utils/contactsUtils';
 import { loadCollectionsIndex, loadMultipleCollections } from './utils/storageUtils';
 import { showSuccessToast, showErrorToast } from './toastHelpers';
-import useProCheckout from './useProCheckout';
+import ShareProPaywall from './ShareProPaywall';
 import './Modal.css';
 import './ShareFolderModal.css';
 
@@ -106,8 +105,6 @@ export default function ShareFolderModal() {
         () => filteredMembers.filter((member) => member.status !== 'declined'),
         [filteredMembers]
     );
-    const startProCheckout = useProCheckout();
-
     if (!folder) return null;
     const busy = Boolean(busyAction);
     const close = () => !busy && setFolder(null);
@@ -389,7 +386,7 @@ export default function ShareFolderModal() {
             onRequestClose={close}
             contentLabel={`${isShared ? 'Manage sharing' : 'Share folder'} for ${folder.name}`}
             ariaHideApp={false}
-            className="modal-content share-folder-modal"
+            className={`modal-content share-folder-modal${!isPro ? ' share-modal--upsell' : ''}`}
             overlayClassName="modal-overlay"
             shouldCloseOnOverlayClick={!busy}
             shouldCloseOnEsc={!busy}
@@ -407,11 +404,7 @@ export default function ShareFolderModal() {
                 </button>
             </div>
             {!isPro ? (
-                <div className="share-upgrade">
-                    <MdWorkspacePremium size={28} />
-                    <p>Sharing folders is a Tabox Pro feature.</p>
-                    <button onClick={() => startProCheckout()}>Upgrade now</button>
-                </div>
+                <ShareProPaywall />
             ) : (
                 <div className="share-modal-body">
                     <section className="share-invite-section" aria-labelledby="share-invite-title">

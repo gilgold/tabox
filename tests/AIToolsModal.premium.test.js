@@ -29,13 +29,15 @@ import { browser } from '../static/globals';
 import AIToolsModal from '../app/AIToolsModal';
 import { aiToolsModalOpenState } from '../app/atoms/aiState';
 import { premiumEntitlementState } from '../app/atoms/premiumState';
+import { viewContextState } from '../app/atoms/globalAppSettingsState';
 
 const PRO = { entitled: true, status: 'active', plan: 'monthly', refreshedAt: new Date().toISOString() };
 
-function renderModal({ premium = null } = {}) {
+function renderModal({ premium = null, viewContext = 'popup' } = {}) {
     const store = createStore();
     store.set(aiToolsModalOpenState, true);
     store.set(premiumEntitlementState, premium);
+    store.set(viewContextState, viewContext);
     render(<Provider store={store}><AIToolsModal /></Provider>);
     return store;
 }
@@ -62,16 +64,30 @@ describe('AIToolsModal premium gating', () => {
     it('clicking a locked tool shows the upsell instead of the tool', () => {
         renderModal();
         fireEvent.click(screen.getByText('Auto rename collections'));
-        expect(screen.getByRole('heading', { name: /Tabox Pro/i })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /upgrade/i })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Meet Tabox Pro' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /start my free 7-day trial/i })).toBeInTheDocument();
+    });
+
+    it.each([
+        ['popup', false],
+        ['fullpage', true],
+    ])('uses the shared responsive upsell in the %s modal', (viewContext, isFullPage) => {
+        renderModal({ viewContext });
+        fireEvent.click(screen.getByText('Auto rename collections'));
+
+        const modal = document.querySelector('.ai-tools-modal');
+        expect(modal).toHaveClass('ai-tools-modal');
+        expect(modal.classList.contains('ai-tools-modal--fullpage')).toBe(isFullPage);
+        expect(screen.getByRole('heading', { name: 'Organize tabs in seconds' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Share folders & collections' })).toBeInTheDocument();
     });
 
     it('upgrade button sends openProCheckout when signed in', async () => {
         browser.storage.local.get.mockResolvedValue({ googleUser: { permissionId: 'g-1' } });
         renderModal();
         fireEvent.click(screen.getByText('Auto rename collections'));
-        await waitFor(() => expect(screen.getByRole('button', { name: /upgrade/i })).toBeInTheDocument());
-        fireEvent.click(screen.getByRole('button', { name: /upgrade/i }));
+        const upgradeButton = await screen.findByRole('button', { name: /start my free 7-day trial/i });
+        fireEvent.click(upgradeButton);
         await waitFor(() =>
             expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'openProCheckout' })
         );

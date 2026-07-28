@@ -91,7 +91,6 @@ describe('OnboardingGuide', () => {
         expect(screen.getByRole('heading', { name: 'Meet Tabox Pro' })).toBeInTheDocument();
         expect(screen.getByText('Tabox AI')).toBeInTheDocument();
         expect(screen.getByText('Share folders & collections')).toBeInTheDocument();
-        expect(screen.getByText('Tab switcher')).toBeInTheDocument();
         expect(screen.getByText('7 days free')).toBeInTheDocument();
     });
 
@@ -137,6 +136,10 @@ describe('OnboardingGuide', () => {
         expect(css).toContain('animation-iteration-count: 1 !important');
         expect(css).toContain('.onboarding-scene.is-active');
         expect(source).toContain('browser-tab-row');
+        expect(source).toContain('welcome-scene-intro');
+        expect(css).toContain('animation:welcome-scene-intro 3.2s');
+        expect(css).toContain('animation-delay:3.2s');
+        expect(css).toContain('font-size:54px');
         expect(source).toContain('welcome-tabox-ui');
         expect(source).not.toContain('welcome-tabox-placeholder');
         expect(source).not.toContain('welcome-tabox-target');
@@ -177,6 +180,15 @@ describe('OnboardingGuide', () => {
         expect(css).toContain('.fullpage-pointer { top:43px; left:224px; }');
         expect(css).toContain('.sharing-user svg { font-size:18px; }');
         expect(css).toContain('font-size:11px; }.shared-arriving-collection i');
+    });
+
+    test('styles the first-step heading as a larger brand gradient', () => {
+        const css = fs.readFileSync(path.join(__dirname, '../app/OnboardingGuide.css'), 'utf8');
+
+        expect(css).toContain('.onboarding-slide--welcome .onboarding-eyebrow');
+        expect(css).toContain('font-size:17px');
+        expect(css).toContain('linear-gradient(90deg, #6757e8, #50c8ff)');
+        expect(css).toContain('background-clip:text');
     });
 
     test('skip is always available and permanently completes onboarding', async () => {

@@ -20,7 +20,24 @@ describe('TaboxProUpsell', () => {
     test('signed-in users get the upgrade CTA', () => {
         const onUpgrade = jest.fn();
         render(<TaboxProUpsell isSignedIn={true} onUpgrade={onUpgrade} onSignIn={jest.fn()} />);
-        expect(screen.getByRole('button', { name: /upgrade/i })).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /start my free 7-day trial/i }));
+        expect(onUpgrade).toHaveBeenCalledTimes(1);
+    });
+
+    test('highlights the AI and sharing benefits with clear trial terms', () => {
+        render(<TaboxProUpsell isSignedIn={true} onUpgrade={jest.fn()} onSignIn={jest.fn()} />);
+
+        expect(screen.getByRole('heading', { name: 'Meet Tabox Pro' })).toBeInTheDocument();
+        expect(screen.getByText('Work smarter. Share anything.')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Organize tabs in seconds' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Share folders & collections' })).toBeInTheDocument();
+        expect(screen.getByText('7 days free')).toBeInTheDocument();
+        expect(screen.getByText('Cancel anytime')).toBeInTheDocument();
+        expect(document.querySelector('.pro-upsell-hero-image')).toHaveAttribute(
+            'src',
+            './images/tabox-pro-ai-sharing-hero.png'
+        );
+        expect(document.querySelector('.pro-upsell-hero-image')).toHaveAttribute('alt', '');
     });
 
     test('mount refresh forwards a real entitlement to onEntitlementRefreshed', async () => {

@@ -4,27 +4,19 @@ import '@testing-library/jest-dom';
 import { Provider, useSetAtom, createStore } from 'jotai';
 import TabSwitcher from '../app/TabSwitcher';
 import { tabSwitcherOpenState } from '../app/atoms/tabSwitcherState';
-import { premiumEntitlementState } from '../app/atoms/premiumState';
 
 jest.mock('../app/toastHelpers', () => ({
     showSuccessToast: jest.fn(),
     showErrorToast: jest.fn(),
 }));
-const PRO = { entitled: true, refreshedAt: new Date().toISOString() };
-
 function Harness() {
     const setOpen = useSetAtom(tabSwitcherOpenState);
     useEffect(() => { setOpen(true); }, [setOpen]);
     return <TabSwitcher />;
 }
 
-// The switcher is Pro-gated, so the default harness renders as a Pro user;
-// pass entitlement: null to exercise the free-user paywall.
-const renderOpenSwitcher = ({ entitlement = PRO } = {}) => {
-    const store = createStore();
-    store.set(premiumEntitlementState, entitlement);
-    return render(<Provider store={store}><Harness /></Provider>);
-};
+const renderOpenSwitcher = () =>
+    render(<Provider store={createStore()}><Harness /></Provider>);
 
 const seedWindows = (windows) => {
     browser.windows.getAll.mockResolvedValue(windows);
@@ -198,36 +190,4 @@ describe('TabSwitcher', () => {
         expect(document.querySelector('.tab-switcher-preview-meta')).toHaveTextContent('Window 2 · Incognito');
     });
 
-    describe('Pro paywall', () => {
-        test('free user sees the upgrade prompt instead of the switcher and no tabs are loaded', async () => {
-            twoWindowSeed();
-            renderOpenSwitcher({ entitlement: null });
-            expect(await screen.findByTestId('tab-switcher-paywall')).toBeInTheDocument();
-            expect(screen.getByRole('button', { name: /upgrade to pro/i })).toBeInTheDocument();
-            expect(screen.queryAllByTestId('tab-switcher-row')).toHaveLength(0);
-            // Tab data must not even be queried for free users.
-            expect(browser.windows.getAll).not.toHaveBeenCalled();
-        });
-
-        test('Upgrade CTA starts the Pro checkout', async () => {
-            renderOpenSwitcher({ entitlement: null });
-            fireEvent.click(await screen.findByRole('button', { name: /upgrade to pro/i }));
-            await waitFor(() =>
-                expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'openProCheckout' }));
-        });
-
-        test('paywall closes on Escape and on overlay click', async () => {
-            renderOpenSwitcher({ entitlement: null });
-            const overlay = document.querySelector('.tab-switcher-overlay');
-            fireEvent.keyDown(overlay, { key: 'Escape' });
-            await waitFor(() =>
-                expect(screen.queryByTestId('tab-switcher-paywall')).not.toBeInTheDocument());
-        });
-
-        test('an expired entitlement is gated like a free user', async () => {
-            twoWindowSeed();
-            renderOpenSwitcher({ entitlement: { entitled: true, refreshedAt: '2020-01-01T00:00:00.000Z' } });
-            expect(await screen.findByTestId('tab-switcher-paywall')).toBeInTheDocument();
-        });
-    });
 });
