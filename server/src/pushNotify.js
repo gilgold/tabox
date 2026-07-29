@@ -98,6 +98,11 @@ export async function notifyEmails(env, db, emails, payload) {
         if (status === 404 || status === 410) {
           await db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?')
             .bind(row.endpoint).run();
+        } else if (status >= 400) {
+          // e.g. 401/403 = VAPID key/subject mismatch — the subscription stays
+          // (it may be valid for corrected keys), but the failure must be
+          // visible in logs or a broken push channel looks healthy forever.
+          console.error(`web push send returned ${status} for ${new URL(row.endpoint).origin}`);
         }
       } catch (err) {
         console.error('web push send failed:', err);

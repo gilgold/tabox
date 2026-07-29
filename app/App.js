@@ -1920,11 +1920,18 @@ function App({ mode = 'popup' }) {
     };
   }, []);
 
-  // Shared folders: popup-only near-real-time sync trigger. The popup has no
-  // long-lived background alarm of its own, so nudge the background sync
-  // engine on open and every 15s while it stays open (signed-in users only).
+  // Shared folders: near-real-time sync trigger for BOTH views (signed-in
+  // users only). Web-push tickles are the primary wake signal for the
+  // background engine, but they are best-effort — a silently-broken push
+  // channel leaves only the 60-minute fallback alarm, which read as "shared
+  // changes never show up until I reload". So any open view also nudges the
+  // engine itself: on mount, whenever the view regains focus/visibility
+  // (e.g. switching back to the full-page tab after editing elsewhere), and
+  // on an interval while visible. The engine's revision short-circuit makes
+  // each no-change nudge a single cheap list GET, and syncSharedFolders
+  // coalesces overlapping runs.
   useEffect(() => {
-    if (isFullPage || !syncSessionState.hasRefreshToken) {
+    if (!syncSessionState.hasRefreshToken) {
       return undefined;
     }
 
@@ -1932,10 +1939,25 @@ function App({ mode = 'popup' }) {
       browser.runtime.sendMessage({ type: 'sharedSyncNow' }).catch(() => {});
     };
     triggerSharedSync();
-    const intervalId = setInterval(triggerSharedSync, SHARED_SYNC_INTERVAL_MS);
 
-    return () => clearInterval(intervalId);
-  }, [isFullPage, syncSessionState.hasRefreshToken]);
+    // A hidden full-page tab shouldn't poll all day — interval ticks are
+    // gated on visibility, and the visibility/focus listeners deliver the
+    // immediate catch-up nudge the moment the user comes back to the view.
+    const nudgeIfVisible = () => {
+      if (document.visibilityState !== 'hidden') {
+        triggerSharedSync();
+      }
+    };
+    const intervalId = setInterval(nudgeIfVisible, SHARED_SYNC_INTERVAL_MS);
+    document.addEventListener('visibilitychange', nudgeIfVisible);
+    window.addEventListener('focus', nudgeIfVisible);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', nudgeIfVisible);
+      window.removeEventListener('focus', nudgeIfVisible);
+    };
+  }, [syncSessionState.hasRefreshToken]);
 
   // Check if any filters are currently active
   const hasActiveFilters = useMemo(() => {
