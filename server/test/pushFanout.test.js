@@ -140,14 +140,12 @@ describe('push tickle fan-out on shared-folder mutations', () => {
     vi.restoreAllMocks();
   });
 
-  it('1: PUT collection by member A sends pushes to the owner and member B, never to the acting member A', async () => {
-    // Actor here is an ACTIVE MEMBER (not the owner) with a write role, so
-    // this actually exercises exceptEmail's case-insensitive match against a
-    // shared_members row — using the owner as actor (as before) can't fail
-    // even if exceptEmail is broken, since the owner isn't unioned in unless
-    // finding 1's fix is present. This also pins that owner-union fix: the
-    // owner has no shared_members row at all, only shared_folders.owner_email,
-    // yet must still receive the tickle.
+  it('1: PUT collection by member A sends pushes to the owner, member B, AND member A themselves', async () => {
+    // Same-account multi-device fix: the acting member's own OTHER devices
+    // need the tickle too, so the actor is no longer excluded from the
+    // fan-out. This also pins the owner-union fix: the owner has no
+    // shared_members row at all, only shared_folders.owner_email, yet must
+    // still receive the tickle.
     const uaOwner = await makeUaKeys();
     const identities = {
       't-owner': { googleId: 'g-owner', email: 'owner@x.com' },
@@ -174,7 +172,9 @@ describe('push tickle fan-out on shared-folder mutations', () => {
     await flush();
 
     const endpoints = pushSends.map((p) => p.endpoint).sort();
-    expect(endpoints).toEqual(['https://push.example.com/b', 'https://push.example.com/owner']);
+    expect(endpoints).toEqual([
+      'https://push.example.com/a', 'https://push.example.com/b', 'https://push.example.com/owner',
+    ]);
   });
 
   it('2: failed mutation (stale baseRev conflict) sends zero pushes', async () => {
@@ -213,7 +213,7 @@ describe('push tickle fan-out on shared-folder mutations', () => {
     expect(JSON.parse(plaintext)).toEqual({ invite: true });
   });
 
-  it('4: member DELETE pushes to remaining members AND the removed member', async () => {
+  it('4: member DELETE pushes to remaining members (incl. the acting owner) AND the removed member', async () => {
     const e = await env(db, vapid, { 'ent:g-owner': PRO_RECORD, 'ent:g-guest': PRO_RECORD });
     await worker.fetch(req('POST', '/shared/folders', 't-owner', { folderId: 'f1', name: 'T', collections: [] }), e);
     await worker.fetch(req('POST', '/shared/folders/f1/invites', 't-owner', { email: 'guest@x.com', role: 'write' }), e);
@@ -228,10 +228,11 @@ describe('push tickle fan-out on shared-folder mutations', () => {
     expect(res.status).toBe(200);
     await flush();
 
-    // Owner (remaining active member, and the actor) is excluded by tickle's
-    // exceptEmail; the removed guest is added back in via extraEmails.
+    // The acting owner's own other devices are tickled too (same-account
+    // multi-device fix); the removed guest is added in via extraEmails so
+    // their devices learn the revocation promptly.
     const endpoints = pushSends.map((p) => p.endpoint).sort();
-    expect(endpoints).toEqual(['https://push.example.com/guest']);
+    expect(endpoints).toEqual(['https://push.example.com/guest', 'https://push.example.com/owner']);
   });
 
   it('5: folder DELETE pushes reach members that existed before deletion', async () => {
@@ -239,6 +240,7 @@ describe('push tickle fan-out on shared-folder mutations', () => {
     await worker.fetch(req('POST', '/shared/folders', 't-owner', { folderId: 'f1', name: 'T', collections: [] }), e);
     await worker.fetch(req('POST', '/shared/folders/f1/invites', 't-owner', { email: 'guest@x.com', role: 'write' }), e);
     await worker.fetch(req('POST', '/shared/invites/f1/respond', 't-guest', { accept: true }), e);
+    addSub(db, 'https://push.example.com/owner', 'owner@x.com', uaA);
     addSub(db, 'https://push.example.com/guest', 'guest@x.com', uaB);
 
     const { ctx, flush } = makeCtx();
@@ -246,8 +248,10 @@ describe('push tickle fan-out on shared-folder mutations', () => {
     expect(res.status).toBe(200);
     await flush();
 
-    expect(pushSends).toHaveLength(1);
-    expect(pushSends[0].endpoint).toBe('https://push.example.com/guest');
+    // The acting owner's own other devices are tickled too (same-account
+    // multi-device fix) so they drop the deleted folder live.
+    const endpoints = pushSends.map((p) => p.endpoint).sort();
+    expect(endpoints).toEqual(['https://push.example.com/guest', 'https://push.example.com/owner']);
   });
 
   it('6: mutation still returns 200 even when the push service itself returns 500', async () => {

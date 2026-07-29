@@ -178,8 +178,21 @@ async function loadLocalSharedFolders() {
 }
 
 // Applies one folder's pulled delta to local storage: upserts/removes collections
-// changed by OTHER users, refreshes folder meta/role/members (every pull, regardless
-// of who changed them), and records timeline events for changes made by others.
+// regardless of who authored them, refreshes folder meta/role/members (every pull),
+// and records timeline events ONLY for changes made by others.
+//
+// Same-account multi-device fix: upserts used to be gated on isOther
+// (row.updatedBy !== myEmail) as an echo guard, which silently left a second
+// device signed into the SAME account stale forever for own-authored rows.
+// The revision watermark already prevents echo — a device's own push advances
+// state.lastRev to the returned revision, so its own row never reappears in a
+// later sinceRev delta; an own-authored row in a delta can therefore only come
+// from ANOTHER device (or a failed watermark persist, where re-applying the
+// identical row is harmless). Storage writes now ignore the author entirely;
+// `isOther` only gates timeline events. The B4 (pendingLocalRemovals) and I3
+// (dirty-defer) guards below apply to own-authored rows exactly as to others':
+// a device-B dirty edit must race a device-A row fairly, not be clobbered by
+// it just because both were authored by the same email.
 // The get -> compute -> ONE storage.local.set (updates) -> storage.local.remove
 // (deletions) sequence is wrapped in a single lock acquisition so it can never
 // interleave with another writer (e.g. a concurrent sharedSyncNow on a different
@@ -270,10 +283,14 @@ async function applyDeltaLocally(folder, delta, myEmail, pendingLocalRemovals = 
       const isLocallyDirty = ((preCycleIndex[row.uid] && preCycleIndex[row.uid].lastUpdated) || 0) > lastSyncedAt;
       if (row.deleted) {
         if (index[row.uid]) {
-          if (isOther && isLocallyDirty) {
+          if (isLocallyDirty) {
             // I3 fix: a remote deletion raced a local dirty edit — defer
-            // rather than silently destroying the unsynced edit. See the
-            // header comment above applyDeltaLocally for the full reasoning.
+            // rather than silently destroying the unsynced edit. Applies to
+            // own-authored tombstones too (same-account multi-device fix):
+            // a device-A deletion must race a device-B dirty edit fairly.
+            // This device's OWN deletion can't reach here — the uid is gone
+            // from the local index already, so index[row.uid] is falsy. See
+            // the header comment above applyDeltaLocally.
             deferredRemotes.set(row.uid, row);
             continue;
           }
@@ -287,15 +304,16 @@ async function applyDeltaLocally(folder, delta, myEmail, pendingLocalRemovals = 
             });
           }
         }
-      } else if (isOther) {
+      } else {
         // B4 fix: this uid was already removed from this folder locally
         // (deleted, or moved to a different parent) before this cycle's pull
-        // ran — do not resurrect it. See the pendingLocalRemovals doc comment
-        // above applyDeltaLocally for the full reasoning.
+        // ran — do not resurrect it, whoever authored the incoming row. See
+        // the pendingLocalRemovals doc comment above applyDeltaLocally.
         if (pendingLocalRemovals.has(row.uid)) continue;
         if (isLocallyDirty) {
           // I3 fix: don't overwrite a locally-dirty (unsynced) edit — defer
-          // the remote row for the push phase to resolve fairly. See the
+          // the remote row for the push phase to resolve fairly. Applies to
+          // own-authored rows too (same-account multi-device fix). See the
           // header comment above applyDeltaLocally for the full reasoning.
           deferredRemotes.set(row.uid, row);
           continue;
@@ -311,10 +329,14 @@ async function applyDeltaLocally(folder, delta, myEmail, pendingLocalRemovals = 
           ...(record.order !== undefined && record.order !== null ? { order: record.order } : {}),
         };
         appliedUids.add(row.uid);
-        events.push({
-          folderId, folderName: safeFolderName, actorEmail: row.updatedBy,
-          kind: 'updated', collectionName: record.name, at: row.updatedAt,
-        });
+        // Timeline events stay others-only: the user doesn't need a toast
+        // about a change they made themselves on another device.
+        if (isOther) {
+          events.push({
+            folderId, folderName: safeFolderName, actorEmail: row.updatedBy,
+            kind: 'updated', collectionName: record.name, at: row.updatedAt,
+          });
+        }
       }
     }
 
@@ -565,8 +587,8 @@ async function materializeSharedFolderLocally({ folderId, name, color, role, own
 // we should have, but that's missing locally OR present without a live
 // `shared` marker, gets rematerialized (folder + all its non-deleted
 // collections, regardless of which user authored them — this is a full
-// resync, not a delta, so applyDeltaLocally's "isOther" author check does not
-// apply here). A folder already present with a live marker is left
+// resync, not a delta, so none of applyDeltaLocally's per-row guards apply
+// here). A folder already present with a live marker is left
 // completely untouched (the normal loop below already syncs it) — no extra
 // network call for it. Failure of the list call itself is skipped silently;
 // the next 5-minute cycle retries. A per-folder delta-fetch failure only

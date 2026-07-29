@@ -113,27 +113,27 @@ export async function notifyEmails(env, db, emails, payload) {
   }
 }
 
-export async function notifyFolderMembers(env, db, folderId, { exceptEmail, payload, extraEmails = [] }) {
+// Same-account multi-device fix: the actor is deliberately NOT excluded.
+// Their OTHER devices need the tickle to pull the change live, and the
+// self-tickle is harmless on the originating device — its sync is either
+// still in flight (a triggered sync coalesces onto it) or the next cycle's
+// revision short-circuit makes the extra pull a no-op. A legacy
+// `exceptEmail` option, if passed, is ignored.
+export async function notifyFolderMembers(env, db, folderId, { payload, extraEmails = [] }) {
   try {
     const { results } = await db.prepare(
       "SELECT email FROM shared_members WHERE folder_id = ? AND status = 'active'"
     ).bind(folderId).all();
     // The owner is NOT a shared_members row (only guests are) — owner_email
-    // lives on shared_folders — so union it in here before the exceptEmail
-    // filter, or the owner never gets tickled for other members' edits.
+    // lives on shared_folders — so union it in here, or the owner never gets
+    // tickled for members' edits. notifyEmails dedups case-insensitively.
     const folder = await db.prepare('SELECT owner_email FROM shared_folders WHERE id = ?')
       .bind(folderId).first();
     const memberEmails = (results || []).map((r) => r.email);
     const allEmails = folder && folder.owner_email
       ? [...memberEmails, folder.owner_email]
       : memberEmails;
-    const except = String(exceptEmail || '').toLowerCase();
-    const emails = allEmails.filter((e) => e.toLowerCase() !== except);
-    // extraEmails must go through the same exceptEmail filter — otherwise a
-    // future caller passing the actor's own email in extraEmails would
-    // reintroduce the self-tickle this function is meant to prevent.
-    const filteredExtra = extraEmails.filter((e) => String(e || '').toLowerCase() !== except);
-    await notifyEmails(env, db, [...emails, ...filteredExtra], payload);
+    await notifyEmails(env, db, [...allEmails, ...extraEmails], payload);
   } catch (err) {
     console.error('notifyFolderMembers failed:', err);
   }

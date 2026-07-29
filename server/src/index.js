@@ -276,10 +276,12 @@ async function handleShared(request, env, url, ctx) {
     const out = (r) => (r.ok === false ? json({ error: r.error }, r.status) : json(r.data, 200));
     // Content-free push tickles: fire-and-forget via ctx.waitUntil so they
     // never delay or fail the response. Guarded with `ctx &&` so tests that
-    // call handleShared without a ctx still pass.
+    // call handleShared without a ctx still pass. The actor is included on
+    // purpose — their own OTHER devices need the tickle (same-account
+    // multi-device liveness); see notifyFolderMembers' doc comment.
     const tickle = (folderId, opts = {}) =>
       ctx && ctx.waitUntil(notifyFolderMembers(env, db, folderId, {
-        exceptEmail: identity.email, payload: { folderId }, ...opts,
+        payload: { folderId }, ...opts,
       }));
     const tickleInvite = (email) =>
       ctx && ctx.waitUntil(notifyEmails(env, db, [email], { invite: true }));
@@ -352,10 +354,11 @@ async function handleShared(request, env, url, ctx) {
           .bind(folderId).first();
         const r = await deleteSharedFolder(db, identity, folderId);
         if (r.ok !== false) {
-          const except = identity.email.toLowerCase();
-          const rawEmails = (preMembers || []).map((m) => m.email);
-          if (preFolder && preFolder.owner_email) rawEmails.push(preFolder.owner_email);
-          const emails = rawEmails.filter((e) => e.toLowerCase() !== except);
+          // The acting user is NOT excluded (same-account multi-device fix):
+          // their other devices need the tickle to drop the folder live.
+          // notifyEmails dedups, so owner-as-member double entries are fine.
+          const emails = (preMembers || []).map((m) => m.email);
+          if (preFolder && preFolder.owner_email) emails.push(preFolder.owner_email);
           if (ctx && emails.length) ctx.waitUntil(notifyEmails(env, db, emails, { folderId }));
         }
         return out(r);

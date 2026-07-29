@@ -359,6 +359,95 @@ describe('I3 fix: conflict-aware pull (deferred remote + fair race)', () => {
   });
 });
 
+// Same-account multi-device fix: applyDeltaLocally used to gate collection
+// upserts on isOther (row.updatedBy !== myEmail), so a change the user made on
+// device A was never applied on device B signed into the same account —
+// device B stayed stale forever for own-authored rows. The author gate was an
+// echo guard, but the revision watermark (lastRev) already prevents a device
+// from re-pulling its own push, so author-based skipping over-blocked.
+// Storage upserts now apply regardless of author; TIMELINE EVENTS stay
+// others-only, and the B4 (pendingLocalRemovals) and I3 (dirty-defer) guards
+// apply to own-authored rows exactly as they do to others'.
+describe('same-account multi-device: own-authored rows from another device', () => {
+  test('an own-authored upsert (same email, other device) is applied to storage WITHOUT a timeline event and is not echo-pushed', async () => {
+    await seedLocal();
+    global.fetch.mockImplementation(async (url, opts = {}) => {
+      if (!opts.method || opts.method === 'GET') {
+        return deltaResponse({
+          collections: [{ uid: 'c2', data: { name: 'From my laptop', tabs: [] }, rev: 2, deleted: 0, updatedBy: 'ME@x.com', updatedAt: 200 }],
+        });
+      }
+      return { ok: true, status: 200, json: async () => ({ revision: 3 }) };
+    });
+
+    await syncSharedFolders();
+
+    const store = await browser.storage.local.get(['collection_c2', 'collections_index', SHARED_EVENTS_KEY]);
+    // Applied locally: device B must not stay stale for the user's own change.
+    expect(store.collection_c2).toMatchObject({ uid: 'c2', name: 'From my laptop', parentId: 'f1' });
+    expect(store.collections_index.c2).toMatchObject({ name: 'From my laptop', parentId: 'f1' });
+    // Timeline events remain others-only: no "you changed this" toast.
+    expect(store[SHARED_EVENTS_KEY] || []).toEqual([]);
+    // Echo-push guard intact: the just-applied row is never re-PUT this cycle.
+    const putCalls = global.fetch.mock.calls.filter(([, o]) => o?.method === 'PUT');
+    expect(putCalls.some(([u]) => u.includes('/collections/c2'))).toBe(false);
+  });
+
+  test('B4 guard holds for own-authored rows: an upsert does not resurrect a collection this device already removed locally', async () => {
+    // knownUids says c9 belonged to f1, but the pre-cycle index no longer has
+    // it — this device deleted/moved it out locally before this cycle.
+    await seedLocal({
+      [SHARED_SYNC_STATE_KEY]: { f1: { lastRev: 1, lastSyncedAt: 200, knownUids: ['c1', 'c9'] } },
+    });
+    global.fetch.mockImplementation(async (url, opts = {}) => {
+      if (!opts.method || opts.method === 'GET') {
+        return deltaResponse({
+          collections: [{ uid: 'c9', data: { name: 'Zombie', tabs: [] }, rev: 2, deleted: 0, updatedBy: 'me@x.com', updatedAt: 300 }],
+        });
+      }
+      return { ok: true, status: 200, json: async () => ({ revision: 3 }) };
+    });
+
+    await syncSharedFolders();
+
+    const store = await browser.storage.local.get(['collection_c9', 'collections_index']);
+    expect(store.collection_c9).toBeUndefined();
+    expect(store.collections_index.c9).toBeUndefined();
+    // The local removal still gets pushed as a real DELETE this same cycle.
+    const delCalls = global.fetch.mock.calls.filter(([, o]) => o?.method === 'DELETE');
+    expect(delCalls.some(([u]) => u.includes('/collections/c9'))).toBe(true);
+  });
+
+  test('I3 guard holds for own-authored rows: a locally-dirty edit defers the remote, races fairly, and applies it with a conflict event on a 409 loss', async () => {
+    await seedLocal({
+      // seedLocal's c1 has lastUpdated: 100 > lastSyncedAt 50 — genuinely dirty.
+      [SHARED_SYNC_STATE_KEY]: { f1: { lastRev: 1, lastSyncedAt: 50, knownUids: ['c1'] } },
+    });
+    global.fetch.mockImplementation(async (url, opts = {}) => {
+      if (!opts.method || opts.method === 'GET') {
+        return deltaResponse({
+          collections: [{ uid: 'c1', data: { name: 'Laptop version', tabs: [] }, rev: 2, deleted: 0, updatedBy: 'me@x.com', updatedAt: 200 }],
+        });
+      }
+      if (opts.method === 'PUT') return { ok: false, status: 409, json: async () => ({ error: 'conflict' }) };
+      return { ok: true, status: 200, json: async () => ({ revision: 3 }) };
+    });
+
+    await syncSharedFolders();
+
+    const store = await browser.storage.local.get(['collection_c1', 'collections_index', SHARED_EVENTS_KEY]);
+    // Lost the fair race: the own-authored deferred remote is applied.
+    expect(store.collection_c1.name).toBe('Laptop version');
+    expect(store.collections_index.c1.name).toBe('Laptop version');
+    // The user is told their (this-device) change was replaced.
+    const conflictEvent = store[SHARED_EVENTS_KEY].find((e) => e.kind === 'conflict');
+    expect(conflictEvent).toMatchObject({ folderId: 'f1', collectionName: 'A' });
+    // Raced against the PRE-pull watermark, proving a genuine race.
+    const putCall = global.fetch.mock.calls.find(([u, o]) => o?.method === 'PUT' && u.includes('/collections/c1'));
+    expect(JSON.parse(putCall[1].body).baseRev).toBe(1);
+  });
+});
+
 // Perf: revision short-circuit. rematerializeMissingSharedFolders' existing
 // `/shared/folders` LIST call (made every cycle for the C2 rematerialization
 // pass) already tells us every locally-known folder's CURRENT server
