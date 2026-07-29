@@ -490,19 +490,36 @@ export const saveSingleCollection = async (collection, forceUpdateTimestamp = fa
             siblingEntries.sort((a, b) => a.normalizedOrder - b.normalizedOrder);
             
             if (siblingEntries.length > 0) {
+                // Shared folders: members can only converge on the same
+                // in-folder order if the shifted siblings SYNC — and the
+                // shared push engine only picks up rows whose (index)
+                // lastUpdated moved past its watermark. Bump the timestamp on
+                // shifted siblings when the parent is a shared folder so
+                // their new order values travel to every member. Displayed
+                // order is unaffected (explicit `order` beats the date sort).
+                let bumpShiftedTimestamps = false;
+                if (targetParentId) {
+                    const { folders_index: foldersIndex = {} } = await browser.storage.local.get('folders_index');
+                    bumpShiftedTimestamps = Boolean(foldersIndex[targetParentId]?.shared?.folderId);
+                }
+
                 const siblingKeys = siblingEntries.map(entry => `${STORAGE_KEYS.COLLECTION_PREFIX}${entry.uid}`);
                 const siblingData = await browser.storage.local.get(siblingKeys);
                 const updatedRecords = {};
-                
+
                 siblingEntries.forEach((entry, indexPosition) => {
                     const newOrderValue = indexPosition + 1; // Start from 1 so new collection can take 0
                     index[entry.uid].order = newOrderValue;
+                    if (bumpShiftedTimestamps) {
+                        index[entry.uid].lastUpdated = now;
+                    }
                     const recordKey = `${STORAGE_KEYS.COLLECTION_PREFIX}${entry.uid}`;
                     const record = siblingData[recordKey];
                     if (record) {
                         updatedRecords[recordKey] = {
                             ...record,
-                            order: newOrderValue
+                            order: newOrderValue,
+                            ...(bumpShiftedTimestamps ? { lastUpdated: now } : {})
                         };
                     }
                 });

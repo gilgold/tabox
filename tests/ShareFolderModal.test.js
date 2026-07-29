@@ -529,7 +529,13 @@ test('creating a link on a NOT-yet-shared folder first creates the share then th
   expect(types.indexOf('sharedCreateShare')).toBeGreaterThanOrEqual(0);
   expect(types.indexOf('sharedCreateShare')).toBeLessThan(types.indexOf('sharedCreateFolderLink'));
   const [createShare] = browser.runtime.sendMessage.mock.calls.find(([m]) => m.type === 'sharedCreateShare');
-  expect(createShare.collections).toEqual([{ uid: 'c1', data: { uid: 'c1', name: 'A', tabs: [] } }]);
+  // Order-consistency: the payload carries the sharer's display order as an
+  // explicit `order` (gatherCollectionsForShare also bumps lastUpdated when
+  // persisting that order locally, so it appears in the uploaded record too).
+  expect(createShare.collections).toEqual([{
+    uid: 'c1',
+    data: { uid: 'c1', name: 'A', tabs: [], order: 0, lastUpdated: expect.any(Number) },
+  }]);
   expect(createShare.invites).toEqual([]);
 });
 

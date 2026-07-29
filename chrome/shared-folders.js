@@ -302,7 +302,14 @@ async function applyDeltaLocally(folder, delta, myEmail, pendingLocalRemovals = 
         }
         const record = { ...sanitizeRemoteCollection(row.data), uid: row.uid, parentId: folderId, lastUpdated: row.updatedAt };
         updates[`collection_${row.uid}`] = record;
-        index[row.uid] = { uid: row.uid, name: record.name, parentId: folderId, lastUpdated: row.updatedAt };
+        // Order-consistency: loadAllCollections treats the INDEX entry's
+        // `order` as authoritative (an index entry without one strips the
+        // record's own order at load time), so a synced order only renders
+        // if it is mirrored here too.
+        index[row.uid] = {
+          uid: row.uid, name: record.name, parentId: folderId, lastUpdated: row.updatedAt,
+          ...(record.order !== undefined && record.order !== null ? { order: record.order } : {}),
+        };
         appliedUids.add(row.uid);
         events.push({
           folderId, folderName: safeFolderName, actorEmail: row.updatedBy,
@@ -371,7 +378,11 @@ async function applyDeferredRemoteConflict(folder, deferredRow) {
     } else {
       const record = { ...sanitizeRemoteCollection(deferredRow.data), uid, parentId: folderId, lastUpdated: deferredRow.updatedAt };
       updates[`collection_${uid}`] = record;
-      index[uid] = { uid, name: record.name, parentId: folderId, lastUpdated: deferredRow.updatedAt };
+      // Mirror `order` into the index — see applyDeltaLocally's upsert.
+      index[uid] = {
+        uid, name: record.name, parentId: folderId, lastUpdated: deferredRow.updatedAt,
+        ...(record.order !== undefined && record.order !== null ? { order: record.order } : {}),
+      };
       collectionName = collectionName ?? record.name;
     }
     updates.collections_index = index;
@@ -530,7 +541,11 @@ async function materializeSharedFolderLocally({ folderId, name, color, role, own
     for (const c of collections) {
       const record = { ...sanitizeRemoteCollection(c.data), uid: c.uid, parentId: folderId, lastUpdated: now };
       updates[`collection_${c.uid}`] = record;
-      cIndex[c.uid] = { uid: c.uid, name: record.name, parentId: folderId, lastUpdated: now };
+      // Mirror `order` into the index — see applyDeltaLocally's upsert.
+      cIndex[c.uid] = {
+        uid: c.uid, name: record.name, parentId: folderId, lastUpdated: now,
+        ...(record.order !== undefined && record.order !== null ? { order: record.order } : {}),
+      };
     }
     updates.folders_index = fIndex;
     updates.collections_index = cIndex;

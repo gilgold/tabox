@@ -9,6 +9,12 @@
 import { browser } from '../../static/globals';
 import { showInfoToast, showErrorToast, showSuccessToast } from '../toastHelpers';
 import { ensureNotificationsPermission } from './notificationsPermission';
+import {
+    loadCollectionsIndex,
+    loadMultipleCollections,
+    sortCollectionsForDisplay,
+    updateCollectionsOrder,
+} from './storageUtils';
 
 /**
  * Leave a shared folder the caller is a member of. Keeps a local copy.
@@ -116,4 +122,50 @@ export async function unshareSharedFolder(folder, onDataUpdate) {
         showErrorToast('Couldn\'t stop sharing — please try again.');
         return false;
     }
+}
+
+/**
+ * Build the collections payload for sharing a folder (`sharedCreateShare`).
+ *
+ * Order-consistency contract: members can only ever see the same in-folder
+ * order as the sharer if every collection carries an explicit sequential
+ * `order` — without it, each device falls back to sorting by `lastUpdated`,
+ * which is device-local (accepting an invite stamps every materialized
+ * collection with the same Date.now(), flattening the order entirely). So
+ * this captures the sharer's CURRENT display order (their active sort
+ * settings, same mapping as App's getCurrentCollectionSortOptions), stamps
+ * it as `order: 0..n` into both the uploaded payload and the sharer's own
+ * local records (updateCollectionsOrder), freezing the folder into
+ * explicit-order mode for everyone from the moment it is shared.
+ *
+ * Local-only fields (`parentId`, `lastOpened`) are stripped, mirroring the
+ * sync engine's own push-phase whitelist.
+ *
+ * @param {string} folderUid - The folder being shared.
+ * @returns {Promise<Array<{uid: string, data: object}>>} Payload for `sharedCreateShare`.
+ */
+export async function gatherCollectionsForShare(folderUid) {
+    const index = await loadCollectionsIndex();
+    const uids = Object.keys(index).filter((uid) => index[uid].parentId === folderUid);
+    const records = await loadMultipleCollections(uids);
+    const present = uids.map((uid) => records[uid]).filter(Boolean);
+
+    const { currentSortValue, currentSortAscending } = await browser.storage.local.get(['currentSortValue', 'currentSortAscending']);
+    const sortFieldMap = { DATE: 'lastUpdated', NAME: 'name', COLOR: 'color' };
+    const sorted = sortCollectionsForDisplay(present, {
+        sortBy: sortFieldMap[currentSortValue || 'DATE'] || 'lastUpdated',
+        sortOrder: (currentSortAscending !== undefined ? currentSortAscending : true) ? 'asc' : 'desc',
+    });
+
+    // Persist the same order locally so the sharer's display can never drift
+    // from what members were sent (a lastUpdated-sorted view re-shuffles as
+    // collections are edited; an explicit order stays put on every device).
+    await updateCollectionsOrder(sorted);
+
+    return sorted.map((record, position) => {
+        const data = { ...record, order: position };
+        delete data.parentId;
+        delete data.lastOpened;
+        return { uid: record.uid, data };
+    });
 }

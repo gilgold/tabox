@@ -16,7 +16,7 @@ import { browser } from '../static/globals';
 import { shareFolderModalState } from './atoms/sharedFoldersState';
 import { isProState } from './atoms/premiumState';
 import { saveContact, searchContacts } from './utils/contactsUtils';
-import { loadCollectionsIndex, loadMultipleCollections } from './utils/storageUtils';
+import { gatherCollectionsForShare } from './utils/sharedFolderActions';
 import { showSuccessToast, showErrorToast } from './toastHelpers';
 import { ensureNotificationsPermission } from './utils/notificationsPermission';
 import ShareProPaywall from './ShareProPaywall';
@@ -137,18 +137,10 @@ export default function ShareFolderModal() {
 
     const clearMemberSelection = () => setSelectedEmails([]);
 
-    const gatherCollections = async () => {
-        const index = await loadCollectionsIndex();
-        const uids = Object.keys(index).filter((uid) => index[uid].parentId === folder.uid);
-        const records = await loadMultipleCollections(uids);
-        return uids
-            .filter((uid) => records[uid])
-            .map((uid) => {
-                const data = { ...records[uid] };
-                delete data.parentId;
-                return { uid, data };
-            });
-    };
+    // Order-consistency: the payload carries the sharer's current display
+    // order as explicit `order` values (also persisted locally) — see
+    // gatherCollectionsForShare for why members diverge without it.
+    const gatherCollections = async () => gatherCollectionsForShare(folder.uid);
 
     const handleShare = async () => {
         const target = email.trim().toLowerCase();
