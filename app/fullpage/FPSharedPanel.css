@@ -197,6 +197,11 @@
     overflow-wrap: anywhere;
 }
 
+.fp-shared-email {
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
 .fp-shared-activity-time {
     flex-shrink: 0;
     font-size: 11.5px;

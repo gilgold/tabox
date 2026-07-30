@@ -144,6 +144,23 @@ export function describeActivityEvent(event, selfEmail = '') {
     }
 }
 
+const EMAIL_PATTERN = /[^\s@“”'"]+@[^\s@“”'"]+\.[^\s@“”'".,;:!?]+/g;
+
+/**
+ * Wraps every email address in `text` in a highlight span so member emails
+ * stand out in activity sentences and comment bylines.
+ */
+export function highlightEmails(text) {
+    const parts = String(text).split(EMAIL_PATTERN);
+    const emails = String(text).match(EMAIL_PATTERN) || [];
+    if (emails.length === 0) return text;
+    return parts.flatMap((part, i) => (
+        i < emails.length
+            ? [part, <span className="fp-shared-email" key={`${emails[i]}-${i}`}>{emails[i]}</span>]
+            : [part]
+    ));
+}
+
 /**
  * Right-side "Activity & comments" panel for shared folders (full-page only).
  * Mirrors the fp-detail-panel width-transition pattern but fixed ~380px.
@@ -155,7 +172,6 @@ function FPSharedPanel({ folder, collections, isOpen, onClose }) {
     const selectedCollectionUid = useAtomValue(selectedCollectionUidState);
 
     const folderUid = folder?.uid || null;
-    const isFolderOwner = folder?.shared?.role === 'owner';
 
     const [tab, setTab] = useState('activity');
     const [selfEmail, setSelfEmail] = useState('');
@@ -348,7 +364,7 @@ function FPSharedPanel({ folder, collections, isOpen, onClose }) {
     if (!folder) return null;
 
     const canDeleteComment = (comment) => (
-        isFolderOwner || (comment.authorEmail || '').toLowerCase() === selfEmail
+        (comment.authorEmail || '').toLowerCase() === selfEmail
     );
 
     return (
@@ -414,7 +430,7 @@ function FPSharedPanel({ folder, collections, isOpen, onClose }) {
                                     {group.events.map((event) => (
                                         <li className="fp-shared-activity-entry" key={event.id}>
                                             <span className="fp-shared-activity-text">
-                                                {describeActivityEvent(event, selfEmail)}
+                                                {highlightEmails(describeActivityEvent(event, selfEmail))}
                                             </span>
                                             <span className="fp-shared-activity-time">
                                                 {formatRelativeTime(event.createdAt)}
@@ -464,7 +480,7 @@ function FPSharedPanel({ folder, collections, isOpen, onClose }) {
                                         <span className="fp-shared-comment-author">
                                             {(comment.authorEmail || '').toLowerCase() === selfEmail
                                                 ? 'You'
-                                                : comment.authorEmail}
+                                                : highlightEmails(comment.authorEmail)}
                                         </span>
                                         <span className="fp-shared-comment-time">
                                             {formatRelativeTime(comment.createdAt)}

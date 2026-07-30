@@ -129,7 +129,7 @@ describe('listComments', () => {
 });
 
 describe('deleteComment', () => {
-  it('author deletes own; owner deletes any; other members get 404 (no existence leak)', async () => {
+  it('only the author deletes their own; everyone else gets 404 (no existence leak)', async () => {
     const db = await seed();
     const own = await postComment(db, GUEST, 'f1', { body: 'mine' }, 2000, PRO);
     const owners = await postComment(db, OWNER, 'f1', { body: 'owner note' }, 2001, PRO);
@@ -138,9 +138,9 @@ describe('deleteComment', () => {
     expect(await deleteComment(db, GUEST, 'f1', owners.data.comment.id)).toEqual({ ok: false, status: 404, error: 'not_found' });
     // author deletes own
     expect(await deleteComment(db, GUEST, 'f1', own.data.comment.id)).toEqual({ ok: true, data: { deleted: true } });
-    // owner moderates anyone's
+    // the folder owner cannot delete other people's comments either
     const guest2 = await postComment(db, GUEST, 'f1', { body: 'mine 2' }, 2002, PRO);
-    expect(await deleteComment(db, OWNER, 'f1', guest2.data.comment.id)).toEqual({ ok: true, data: { deleted: true } });
+    expect(await deleteComment(db, OWNER, 'f1', guest2.data.comment.id)).toEqual({ ok: false, status: 404, error: 'not_found' });
     // already-deleted and unknown ids 404; non-members 404
     expect(await deleteComment(db, GUEST, 'f1', own.data.comment.id)).toEqual({ ok: false, status: 404, error: 'not_found' });
     expect(await deleteComment(db, OWNER, 'f1', 'nope')).toEqual({ ok: false, status: 404, error: 'not_found' });

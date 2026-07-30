@@ -156,9 +156,9 @@ export async function postComment(db, identity, folderId, { collectionUid = null
   return { ok: true, data: { comment: { id, collectionUid: uid, authorEmail, body: text, createdAt: nowMs } } };
 }
 
-// Author may delete their own comment; the folder OWNER may delete any
-// (moderation). Everyone else gets the same 404 as a missing comment so
-// existence is never leaked. Soft delete only — the row stays for audit.
+// Only the author may delete their own comment. Everyone else gets the
+// same 404 as a missing comment so existence is never leaked. Soft delete
+// only — the row stays for audit.
 export async function deleteComment(db, identity, folderId, commentId) {
   const access = await requireFolderAccess(db, identity, folderId, 'read');
   if (access.ok === false) return access;
@@ -168,7 +168,7 @@ export async function deleteComment(db, identity, folderId, commentId) {
   ).bind(folderId, commentId).first();
   if (!row) return err(404, 'not_found');
   const isAuthor = row.author_email === identity.email.toLowerCase();
-  if (!isAuthor && access.role !== 'owner') return err(404, 'not_found');
+  if (!isAuthor) return err(404, 'not_found');
   await db.prepare('UPDATE shared_comments SET deleted = 1 WHERE folder_id = ? AND id = ?').bind(folderId, commentId).run();
   return { ok: true, data: { deleted: true } };
 }

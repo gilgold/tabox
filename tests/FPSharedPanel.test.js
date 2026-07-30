@@ -3,7 +3,7 @@
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { Provider, createStore } from 'jotai';
-import FPSharedPanel, { describeActivityEvent } from '../app/fullpage/FPSharedPanel';
+import FPSharedPanel, { describeActivityEvent, highlightEmails } from '../app/fullpage/FPSharedPanel';
 import { premiumEntitlementState } from '../app/atoms/premiumState';
 import { sharedPanelOpenState } from '../app/atoms/sharedFoldersState';
 import { detailPanelOpenState, selectedCollectionUidState } from '../app/atoms/globalAppSettingsState';
@@ -120,7 +120,11 @@ describe('FPSharedPanel', () => {
         const { container } = renderPanel();
 
         expect(await screen.findByText(/You added “Research”/)).toBeInTheDocument();
-        expect(screen.getByText(/amy@example\.com joined as write/)).toBeInTheDocument();
+        // The actor email is wrapped in a highlight span, so match across elements.
+        const joinEntry = [...container.querySelectorAll('.fp-shared-activity-text')]
+            .find((node) => /amy@example\.com joined as write/.test(node.textContent));
+        expect(joinEntry).toBeTruthy();
+        expect(joinEntry.querySelector('.fp-shared-email')).toHaveTextContent('amy@example.com');
 
         const dayLabels = container.querySelectorAll('.fp-shared-activity-day');
         expect(dayLabels.length).toBe(2);
@@ -288,5 +292,19 @@ describe('describeActivityEvent', () => {
         [{ actorEmail: 'amy@x.com', action: 'role_changed', subject: self, detail: '{"role":"write"}' }, 'amy@x.com changed your role to write'],
     ])('describes %j', (event, expected) => {
         expect(describeActivityEvent(event, self)).toBe(expected);
+    });
+});
+
+describe('highlightEmails', () => {
+    it('wraps each email in a highlight span, leaving other text intact', () => {
+        render(<span data-testid="ht">{highlightEmails('amy@x.com removed bob@y.dev')}</span>);
+        const host = screen.getByTestId('ht');
+        expect(host).toHaveTextContent('amy@x.com removed bob@y.dev');
+        const marks = host.querySelectorAll('.fp-shared-email');
+        expect([...marks].map((m) => m.textContent)).toEqual(['amy@x.com', 'bob@y.dev']);
+    });
+
+    it('returns plain text unchanged when there is no email', () => {
+        expect(highlightEmails('You renamed the folder')).toBe('You renamed the folder');
     });
 });
