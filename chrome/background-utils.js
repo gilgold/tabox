@@ -1386,8 +1386,10 @@ async function validateToken(token) {
             return false;
         }
     } catch (error) {
-        logSyncOperation('error', 'Token validation network error', { error: error.message });
-        return false;
+        // Fetch never reached Google (offline, sleep/wake, SW woke before network).
+        // Not an auth failure — let the caller decide whether the cached token is still usable.
+        logSyncOperation('info', 'Token validation skipped - network unavailable', { error: error.message });
+        return 'network_error';
     }
 }
 
@@ -1413,11 +1415,17 @@ async function getAuthToken() {
     
     const isValid = await validateToken(googleToken);
     lastValidated = Date.now();
-    
-    if (isValid) {
+
+    if (isValid === true) {
         return googleToken;
     }
-    
+
+    // Network-level validation failure with a token that isn't expired per stored
+    // expiry: keep using it — a refresh attempt would hit the same dead network.
+    if (isValid === 'network_error' && tokenExpiryTime && now < tokenExpiryTime) {
+        return googleToken;
+    }
+
     return await getNewAccessToken();
 }
 
