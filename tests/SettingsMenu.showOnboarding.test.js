@@ -23,7 +23,8 @@ describe('SettingsMenu — Show onboarding', () => {
             await new Promise((resolve) => setTimeout(resolve, 0));
         });
 
-        fireEvent.click(await screen.findByText('Show onboarding'));
+        fireEvent.click(document.querySelector('.settings-button'));
+        fireEvent.click(await screen.findByRole('button', { name: 'Show onboarding' }));
 
         expect(listener).toHaveBeenCalledTimes(1);
         window.removeEventListener(SHOW_ONBOARDING_EVENT, listener);

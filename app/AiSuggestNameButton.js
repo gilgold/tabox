@@ -1,8 +1,11 @@
 // app/AiSuggestNameButton.js
 import React, { useState } from 'react';
 import { BsStars } from 'react-icons/bs';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { useTaboxAIEnabled } from './ai/useTaboxAIEnabled';
 import { isAISupported } from './ai/aiClient';
+import { isProState } from './atoms/premiumState';
+import { aiToolsInitialToolState, aiToolsModalOpenState } from './atoms/aiState';
 import { showErrorToast } from './toastHelpers';
 import './AiSuggestNameButton.css';
 
@@ -19,18 +22,27 @@ function AiSuggestNameButton({
     label = 'Suggest name with AI',
 }) {
     const enabled = useTaboxAIEnabled();
+    const isPro = useAtomValue(isProState);
+    const setInitialTool = useSetAtom(aiToolsInitialToolState);
+    const setAIToolsOpen = useSetAtom(aiToolsModalOpenState);
     const [busy, setBusy] = useState(false);
 
-    if (!enabled || !isAISupported()) return null;
+    if (!isAISupported() || (isPro && !enabled)) return null;
 
     const handleClick = async () => {
-        if (busy || disabled) return;
+        if (busy) return;
+        if (!isPro) {
+            setInitialTool('name-suggestion');
+            setAIToolsOpen(true);
+            return;
+        }
+        if (disabled) return;
         setBusy(true);
         if (onBusyChange) onBusyChange(true);
         try {
             const name = await suggest();
             const trimmed = (name || '').trim();
-            if (trimmed && onSuggested) onSuggested(trimmed);
+            if (trimmed && onSuggested) await onSuggested(trimmed);
         } catch (err) {
             console.error('AI name suggestion failed:', err);
             showErrorToast('Could not generate a name. Please try again.');
@@ -44,13 +56,15 @@ function AiSuggestNameButton({
         <span
             className="ai-suggest-name-btn-wrap"
             data-tooltip-id="main-tooltip"
-            data-tooltip-content={disabled && disabledReason ? disabledReason : label}
+            data-tooltip-content={!isPro
+                ? `${label} · Tabox Pro`
+                : disabled && disabledReason ? disabledReason : label}
         >
             <button
                 type="button"
                 className={`ai-suggest-name-btn${busy ? ' ai-suggest-name-btn--busy' : ''}`}
                 onClick={handleClick}
-                disabled={disabled || busy}
+                disabled={(isPro && disabled) || busy}
                 aria-busy={busy}
                 aria-label={label}
             >

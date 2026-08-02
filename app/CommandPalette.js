@@ -44,7 +44,7 @@ export const EXTENSION_ACTIONS = [
     { id: 'export-all', label: 'Export All Collections & Folders', keywords: 'export download backup save', icon: MdFileDownload },
     { id: 'open-fullpage', label: 'Open in Full Page', keywords: 'fullpage full page expand tab window big', icon: MdOpenInNew },
     { id: 'restore-session', label: 'Restore Recently Closed', fullpageLabel: 'Browse Recently Closed', keywords: 'restore recently closed recover previous history browse', icon: MdHistory },
-    { id: 'manage-subscription', label: 'Manage Subscription', keywords: 'subscription manage billing plan cancel switch monthly annual yearly pro payment upgrade downgrade', icon: MdWorkspacePremium, proOnly: true },
+    { id: 'manage-subscription', label: 'Manage Subscription', freeLabel: 'Upgrade to Pro', keywords: 'subscription manage billing plan cancel switch monthly annual yearly pro payment upgrade downgrade', icon: MdWorkspacePremium },
     { id: 'share-folder', label: 'Share Folder…', keywords: 'share folder collaborate invite team', icon: MdFolderShared, proOnly: true },
     // fullpageOnly: the Activity & comments panel is inherently view-bound to
     // the full-page layout — the sanctioned reason for a parity divergence.
@@ -125,6 +125,7 @@ function CommandPalette({
     onRestoreSession,
     onCollectionAction,
     onOpenAiTool,
+    onUpgradeToPro,
     onManageSubscription,
     onShareFolder,
 }) {
@@ -290,14 +291,15 @@ function CommandPalette({
             if (action.id === 'open-shared-panel' && !selectedSharedFolder) return;
             if (action.proOnly && !isPro) return;
             if (action.requiresGoogleUser && !googleUser?.permissionId) return;
+            const actionLabel = !isPro && action.freeLabel ? action.freeLabel : action.label;
             if (q) {
-                const haystack = `${action.label} ${action.keywords}`.toLowerCase();
+                const haystack = `${actionLabel} ${action.label} ${action.keywords}`.toLowerCase();
                 if (!haystack.includes(q.toLowerCase())) return;
             }
             items.push({
                 type: 'action',
                 id: action.id,
-                label: (isFullPage && action.fullpageLabel) ? action.fullpageLabel : action.label,
+                label: (isFullPage && action.fullpageLabel) ? action.fullpageLabel : actionLabel,
                 icon: action.icon,
                 actionDef: action,
             });
@@ -405,7 +407,10 @@ function CommandPalette({
             case 'export-all': onExportAll?.(); break;
             case 'open-fullpage': onOpenFullPage?.(); break;
             case 'restore-session': onRestoreSession?.(); break;
-            case 'manage-subscription': onManageSubscription?.(); break;
+            case 'manage-subscription':
+                if (isPro) onManageSubscription?.();
+                else onUpgradeToPro?.();
+                break;
             case 'open-shared-panel': setSharedPanelOpen(true); break;
             case 'copy-google-id':
                 if (googleUser?.permissionId) copyToClipboard(googleUser.permissionId).catch(() => {});
@@ -414,7 +419,7 @@ function CommandPalette({
                 window.dispatchEvent(new CustomEvent(SHOW_ONBOARDING_EVENT));
                 break;
         }
-    }, [close, onCreateFolder, onImport, onExportAll, onOpenFullPage, onRestoreSession, onManageSubscription, focusInput, setSharedPanelOpen, googleUser]);
+    }, [close, onCreateFolder, onImport, onExportAll, onOpenFullPage, onRestoreSession, onUpgradeToPro, onManageSubscription, focusInput, setSharedPanelOpen, googleUser, isPro]);
 
     const toggleSetting = useCallback(async (settingKey) => {
         const newVal = !settingValues[settingKey];

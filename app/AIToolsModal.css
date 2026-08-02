@@ -755,3 +755,8 @@ html.performance-mode .ai-tool-card[data-tool-id="split-collection"]::before {
     margin: 0;
     padding-top: 4px;
 }
+.ai-tools-modal-overlay {
+    /* Name-suggestion paywalls can be launched from another open modal. Keep
+       this shared AI layer above Save Collection/Create Folder (999999). */
+    z-index: 1000000;
+}

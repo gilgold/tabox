@@ -27,6 +27,8 @@ const renderSettings = async () => {
             </Provider>
         );
     });
+    fireEvent.click(document.querySelector('.settings-button'));
+    fireEvent.click(screen.getByRole('button', { name: 'Tabox AI' }));
 };
 
 describe('SettingsMenu — Tabox AI section', () => {
@@ -40,7 +42,7 @@ describe('SettingsMenu — Tabox AI section', () => {
 
     test('renders a Tabox AI section with the enable switch', async () => {
         await renderSettings();
-        expect(screen.getByText('Tabox AI')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Tabox AI', level: 3 })).toBeInTheDocument();
         expect(document.getElementById('chkTaboxAI')).toBeInTheDocument();
     });
 

@@ -20,6 +20,8 @@ import ExpandedCollectionData from './ExpandedCollectionData';
 import { getColorValue } from './utils/colorMigration';
 import { useTaboxAIEnabled } from './ai/useTaboxAIEnabled';
 import { isAISupported } from './ai/aiClient';
+import { isProState } from './atoms/premiumState';
+import { aiToolsInitialToolState, aiToolsModalOpenState } from './atoms/aiState';
 import { suggestCollectionName } from './ai/tasks/suggestCollectionName';
 import { loadSingleCollection } from './utils/storageUtils';
 import { countNonEmptyGroups } from './utils/groupCount';
@@ -56,6 +58,9 @@ function CollectionDetailPanel({
     const setDeletingCollectionUids = useSetAtom(deletingCollectionUidsState);
     const setAiProcessingUids = useSetAtom(aiProcessingUidsState);
     const setAiProcessingCurrentUid = useSetAtom(aiProcessingCurrentUidState);
+    const isPro = useAtomValue(isProState);
+    const setAiToolsInitialTool = useSetAtom(aiToolsInitialToolState);
+    const setAiToolsModalOpen = useSetAtom(aiToolsModalOpenState);
 
     // Use shared collection operations
     const {
@@ -80,7 +85,7 @@ function CollectionDetailPanel({
     });
 
     const isAIEnabled = useTaboxAIEnabled();
-    const showAiRenameBtn = isAIEnabled && isAISupported();
+    const showAiRenameBtn = isAISupported() && (isAIEnabled || !isPro);
     // The panel instance persists across collection switches; track what's
     // displayed so an in-flight AI rename never retitles the wrong collection.
     const displayedUidRef = useRef(collection?.uid);
@@ -88,6 +93,11 @@ function CollectionDetailPanel({
 
     const handleAiRename = async () => {
         if (isAiRenaming) return;
+        if (!isPro) {
+            setAiToolsInitialTool('name-suggestion');
+            setAiToolsModalOpen(true);
+            return;
+        }
         setIsAiRenaming(true);
         const renamedUid = collection.uid;
         // Signal AI processing to consumers (cards, etc.)

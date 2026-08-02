@@ -16,11 +16,13 @@
     border-radius: 6px;
     flex-shrink: 0;
     line-height: 0;
-    transition: background 0.2s ease, opacity 0.2s ease;
+    transition: color 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
 }
 
 .ai-suggest-name-btn:hover {
-    background: rgba(124, 58, 237, 0.12);
+    background: transparent;
+    color: #9333ea;
+    transform: scale(1.08);
 }
 
 .ai-suggest-name-btn:disabled {

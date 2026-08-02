@@ -1,9 +1,13 @@
 /** @jest-environment jsdom */
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import fs from 'fs';
+import path from 'path';
 import SyncDebugRecoveryPanel from '../app/SyncDebugRecoveryPanel';
 import { browser } from '../static/globals';
 import { showSuccessToast } from '../app/toastHelpers';
+
+const recoveryCss = fs.readFileSync(path.join(__dirname, '../app/SyncDebugRecoveryPanel.css'), 'utf8');
 
 jest.mock('../static/globals', () => ({
     browser: {
@@ -51,6 +55,18 @@ describe('SyncDebugRecoveryPanel', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         global.confirm = jest.fn(() => true);
+    });
+
+    test('keeps the restore picker toolbar compact in the popup viewport', () => {
+        const toolbarRule = recoveryCss.match(/html:not\(\.fullpage-mode\) \.sync-recovery-picker-toolbar\s*{[^}]+}/)?.[0] || '';
+        const searchRule = recoveryCss.match(/html:not\(\.fullpage-mode\) \.sync-recovery-picker-toolbar \.sync-recovery-search-field\s*{[^}]+}/)?.[0] || '';
+        const actionRule = recoveryCss.match(/html:not\(\.fullpage-mode\) \.sync-recovery-picker-toolbar \.sync-recovery-picker-action-btn\s*{[^}]+}/)?.[0] || '';
+
+        expect(toolbarRule).toContain('grid-template-columns: minmax(0, 1fr) auto auto');
+        expect(searchRule).toContain('height: 38px');
+        expect(searchRule).toContain('min-height: 38px');
+        expect(searchRule).toContain('min-width: 0');
+        expect(actionRule).toContain('width: auto');
     });
 
     test('restores an entire backup from the row without expanding details', async () => {

@@ -12,9 +12,11 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { gzipSync } from 'node:zlib';
 import { TIERS } from './tiers.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
+const WIX_CUSTOM_CODE_LIMIT = 15000;
 
 function fail(msg) {
   console.error(`\n✗ build-pricing: ${msg}\n`);
@@ -49,16 +51,37 @@ if (!/^https:\/\/[^/]+$/.test(siteUrl)) {
 
 const template = await readFile(join(here, 'pricing.template.html'), 'utf8');
 
-const html = template
+const expandedHtml = template
   .replace('__PADDLE_ENVIRONMENT__', env)
   .replace('__PADDLE_CLIENT_TOKEN__', token)
   .replace('__SITE_URL__', siteUrl)
   .replace('__TIERS_JSON__', JSON.stringify(TIERS));
 
-if (html.includes('__PADDLE_') || html.includes('__TIERS_JSON__')) {
+if (expandedHtml.includes('__PADDLE_') || expandedHtml.includes('__TIERS_JSON__')) {
   fail('Template still contains unreplaced placeholders — aborting.');
+}
+
+// Wix limits each Custom Code snippet to 15,000 characters. The readable source
+// stays in pricing.template.html; the generated snippet inflates it in-browser,
+// inserts the markup/styles, then recreates its scripts in their original order.
+const payload = gzipSync(Buffer.from(expandedHtml), { level: 9 }).toString('base64');
+const html = '<!-- Tabox pricing: generated; edit pricing.template.html, not this file. -->' +
+  '<script>(async()=>{const t=document.createElement("template"),' +
+  `b=Uint8Array.from(atob("${payload}"),c=>c.charCodeAt(0)),` +
+  'h=await new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream("gzip"))).text();' +
+  't.innerHTML=h;const s=[...t.content.querySelectorAll("script")];s.forEach(e=>e.remove());' +
+  'document.body.append(t.content);for(const e of s){const n=document.createElement("script");' +
+  'for(const x of e.attributes)n.setAttribute(x.name,x.value);if(e.src)' +
+  'await new Promise(r=>{n.onload=r;n.onerror=r;document.body.append(n)});' +
+  'else{n.textContent=e.textContent;document.body.append(n)}}})().catch(console.error)</script>';
+
+if ([...html].length > WIX_CUSTOM_CODE_LIMIT) {
+  fail(`Generated snippet is ${[...html].length} characters; Wix allows ${WIX_CUSTOM_CODE_LIMIT}.`);
 }
 
 const outPath = join(here, 'pricing.html');
 await writeFile(outPath, html, 'utf8');
-console.log(`✓ built ${outPath}  (env=${env}, token=${token.slice(0, 5)}…, tiers=${TIERS.length})`);
+console.log(
+  `✓ built ${outPath}  (env=${env}, token=${token.slice(0, 5)}…, ` +
+  `tiers=${TIERS.length}, wixChars=${[...html].length}/${WIX_CUSTOM_CODE_LIMIT})`,
+);

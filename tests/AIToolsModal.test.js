@@ -2,7 +2,7 @@
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { Provider, createStore } from 'jotai';
-import { aiToolsModalOpenState, aiToolsScopeState, aiProcessingUidsState, aiProcessingCurrentUidState } from '../app/atoms/aiState';
+import { aiToolsInitialToolState, aiToolsModalOpenState, aiToolsScopeState, aiProcessingUidsState, aiProcessingCurrentUidState } from '../app/atoms/aiState';
 import { premiumEntitlementState } from '../app/atoms/premiumState';
 
 const PRO = { entitled: true, status: 'active', plan: 'monthly', refreshedAt: new Date().toISOString() };
@@ -92,6 +92,19 @@ describe('AIToolsModal', () => {
     test('tool list renders from registry', async () => {
         await renderOpenModal();
         expect(screen.getByText('Auto rename collections')).toBeInTheDocument();
+    });
+
+    test('name-suggestion route shows the Pro paywall to free users', async () => {
+        const store = createStore();
+        store.set(aiToolsModalOpenState, true);
+        store.set(aiToolsInitialToolState, 'name-suggestion');
+        await act(async () => {
+            render(<Provider store={store}><AIToolsModal updateRemoteData={jest.fn()} /></Provider>);
+        });
+
+        expect(await screen.findByText('AI name suggestions')).toBeInTheDocument();
+        expect(screen.getByText('Meet Tabox Pro')).toBeInTheDocument();
+        expect(document.querySelector('.ai-tools-modal-overlay')).toBeInTheDocument();
     });
 
     // ── 2. Idle panel shows count ─────────────────────────────────────────────

@@ -3,80 +3,542 @@
 <div id="tabox-pricing" class="tbx-pricing">
   <style>
     .tbx-pricing {
-      --tbx-bg: #ffffff;
-      --tbx-fg: #0f172a;
-      --tbx-muted: #64748b;
-      --tbx-border: #e2e8f0;
-      --tbx-accent: #4f46e5;
+      --tbx-card: #0e1428;
+      --tbx-card-soft: #121a33;
+      --tbx-fg: #f7f8ff;
+      --tbx-muted: #9ca8c2;
+      --tbx-border: rgba(139, 124, 255, .34);
+      --tbx-border-soft: rgba(148, 163, 184, .15);
+      --tbx-accent: #6657ff;
+      --tbx-accent-2: #8d62ff;
+      --tbx-mint: #5ee7c2;
       --tbx-accent-fg: #ffffff;
-      --tbx-card: #ffffff;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       color: var(--tbx-fg);
-      max-width: 960px;
+      width: 100%;
+      min-height: 880px;
       margin: 0 auto;
-      padding: 48px 20px 64px;
+      padding: 54px 20px 72px;
       box-sizing: border-box;
+      position: relative;
+      isolation: isolate;
+      overflow: hidden;
+      background: transparent;
     }
-    @media (prefers-color-scheme: dark) {
-      .tbx-pricing {
-        --tbx-bg: #0b1120; --tbx-fg: #e2e8f0; --tbx-muted: #94a3b8;
-        --tbx-border: #1e293b; --tbx-card: #0f172a;
-      }
+    .tbx-pricing *,
+    .tbx-pricing *::before,
+    .tbx-pricing *::after { box-sizing: border-box; }
+    .tbx-inner { width: min(100%, 1160px); margin: 0 auto; position: relative; z-index: 1; }
+    .tbx-head { text-align: center; margin-bottom: 24px; }
+    .tbx-head h1 {
+      font-size: clamp(2.25rem, 5vw, 3.7rem);
+      line-height: 1.04;
+      margin: 0 0 12px;
+      letter-spacing: -.045em;
+      text-wrap: balance;
     }
-    .tbx-pricing * { box-sizing: border-box; }
-    .tbx-head { text-align: center; margin-bottom: 32px; }
-    .tbx-head h1 { font-size: 2rem; margin: 0 0 8px; letter-spacing: -0.02em; }
-    .tbx-head p { color: var(--tbx-muted); margin: 0; font-size: 1.05rem; }
+    .tbx-head p {
+      color: var(--tbx-muted);
+      margin: 0;
+      font-size: clamp(1rem, 2vw, 1.22rem);
+    }
+    .tbx-toggle-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 28px;
+    }
     .tbx-toggle {
-      display: inline-flex; align-items: center; gap: 4px;
-      background: var(--tbx-border); border-radius: 999px; padding: 4px; margin: 24px auto 8px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      min-width: 330px;
+      padding: 5px;
+      margin: 4px auto 8px;
+      border: 1px solid var(--tbx-border-soft);
+      border-radius: 999px;
+      background: rgba(19, 27, 53, .88);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04), 0 14px 35px rgba(0, 0, 0, .24);
+      backdrop-filter: blur(14px);
     }
     .tbx-toggle button {
-      border: 0; background: transparent; color: var(--tbx-muted); cursor: pointer;
-      font: inherit; font-weight: 600; padding: 8px 18px; border-radius: 999px; transition: all .15s ease;
+      position: relative;
+      flex: 1;
+      border: 0;
+      background: transparent;
+      color: var(--tbx-muted);
+      cursor: pointer;
+      font: inherit;
+      font-weight: 700;
+      padding: 12px 20px;
+      border-radius: 999px;
+      transition: color .18s ease, background .18s ease, box-shadow .18s ease, transform .18s ease;
     }
-    .tbx-toggle button[aria-pressed="true"] { background: var(--tbx-card); color: var(--tbx-fg); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
-    .tbx-toggle-wrap { text-align: center; }
-    .tbx-save { display: block; text-align: center; color: var(--tbx-accent); font-size: .85rem; font-weight: 600; min-height: 1.1em; margin-bottom: 24px; }
-    .tbx-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; justify-content: center; }
+    .tbx-toggle button:hover { color: var(--tbx-fg); }
+    .tbx-toggle button[aria-pressed="true"] {
+      color: var(--tbx-fg);
+      background: linear-gradient(135deg, rgba(104, 79, 255, .36), rgba(59, 46, 139, .28));
+      box-shadow: inset 0 0 0 1px #8876ff, 0 8px 22px rgba(70, 46, 210, .3);
+    }
+    .tbx-toggle button:focus-visible,
+    .tbx-cta:focus-visible {
+      outline: 3px solid rgba(94, 231, 194, .7);
+      outline-offset: 3px;
+    }
+    .tbx-annual-label { display: inline-flex; align-items: center; gap: 7px; }
+    .tbx-toggle-badge {
+      position: absolute;
+      left: 50%;
+      top: -13px;
+      transform: translateX(-50%);
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #7165ff, #4eddb8);
+      color: #07111b;
+      font-size: .58rem;
+      font-weight: 850;
+      letter-spacing: .06em;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+    .tbx-save {
+      min-height: 1.1em;
+      color: var(--tbx-mint);
+      font-size: .78rem;
+      font-weight: 700;
+      letter-spacing: .02em;
+    }
+    .tbx-grid { display: grid; gap: 20px; }
     .tbx-card {
-      border: 1px solid var(--tbx-border); border-radius: 16px; background: var(--tbx-card);
-      padding: 28px 24px; display: flex; flex-direction: column;
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(390px, .88fr) minmax(420px, 1.12fr);
+      min-height: 550px;
+      overflow: hidden;
+      border: 1px solid var(--tbx-border);
+      border-radius: 26px;
+      background:
+        linear-gradient(135deg, rgba(255, 255, 255, .025), transparent 34%),
+        rgba(12, 18, 38, .96);
+      box-shadow:
+        0 34px 80px -36px rgba(32, 22, 112, .84),
+        inset 0 1px 0 rgba(255, 255, 255, .04);
     }
-    .tbx-card.highlighted { border-color: var(--tbx-accent); box-shadow: 0 10px 30px -12px rgba(79,70,229,.35); }
-    .tbx-card h2 { margin: 0 0 4px; font-size: 1.3rem; }
-    .tbx-card .desc { color: var(--tbx-muted); margin: 0 0 20px; font-size: .95rem; min-height: 2.6em; }
-    .tbx-price { font-size: 2.4rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
-    .tbx-price .cadence { font-size: .95rem; font-weight: 500; color: var(--tbx-muted); }
-    .tbx-price.loading { color: var(--tbx-muted); font-size: 1.1rem; font-weight: 500; }
-    .tbx-features { list-style: none; padding: 0; margin: 20px 0 24px; flex: 1; }
-    .tbx-features li { padding: 6px 0 6px 26px; position: relative; font-size: .95rem; }
-    .tbx-features li::before { content: "\2713"; position: absolute; left: 0; color: var(--tbx-accent); font-weight: 700; }
+    .tbx-card.highlighted { border-color: rgba(107, 88, 255, .78); }
+    .tbx-card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      box-shadow: inset 0 0 44px rgba(71, 49, 184, .08);
+    }
+    .tbx-value-ribbon {
+      position: absolute;
+      z-index: 4;
+      left: -48px;
+      top: 0;
+      width: 190px;
+      padding: 8px 0;
+      transform: rotate(-38deg);
+      text-align: center;
+      background: linear-gradient(90deg, #6257ff 18%, #6d5fff 56%, #5ee7c2);
+      box-shadow: 0 10px 28px rgba(61, 44, 204, .32);
+      transition: opacity .18s ease, filter .18s ease;
+    }
+    .tbx-value-ribbon span {
+      color: #07111b;
+      font-size: .67rem;
+      font-weight: 900;
+      letter-spacing: .08em;
+    }
+    .tbx-pricing[data-cadence="month"] .tbx-value-ribbon { opacity: .32; filter: saturate(.3); }
+    .tbx-card-copy {
+      display: flex;
+      flex-direction: column;
+      padding: 92px 42px 36px;
+      border-right: 1px solid var(--tbx-border-soft);
+    }
+    .tbx-plan-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+    .tbx-plan-kicker {
+      color: #a59bff;
+      font-size: .7rem;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    .tbx-card h2 { margin: 3px 0 0; font-size: 1.65rem; letter-spacing: -.025em; }
+    .tbx-plan-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 10px;
+      border: 1px solid rgba(94, 231, 194, .22);
+      border-radius: 999px;
+      color: var(--tbx-mint);
+      background: rgba(34, 121, 105, .1);
+      font-size: .72rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .tbx-plan-status::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 10px currentColor;
+    }
+    .tbx-card .desc { color: var(--tbx-muted); margin: 10px 0 22px; font-size: .93rem; }
+    .tbx-price-wrap { min-height: 86px; }
+    .tbx-price {
+      font-size: clamp(2.75rem, 5vw, 4.15rem);
+      font-weight: 780;
+      letter-spacing: -.055em;
+      line-height: 1;
+    }
+    .tbx-price .cadence {
+      margin-left: 5px;
+      font-size: 1rem;
+      font-weight: 600;
+      letter-spacing: -.01em;
+      color: var(--tbx-muted);
+    }
+    .tbx-price.loading { padding-top: 18px; color: var(--tbx-muted); font-size: 1rem; font-weight: 600; letter-spacing: 0; }
+    .tbx-price-note { min-height: 1.2em; margin: 8px 0 0; color: var(--tbx-muted); font-size: .84rem; }
+    .tbx-price-note strong { color: var(--tbx-mint); font-weight: 750; }
+    .tbx-trial-pill {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: max-content;
+      margin: 20px 0 8px;
+      padding: 8px 12px 8px 9px;
+      border: 1px solid rgba(94, 231, 194, .24);
+      border-radius: 11px;
+      color: var(--tbx-mint);
+      background: linear-gradient(90deg, rgba(16, 104, 91, .17), rgba(16, 104, 91, .06));
+    }
+    .tbx-trial-pill svg { width: 25px; height: 25px; padding: 5px; border-radius: 7px; background: rgba(94, 231, 194, .12); }
+    .tbx-trial-pill span { display: grid; gap: 1px; line-height: 1.15; }
+    .tbx-trial-pill strong { font-size: .82rem; }
+    .tbx-trial-pill small { color: var(--tbx-muted); font-size: .66rem; }
+    .tbx-features { list-style: none; padding: 0; margin: 14px 0 24px; flex: 1; }
+    .tbx-features li {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      min-height: 45px;
+      padding: 7px 0;
+      border-bottom: 1px solid rgba(148, 163, 184, .1);
+      font-size: .83rem;
+      line-height: 1.35;
+    }
+    .tbx-features li:last-child { border-bottom: 0; }
+    .tbx-feature-icon {
+      display: grid;
+      place-items: center;
+      flex: 0 0 32px;
+      height: 32px;
+      border: 1px solid rgba(132, 116, 255, .28);
+      border-radius: 9px;
+      color: #aa9fff;
+      background: linear-gradient(135deg, rgba(101, 80, 255, .2), rgba(32, 40, 74, .44));
+    }
+    .tbx-feature-icon svg { width: 17px; height: 17px; }
     .tbx-cta {
-      border: 0; border-radius: 10px; background: var(--tbx-accent); color: var(--tbx-accent-fg);
-      font: inherit; font-weight: 600; font-size: 1rem; padding: 13px 20px; cursor: pointer; width: 100%;
-      transition: filter .15s ease;
+      position: relative;
+      overflow: hidden;
+      width: 100%;
+      min-height: 54px;
+      border: 1px solid rgba(157, 145, 255, .5);
+      border-radius: 12px;
+      background: linear-gradient(100deg, #5747f5, #6d54ff 55%, #704dff);
+      color: var(--tbx-accent-fg);
+      box-shadow: 0 14px 30px rgba(68, 43, 222, .32), inset 0 1px 0 rgba(255, 255, 255, .18);
+      cursor: pointer;
+      font: inherit;
+      font-weight: 750;
+      font-size: .98rem;
+      padding: 14px 20px;
+      transition: transform .18s ease, filter .18s ease, box-shadow .18s ease;
     }
-    .tbx-cta:hover { filter: brightness(1.08); }
+    .tbx-cta::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      transform: translateX(-110%);
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .18), transparent);
+      transition: transform .55s ease;
+    }
+    .tbx-cta:hover { filter: brightness(1.08); transform: translateY(-1px); box-shadow: 0 18px 34px rgba(68, 43, 222, .42); }
+    .tbx-cta:hover::before { transform: translateX(110%); }
     .tbx-cta:disabled { opacity: .55; cursor: not-allowed; }
-    .tbx-error { text-align: center; color: #dc2626; margin-top: 16px; font-size: .9rem; min-height: 1.1em; }
+    .tbx-fine-print { margin: 11px 0 0; text-align: center; color: #7f8ba6; font-size: .7rem; }
+    .tbx-error {
+      min-height: 1.1em;
+      margin-top: 16px;
+      color: #ff9baf;
+      text-align: center;
+      font-size: .86rem;
+    }
+
+    .tbx-product-visual {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      min-height: 100%;
+      padding: 54px 36px 70px;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 50% 48%, rgba(99, 70, 255, .2), transparent 43%),
+        linear-gradient(135deg, rgba(25, 33, 67, .34), rgba(10, 14, 32, .12));
+    }
+    .tbx-product-visual::before {
+      content: "";
+      position: absolute;
+      width: 420px;
+      height: 420px;
+      border: 1px solid rgba(104, 83, 255, .14);
+      border-radius: 50%;
+      box-shadow: 0 0 0 56px rgba(98, 73, 255, .025), 0 0 0 112px rgba(98, 73, 255, .018);
+    }
+    .tbx-visual-features {
+      position: relative;
+      z-index: 4;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 9px;
+      width: min(100%, 500px);
+    }
+    .tbx-visual-feature {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 58px;
+      padding: 9px 10px;
+      border: 1px solid rgba(139, 124, 255, .25);
+      border-radius: 11px;
+      color: #e8ebfa;
+      background: linear-gradient(145deg, rgba(37, 46, 83, .8), rgba(18, 24, 48, .88));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04), 0 10px 24px rgba(0, 0, 0, .16);
+      font-size: .69rem;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+    .tbx-visual-feature svg {
+      flex: 0 0 32px;
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      color: #afa4ff;
+      background: none;
+    }
+    .tbx-visual-feature:first-child {
+      border-color: transparent;
+      background:
+        linear-gradient(145deg, #252e53, #121830) padding-box,
+        linear-gradient(120deg, var(--tbx-accent), var(--tbx-accent-2), var(--tbx-mint), var(--tbx-accent)) border-box;
+      background-size: 100% 100%, 260% 260%;
+      animation: tbx-ai-feature-border 4s ease-in-out infinite;
+    }
+    .tbx-visual-feature:nth-child(2) svg { color: var(--tbx-mint); }
+    .tbx-visual-feature:nth-child(3) svg { color: #68b5ff; }
+    @keyframes tbx-ai-feature-border {
+      0%, 100% { background-position: 0 0, 0% 50%; }
+      50% { background-position: 0 0, 100% 50%; }
+    }
+    .tbx-browser-window {
+      position: relative;
+      z-index: 2;
+      width: min(100%, 460px);
+      min-height: 330px;
+      border: 1px solid rgba(144, 130, 255, .42);
+      border-radius: 18px;
+      background: rgba(14, 21, 43, .94);
+      box-shadow: 0 28px 60px rgba(0, 0, 0, .42), inset 0 1px 0 rgba(255, 255, 255, .06);
+      transform: perspective(1000px) rotateY(-4deg) rotateX(1deg);
+    }
+    .tbx-browser-bar {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      height: 45px;
+      padding: 0 14px;
+      border-bottom: 1px solid rgba(148, 163, 184, .13);
+    }
+    .tbx-browser-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .tbx-browser-dot.red { background: #ff7a8a; }
+    .tbx-browser-dot.yellow { background: #f9ca64; }
+    .tbx-browser-dot.green { background: #5bd59a; }
+    .tbx-mini-tabs { display: flex; gap: 5px; margin-left: 11px; }
+    .tbx-mini-tab {
+      display: grid;
+      place-items: center;
+      width: 31px;
+      height: 23px;
+      border: 1px solid rgba(139, 124, 255, .18);
+      border-radius: 7px;
+      background: rgba(70, 82, 132, .19);
+    }
+    .tbx-mini-tab::before { content: ""; width: 7px; height: 7px; border-radius: 2px; background: #6d5cff; box-shadow: 0 0 8px rgba(109, 92, 255, .58); }
+    .tbx-mini-tab:nth-child(2)::before { background: #5ee7c2; box-shadow: 0 0 8px rgba(94, 231, 194, .55); }
+    .tbx-mini-tab:nth-child(3)::before { background: #5ba6ff; }
+    .tbx-mini-tab:nth-child(4)::before { background: #f2b94b; }
+    .tbx-folder-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; padding: 22px; }
+    .tbx-folder-card {
+      min-height: 105px;
+      padding: 20px 15px 13px;
+      border: 1px solid rgba(140, 129, 226, .18);
+      border-radius: 13px;
+      background: linear-gradient(145deg, rgba(33, 45, 81, .72), rgba(20, 27, 52, .82));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025);
+    }
+    .tbx-folder-shape {
+      position: relative;
+      width: 40px;
+      height: 29px;
+      margin-bottom: 11px;
+      border-radius: 5px;
+      background: linear-gradient(135deg, #856dff, #5545db);
+      box-shadow: 0 6px 12px rgba(67, 43, 199, .24);
+    }
+    .tbx-folder-shape::before {
+      content: "";
+      position: absolute;
+      left: 3px;
+      top: -5px;
+      width: 16px;
+      height: 7px;
+      border-radius: 4px 4px 0 0;
+      background: #9a87ff;
+    }
+    .tbx-folder-card:nth-child(2) .tbx-folder-shape { background: linear-gradient(135deg, #52b8ff, #3477e0); }
+    .tbx-folder-card:nth-child(2) .tbx-folder-shape::before { background: #6ec7ff; }
+    .tbx-folder-card:nth-child(3) .tbx-folder-shape { background: linear-gradient(135deg, #68d5a0, #36a874); }
+    .tbx-folder-card:nth-child(3) .tbx-folder-shape::before { background: #83e3b4; }
+    .tbx-folder-card:nth-child(4) .tbx-folder-shape { background: linear-gradient(135deg, #f4c15b, #d99429); }
+    .tbx-folder-card:nth-child(4) .tbx-folder-shape::before { background: #ffd372; }
+    .tbx-folder-card strong { display: block; color: #e8ebfa; font-size: .76rem; }
+    .tbx-folder-card small { color: #75829f; font-size: .65rem; }
+    .tbx-collaborators {
+      position: absolute;
+      z-index: 3;
+      right: 4%;
+      top: 47%;
+      display: grid;
+      gap: 28px;
+    }
+    .tbx-avatar {
+      display: grid;
+      place-items: center;
+      width: 46px;
+      height: 46px;
+      border: 2px solid #846fff;
+      border-radius: 50%;
+      color: #fff;
+      background: linear-gradient(145deg, #b57bff, #6448ce);
+      box-shadow: 0 0 0 5px rgba(101, 79, 228, .1), 0 10px 22px rgba(0, 0, 0, .3);
+      font-size: .72rem;
+      font-weight: 850;
+    }
+    .tbx-avatar:last-child { border-color: #5ee7c2; background: linear-gradient(145deg, #5cc9c3, #287580); }
+    .tbx-sync-orbit {
+      position: absolute;
+      z-index: 3;
+      left: 14%;
+      right: 11%;
+      bottom: 37px;
+      height: 58px;
+      border-bottom: 1px dashed rgba(119, 97, 255, .74);
+      border-radius: 0 0 50% 50%;
+    }
+    .tbx-sync-orbit::before,
+    .tbx-sync-orbit::after {
+      content: "";
+      position: absolute;
+      bottom: -4px;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #bdb4ff;
+      box-shadow: 0 0 10px #7363ff;
+    }
+    .tbx-sync-orbit::before { left: 2%; }
+    .tbx-sync-orbit::after { right: 2%; }
+    .tbx-sync-cloud {
+      position: absolute;
+      left: 50%;
+      bottom: -9px;
+      display: grid;
+      place-items: center;
+      width: 66px;
+      height: 40px;
+      transform: translateX(-50%);
+      border: 1px solid rgba(157, 143, 255, .7);
+      border-radius: 22px;
+      color: #d8d2ff;
+      background: #29205f;
+      box-shadow: 0 0 26px rgba(93, 71, 228, .32);
+    }
+    .tbx-sync-cloud svg { width: 27px; height: 27px; }
+    @media (max-width: 900px) {
+      .tbx-card { grid-template-columns: 1fr; }
+      .tbx-card-copy { border-right: 0; border-bottom: 1px solid var(--tbx-border-soft); }
+      .tbx-product-visual { min-height: 560px; }
+    }
+    @media (max-width: 560px) {
+      .tbx-pricing { min-height: 0; padding: 38px 12px 48px; }
+      .tbx-toggle { min-width: 0; width: min(100%, 330px); }
+      .tbx-toggle button { padding-inline: 13px; }
+      .tbx-card { border-radius: 20px; }
+      .tbx-value-ribbon { display: none; }
+      .tbx-card-copy { padding: 48px 22px 28px; }
+      .tbx-plan-status { display: none; }
+      .tbx-product-visual { min-height: 500px; padding: 42px 18px 58px; }
+      .tbx-visual-features { gap: 6px; }
+      .tbx-visual-feature { min-height: 54px; padding: 7px; font-size: .61rem; }
+      .tbx-visual-feature svg { flex-basis: 28px; width: 28px; height: 28px; }
+      .tbx-browser-window { min-height: 286px; transform: none; }
+      .tbx-folder-grid { gap: 9px; padding: 16px; }
+      .tbx-folder-card { min-height: 88px; padding: 16px 11px 10px; }
+      .tbx-collaborators { right: 1%; }
+      .tbx-avatar { width: 39px; height: 39px; }
+      .tbx-sync-orbit { left: 8%; right: 8%; bottom: 27px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .tbx-pricing *, .tbx-pricing *::before, .tbx-pricing *::after {
+        scroll-behavior: auto !important;
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+      }
+    }
   </style>
 
-  <div class="tbx-head">
-    <h1>Upgrade to Tabox Pro</h1>
-    <p>Prices shown in your local currency. Cancel anytime.</p>
-  </div>
-
-  <div class="tbx-toggle-wrap">
-    <div class="tbx-toggle" role="group" aria-label="Billing period">
-      <button type="button" data-cadence="month" aria-pressed="true">Monthly</button>
-      <button type="button" data-cadence="year" aria-pressed="false">Yearly</button>
+  <div class="tbx-inner">
+    <div class="tbx-head">
+      <h1>Upgrade to Tabox Pro</h1>
+      <p>Turn tab chaos into organized focus.</p>
     </div>
-  </div>
-  <span class="tbx-save" id="tbx-save"></span>
 
-  <div class="tbx-grid" id="tbx-grid"></div>
-  <div class="tbx-error" id="tbx-error"></div>
+    <div class="tbx-toggle-wrap">
+      <div class="tbx-toggle" role="group" aria-label="Billing period">
+        <button type="button" data-cadence="month" aria-pressed="false">Monthly</button>
+        <button type="button" data-cadence="year" aria-pressed="true">
+          <span class="tbx-annual-label">Annual</span>
+          <span class="tbx-toggle-badge">BEST VALUE</span>
+        </button>
+      </div>
+      <span class="tbx-save" id="tbx-save" aria-live="polite">Our best price</span>
+    </div>
+
+    <div class="tbx-grid" id="tbx-grid"></div>
+    <div class="tbx-error" id="tbx-error" role="status" aria-live="polite"></div>
+  </div>
 
   <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
   <script>
@@ -122,7 +584,8 @@
     var grid = document.getElementById("tbx-grid");
     var errorEl = document.getElementById("tbx-error");
     var saveEl = document.getElementById("tbx-save");
-    var cadence = "month";
+    var cadence = "year";
+    root.setAttribute("data-cadence", cadence);
     // priceId -> { formattedTotal }  (whatever Paddle returns; we never re-format)
     var previews = {};
 
@@ -150,6 +613,80 @@
       return (typeof e === "string" && e.indexOf("@") > 0) ? e : null;
     }
 
+    var featureIcons = [
+      '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m12 2 1.6 5.1L19 9l-5.4 1.9L12 16l-1.6-5.1L5 9l5.4-1.9L12 2Zm6.5 12 .8 2.7 2.7.8-2.7.8-.8 2.7-.8-2.7-2.7-.8 2.7-.8.8-2.7Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>',
+      '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm8-1a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5ZM3 19v-2a4 4 0 0 1 4-4h2a4 4 0 0 1 4 4v2H3Zm11-6h1.5a3.5 3.5 0 0 1 3.5 3.5V19h-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m9.5 14.5 5-5M7.8 17.2l-1 1a3.5 3.5 0 0 1-5-5l3.4-3.4a3.5 3.5 0 0 1 5 0M16.2 6.8l1-1a3.5 3.5 0 1 1 5 5l-3.4 3.4a3.5 3.5 0 0 1-5 0" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
+      '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 18.5H5.5a3.5 3.5 0 0 1-.4-7A6 6 0 0 1 16.7 9a4.5 4.5 0 0 1 .8 9H17M9 16l3-3 3 3m-3-3v8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    ];
+
+    function productVisualMarkup() {
+      return '' +
+        '<div class="tbx-product-visual" aria-hidden="true">' +
+          '<div class="tbx-visual-features">' +
+            '<div class="tbx-visual-feature">' + featureIcons[0] + '<span>Tabox AI</span></div>' +
+            '<div class="tbx-visual-feature">' + featureIcons[1] + '<span>Shared folders</span></div>' +
+            '<div class="tbx-visual-feature">' + featureIcons[2] + '<span>Share collections via link</span></div>' +
+          '</div>' +
+          '<div class="tbx-collaborators"><span class="tbx-avatar">AM</span><span class="tbx-avatar">JG</span></div>' +
+          '<div class="tbx-browser-window">' +
+            '<div class="tbx-browser-bar">' +
+              '<span class="tbx-browser-dot red"></span><span class="tbx-browser-dot yellow"></span><span class="tbx-browser-dot green"></span>' +
+              '<div class="tbx-mini-tabs"><span class="tbx-mini-tab"></span><span class="tbx-mini-tab"></span><span class="tbx-mini-tab"></span><span class="tbx-mini-tab"></span></div>' +
+            '</div>' +
+            '<div class="tbx-folder-grid">' +
+              '<div class="tbx-folder-card"><div class="tbx-folder-shape"></div><strong>Research</strong><small>32 tabs</small></div>' +
+              '<div class="tbx-folder-card"><div class="tbx-folder-shape"></div><strong>Work</strong><small>18 tabs</small></div>' +
+              '<div class="tbx-folder-card"><div class="tbx-folder-shape"></div><strong>Inspiration</strong><small>24 tabs</small></div>' +
+              '<div class="tbx-folder-card"><div class="tbx-folder-shape"></div><strong>Projects</strong><small>27 tabs</small></div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="tbx-sync-orbit"><span class="tbx-sync-cloud">' +
+            '<svg viewBox="0 0 24 24" fill="none"><path d="M7.5 8A6 6 0 0 1 18 10l2-1m-2 1-1-2M16.5 16A6 6 0 0 1 6 14l-2 1m2-1 1 2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+          '</span></div>' +
+        '</div>';
+    }
+
+    // Build one card per tier.
+    TIERS.forEach(function (tier, i) {
+      var card = document.createElement("div");
+      card.className = "tbx-card" + (tier.highlighted ? " highlighted" : "");
+      card.innerHTML =
+        '<div class="tbx-value-ribbon" aria-hidden="true"><span>BEST VALUE</span></div>' +
+        '<section class="tbx-card-copy" aria-labelledby="tbx-plan-' + i + '">' +
+          '<div class="tbx-plan-top"><div><span class="tbx-plan-kicker">Everything unlocked</span><h2 id="tbx-plan-' + i + '"></h2></div><span class="tbx-plan-status">Annual plan</span></div>' +
+          '<p class="desc"></p>' +
+          '<div class="tbx-price-wrap">' +
+            '<div class="tbx-price loading" data-tier="' + i + '" aria-live="polite">Loading local price...</div>' +
+            '<p class="tbx-price-note" data-tier="' + i + '"><strong>Best value</strong> &middot; billed yearly</p>' +
+          '</div>' +
+          '<div class="tbx-trial-pill">' +
+            '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3 20 6v5c0 5-3.3 8.5-8 10-4.7-1.5-8-5-8-10V6l8-3Zm-3 9 2 2 4-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+            '<span><strong>7-day free trial</strong><small>No charge today</small></span>' +
+          '</div>' +
+          '<ul class="tbx-features"></ul>' +
+          '<button class="tbx-cta" data-tier="' + i + '" disabled>Start free trial</button>' +
+          '<p class="tbx-fine-print">Cancel anytime &middot; Prices shown in your local currency</p>' +
+        '</section>' +
+        productVisualMarkup();
+      card.querySelector("h2").textContent = tier.name;
+      card.querySelector(".desc").textContent = tier.description;
+      var ul = card.querySelector(".tbx-features");
+      (tier.features || []).forEach(function (f, featureIndex) {
+        var li = document.createElement("li");
+        var icon = document.createElement("span");
+        var label = document.createElement("span");
+        icon.className = "tbx-feature-icon";
+        icon.innerHTML = featureIcons[featureIndex % featureIcons.length];
+        label.textContent = f;
+        li.appendChild(icon);
+        li.appendChild(label);
+        ul.appendChild(li);
+      });
+      card.querySelector(".tbx-cta").addEventListener("click", function () { openCheckout(tier); });
+      grid.appendChild(card);
+    });
+
     if (typeof Paddle === "undefined") { showError("Could not load Paddle. Please refresh."); return; }
 
     // Environment must be explicit. Production is Paddle.js's default; set sandbox only when asked.
@@ -160,26 +697,6 @@
       return;
     }
     Paddle.Initialize({ token: PADDLE_CLIENT_TOKEN });
-
-    // Build one card per tier.
-    TIERS.forEach(function (tier, i) {
-      var card = document.createElement("div");
-      card.className = "tbx-card" + (tier.highlighted ? " highlighted" : "");
-      card.innerHTML =
-        '<h2></h2>' +
-        '<p class="desc"></p>' +
-        '<div class="tbx-price loading" data-tier="' + i + '">Loading price...</div>' +
-        '<ul class="tbx-features"></ul>' +
-        '<button class="tbx-cta" data-tier="' + i + '" disabled>Subscribe</button>';
-      card.querySelector("h2").textContent = tier.name;
-      card.querySelector(".desc").textContent = tier.description;
-      var ul = card.querySelector(".tbx-features");
-      (tier.features || []).forEach(function (f) {
-        var li = document.createElement("li"); li.textContent = f; ul.appendChild(li);
-      });
-      card.querySelector(".tbx-cta").addEventListener("click", function () { openCheckout(tier); });
-      grid.appendChild(card);
-    });
 
     function openCheckout(tier) {
       var priceId = tier.priceId[cadence];
@@ -232,6 +749,8 @@
     function render() {
       TIERS.forEach(function (tier, i) {
         var priceEl = grid.querySelector('.tbx-price[data-tier="' + i + '"]');
+        var noteEl = grid.querySelector('.tbx-price-note[data-tier="' + i + '"]');
+        var statusEl = grid.querySelector(".tbx-plan-status");
         var cta = grid.querySelector('.tbx-cta[data-tier="' + i + '"]');
         var formatted = previews[tier.priceId[cadence]];
         if (formatted) {
@@ -242,19 +761,26 @@
           cad.className = "cadence";
           cad.textContent = cadence === "month" ? " / month" : " / year";
           priceEl.appendChild(amount); priceEl.appendChild(cad);
+          noteEl.innerHTML = cadence === "year"
+            ? "<strong>Best value</strong> &middot; billed yearly"
+            : "Flexible billing &middot; billed monthly";
+          statusEl.textContent = cadence === "year" ? "Annual plan" : "Monthly plan";
           cta.disabled = false;
         } else {
           priceEl.classList.add("loading");
           priceEl.textContent = "Unavailable";
+          noteEl.textContent = "Price unavailable for this billing period";
           cta.disabled = true;
         }
       });
+      saveEl.textContent = cadence === "year" ? "Our best price" : "Choose annual for the best value";
     }
 
     // Billing-period toggle.
     root.querySelectorAll(".tbx-toggle button").forEach(function (btn) {
       btn.addEventListener("click", function () {
         cadence = btn.getAttribute("data-cadence");
+        root.setAttribute("data-cadence", cadence);
         root.querySelectorAll(".tbx-toggle button").forEach(function (b) {
           b.setAttribute("aria-pressed", String(b === btn));
         });

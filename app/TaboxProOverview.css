@@ -1,4 +1,4 @@
-html.fullpage-mode .fp-pro-overview {
+:is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-overview {
     display: flex;
     flex: 1;
     flex-direction: column;
@@ -6,7 +6,7 @@ html.fullpage-mode .fp-pro-overview {
     min-width: 0;
 }
 
-html.fullpage-mode .fp-pro-status-pill {
+:is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-status-pill {
     display: inline-flex;
     align-items: center;
     align-self: flex-start;
@@ -20,12 +20,12 @@ html.fullpage-mode .fp-pro-status-pill {
     box-shadow: var(--fp-shadow-sm);
 }
 
-html.fullpage-mode .fp-pro-status-pill svg {
+:is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-status-pill svg {
     width: 17px;
     height: 17px;
 }
 
-html.fullpage-mode .fp-pro-status-pill strong {
+:is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-status-pill strong {
     color: var(--color-text);
     font-size: 12px;
     font-weight: 700;
@@ -46,18 +46,18 @@ html.fullpage-mode .fp-pro-status-pill strong {
     border: 0;
 }
 
-html.fullpage-mode .fp-pro-overview-layout {
+:is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-overview-layout {
     display: grid;
     grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr);
     gap: 32px;
     min-height: 0;
 }
 
-html.fullpage-mode .fp-pro-benefits {
+:is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-benefits {
     min-width: 0;
 }
 
-html.fullpage-mode .fp-pro-benefits > h4 {
+:is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-benefits > h4 {
     margin: 8px 0 24px;
     color: var(--color-text);
     font-family: var(--fp-font-display);
@@ -66,7 +66,7 @@ html.fullpage-mode .fp-pro-benefits > h4 {
     line-height: 1.2;
 }
 
-html.fullpage-mode .fp-pro-benefit-list {
+:is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-benefit-list {
     display: flex;
     flex-direction: column;
     margin: 0;
@@ -74,7 +74,7 @@ html.fullpage-mode .fp-pro-benefit-list {
     list-style: none;
 }
 
-html.fullpage-mode .fp-pro-benefit {
+:is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-benefit {
     display: grid;
     grid-template-columns: 60px minmax(0, 1fr) 22px;
     align-items: center;
@@ -84,11 +84,11 @@ html.fullpage-mode .fp-pro-benefit {
     border-bottom: 1px solid var(--color-border);
 }
 
-html.fullpage-mode .fp-pro-benefit:last-child {
+:is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-benefit:last-child {
     border-bottom: 0;
 }
 
-html.fullpage-mode .fp-pro-benefit-icon {
+:is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-benefit-icon {
     display: grid;
     width: 58px;
     height: 58px;
@@ -101,37 +101,37 @@ html.fullpage-mode .fp-pro-benefit-icon {
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
-html.fullpage-mode .fp-pro-benefit-icon.is-ai {
+:is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-benefit-icon.is-ai {
     border-color: rgba(139, 92, 246, 0.42);
     background: rgba(124, 58, 237, 0.14);
     color: #9b7cf8;
 }
 
-html.fullpage-mode .fp-pro-benefit-icon.is-control {
+:is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-benefit-icon.is-control {
     background: rgba(37, 99, 235, 0.1);
 }
 
-html.fullpage-mode .fp-pro-benefit-copy {
+:is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-benefit-copy {
     display: flex;
     flex-direction: column;
     gap: 7px;
     min-width: 0;
 }
 
-html.fullpage-mode .fp-pro-benefit-copy strong {
+:is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-benefit-copy strong {
     color: var(--color-text);
     font-family: var(--fp-font-display);
     font-size: 19px;
     line-height: 1.3;
 }
 
-html.fullpage-mode .fp-pro-benefit-copy > span {
+:is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-benefit-copy > span {
     color: var(--color-text-muted);
     font-size: 14px;
     line-height: 1.5;
 }
 
-html.fullpage-mode .fp-pro-benefit-check {
+:is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-benefit-check {
     display: grid;
     width: 20px;
     height: 20px;
@@ -142,7 +142,7 @@ html.fullpage-mode .fp-pro-benefit-check {
     font-size: 14px;
 }
 
-html.fullpage-mode .fp-pro-offer-card {
+:is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-offer-card {
     position: relative;
     display: flex;
     flex-direction: column;
@@ -160,7 +160,7 @@ html.fullpage-mode .fp-pro-offer-card {
     box-shadow: var(--fp-shadow-lg);
 }
 
-html.fullpage-mode .fp-pro-offer-icon {
+:is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-offer-icon {
     display: grid;
     align-self: center;
     width: 54px;
@@ -173,7 +173,15 @@ html.fullpage-mode .fp-pro-offer-icon {
     box-shadow: 0 10px 28px rgba(22, 152, 226, 0.28);
 }
 
-html.fullpage-mode .fp-pro-offer-card > h4 {
+.fp-pro-offer-kicker {
+    display: none;
+}
+
+.fp-pro-upgrade-arrow {
+    display: none;
+}
+
+:is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-offer-card > h4 {
     margin: 0 0 2px;
     background: linear-gradient(110deg, #7eb6ff, #369af0 55%, #8179f4);
     background-clip: text;
@@ -187,18 +195,18 @@ html.fullpage-mode .fp-pro-offer-card > h4 {
     -webkit-text-fill-color: transparent;
 }
 
-html.fullpage-mode .fp-pro-pricing {
+:is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-pricing {
     display: flex;
     flex-direction: column;
 }
 
-html.fullpage-mode .fp-pro-prices {
+:is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-prices {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
 }
 
-html.fullpage-mode .fp-pro-price {
+:is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-price {
     display: flex;
     position: relative;
     flex-direction: column;
@@ -214,19 +222,19 @@ html.fullpage-mode .fp-pro-price {
     text-align: center;
 }
 
-html.fullpage-mode .fp-pro-price strong {
+:is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-price strong {
     color: var(--color-text);
     font-size: 16px;
     line-height: 1.3;
 }
 
-html.fullpage-mode .fp-pro-price > span:not(.fp-pro-savings) {
+:is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-price > span:not(.fp-pro-savings) {
     color: var(--color-text-muted);
     font-size: 13px;
     line-height: 1.4;
 }
 
-html.fullpage-mode .fp-pro-savings {
+:is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-savings {
     display: inline-flex;
     position: absolute;
     top: 4px;
@@ -246,7 +254,8 @@ html.fullpage-mode .fp-pro-savings {
     white-space: nowrap;
 }
 
-html.fullpage-mode .fp-settings-modal-shell .fp-pro-upgrade-button {
+html.fullpage-mode .fp-settings-modal-shell .fp-pro-upgrade-button,
+.fp-settings-modal-shell--popup .fp-pro-upgrade-button {
     display: flex;
     flex-wrap: nowrap;
     gap: 6px;
@@ -260,11 +269,11 @@ html.fullpage-mode .fp-settings-modal-shell .fp-pro-upgrade-button {
     white-space: nowrap;
 }
 
-html.fullpage-mode .fp-pro-upgrade-button svg {
+:is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-upgrade-button svg {
     flex: 0 0 auto;
 }
 
-html.fullpage-mode .fp-pro-offer-note {
+:is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-offer-note {
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -274,20 +283,217 @@ html.fullpage-mode .fp-pro-offer-note {
     text-align: center;
 }
 
-html.fullpage-mode .fp-pro-offer-card .ai-unavailable-warning {
+:is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-offer-card .ai-unavailable-warning {
     margin: -2px 0 0;
 }
 
 @media (max-width: 760px) {
-    html.fullpage-mode .fp-pro-overview-layout {
+    :is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-overview-layout {
         grid-template-columns: 1fr;
     }
 
-    html.fullpage-mode .fp-pro-benefit {
+    :is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-benefit {
         min-height: 96px;
     }
 
-    html.fullpage-mode .fp-pro-offer-card {
+    :is(html.fullpage-mode, .fp-settings-modal-shell--popup) .fp-pro-offer-card {
         width: auto;
     }
+}
+
+.fp-settings-modal-shell--popup .fp-pro-overview.fp-pro-overview--compact {
+    gap: 10px;
+}
+
+.fp-settings-modal-shell--popup .fp-pro-overview--compact .fp-pro-status-pill {
+    gap: 7px;
+    padding: 6px 10px;
+}
+
+.fp-settings-modal-shell--popup .fp-pro-overview--compact .fp-pro-overview-layout {
+    grid-template-columns: 1fr;
+    gap: 12px;
+}
+
+.fp-settings-modal-shell--popup .fp-pro-overview--compact .fp-pro-benefits > h4 {
+    margin: 0 0 8px;
+    font-size: 14px;
+    letter-spacing: 0.01em;
+}
+
+.fp-settings-modal-shell--popup .fp-pro-overview--compact .fp-pro-benefit-list {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.fp-settings-modal-shell--popup .fp-pro-overview--compact .fp-pro-benefit,
+.fp-settings-modal-shell--popup .fp-pro-overview--compact .fp-pro-benefit:last-child {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 7px;
+    min-height: 92px;
+    padding: 9px;
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    background: linear-gradient(145deg, var(--color-surface), var(--color-surface-muted));
+}
+
+.fp-settings-modal-shell--popup .fp-pro-overview--compact .fp-pro-benefit-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    font-size: 16px;
+}
+
+.fp-settings-modal-shell--popup .fp-pro-overview--compact .fp-pro-benefit-copy {
+    gap: 3px;
+}
+
+.fp-settings-modal-shell--popup .fp-pro-overview--compact .fp-pro-benefit-copy strong {
+    font-size: 12px;
+    line-height: 1.25;
+}
+
+.fp-settings-modal-shell--popup .fp-pro-overview--compact .fp-pro-benefit-copy > span {
+    font-size: 9.5px;
+    line-height: 1.3;
+}
+
+.fp-settings-modal-shell--popup .fp-pro-overview--compact .fp-pro-benefit-check {
+    display: none;
+}
+
+.fp-settings-modal-shell--popup .fp-pro-overview--compact .fp-pro-offer-card {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr);
+    gap: 0 12px;
+    width: auto;
+    padding: 14px;
+    border-color: rgba(89, 105, 224, 0.5);
+    border-radius: 16px;
+    background:
+        radial-gradient(circle at 12% 12%, rgba(56, 189, 248, 0.2), transparent 30%),
+        linear-gradient(145deg, var(--color-surface), rgba(99, 102, 241, 0.08));
+    box-shadow: 0 12px 26px rgba(30, 64, 175, 0.15);
+}
+
+.fp-settings-modal-shell--popup .fp-pro-overview--compact .fp-pro-offer-icon {
+    grid-row: 1 / span 2;
+    grid-column: 1;
+    align-self: center;
+    width: 42px;
+    height: 42px;
+    font-size: 22px;
+    box-shadow: 0 8px 20px rgba(22, 152, 226, 0.24);
+}
+
+.fp-settings-modal-shell--popup .fp-pro-overview--compact .fp-pro-offer-kicker {
+    display: block;
+    grid-row: 1;
+    grid-column: 2;
+    align-self: end;
+    color: var(--color-text-muted);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
+.fp-settings-modal-shell--popup .fp-pro-overview--compact .fp-pro-offer-card > h4 {
+    grid-row: 2;
+    grid-column: 2;
+    align-self: start;
+    margin: 1px 0 0;
+    font-size: 27px;
+    line-height: 1.05;
+    text-align: left;
+}
+
+.fp-settings-modal-shell--popup .fp-pro-overview--compact .fp-pro-pricing {
+    grid-column: 1 / -1;
+    margin-top: 12px;
+}
+
+.fp-settings-modal-shell--popup .fp-pro-overview--compact .fp-pro-prices {
+    gap: 8px;
+}
+
+.fp-settings-modal-shell--popup .fp-pro-overview--compact .fp-pro-price {
+    align-items: flex-start;
+    min-height: 62px;
+    gap: 4px;
+    padding: 10px 11px;
+    border-radius: 11px;
+    background: rgba(127, 127, 127, 0.06);
+    text-align: left;
+}
+
+.fp-settings-modal-shell--popup .fp-pro-overview--compact .fp-pro-price.is-yearly {
+    border-color: rgba(99, 102, 241, 0.72);
+    background: linear-gradient(145deg, rgba(59, 130, 246, 0.13), rgba(139, 92, 246, 0.14));
+    box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.1);
+}
+
+.fp-settings-modal-shell--popup .fp-pro-overview--compact .fp-pro-price strong {
+    font-size: 13px;
+}
+
+.fp-settings-modal-shell--popup .fp-pro-overview--compact .fp-pro-price > span:not(.fp-pro-savings) {
+    font-size: 11px;
+}
+
+.fp-settings-modal-shell--popup .fp-pro-overview--compact .fp-pro-savings {
+    top: 6px;
+    right: 6px;
+    min-height: 17px;
+    padding: 1px 6px;
+    transform: none;
+    font-size: 8px;
+    box-shadow: none;
+}
+
+.fp-settings-modal-shell--popup .fp-pro-overview--compact .fp-pro-upgrade-button {
+    grid-column: 1 / -1;
+    min-height: 42px;
+    margin: 16px 0 0;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 12px;
+    background: linear-gradient(110deg, #168fe7, #536de8 55%, #7867ee);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 800;
+    box-shadow: 0 9px 20px rgba(54, 91, 218, 0.3);
+    transition: transform 150ms ease, box-shadow 150ms ease, filter 150ms ease;
+}
+
+.fp-settings-modal-shell--popup .fp-pro-overview--compact .fp-pro-upgrade-button:hover {
+    border-radius: 12px;
+    background: linear-gradient(110deg, #249ff4, #6078ef 55%, #8775f5);
+    color: #fff;
+    filter: saturate(1.08);
+    box-shadow: 0 12px 24px rgba(54, 91, 218, 0.36);
+}
+
+.fp-settings-modal-shell--popup .fp-pro-overview--compact .fp-pro-upgrade-button:active {
+    transform: translateY(0);
+    box-shadow: 0 5px 12px rgba(54, 91, 218, 0.26);
+}
+
+.fp-settings-modal-shell--popup .fp-pro-overview--compact .fp-pro-upgrade-arrow {
+    display: block;
+    margin-left: 2px;
+}
+
+.fp-settings-modal-shell--popup .fp-pro-overview--compact .fp-pro-offer-note {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 7px;
+    font-size: 10px;
+    line-height: 1.3;
 }

@@ -6,7 +6,7 @@ import path from 'path';
 import { Provider, createStore } from 'jotai';
 import { browser } from '../static/globals';
 import SettingsMenu from '../app/SettingsMenu';
-import { premiumEntitlementState, manageSubscriptionOpenState } from '../app/atoms/premiumState';
+import { premiumEntitlementState } from '../app/atoms/premiumState';
 import { getAIAvailability } from '../app/ai/aiClient';
 
 const taboxProOverviewCss = fs.readFileSync(path.join(__dirname, '../app/TaboxProOverview.css'), 'utf8');
@@ -44,6 +44,7 @@ const renderSettingsMenu = (premium = null, variant = 'popup') => {
 
 const openSettings = (container) => {
     fireEvent.click(container.querySelector('.settings-button'));
+    fireEvent.click(screen.getByRole('button', { name: 'Tabox Pro' }));
 };
 
 describe('SettingsMenu — Tabox Pro section', () => {
@@ -62,9 +63,9 @@ describe('SettingsMenu — Tabox Pro section', () => {
 
         openSettings(container);
 
-        expect(screen.getByText('Tabox Pro')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Tabox Pro', level: 3 })).toBeInTheDocument();
         expect(screen.getByText('Free plan')).toBeInTheDocument();
-        const upgradeButton = screen.getByRole('button', { name: /upgrade/i });
+        const upgradeButton = screen.getByRole('button', { name: /start free 7-day trial/i });
         expect(upgradeButton).toBeInTheDocument();
 
         fireEvent.click(upgradeButton);
@@ -82,7 +83,7 @@ describe('SettingsMenu — Tabox Pro section', () => {
 
         openSettings(container);
 
-        expect(screen.getByText('Tabox Pro')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Tabox Pro', level: 3 })).toBeInTheDocument();
         expect(screen.getByText(/Active \(Trial\) — ends/)).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /manage subscription/i })).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /upgrade/i })).not.toBeInTheDocument();
@@ -163,8 +164,64 @@ describe('SettingsMenu — Tabox Pro section', () => {
         expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'openProCheckout' });
     });
 
-    test('Manage subscription opens the shared modal via the atom', () => {
-        const { container, store } = renderSettingsMenu({
+    test('uses the compact offer-first Pro layout in the popup', () => {
+        const { container } = renderSettingsMenu(null);
+
+        openSettings(container);
+
+        const style = document.createElement('style');
+        style.textContent = taboxProOverviewCss;
+        document.head.appendChild(style);
+        const layout = document.querySelector('.fp-pro-overview-layout');
+        const benefitList = document.querySelector('.fp-pro-benefit-list');
+        const offerCard = document.querySelector('.fp-pro-offer-card');
+        const popupUpgradeButton = screen.getByRole('button', { name: 'Start free 7-day trial' });
+        const priceCards = document.querySelectorAll('.fp-pro-price');
+        const popupBenefitListRule = taboxProOverviewCss.match(/(?:^|\n)\.fp-settings-modal-shell--popup \.fp-pro-overview--compact \.fp-pro-benefit-list\s*{[^}]+}/)?.[0] || '';
+        const popupOfferRule = taboxProOverviewCss.match(/(?:^|\n)\.fp-settings-modal-shell--popup \.fp-pro-overview--compact \.fp-pro-offer-card\s*{[^}]+}/)?.[0] || '';
+        const popupYearlyRule = taboxProOverviewCss.match(/(?:^|\n)\.fp-settings-modal-shell--popup \.fp-pro-overview--compact \.fp-pro-price\.is-yearly\s*{[^}]+}/)?.[0] || '';
+        const popupCtaRule = taboxProOverviewCss.match(/(?:^|\n)\.fp-settings-modal-shell--popup \.fp-pro-overview--compact \.fp-pro-upgrade-button\s*{[^}]+}/)?.[0] || '';
+
+        expect(layout.firstElementChild).toHaveClass('fp-pro-offer-card');
+        expect(layout.lastElementChild).toHaveClass('fp-pro-benefits');
+        expect(screen.getByRole('heading', { name: 'Everything included' })).toBeInTheDocument();
+        expect(screen.getByText('Group, rename & clean up')).toBeInTheDocument();
+        expect(priceCards[1]).toHaveClass('is-yearly');
+        expect(popupBenefitListRule).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))');
+        expect(popupOfferRule).toContain('grid-template-columns: 42px minmax(0, 1fr)');
+        expect(popupYearlyRule).toContain('linear-gradient');
+        expect(popupCtaRule).toContain('linear-gradient');
+        expect(popupCtaRule).toContain('box-shadow');
+        expect(popupCtaRule).toContain('margin: 16px 0 0');
+        expect(popupUpgradeButton).toBeInTheDocument();
+        expect(window.getComputedStyle(offerCard).display).toBe('grid');
+        expect(window.getComputedStyle(benefitList).display).toBe('grid');
+        expect(window.getComputedStyle(benefitList).gridTemplateColumns).toBe('repeat(3, minmax(0, 1fr))');
+        expect(window.getComputedStyle(popupUpgradeButton).marginTop).toBe('16px');
+        expect(window.getComputedStyle(popupUpgradeButton).minHeight).toBe('42px');
+        expect(taboxProOverviewCss).not.toContain(':is(html.fullpage-mode .fp-settings-modal-shell, .fp-settings-modal-shell--popup) .fp-pro-upgrade-button');
+
+        style.remove();
+    });
+
+    test('shows subscription controls inside the popup settings modal', async () => {
+        browser.runtime.sendMessage.mockImplementation(async (message) => {
+            if (message.type === 'proGetSubscription') {
+                return {
+                    ok: true,
+                    data: {
+                        plan: 'monthly',
+                        status: 'active',
+                        next_billed_at: '2026-08-01T00:00:00Z',
+                        current_period_end: '2026-08-01T00:00:00Z',
+                        scheduled_change: null,
+                    },
+                };
+            }
+            return {};
+        });
+
+        const { container } = renderSettingsMenu({
             entitled: true,
             status: 'active',
             plan: 'monthly',
@@ -174,7 +231,9 @@ describe('SettingsMenu — Tabox Pro section', () => {
         openSettings(container);
         fireEvent.click(screen.getByRole('button', { name: /manage subscription/i }));
 
-        expect(store.get(manageSubscriptionOpenState)).toBe(true);
+        const planDetails = await screen.findByText('Tabox Pro — monthly');
+        expect(document.querySelector('.fp-settings-modal-shell--popup')).toContainElement(planDetails);
+        expect(screen.getByRole('button', { name: /back to plan overview/i })).toBeInTheDocument();
     });
 
     test('shows subscription controls inside the full-page settings modal', async () => {
@@ -194,7 +253,7 @@ describe('SettingsMenu — Tabox Pro section', () => {
             return {};
         });
 
-        const { container, store } = renderSettingsMenu({
+        const { container } = renderSettingsMenu({
             entitled: true,
             status: 'active',
             plan: 'monthly',
@@ -212,7 +271,6 @@ describe('SettingsMenu — Tabox Pro section', () => {
         const switchButton = screen.getByRole('button', { name: /switch to annual billing/i });
         const cancelButton = screen.getByRole('button', { name: /^cancel subscription$/i });
         expect(switchButton.closest('.manage-sub-plan-actions')).toContainElement(cancelButton);
-        expect(store.get(manageSubscriptionOpenState)).toBe(false);
     });
 
     test('signed-out free user: Upgrade click signs in then retries checkout', async () => {
@@ -229,10 +287,10 @@ describe('SettingsMenu — Tabox Pro section', () => {
         const { container } = renderSettingsMenu(null);
         openSettings(container);
 
-        const upgradeButton = screen.getByRole('button', { name: /upgrade/i });
+        const upgradeButton = screen.getByRole('button', { name: /start free 7-day trial/i });
         fireEvent.click(upgradeButton);
 
-        await screen.findByText('Tabox Pro');
+        await screen.findByRole('heading', { name: 'Tabox Pro', level: 3 });
         expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'openProCheckout' });
         expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'login' });
         expect(

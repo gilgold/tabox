@@ -67,6 +67,7 @@ import AIToolsModal from './AIToolsModal';
 import ManageSubscriptionModal from './ManageSubscriptionModal';
 import { manageSubscriptionOpenState } from './atoms/premiumState';
 import { usePremiumEntitlement } from './usePremiumEntitlement';
+import useProCheckout from './useProCheckout';
 import NoPermissionModal from './NoPermissionModal';
 import SharedActionConfirmModal from './SharedActionConfirmModal';
 import { noPermissionOpenState, pendingInvitesState, pendingLinkJoinState, shareCollectionLinkModalState, shareFolderModalState } from './atoms/sharedFoldersState';
@@ -255,6 +256,7 @@ let assessMigrationNeeds, executeMigration;
 let timeAgoLocaleInitialized = false;
 function App({ mode = 'popup' }) {
   const isFullPage = mode === 'fullpage';
+  const startProCheckout = useProCheckout();
   const [settingsData, setSettingsData] = useAtom(settingsDataState);
   const setHighlightedCollectionUid = useSetAtom(highlightedCollectionUidState);
   const [themeMode, setThemeMode] = useAtom(themeState);
@@ -2116,6 +2118,10 @@ function App({ mode = 'popup' }) {
     setManageSubscriptionOpen(true);
   }, [setManageSubscriptionOpen]);
 
+  const cmdUpgradeToPro = useCallback(() => {
+    startProCheckout({ ensureLogin: true });
+  }, [startProCheckout]);
+
   const cmdShareFolder = useCallback((folder) => {
     setShareFolderModal(folder);
   }, [setShareFolderModal]);
@@ -2234,6 +2240,7 @@ function App({ mode = 'popup' }) {
       onRestoreSession={cmdRestoreSession}
       onCollectionAction={cmdCollectionAction}
       onOpenAiTool={cmdOpenAiTool}
+      onUpgradeToPro={cmdUpgradeToPro}
       onManageSubscription={cmdManageSubscription}
       onShareFolder={cmdShareFolder}
     />

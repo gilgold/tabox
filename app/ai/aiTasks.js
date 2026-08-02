@@ -44,3 +44,14 @@ export const AI_TOOLS = [
         premium: true,
     },
 ];
+
+// Paywall-only route used by the small sparkle buttons beside name fields.
+// Paid users run the one-shot OpenRouter request in place; free users are sent
+// to this shared upsell without adding a non-runnable card to the AI tools hub.
+export const AI_NAME_SUGGESTION_TOOL = {
+    id: 'name-suggestion',
+    title: 'AI name suggestions',
+    description: 'Generate concise collection and folder names from your tabs.',
+    icon: MdDriveFileRenameOutline,
+    premium: true,
+};

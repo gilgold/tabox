@@ -3,7 +3,8 @@ import { act, fireEvent, render } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { Provider, createStore } from 'jotai';
 import CollectionDetailPanel from '../app/CollectionDetailPanel';
-import { aiProcessingUidsState, aiProcessingCurrentUidState } from '../app/atoms/aiState';
+import { aiProcessingUidsState, aiProcessingCurrentUidState, aiToolsInitialToolState, aiToolsModalOpenState } from '../app/atoms/aiState';
+import { premiumEntitlementState } from '../app/atoms/premiumState';
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
@@ -79,10 +80,12 @@ const baseCollection = {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const renderPanel = async (props = {}, store = undefined) => {
+    const panelStore = store || createStore();
+    panelStore.set(premiumEntitlementState, { entitled: true, refreshedAt: new Date().toISOString() });
     let result;
     await act(async () => {
         result = render(
-            <Provider store={store}>
+            <Provider store={panelStore}>
                 <CollectionDetailPanel
                     collection={baseCollection}
                     isOpen={true}
@@ -135,6 +138,33 @@ describe('CollectionDetailPanel – AI rename button visibility', () => {
         const editBtn = container.querySelector('.panel-edit-btn:not(.panel-ai-rename-btn)');
         fireEvent.click(editBtn);
         expect(getAiBtn(container)).toBeNull();
+    });
+
+    test('free-plan click opens the name-suggestion paywall without calling AI', async () => {
+        const store = createStore();
+        let result;
+        await act(async () => {
+            result = render(
+                <Provider store={store}>
+                    <CollectionDetailPanel
+                        collection={baseCollection}
+                        isOpen={true}
+                        onClose={jest.fn()}
+                        updateCollection={jest.fn()}
+                        removeCollection={jest.fn()}
+                        updateRemoteData={jest.fn()}
+                        addCollection={jest.fn()}
+                        onDataUpdate={jest.fn()}
+                        renderInline={true}
+                    />
+                </Provider>,
+            );
+        });
+
+        fireEvent.click(getAiBtn(result.container));
+        expect(mockSuggestCollectionName).not.toHaveBeenCalled();
+        expect(store.get(aiToolsInitialToolState)).toBe('name-suggestion');
+        expect(store.get(aiToolsModalOpenState)).toBe(true);
     });
 });
 

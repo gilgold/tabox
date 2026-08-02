@@ -40,6 +40,7 @@ const renderSettingsMenu = (variant = 'popup') => {
 
 const openSettings = (container) => {
     fireEvent.click(container.querySelector('.settings-button'));
+    fireEvent.click(screen.getByRole('button', { name: 'Tabox Pro' }));
 };
 
 describe('SettingsMenu — Google account ID row', () => {
@@ -92,7 +93,6 @@ describe('SettingsMenu — Google account ID row', () => {
         }));
         const { container } = renderSettingsMenu('fullpage');
         openSettings(container);
-        fireEvent.click(screen.getByRole('button', { name: 'Tabox Pro' }));
 
         const idValue = await screen.findByText(GOOGLE_ID);
         expect(idValue).toHaveAttribute('data-tooltip-content', expect.stringContaining('darkstorm13@gmail.com'));

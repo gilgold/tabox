@@ -1,33 +1,28 @@
 import React, { useEffect, useState, useRef, lazy, Suspense, useEffectEvent } from 'react';
-import ReactDOM from 'react-dom';
 import Modal from 'react-modal';
 import './SettingsMenu.css';
 import Switch from './Switch';
 import { ToastViewport } from './ToastViewport';
 import { themeState, isLoggedInState, listKeyState } from './atoms/globalAppSettingsState';
-import { premiumEntitlementState, isProState, manageSubscriptionOpenState } from './atoms/premiumState';
+import { premiumEntitlementState, isProState } from './atoms/premiumState';
 import { useAtomValue, useSetAtom, useAtom } from 'jotai';
 import { browser } from '../static/globals';
-import { showUndoToast, showSuccessToast, showErrorToast, setToastViewContext } from './toastHelpers';
+import { showSuccessToast, showErrorToast, setToastViewContext } from './toastHelpers';
 import { copyToClipboard } from './utils/clipboardUtils';
-import { UNDO_TIME } from './constants';
 import { downloadTextFile } from './utils';
 import SyncDebugRecoveryPanel from './SyncDebugRecoveryPanel';
 import { ManageSubscriptionControls } from './ManageSubscriptionModal';
 import { useOrphanRecoveryContext } from './OrphanRecoveryContext';
-import { buildOrphanRecoveryMenuItem } from './orphanRecoveryMenuItem';
 import { loadBrowserSessions, subscribeToBrowserSessions } from './utils/browserSessions';
 import useProCheckout from './useProCheckout';
 import TaboxProOverview from './TaboxProOverview';
 import { RiFolderAddFill, RiEdit2Line, RiSettings5Fill } from 'react-icons/ri';
 import { ImNewTab } from 'react-icons/im';
-import { MdOutlineSyncAlt, MdSettingsBackupRestore, MdClose, MdExpandMore, MdExpandLess, MdBugReport, MdFileDownload, MdHistory, MdWorkspacePremium, MdContentCopy, MdOutlineTour } from 'react-icons/md';
+import { MdOutlineSyncAlt, MdSettingsBackupRestore, MdClose, MdBugReport, MdFileDownload, MdWorkspacePremium, MdContentCopy, MdOutlineTour } from 'react-icons/md';
 import { SHOW_ONBOARDING_EVENT } from './OnboardingGuide';
-import { FaRegCheckCircle } from 'react-icons/fa';
 import { IoMoon, IoSunny } from 'react-icons/io5';
 import { BsStars } from 'react-icons/bs';
 
-const SyncDebugModal = lazy(() => import('./SyncDebugModal').then((module) => ({ default: module.SyncDebugModal })));
 const AIEnableModal = lazy(() => import('./AIEnableModal'));
 const SessionsModal = lazy(() => import('./SessionsModal').then(module => ({ default: module.SessionsModal })));
 
@@ -38,7 +33,6 @@ export default function SettingsMenu(props) {
     const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(false);
     const [badgeEnabled, setBadgeEnabled] = useState(false);
     const [, setPerformanceModeEnabled] = useState(false);
-    const [isSyncDebugModalOpen, setIsSyncDebugModalOpen] = useState(false);
     const [isAIEnableModalOpen, setIsAIEnableModalOpen] = useState(false);
     const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
     const [sessionList, setSessionList] = useState([]);
@@ -47,16 +41,6 @@ export default function SettingsMenu(props) {
     const [showSubscriptionControls, setShowSubscriptionControls] = useState(false);
     const [googleUser, setGoogleUser] = useState(null);
     const isMountedRef = useRef(true);
-    const [expandedSections, setExpandedSections] = useState({
-        general: true,
-        ai: true,
-        adding: true,
-        opening: true,
-        editing: true,
-        autoUpdate: true,
-        'tabox-pro': true,
-        backup: true,
-    });
 
     const isLoggedIn = useAtomValue(isLoggedInState);
     const setListKey = useSetAtom(listKeyState);
@@ -64,7 +48,6 @@ export default function SettingsMenu(props) {
     const [premium, setPremium] = useAtom(premiumEntitlementState);
     const isPro = useAtomValue(isProState);
     const startProCheckout = useProCheckout();
-    const setManageSubscriptionOpen = useSetAtom(manageSubscriptionOpenState);
 
     const closeMenu = () => setIsDrawerOpen(false);
 
@@ -86,10 +69,8 @@ export default function SettingsMenu(props) {
     });
 
     const openMenu = () => {
-        if (isFullPageVariant) {
-            setActiveCategory('general');
-            setShowSubscriptionControls(false);
-        }
+        setActiveCategory('general');
+        setShowSubscriptionControls(false);
         setIsDrawerOpen(true);
         refreshPremiumOnOpen();
     };
@@ -185,27 +166,6 @@ export default function SettingsMenu(props) {
         });
     };
 
-    const showRecoverySuccess = (previousCollections) => {
-        showUndoToast(
-            <FaRegCheckCircle />,
-            'Successfully recovered from backup',
-            'Collections',
-            async () => {
-                await props.updateRemoteData(previousCollections);
-            },
-            UNDO_TIME,
-        );
-    };
-
-    const handleSyncDebug = () => {
-        setIsSyncDebugModalOpen(true);
-        closeMenu();
-    };
-
-    const closeSyncDebugModal = () => {
-        setIsSyncDebugModalOpen(false);
-    };
-
     const handleExport = async () => {
         closeMenu();
         try {
@@ -265,11 +225,6 @@ export default function SettingsMenu(props) {
         }, 100);
     };
 
-    const handleRestoreSession = () => {
-        setIsSessionModalOpen(true);
-        closeMenu();
-    };
-
     const handleShowOnboarding = () => {
         closeMenu();
         window.dispatchEvent(new CustomEvent(SHOW_ONBOARDING_EVENT));
@@ -293,13 +248,6 @@ export default function SettingsMenu(props) {
         }
 
         openMenu();
-    };
-
-    const toggleSection = (sectionKey) => {
-        setExpandedSections((prev) => ({
-            ...prev,
-            [sectionKey]: !prev[sectionKey],
-        }));
     };
 
     const proBaseLabel = premium?.status === 'trialing'
@@ -373,7 +321,11 @@ export default function SettingsMenu(props) {
         renderFullPageContent: !isPro
             ? () => (
                 <>
-                    <TaboxProOverview statusLabel={proStatusLabel} onUpgrade={handleProUpgrade} />
+                    <TaboxProOverview
+                        statusLabel={proStatusLabel}
+                        onUpgrade={handleProUpgrade}
+                        compact={!isFullPageVariant}
+                    />
                     {renderFullPageItem(googleIdItem)}
                 </>
             )
@@ -395,14 +347,7 @@ export default function SettingsMenu(props) {
                     key: 'pro-manage',
                     title: 'Manage subscription',
                     description: 'Update payment details, change plan, or cancel your subscription.',
-                    onClick: () => {
-                        if (isFullPageVariant) {
-                            setShowSubscriptionControls(true);
-                            return;
-                        }
-                        setManageSubscriptionOpen(true);
-                        closeMenu();
-                    },
+                    onClick: () => setShowSubscriptionControls(true),
                     content: (
                         <>
                             <MdWorkspacePremium size="14" style={{ marginRight: '8px' }} />
@@ -663,52 +608,6 @@ export default function SettingsMenu(props) {
         },
     ];
 
-    const orphanRecoveryItem = buildOrphanRecoveryMenuItem(orphanRecovery, { onActivate: closeMenu });
-    const popupBackupSection = {
-        key: 'backup',
-        title: 'Backup & Restore',
-        icon: MdSettingsBackupRestore,
-        items: [
-            ...(orphanRecoveryItem ? [orphanRecoveryItem] : []),
-            {
-                type: 'button',
-                key: 'restore-session',
-                title: 'Restore recently closed',
-                description: 'View and restore recently closed tabs and windows from your browser.',
-                onClick: handleRestoreSession,
-                isVisible: sessionList.length > 0,
-                content: (
-                    <>
-                        <MdHistory size="14" style={{ marginRight: '8px' }} />
-                        Restore recently closed
-                    </>
-                ),
-            },
-            {
-                type: 'button',
-                key: 'export-all',
-                title: 'Export all collections & folders',
-                description: 'Download a full backup of every collection and folder.',
-                onClick: handleExport,
-                content: 'Export all collections & folders',
-            },
-            {
-                type: 'button',
-                key: 'sync-debug',
-                title: 'Sync Debug & Recovery',
-                description: 'Open sync diagnostics and recovery tools for your Google Drive data.',
-                onClick: handleSyncDebug,
-                isVisible: isLoggedIn,
-                content: (
-                    <>
-                        <MdBugReport size="14" style={{ marginRight: '8px' }} />
-                        Sync Debug & Recovery
-                    </>
-                ),
-            },
-        ],
-    };
-
     const fullPageSettingsSections = [
         ...commonSettingsSections,
         {
@@ -741,7 +640,7 @@ export default function SettingsMenu(props) {
                     applyDataFromServer={props.applyDataFromServer}
                     updateRemoteData={props.updateRemoteData}
                     onDataUpdate={props.onDataUpdate}
-                    feedbackToasterId={isFullPageVariant ? 'settings-modal' : undefined}
+                    feedbackToasterId="settings-modal"
                 />
             ),
         },
@@ -759,45 +658,17 @@ export default function SettingsMenu(props) {
                     applyDataFromServer={props.applyDataFromServer}
                     updateRemoteData={props.updateRemoteData}
                     onDataUpdate={props.onDataUpdate}
-                    feedbackToasterId={isFullPageVariant ? 'settings-modal' : undefined}
+                    feedbackToasterId="settings-modal"
                 />
             ),
         },
     ];
 
-    const settingsSections = isFullPageVariant
-        ? fullPageSettingsSections
-        : [...commonSettingsSections, popupBackupSection];
+    const settingsSections = fullPageSettingsSections;
 
     const visibleItemsForSection = (section) => section.items.filter((item) => item.isVisible !== false);
     const activeSection = settingsSections.find((section) => section.key === activeCategory) || settingsSections[0];
     const ActiveSectionIcon = activeSection.icon;
-
-    const renderPopupItem = (item) => {
-        if (item.type === 'custom') {
-            return <React.Fragment key={item.key}>{item.content}</React.Fragment>;
-        }
-
-        if (item.type === 'button') {
-            return (
-                <button
-                    key={item.key}
-                    className={`menu-button${item.variant === 'status' ? ' menu-button-status' : ''}`}
-                    onClick={item.onClick}
-                    disabled={item.disabled}
-                    {...(item.buttonProps || {})}
-                >
-                    {item.content}
-                </button>
-            );
-        }
-
-        return (
-            <div key={item.key} className="setting-item">
-                <Switch {...item.switchProps} />
-            </div>
-        );
-    };
 
     const renderFullPageItem = (item) => {
         if (item.type === 'custom') {
@@ -873,143 +744,81 @@ export default function SettingsMenu(props) {
                 </div>
             </div>
 
-            {!isFullPageVariant && ReactDOM.createPortal(
-                <div className={`custom-drawer-overlay ${isDrawerOpen ? 'open' : ''}`} onClick={closeMenu}>
-                    <div className={`custom-drawer ${isDrawerOpen ? 'open' : ''}`} onClick={(event) => event.stopPropagation()}>
-                        <div className="settings-drawer-content">
-                            <div className="settings-header">
-                                <h2><RiSettings5Fill /> Settings</h2>
-                                <button className="close-button" onClick={closeMenu}>
-                                    <MdClose size="20" />
-                                </button>
+            <Modal
+                isOpen={isDrawerOpen}
+                onRequestClose={closeMenu}
+                contentLabel="Settings"
+                className={`fp-settings-modal${isFullPageVariant ? '' : ' fp-settings-modal--popup'}`}
+                overlayClassName={`fp-settings-modal-overlay${isFullPageVariant ? '' : ' fp-settings-modal-overlay--popup'}`}
+                ariaHideApp={false}
+                shouldCloseOnOverlayClick={true}
+                shouldCloseOnEsc={true}
+            >
+                <div className={`fp-settings-modal-shell${isFullPageVariant ? '' : ' fp-settings-modal-shell--popup'}`}>
+                    <ToastViewport
+                        context={isFullPageVariant ? 'fullpage' : 'popup'}
+                        toasterId="settings-modal"
+                        disablePortal={true}
+                    />
+                    <aside className="fp-settings-sidebar" aria-label="Settings categories">
+                        <div className="fp-settings-sidebar-header">
+                            <h2><RiSettings5Fill /> Settings</h2>
+                            <p>Customize how Tabox saves, opens, and restores your collections.</p>
+                        </div>
+
+                        <nav className="fp-settings-sidebar-nav">
+                            {settingsSections.map((section) => {
+                                const SectionIcon = section.icon;
+                                const isActive = section.key === activeSection.key;
+
+                                return (
+                                    <button
+                                        key={section.key}
+                                        type="button"
+                                        className={`fp-settings-sidebar-item${section.key === 'tabox-pro' ? ' tabox-pro-option' : ''}${isActive ? ' active' : ''}`}
+                                        onClick={() => {
+                                            setActiveCategory(section.key);
+                                            setShowSubscriptionControls(false);
+                                        }}
+                                    >
+                                        <SectionIcon className="fp-settings-sidebar-item-icon" />
+                                        <span>{section.title}</span>
+                                        {section.key === 'recovery' && orphanRecovery.showEntry && (
+                                            <span className="fp-settings-sidebar-badge">{orphanRecovery.orphanCount}</span>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </nav>
+                    </aside>
+
+                    <div className="fp-settings-main">
+                        <div className="fp-settings-main-header">
+                            <div className="fp-settings-main-heading">
+                                <h3><ActiveSectionIcon /> {activeSection.title}</h3>
+                                <p>{activeSection.description || 'Review and update the settings in this category without changing their current behavior.'}</p>
                             </div>
 
-                            <div className="settings-content">
-                                {settingsSections.map((section) => {
-                                    const SectionIcon = section.icon;
-                                    const visibleItems = visibleItemsForSection(section);
+                            <button className="close-button" aria-label="Close settings" onClick={closeMenu}>
+                                <MdClose size="20" />
+                            </button>
+                        </div>
 
-                                    return (
-                                        <div key={section.key} className="settings-section">
-                                            <h3
-                                                className={`settings-collapsible-header${section.key === 'tabox-pro' ? ' tabox-pro-option' : ''}`}
-                                                onClick={() => toggleSection(section.key)}
-                                            >
-                                                <div className="header-content">
-                                                    <SectionIcon />
-                                                    <span>{section.title}</span>
-                                                </div>
-                                                {expandedSections[section.key] ? <MdExpandLess /> : <MdExpandMore />}
-                                            </h3>
-                                            <div className={`collapsible-content ${expandedSections[section.key] ? 'expanded' : 'collapsed'}`}>
-                                                {visibleItems.map(renderPopupItem)}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                        <div className="fp-settings-main-content">
+                            {activeSection.key === 'tabox-pro' && showSubscriptionControls
+                                ? (
+                                    <ManageSubscriptionControls
+                                        active={isDrawerOpen}
+                                        onBack={() => setShowSubscriptionControls(false)}
+                                    />
+                                )
+                                : typeof activeSection.renderFullPageContent === 'function'
+                                ? activeSection.renderFullPageContent()
+                                : visibleItemsForSection(activeSection).map(renderFullPageItem)}
                         </div>
                     </div>
-                </div>,
-                document.body,
-            )}
-
-            {isFullPageVariant && (
-                <Modal
-                    isOpen={isDrawerOpen}
-                    onRequestClose={closeMenu}
-                    contentLabel="Settings"
-                    className="fp-settings-modal"
-                    overlayClassName="fp-settings-modal-overlay"
-                    ariaHideApp={false}
-                    shouldCloseOnOverlayClick={true}
-                    shouldCloseOnEsc={true}
-                >
-                    <div className="fp-settings-modal-shell">
-                        <ToastViewport
-                            context="fullpage"
-                            toasterId="settings-modal"
-                            disablePortal={true}
-                        />
-                        <aside className="fp-settings-sidebar" aria-label="Settings categories">
-                            <div className="fp-settings-sidebar-header">
-                                <h2><RiSettings5Fill /> Settings</h2>
-                                <p>Customize how Tabox saves, opens, and restores your collections.</p>
-                            </div>
-
-                            <nav className="fp-settings-sidebar-nav">
-                                {settingsSections.map((section) => {
-                                    const SectionIcon = section.icon;
-                                    const isActive = section.key === activeSection.key;
-
-                                    return (
-                                        <button
-                                            key={section.key}
-                                            type="button"
-                                            className={`fp-settings-sidebar-item${section.key === 'tabox-pro' ? ' tabox-pro-option' : ''}${isActive ? ' active' : ''}`}
-                                            onClick={() => setActiveCategory(section.key)}
-                                        >
-                                            <SectionIcon className="fp-settings-sidebar-item-icon" />
-                                            <span>{section.title}</span>
-                                            {section.key === 'recovery' && orphanRecovery.showEntry && (
-                                                <span className="fp-settings-sidebar-badge">{orphanRecovery.orphanCount}</span>
-                                            )}
-                                        </button>
-                                    );
-                                })}
-                            </nav>
-                        </aside>
-
-                        <div className="fp-settings-main">
-                            <div className="fp-settings-main-header">
-                                <div className="fp-settings-main-heading">
-                                    <h3><ActiveSectionIcon /> {activeSection.title}</h3>
-                                    <p>{activeSection.description || 'Review and update the settings in this category without changing their current behavior.'}</p>
-                                </div>
-
-                                <button className="close-button" onClick={closeMenu}>
-                                    <MdClose size="20" />
-                                </button>
-                            </div>
-
-                            <div className="fp-settings-main-content">
-                                {activeSection.key === 'tabox-pro' && showSubscriptionControls
-                                    ? (
-                                        <ManageSubscriptionControls
-                                            active={isDrawerOpen}
-                                            onBack={() => setShowSubscriptionControls(false)}
-                                        />
-                                    )
-                                    : typeof activeSection.renderFullPageContent === 'function'
-                                    ? activeSection.renderFullPageContent()
-                                    : visibleItemsForSection(activeSection).map(renderFullPageItem)}
-                            </div>
-                        </div>
-                    </div>
-                </Modal>
-            )}
-
-            {!isFullPageVariant && (
-                <Modal
-                    isOpen={isSyncDebugModalOpen}
-                    onRequestClose={closeSyncDebugModal}
-                    contentLabel="Sync Debug Modal"
-                    className="modal-content"
-                    overlayClassName="modal-overlay"
-                    ariaHideApp={false}
-                >
-                    <Suspense fallback={<div style={{ padding: '20px', textAlign: 'center' }}>Loading...</div>}>
-                        <SyncDebugModal
-                            isOpen={isSyncDebugModalOpen}
-                            onClose={closeSyncDebugModal}
-                            applyDataFromServer={props.applyDataFromServer}
-                            updateRemoteData={props.updateRemoteData}
-                            onDataUpdate={props.onDataUpdate}
-                            onRecoverySuccess={showRecoverySuccess}
-                        />
-                    </Suspense>
-                </Modal>
-            )}
+                </div>
+            </Modal>
 
             {isAIEnableModalOpen && (
                 <Suspense fallback={null}>

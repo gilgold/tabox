@@ -913,6 +913,156 @@ html.fullpage-mode .switch-label {
     }
 }
 
+/* Popup settings keeps the full-page modal's two-column structure while using
+   denser spacing for the extension's fixed 670 x 585 viewport. */
+.fp-settings-modal-overlay--popup {
+    padding: 6px;
+    backdrop-filter: blur(8px) saturate(120%);
+    -webkit-backdrop-filter: blur(8px) saturate(120%);
+}
+
+.fp-settings-modal--popup {
+    width: calc(100vw - 12px);
+    height: calc(100vh - 12px);
+}
+
+.fp-settings-modal-shell--popup {
+    --color-background: var(--bg-color);
+    --color-surface: var(--settings-bg-color);
+    --color-surface-raised: var(--settings-bg-color);
+    --color-surface-muted: var(--section-bg-color);
+    --color-border: var(--divider-color);
+    --color-border-strong: var(--setting-row-border-color);
+    --color-text: var(--text-color);
+    --color-text-muted: var(--settings-row-text-color);
+    --color-text-subtle: var(--settings-row-text-color);
+    --color-text-inverse: #fff;
+    --color-primary: var(--primary-color);
+    --color-primary-hover: var(--primary-color);
+    --color-selected-bg: var(--primary-hover-bg);
+    --color-hover-bg: var(--setting-row-hover-bg-color);
+    --fp-radius-sm: 8px;
+    --fp-radius-md: 12px;
+    --fp-radius-lg: 16px;
+    --fp-radius-xl: 18px;
+    --fp-shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.08);
+    --fp-shadow-lg: 0 12px 30px rgba(15, 23, 42, 0.16);
+    grid-template-columns: 190px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    border-radius: var(--fp-radius-xl);
+}
+
+.fp-settings-modal-shell--popup .fp-settings-sidebar {
+    min-width: 0;
+    min-height: 0;
+    gap: 12px;
+    padding: 14px 10px 12px;
+    border-right: 1px solid var(--color-border);
+    border-bottom: 0;
+}
+
+.fp-settings-modal-shell--popup .fp-settings-sidebar-header {
+    display: block;
+}
+
+.fp-settings-modal-shell--popup .fp-settings-sidebar-header h2 {
+    font-size: 18px;
+}
+
+.fp-settings-modal-shell--popup .fp-settings-sidebar-header p {
+    margin: 6px 0 0;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.fp-settings-modal-shell--popup .fp-settings-sidebar-nav {
+    flex: 1;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    min-height: 0;
+    gap: 4px;
+    padding: 0 2px 0 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+
+.fp-settings-modal-shell--popup .fp-settings-sidebar-item {
+    flex: 0 0 auto;
+    width: 100%;
+    min-height: 34px;
+    gap: 7px;
+    padding: 7px 10px;
+    border-radius: var(--fp-radius-sm);
+    font-size: 12px;
+    line-height: 1.25;
+}
+
+.fp-settings-modal-shell--popup .fp-settings-sidebar-item-icon {
+    font-size: 15px;
+}
+
+.fp-settings-modal-shell--popup .fp-settings-main-header {
+    gap: 12px;
+    padding: 10px 16px 9px;
+}
+
+.fp-settings-modal-shell--popup .fp-settings-main-heading h3 {
+    gap: 8px;
+    font-size: 18px;
+}
+
+.fp-settings-modal-shell--popup .fp-settings-main-heading p {
+    margin-top: 4px;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.fp-settings-modal-shell--popup .close-button {
+    flex: 0 0 34px;
+    width: 34px;
+    height: 34px;
+}
+
+.fp-settings-modal-shell--popup .fp-settings-main-content {
+    gap: 10px;
+    padding: 12px 16px 18px;
+}
+
+.fp-settings-modal-shell--popup .fp-settings-item-card {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: var(--fp-radius-md);
+}
+
+.fp-settings-modal-shell--popup .fp-settings-item-copy h4 {
+    font-size: 14px;
+}
+
+.fp-settings-modal-shell--popup .fp-settings-item-copy p {
+    margin-top: 4px;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.fp-settings-modal-shell--popup .fp-settings-item-control .switch-label {
+    padding-top: 7px;
+    padding-bottom: 7px;
+    font-size: 12px;
+}
+
+.fp-settings-modal-shell--popup .fp-settings-item-card-action .fp-settings-menu-button {
+    width: 100%;
+    min-width: 0;
+}
+
+.fp-settings-modal-shell--popup .fp-settings-plan-details {
+    padding: 10px 12px;
+}
+
 /* ========================================
    PipelinePro full-page settings modal layer
    ======================================== */
@@ -1227,7 +1377,7 @@ html.fullpage-mode .fp-settings-modal-shell .switch-label:hover:after {
     animation: tabox-pro-gradient 6s ease-in-out infinite;
 }
 
-html.fullpage-mode .fp-settings-sidebar-item.tabox-pro-option > span {
+.fp-settings-sidebar-item.tabox-pro-option > span {
     display: inline-block;
     background: linear-gradient(110deg, #3b82f6, #8b5cf6, #ec4899, #f59e0b, #3b82f6);
     background-size: 300% auto;

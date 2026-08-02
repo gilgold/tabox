@@ -7,7 +7,7 @@ import { aiToolsModalOpenState, aiToolsScopeState, aiProcessingUidsState, aiProc
 import { viewContextState } from './atoms/globalAppSettingsState';
 import { isProState, premiumEntitlementState } from './atoms/premiumState';
 import TaboxProUpsell from './TaboxProUpsell';
-import { AI_TOOLS } from './ai/aiTasks';
+import { AI_NAME_SUGGESTION_TOOL, AI_TOOLS } from './ai/aiTasks';
 import { getAIAvailability } from './ai/aiClient';
 import useProCheckout from './useProCheckout';
 import { readWindowStructure } from './ai/readWindowStructure';
@@ -882,7 +882,7 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
             : 'No collections with tabs to rename.')
         : null;
     const activeTool = activeToolId
-        ? AI_TOOLS.find((tool) => tool.id === activeToolId)
+        ? [...AI_TOOLS, AI_NAME_SUGGESTION_TOOL].find((tool) => tool.id === activeToolId)
         : null;
     const showProUpsell = Boolean(activeTool && isToolLocked(activeTool));
 
@@ -892,7 +892,7 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
             onRequestClose={busy ? undefined : close}
             contentLabel="Tabox AI Tools"
             className={`modal-content ai-tools-modal${viewContext === 'fullpage' ? ' ai-tools-modal--fullpage' : ''}`}
-            overlayClassName="modal-overlay"
+            overlayClassName="modal-overlay ai-tools-modal-overlay"
             ariaHideApp={false}
             shouldCloseOnOverlayClick={!busy}
             shouldCloseOnEsc={!busy}
