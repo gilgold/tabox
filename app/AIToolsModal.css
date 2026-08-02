@@ -647,10 +647,141 @@ html.performance-mode .ai-tool-card[data-tool-id="split-collection"]::before {
     color: var(--text-color);
 }
 
+.ai-so-done {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.ai-so-done-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding-top: 2px;
+}
+
+.ai-so-success-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    color: #fff;
+    background: #2563eb;
+    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.24);
+}
+
+.ai-so-done-title {
+    margin: 0;
+    color: var(--text-color);
+    font-size: 20px;
+    line-height: 1.2;
+    text-align: center;
+}
+
+.ai-so-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.ai-so-metric {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+    padding: 12px 10px;
+    border: 1px solid rgba(67, 97, 238, 0.2);
+    border-radius: 10px;
+    background: rgba(67, 97, 238, 0.06);
+}
+
+.ai-so-metric-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 32px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    color: #2563eb;
+    background: rgba(37, 99, 235, 0.12);
+}
+
+.ai-so-metric-copy {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    color: var(--text-color);
+}
+
+.ai-so-metric-copy strong {
+    font-size: 24px;
+    line-height: 1;
+}
+
+.ai-so-metric-copy span {
+    margin-top: 4px;
+    font-size: 11px;
+    line-height: 1.2;
+    opacity: 0.65;
+}
+
+[data-theme="dark"] .ai-so-metric {
+    border-color: rgba(148, 163, 184, 0.24);
+    background: rgba(255, 255, 255, 0.035);
+}
+
+[data-theme="dark"] .ai-so-metric-icon {
+    color: #8a9cff;
+    background: rgba(67, 97, 238, 0.22);
+}
+
 .ai-so-done-actions {
     display: flex;
     flex-direction: column;
     gap: 8px;
+}
+
+.ai-so-done-actions--smart {
+    align-items: center;
+    gap: 6px;
+}
+
+.ai-so-save-btn {
+    width: 100%;
+    min-height: 38px;
+    background: #2563eb;
+}
+
+.ai-so-done-undo-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 34px;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-color);
+    font-size: 12px;
+    font-weight: 600;
+    opacity: 0.65;
+    cursor: pointer;
+    transition: background 0.2s ease, opacity 0.2s ease;
+}
+
+.ai-so-done-undo-btn:hover {
+    background: rgba(128, 128, 128, 0.1);
+    opacity: 1;
+}
+
+.ai-so-done-undo-btn:focus-visible {
+    outline: 2px solid rgba(67, 97, 238, 0.6);
+    outline-offset: 2px;
 }
 
 .ai-so-window-list {

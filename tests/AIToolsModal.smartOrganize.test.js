@@ -129,7 +129,35 @@ describe('Smart Organize panel (popup)', () => {
         });
 
         await waitFor(() => expect(showUndoToast).toHaveBeenCalled());
-        expect(screen.getByText(/created 2 groups/i)).toBeInTheDocument();
+        expect(screen.getByLabelText('2 new groups')).toBeInTheDocument();
+    });
+
+    test('done state presents the grouped result as metric cards without a duplicate close action', async () => {
+        browser.runtime.sendMessage = jest.fn().mockImplementation((msg) => {
+            if (msg.type === 'aiGetState') return Promise.resolve(null);
+            if (msg.type === 'smartOrganizeApply') {
+                return Promise.resolve({ success: true, groupsCreated: 7, tabsAdded: 11, skipped: 13 });
+            }
+            return Promise.resolve({});
+        });
+
+        await openModal();
+        fireEvent.click(screen.getByText('Smart Tab Grouping'));
+        await waitFor(() => expect(screen.getByRole('button', { name: /organize/i })).toBeInTheDocument());
+
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /organize/i })); });
+        await fireStorageChange(donePlanState());
+
+        await waitFor(() => expect(screen.getByRole('status', { name: 'Your tabs are grouped' })).toBeInTheDocument());
+        expect(screen.getByLabelText('7 new groups')).toBeInTheDocument();
+        expect(screen.getByLabelText('11 added to groups')).toBeInTheDocument();
+        expect(screen.getByLabelText('13 left ungrouped')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Save as collection' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument();
+
+        const closeButtons = screen.getAllByRole('button', { name: 'Close' });
+        expect(closeButtons).toHaveLength(1);
+        expect(closeButtons[0]).toHaveClass('ai-tools-modal-close');
     });
 
     test('the undo toast action sends smartOrganizeUndo', async () => {
@@ -156,7 +184,7 @@ describe('Smart Organize panel (popup)', () => {
         await fireStorageChange(donePlanState('so1'));
         await fireStorageChange(donePlanState('so1'));
 
-        await waitFor(() => expect(screen.getByText(/created 2 groups/i)).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByLabelText('2 new groups')).toBeInTheDocument());
         const applyCalls = browser.runtime.sendMessage.mock.calls.filter((c) => c[0].type === 'smartOrganizeApply');
         expect(applyCalls).toHaveLength(1);
     });
@@ -288,12 +316,12 @@ describe('Smart Organize — in-modal undo affordance', () => {
 
         await act(async () => { fireEvent.click(screen.getByRole('button', { name: /organize/i })); });
         await fireStorageChange(donePlanState());
-        await waitFor(() => expect(screen.getByText(/created 2 groups/i)).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByLabelText('2 new groups')).toBeInTheDocument());
 
         fireEvent.click(screen.getByRole('button', { name: /^undo$/i }));
 
         await waitFor(() => expect(undoFn).toHaveBeenCalled());
-        await waitFor(() => expect(screen.queryByText(/created 2 groups/i)).not.toBeInTheDocument());
+        await waitFor(() => expect(screen.queryByLabelText('2 new groups')).not.toBeInTheDocument());
         await waitFor(() => expect(screen.getByRole('button', { name: /organize/i })).toBeInTheDocument());
     });
 

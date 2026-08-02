@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Modal from 'react-modal';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { MdClose, MdArrowBack, MdUndo, MdLock } from 'react-icons/md';
+import { MdAdd, MdArrowBack, MdCheck, MdClose, MdFolder, MdLock, MdRadioButtonUnchecked, MdUndo } from 'react-icons/md';
 import { BsStars } from 'react-icons/bs';
 import { aiToolsModalOpenState, aiToolsScopeState, aiProcessingUidsState, aiProcessingCurrentUidState, aiSplitTargetState, aiToolsInitialToolState } from './atoms/aiState';
 import { viewContextState } from './atoms/globalAppSettingsState';
@@ -96,7 +96,7 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
     // Smart Organize panel state
     const [soWindowId, setSoWindowId] = useState(null);
     const [soStructure, setSoStructure] = useState(null); // { ungroupedTabs, existingGroups }
-    const [soSummary, setSoSummary] = useState(null); // string
+    const [soSummary, setSoSummary] = useState(null); // { groupsCreated, tabsAdded, skippedCount }
     const [soWindows, setSoWindows] = useState([]); // for full-page picker
     const [soLoadingWindows, setSoLoadingWindows] = useState(false);
 
@@ -651,11 +651,7 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
                 if (dead) return;
 
                 const { groupsCreated = 0, tabsAdded = 0, skipped: skippedCount = 0 } = applyResult || {};
-                const summaryParts = [`Created ${groupsCreated} groups`];
-                if (tabsAdded > 0) summaryParts.push(`added ${tabsAdded} tabs to existing groups`);
-                summaryParts.push(`${skippedCount} left ungrouped`);
-                const summary = summaryParts.join(' · ');
-                setSoSummary(summary);
+                setSoSummary({ groupsCreated, tabsAdded, skippedCount });
 
                 showUndoToast(
                     <BsStars />,
@@ -1098,29 +1094,57 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
                             <>
                                 {error && <div className="ai-tool-error">{error}</div>}
                                 {soSummary && (
-                                    <p className="ai-rename-description ai-so-summary">{soSummary}</p>
+                                    <div className="ai-so-done">
+                                        <div
+                                            className="ai-so-done-hero"
+                                            role="status"
+                                            aria-label="Your tabs are grouped"
+                                        >
+                                            <span className="ai-so-success-icon" aria-hidden="true">
+                                                <MdCheck size={28} />
+                                            </span>
+                                            <h2 className="ai-so-done-title">Your tabs are grouped</h2>
+                                        </div>
+                                        <div className="ai-so-metrics" role="list" aria-label="Grouping results">
+                                            <div className="ai-so-metric" role="listitem" aria-label={`${soSummary.groupsCreated} new groups`}>
+                                                <span className="ai-so-metric-icon" aria-hidden="true"><MdFolder size={20} /></span>
+                                                <span className="ai-so-metric-copy">
+                                                    <strong>{soSummary.groupsCreated}</strong>
+                                                    <span>new groups</span>
+                                                </span>
+                                            </div>
+                                            <div className="ai-so-metric" role="listitem" aria-label={`${soSummary.tabsAdded} added to groups`}>
+                                                <span className="ai-so-metric-icon" aria-hidden="true"><MdAdd size={22} /></span>
+                                                <span className="ai-so-metric-copy">
+                                                    <strong>{soSummary.tabsAdded}</strong>
+                                                    <span>added to groups</span>
+                                                </span>
+                                            </div>
+                                            <div className="ai-so-metric" role="listitem" aria-label={`${soSummary.skippedCount} left ungrouped`}>
+                                                <span className="ai-so-metric-icon" aria-hidden="true"><MdRadioButtonUnchecked size={20} /></span>
+                                                <span className="ai-so-metric-copy">
+                                                    <strong>{soSummary.skippedCount}</strong>
+                                                    <span>left ungrouped</span>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 )}
-                                <div className="ai-so-done-actions">
+                                <div className="ai-so-done-actions ai-so-done-actions--smart">
                                     <button
                                         type="button"
-                                        className="ai-tool-action-btn"
+                                        className="ai-tool-action-btn ai-so-save-btn"
                                         onClick={handleSmartOrganizeSaveAsCollection}
                                     >
                                         Save as collection
                                     </button>
                                     <button
                                         type="button"
-                                        className="ai-tool-action-btn ai-tool-action-btn--cancel"
+                                        className="ai-so-done-undo-btn"
                                         onClick={handleSmartOrganizeUndoLast}
                                     >
+                                        <MdUndo size={18} aria-hidden="true" />
                                         Undo
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="ai-tool-action-btn ai-tool-action-btn--cancel"
-                                        onClick={close}
-                                    >
-                                        Close
                                     </button>
                                 </div>
                             </>
@@ -1436,7 +1460,11 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
                     </>
                 )}
 
-                <p className="ai-tools-disclaimer">AI makes mistakes. Always review suggestions before applying them.</p>
+                <p className="ai-tools-disclaimer">
+                    {activeToolId === 'smart-organize' && panelStatus === 'done'
+                        ? 'AI can make mistakes. Review your groups before saving.'
+                        : 'AI makes mistakes. Always review suggestions before applying them.'}
+                </p>
             </div>
         </Modal>
     );
