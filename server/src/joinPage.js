@@ -53,7 +53,7 @@ export const JOIN_PAGE_HTML = `<!doctype html>
   function renderMeta(info) {
     if (info.kind === 'folder') {
       el('title').textContent = 'Join "' + info.name + '"';
-      el('subtitle').textContent = info.ownerEmail + ' is sharing this folder with you.';
+      el('subtitle').textContent = (info.ownerFirstName || info.ownerEmail) + ' is sharing this folder with you.';
       el('meta').textContent = info.collectionCount + ' collection' + (info.collectionCount === 1 ? '' : 's') + ' · you can ' + (info.role === 'write' ? 'view and edit (editing requires Tabox Pro)' : 'view');
     } else {
       el('title').textContent = 'Add "' + info.name + '"';

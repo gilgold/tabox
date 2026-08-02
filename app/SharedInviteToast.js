@@ -39,7 +39,7 @@ export default function SharedInviteToast({
         <div className="shared-invite-toast-content">
           <div className="shared-invite-toast-kicker">Folder invitation</div>
           <div className="shared-invite-toast-text">
-            <strong>{invite.ownerEmail}</strong> invited you to <strong>&quot;{invite.folderName}&quot;</strong>
+            <strong>{invite.ownerFirstName || invite.ownerEmail}</strong> invited you to <strong>&quot;{invite.folderName}&quot;</strong>
             {invite.role === 'read' && (
               <span className="shared-invite-toast-role">view only</span>
             )}

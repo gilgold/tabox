@@ -690,14 +690,24 @@
     gap: 4px;
 }
 
+.share-member-name,
 .share-member-email {
     max-width: 100%;
     overflow: hidden;
-    color: var(--text-color);
     font-size: 12px;
-    font-weight: 600;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.share-member-name {
+    color: var(--text-color);
+    font-weight: 700;
+}
+
+.share-member-email {
+    color: var(--share-muted);
+    font-size: 11px;
+    font-weight: 500;
 }
 
 .share-member-status {

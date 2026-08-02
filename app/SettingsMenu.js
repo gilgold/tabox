@@ -310,6 +310,45 @@ export default function SettingsMenu(props) {
         ),
     };
 
+    const proStatusItem = {
+        type: 'button',
+        key: 'pro-status',
+        title: 'Current plan',
+        description: 'Your current Tabox Pro subscription status.',
+        variant: 'status',
+        disabled: true,
+        onClick: undefined,
+        content: proStatusLabel,
+    };
+
+    const proActionItem = isPro
+        ? {
+            type: 'button',
+            key: 'pro-manage',
+            title: 'Subscription controls',
+            description: 'Update payment details, change plan, or cancel your subscription.',
+            onClick: () => setShowSubscriptionControls(true),
+            content: (
+                <>
+                    <MdWorkspacePremium size="14" style={{ marginRight: '8px' }} />
+                    Manage subscription
+                </>
+            ),
+        }
+        : {
+            type: 'button',
+            key: 'pro-upgrade',
+            title: 'Upgrade to Tabox Pro',
+            description: 'Unlock premium features with a free 7-day trial.',
+            onClick: handleProUpgrade,
+            content: (
+                <>
+                    <MdWorkspacePremium size="14" style={{ marginRight: '8px' }} />
+                    Upgrade — start free 7-day trial
+                </>
+            ),
+        };
+
     const proSection = {
         key: 'tabox-pro',
         title: 'Tabox Pro',
@@ -318,56 +357,31 @@ export default function SettingsMenu(props) {
         // Free users get the benefit-led overview instead of the items list, so
         // the Google ID row (needed pre-purchase, e.g. for manual Pro grants)
         // renders explicitly beneath it.
-        renderFullPageContent: !isPro
-            ? () => (
-                <>
-                    <TaboxProOverview
-                        statusLabel={proStatusLabel}
-                        onUpgrade={handleProUpgrade}
-                        compact={!isFullPageVariant}
-                    />
-                    {renderFullPageItem(googleIdItem)}
-                </>
-            )
-            : undefined,
+        renderFullPageContent: () => (
+            !isPro
+                ? (
+                    <>
+                        <TaboxProOverview
+                            statusLabel={proStatusLabel}
+                            onUpgrade={handleProUpgrade}
+                            compact={!isFullPageVariant}
+                        />
+                        {renderFullPageItem(googleIdItem)}
+                    </>
+                )
+                : (
+                    <>
+                        <div className="fp-settings-pro-active-overview">
+                            {renderFullPageItem(proStatusItem)}
+                            {renderFullPageItem(proActionItem)}
+                        </div>
+                        {renderFullPageItem(googleIdItem)}
+                    </>
+                )
+        ),
         items: [
-            {
-                type: 'button',
-                key: 'pro-status',
-                title: 'Current plan',
-                description: 'Your current Tabox Pro subscription status.',
-                variant: 'status',
-                disabled: true,
-                onClick: undefined,
-                content: proStatusLabel,
-            },
-            isPro
-                ? {
-                    type: 'button',
-                    key: 'pro-manage',
-                    title: 'Manage subscription',
-                    description: 'Update payment details, change plan, or cancel your subscription.',
-                    onClick: () => setShowSubscriptionControls(true),
-                    content: (
-                        <>
-                            <MdWorkspacePremium size="14" style={{ marginRight: '8px' }} />
-                            Manage subscription
-                        </>
-                    ),
-                }
-                : {
-                    type: 'button',
-                    key: 'pro-upgrade',
-                    title: 'Upgrade to Tabox Pro',
-                    description: 'Unlock premium features with a free 7-day trial.',
-                    onClick: handleProUpgrade,
-                    content: (
-                        <>
-                            <MdWorkspacePremium size="14" style={{ marginRight: '8px' }} />
-                            Upgrade — start free 7-day trial
-                        </>
-                    ),
-                },
+            proStatusItem,
+            proActionItem,
             googleIdItem,
         ],
     };

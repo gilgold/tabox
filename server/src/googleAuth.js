@@ -13,10 +13,20 @@ export async function verifyGoogleToken(accessToken, clientId, fetchImpl = fetch
     if (!aboutRes.ok) return null;
     const { user } = await aboutRes.json();
     if (!user || !user.permissionId) return null;
-    return { googleId: user.permissionId, email: user.emailAddress || null };
+    return {
+      googleId: user.permissionId,
+      email: user.emailAddress || null,
+      firstName: firstNameFromDisplayName(user.displayName),
+    };
   } catch {
     return null;
   }
+}
+
+export function firstNameFromDisplayName(displayName) {
+  if (typeof displayName !== 'string') return null;
+  const [firstName = ''] = displayName.trim().split(/\s+/);
+  return firstName ? firstName.slice(0, 100) : null;
 }
 
 // Server-side OAuth token exchange. The extension never sees the client

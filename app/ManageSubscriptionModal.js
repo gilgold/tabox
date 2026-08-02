@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Modal from 'react-modal';
 import { useAtom, useAtomValue } from 'jotai';
-import { MdClose, MdWorkspacePremium, MdOpenInNew } from 'react-icons/md';
+import { MdArrowBack, MdClose, MdWorkspacePremium, MdOpenInNew } from 'react-icons/md';
 import { browser } from '../static/globals';
 import { manageSubscriptionOpenState, isProState } from './atoms/premiumState';
 import { showSuccessToast } from './toastHelpers';
@@ -143,8 +143,15 @@ export function ManageSubscriptionControls({ active = true, onBack, onBusyChange
                         <h4>Manage subscription</h4>
                         <p>Review billing details or make changes to your Tabox Pro plan.</p>
                     </div>
-                    <button className="manage-sub-back" onClick={onBack} type="button" disabled={busy}>
-                        Back to plan overview
+                    <button
+                        className="manage-sub-back"
+                        onClick={onBack}
+                        type="button"
+                        disabled={busy}
+                        aria-label="Back to plan overview"
+                    >
+                        <MdArrowBack aria-hidden="true" />
+                        Plan overview
                     </button>
                 </div>
             )}
@@ -220,7 +227,7 @@ export function ManageSubscriptionControls({ active = true, onBack, onBusyChange
                     )}
 
                     {!loading && subscription && view === 'confirm-switch' && (
-                        <>
+                        <div className="manage-sub-confirm-panel">
                             <h4 className="manage-sub-confirm-title">Switch to {targetPlan} billing?</h4>
                             <ul className="manage-sub-confirm-details">
                                 {immediateCharge ? (
@@ -245,11 +252,11 @@ export function ManageSubscriptionControls({ active = true, onBack, onBusyChange
                                     {busy ? 'Switching…' : `Confirm switch`}
                                 </button>
                             </div>
-                        </>
+                        </div>
                     )}
 
                     {!loading && subscription && view === 'confirm-cancel' && (
-                        <>
+                        <div className="manage-sub-confirm-panel is-danger">
                             <h4 className="manage-sub-confirm-title">Cancel your subscription?</h4>
                             <p className="manage-sub-confirm-text">
                                 You&apos;ll keep Tabox Pro until <strong>{periodEnd || 'the end of your billing period'}</strong>.
@@ -263,7 +270,7 @@ export function ManageSubscriptionControls({ active = true, onBack, onBusyChange
                                     {busy ? 'Cancelling…' : 'Cancel subscription'}
                                 </button>
                             </div>
-                        </>
+                        </div>
                     )}
 
                     {!loading && manualGrant && (

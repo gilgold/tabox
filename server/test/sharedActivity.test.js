@@ -10,8 +10,8 @@ import {
 } from '../src/sharedActivity.js';
 import { createOrRotateFolderLink, joinViaFolderLink } from '../src/shareLinks.js';
 
-const OWNER = { googleId: 'g-owner', email: 'owner@x.com' };
-const GUEST = { googleId: 'g-guest', email: 'guest@x.com' };
+const OWNER = { googleId: 'g-owner', email: 'owner@x.com', firstName: 'Olivia' };
+const GUEST = { googleId: 'g-guest', email: 'guest@x.com', firstName: 'Grace' };
 const STRANGER = { googleId: 'g-str', email: 'stranger@x.com' };
 const MIN = 60 * 1000;
 
@@ -35,7 +35,7 @@ describe('activity recording by mutators', () => {
     await putCollection(db, OWNER, 'f1', 'c1', { data: { name: 'Research v2' } }, 3000);
     const evs = await events(db);
     expect(evs).toHaveLength(2);
-    expect(evs[0]).toMatchObject({ action: 'collection_updated', subject: 'c1', actorEmail: 'owner@x.com', detail: { name: 'Research v2' }, createdAt: 3000 });
+    expect(evs[0]).toMatchObject({ action: 'collection_updated', subject: 'c1', actorEmail: 'owner@x.com', actorFirstName: 'Olivia', detail: { name: 'Research v2' }, createdAt: 3000 });
     expect(evs[1]).toMatchObject({ action: 'collection_added', subject: 'c1', detail: { name: 'Research' }, createdAt: 2000 });
   });
 
@@ -71,7 +71,7 @@ describe('activity recording by mutators', () => {
     await respondInvite(db, GUEST, 'f1', true, 1600, { isPro: false }); // downgraded to read
     const evs = await events(db);
     expect(evs).toHaveLength(1);
-    expect(evs[0]).toMatchObject({ action: 'member_joined', actorEmail: 'guest@x.com', subject: 'guest@x.com', detail: { role: 'read' } });
+    expect(evs[0]).toMatchObject({ action: 'member_joined', actorEmail: 'guest@x.com', actorFirstName: 'Grace', subject: 'guest@x.com', detail: { role: 'read', subjectFirstName: 'Grace' } });
   });
 
   it('declining an invite records nothing', async () => {
@@ -95,7 +95,7 @@ describe('activity recording by mutators', () => {
     const db = await seed();
     await removeMember(db, GUEST, 'f1', 'guest@x.com', 5000);
     let evs = await events(db);
-    expect(evs[0]).toMatchObject({ action: 'member_left', actorEmail: 'guest@x.com', subject: 'guest@x.com', detail: null });
+    expect(evs[0]).toMatchObject({ action: 'member_left', actorEmail: 'guest@x.com', actorFirstName: 'Grace', subject: 'guest@x.com', detail: { subjectFirstName: 'Grace' } });
 
     await inviteMember(db, OWNER, 'f1', { email: 'guest@x.com', role: 'read' }, 6000);
     await respondInvite(db, GUEST, 'f1', true, 6001, { isPro: false });

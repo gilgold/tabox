@@ -870,7 +870,7 @@ function FolderContainer({
                                     data-tooltip-id="main-tooltip"
                                     data-tooltip-content={folder.shared.role === 'owner'
                                         ? `Shared by you · ${(folder.shared.members || []).length} member(s)`
-                                        : `Shared by ${folder.shared.ownerEmail}${folder.shared.role === 'read' ? ' · view only' : ''}`}
+                                        : `Shared by ${folder.shared.ownerFirstName || folder.shared.ownerEmail}${folder.shared.role === 'read' ? ' · view only' : ''}`}
                                 >
                                     <MdPeopleAlt size={13} />
                                 </span>

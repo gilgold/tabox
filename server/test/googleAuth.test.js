@@ -8,8 +8,8 @@ describe('verifyGoogleToken', () => {
   it('returns identity for a valid token with matching aud', async () => {
     const fetchImpl = vi.fn()
       .mockResolvedValueOnce(okJson({ aud: CLIENT_ID, expires_in: '3000' }))
-      .mockResolvedValueOnce(okJson({ user: { permissionId: 'g-123', emailAddress: 'a@b.c' } }));
-    expect(await verifyGoogleToken('tok', CLIENT_ID, fetchImpl)).toEqual({ googleId: 'g-123', email: 'a@b.c' });
+      .mockResolvedValueOnce(okJson({ user: { permissionId: 'g-123', emailAddress: 'a@b.c', displayName: '  Amy Example  ' } }));
+    expect(await verifyGoogleToken('tok', CLIENT_ID, fetchImpl)).toEqual({ googleId: 'g-123', email: 'a@b.c', firstName: 'Amy' });
     expect(fetchImpl.mock.calls[0][0]).toContain('tokeninfo?access_token=tok');
     expect(fetchImpl.mock.calls[1][1].headers.Authorization).toBe('Bearer tok');
   });

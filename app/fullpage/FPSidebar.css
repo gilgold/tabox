@@ -203,7 +203,7 @@
 /* ---- Shared Folders ---- */
 .fp-sidebar-shared-section {
     flex-shrink: 0;
-    padding: 4px 10px 0;
+    padding-top: 4px;
 }
 
 .fp-sidebar-shared-title {

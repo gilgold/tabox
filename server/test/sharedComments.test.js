@@ -8,8 +8,8 @@ import {
   listComments, postComment, deleteComment, MAX_COMMENT_LENGTH, MAX_COMMENTS_PER_THREAD,
 } from '../src/sharedActivity.js';
 
-const OWNER = { googleId: 'g-owner', email: 'owner@x.com' };
-const GUEST = { googleId: 'g-guest', email: 'guest@x.com' };
+const OWNER = { googleId: 'g-owner', email: 'owner@x.com', firstName: 'Olivia' };
+const GUEST = { googleId: 'g-guest', email: 'guest@x.com', firstName: 'Grace' };
 const STRANGER = { googleId: 'g-str', email: 'stranger@x.com' };
 const PRO = { isPro: true };
 
@@ -39,7 +39,7 @@ describe('postComment', () => {
     const db = await seed();
     const res = await postComment(db, GUEST, 'f1', { collectionUid: 'c1', body: '  hello there  ' }, 2000, PRO);
     expect(res.ok).toBe(true);
-    expect(res.data.comment).toMatchObject({ collectionUid: 'c1', authorEmail: 'guest@x.com', body: 'hello there', createdAt: 2000 });
+    expect(res.data.comment).toMatchObject({ collectionUid: 'c1', authorEmail: 'guest@x.com', authorFirstName: 'Grace', body: 'hello there', createdAt: 2000 });
     expect(typeof res.data.comment.id).toBe('string');
     expect(res.data.comment.id.length).toBeGreaterThan(10);
   });

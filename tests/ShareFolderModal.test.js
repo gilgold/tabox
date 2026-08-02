@@ -98,7 +98,7 @@ test('first share sends sharedCreateShare with the folder collections and chosen
 
 test('owner sees per-member status (Pending/Active/Declined), can change roles, revoke, and re-invite', async () => {
   const MEMBERS = [
-    { email: 'a@x.com', role: 'write', status: 'active' },
+    { email: 'a@x.com', firstName: 'Amy', role: 'write', status: 'active' },
     { email: 'p@x.com', role: 'read', status: 'invited' },
     { email: 'd@x.com', role: 'read', status: 'declined' },
   ];
@@ -110,6 +110,8 @@ test('owner sees per-member status (Pending/Active/Declined), can change roles, 
   // on-open refresh hits the server
   await waitFor(() => expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'sharedGetMembers', folderId: 'f1' }));
   expect(await screen.findByText('Active')).toBeInTheDocument();
+  expect(screen.getByText('Amy')).toBeInTheDocument();
+  expect(screen.getByText('a@x.com')).toBeInTheDocument();
   expect(screen.getByText('Pending')).toBeInTheDocument();
   expect(screen.getByText('Declined')).toBeInTheDocument();
   // owner changes a member's permission level

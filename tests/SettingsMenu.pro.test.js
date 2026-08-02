@@ -10,6 +10,8 @@ import { premiumEntitlementState } from '../app/atoms/premiumState';
 import { getAIAvailability } from '../app/ai/aiClient';
 
 const taboxProOverviewCss = fs.readFileSync(path.join(__dirname, '../app/TaboxProOverview.css'), 'utf8');
+const settingsMenuCss = fs.readFileSync(path.join(__dirname, '../app/SettingsMenu.css'), 'utf8');
+const manageSubscriptionCss = fs.readFileSync(path.join(__dirname, '../app/ManageSubscriptionModal.css'), 'utf8');
 
 // AIEnableModal is lazily imported by SettingsMenu — mock its deps to keep
 // this test focused and fast (mirrors SettingsMenuTaboxAI.test.js).
@@ -84,9 +86,21 @@ describe('SettingsMenu — Tabox Pro section', () => {
         openSettings(container);
 
         expect(screen.getByRole('heading', { name: 'Tabox Pro', level: 3 })).toBeInTheDocument();
-        expect(screen.getByText(/Active \(Trial\) — ends/)).toBeInTheDocument();
+        const planStatus = screen.getByText(/Active \(Trial\) — ends/);
+        const activeOverview = planStatus.closest('.fp-settings-pro-active-overview');
+        const activeOverviewRule = settingsMenuCss.match(/\.fp-settings-modal-shell--popup \.fp-settings-pro-active-overview\s*{[^}]+}/)?.[0] || '';
+        const planDetailsRule = settingsMenuCss.match(/\.fp-settings-modal-shell--popup \.fp-settings-pro-active-overview \.fp-settings-plan-details\s*{[^}]+}/)?.[0] || '';
+        const manageButtonRule = settingsMenuCss.match(/\.fp-settings-modal-shell--popup \.fp-settings-pro-active-overview \.fp-settings-menu-button\s*{[^}]+}/)?.[0] || '';
+
+        expect(activeOverview).toBeInTheDocument();
+        expect(activeOverview).toHaveTextContent('Subscription controls');
         expect(screen.getByRole('button', { name: /manage subscription/i })).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /upgrade/i })).not.toBeInTheDocument();
+        expect(activeOverviewRule).toContain('overflow: hidden');
+        expect(activeOverviewRule).toContain('linear-gradient');
+        expect(planDetailsRule).toContain('display: grid');
+        expect(planDetailsRule).toContain('grid-template-columns: 44px minmax(0, 1fr)');
+        expect(manageButtonRule).toContain('linear-gradient');
     });
 
     test('shows Active (Monthly) / Active (Yearly) for paid plans', () => {
@@ -232,8 +246,25 @@ describe('SettingsMenu — Tabox Pro section', () => {
         fireEvent.click(screen.getByRole('button', { name: /manage subscription/i }));
 
         const planDetails = await screen.findByText('Tabox Pro — monthly');
-        expect(document.querySelector('.fp-settings-modal-shell--popup')).toContainElement(planDetails);
-        expect(screen.getByRole('button', { name: /back to plan overview/i })).toBeInTheDocument();
+        const popupShell = document.querySelector('.fp-settings-modal-shell--popup');
+        const inlineControls = planDetails.closest('.manage-sub-controls-inline');
+        const backButton = screen.getByRole('button', { name: /plan overview/i });
+        const controlsRule = manageSubscriptionCss.match(/\.fp-settings-modal-shell--popup \.manage-sub-controls-inline\s*{[^}]+}/)?.[0] || '';
+        const headerRule = manageSubscriptionCss.match(/\.fp-settings-modal-shell--popup \.manage-sub-inline-header\s*{[^}]+}/)?.[0] || '';
+        const summaryRule = manageSubscriptionCss.match(/\.fp-settings-modal-shell--popup \.manage-sub-controls-inline \.manage-sub-summary\s*{[^}]+}/)?.[0] || '';
+        const summaryAccentRule = manageSubscriptionCss.match(/\.fp-settings-modal-shell--popup \.manage-sub-controls-inline \.manage-sub-summary::before\s*{[^}]+}/)?.[0] || '';
+        const actionsRule = manageSubscriptionCss.match(/\.fp-settings-modal-shell--popup \.manage-sub-controls-inline \.manage-sub-plan-actions\s*{[^}]+}/)?.[0] || '';
+        const primaryRule = manageSubscriptionCss.match(/\.fp-settings-modal-shell--popup \.manage-sub-controls-inline \.manage-sub-btn-primary\s*{[^}]+}/)?.[0] || '';
+
+        expect(popupShell).toContainElement(planDetails);
+        expect(inlineControls).toBeInTheDocument();
+        expect(backButton).toHaveTextContent('Plan overview');
+        expect(controlsRule).toContain('width: 100%');
+        expect(headerRule).toContain('grid-template-columns: minmax(0, 1fr) auto');
+        expect(summaryRule).toContain('linear-gradient');
+        expect(summaryAccentRule).toBe('');
+        expect(actionsRule).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))');
+        expect(primaryRule).toContain('linear-gradient');
     });
 
     test('shows subscription controls inside the full-page settings modal', async () => {

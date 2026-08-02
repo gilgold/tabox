@@ -134,6 +134,30 @@
     text-align: center;
 }
 
+.fp-shared-panel-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 4px 12px;
+}
+
+.fp-shared-panel-spinner {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    border: 2px solid var(--fp-border-strong);
+    border-top-color: var(--primary-color);
+    border-radius: 50%;
+    animation: fp-shared-panel-spin 0.75s linear infinite;
+}
+
+@keyframes fp-shared-panel-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 .fp-shared-panel-error {
     display: flex;
     flex-direction: column;
@@ -450,5 +474,9 @@
 @media (prefers-reduced-motion: reduce) {
     .fp-shared-panel {
         transition: none !important;
+    }
+
+    .fp-shared-panel-spinner {
+        animation: none;
     }
 }

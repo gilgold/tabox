@@ -31,6 +31,7 @@ const activityEvents = [
     {
         id: 7,
         actorEmail: 'gil@example.com',
+        actorFirstName: 'Gil',
         action: 'collection_added',
         subject: 'c1',
         detail: JSON.stringify({ name: 'Research' }),
@@ -39,6 +40,7 @@ const activityEvents = [
     {
         id: 6,
         actorEmail: 'amy@example.com',
+        actorFirstName: 'Amy',
         action: 'member_joined',
         subject: 'amy@example.com',
         detail: JSON.stringify({ role: 'write' }),
@@ -52,6 +54,7 @@ const defaultComments = {
             id: 'cm1',
             collectionUid: null,
             authorEmail: 'amy@example.com',
+            authorFirstName: 'Amy',
             body: 'Hello from Amy',
             createdAt: NOW - 5 * 60 * 1000,
         },
@@ -122,9 +125,9 @@ describe('FPSharedPanel', () => {
         expect(await screen.findByText(/You added “Research”/)).toBeInTheDocument();
         // The actor email is wrapped in a highlight span, so match across elements.
         const joinEntry = [...container.querySelectorAll('.fp-shared-activity-text')]
-            .find((node) => /amy@example\.com joined as write/.test(node.textContent));
+            .find((node) => /Amy joined as write/.test(node.textContent));
         expect(joinEntry).toBeTruthy();
-        expect(joinEntry.querySelector('.fp-shared-email')).toHaveTextContent('amy@example.com');
+        expect(joinEntry.querySelector('.fp-shared-email')).toBeNull();
 
         const dayLabels = container.querySelectorAll('.fp-shared-activity-day');
         expect(dayLabels.length).toBe(2);
@@ -142,12 +145,35 @@ describe('FPSharedPanel', () => {
         });
     });
 
+    test('keeps cached activity visible with a refreshing state after the panel remounts', async () => {
+        const store = createStore();
+        const firstRender = renderPanel({ store });
+        expect(await screen.findByText(/You added “Research”/)).toBeInTheDocument();
+        firstRender.unmount();
+
+        let resolveRefresh;
+        installSendMessageMock({
+            sharedGetActivity: () => new Promise((resolve) => { resolveRefresh = resolve; }),
+        });
+        renderPanel({ store });
+
+        expect(await screen.findByText('Refreshing activity…')).toBeInTheDocument();
+        expect(await screen.findByText(/You added “Research”/)).toBeInTheDocument();
+
+        await act(async () => {
+            resolveRefresh({ ok: true, data: { events: activityEvents } });
+        });
+        await waitFor(() => {
+            expect(screen.queryByText('Refreshing activity…')).not.toBeInTheDocument();
+        });
+    });
+
     test('tab switching shows the Comments tab with thread switcher counts and comments', async () => {
         renderPanel();
         fireEvent.click(screen.getByRole('tab', { name: 'Comments' }));
 
         expect(await screen.findByText('Hello from Amy')).toBeInTheDocument();
-        expect(screen.getByText('amy@example.com')).toBeInTheDocument();
+        expect(screen.getByText('Amy')).toBeInTheDocument();
 
         const threadSelect = screen.getByLabelText('Comment thread');
         expect(threadSelect).toBeInTheDocument();
@@ -156,6 +182,32 @@ describe('FPSharedPanel', () => {
         expect(screen.getByRole('option', { name: 'Design (0)' })).toBeInTheDocument();
         // Collections outside this folder never appear as threads.
         expect(screen.queryByRole('option', { name: /Elsewhere/ })).not.toBeInTheDocument();
+    });
+
+    test('keeps cached comments visible with a refreshing state after the panel remounts', async () => {
+        const store = createStore();
+        const firstRender = renderPanel({ store });
+        fireEvent.click(screen.getByRole('tab', { name: 'Comments' }));
+        expect(await screen.findByText('Hello from Amy')).toBeInTheDocument();
+        firstRender.unmount();
+
+        let resolveRefresh;
+        installSendMessageMock({
+            sharedGetComments: () => new Promise((resolve) => { resolveRefresh = resolve; }),
+        });
+        renderPanel({ store });
+        await act(async () => { await Promise.resolve(); });
+        fireEvent.click(screen.getByRole('tab', { name: 'Comments' }));
+
+        expect(screen.getByText('Hello from Amy')).toBeInTheDocument();
+        expect(await screen.findByText('Refreshing comments…')).toBeInTheDocument();
+
+        await act(async () => {
+            resolveRefresh({ ok: true, data: defaultComments });
+        });
+        await waitFor(() => {
+            expect(screen.queryByText('Refreshing comments…')).not.toBeInTheDocument();
+        });
     });
 
     test('switching threads refetches comments scoped to the collection', async () => {
@@ -284,7 +336,7 @@ describe('describeActivityEvent', () => {
     const self = 'gil@example.com';
 
     test.each([
-        [{ actorEmail: 'amy@x.com', action: 'collection_updated', subject: 'c1', detail: '{"name":"Docs"}' }, 'amy@x.com updated “Docs”'],
+        [{ actorEmail: 'amy@x.com', actorFirstName: 'Amy', action: 'collection_updated', subject: 'c1', detail: '{"name":"Docs"}' }, 'Amy updated “Docs”'],
         [{ actorEmail: 'amy@x.com', action: 'collection_deleted', subject: 'c1', detail: '{"name":"Docs"}' }, 'amy@x.com deleted “Docs”'],
         [{ actorEmail: self, action: 'folder_renamed', detail: '{"from":"Old","to":"New"}' }, 'You renamed the folder from “Old” to “New”'],
         [{ actorEmail: 'amy@x.com', action: 'member_left' }, 'amy@x.com left the folder'],

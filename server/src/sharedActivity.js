@@ -43,7 +43,7 @@ function parsePaging({ beforeId, limit } = {}) {
 // (actor_email, action, subject) and is < 10 minutes old, bump its created_at
 // and refresh detail instead of inserting ("updated × 12" noise killer).
 // Retention: newest MAX_ACTIVITY_ROWS rows per folder, pruned on insert.
-export async function recordActivity(db, folderId, actorEmail, action, subject, detail, nowMs) {
+export async function recordActivity(db, folderId, actorEmail, action, subject, detail, nowMs, actorFirstName = null) {
   try {
     const email = String(actorEmail || '').toLowerCase();
     const subj = subject ?? null;
@@ -55,13 +55,13 @@ export async function recordActivity(db, folderId, actorEmail, action, subject, 
       last && last.actor_email === email && last.action === action &&
       (last.subject ?? null) === subj && nowMs - last.created_at < ACTIVITY_COALESCE_MS
     ) {
-      await db.prepare('UPDATE shared_activity SET created_at = ?, detail = ? WHERE id = ?')
-        .bind(nowMs, detailJson, last.id).run();
+      await db.prepare('UPDATE shared_activity SET created_at = ?, detail = ?, actor_first_name = ? WHERE id = ?')
+        .bind(nowMs, detailJson, actorFirstName, last.id).run();
       return;
     }
     await db.prepare(
-      'INSERT INTO shared_activity (folder_id, actor_email, action, subject, detail, created_at) VALUES (?,?,?,?,?,?)'
-    ).bind(folderId, email, action, subj, detailJson, nowMs).run();
+      'INSERT INTO shared_activity (folder_id, actor_email, actor_first_name, action, subject, detail, created_at) VALUES (?,?,?,?,?,?,?)'
+    ).bind(folderId, email, actorFirstName, action, subj, detailJson, nowMs).run();
     await db.prepare(
       'DELETE FROM shared_activity WHERE folder_id = ?1 AND id NOT IN (SELECT id FROM shared_activity WHERE folder_id = ?1 ORDER BY id DESC LIMIT ?2)'
     ).bind(folderId, MAX_ACTIVITY_ROWS).run();
@@ -83,7 +83,7 @@ export async function listActivity(db, identity, folderId, { beforeId, limit } =
   }
   bound.push(paging.limit);
   const { results } = await db.prepare(
-    `SELECT id, actor_email, action, subject, detail, created_at FROM shared_activity WHERE ${where} ORDER BY id DESC LIMIT ?`
+    `SELECT id, actor_email, actor_first_name, action, subject, detail, created_at FROM shared_activity WHERE ${where} ORDER BY id DESC LIMIT ?`
   ).bind(...bound).all();
   return {
     ok: true,
@@ -91,7 +91,11 @@ export async function listActivity(db, identity, folderId, { beforeId, limit } =
       events: results.map((r) => {
         let detail = null;
         try { detail = r.detail == null ? null : JSON.parse(r.detail); } catch { detail = null; }
-        return { id: r.id, actorEmail: r.actor_email, action: r.action, subject: r.subject, detail, createdAt: r.created_at };
+        return {
+          id: r.id, actorEmail: r.actor_email,
+          ...(r.actor_first_name ? { actorFirstName: r.actor_first_name } : {}),
+          action: r.action, subject: r.subject, detail, createdAt: r.created_at,
+        };
       }),
     },
   };
@@ -116,7 +120,7 @@ export async function listComments(db, identity, folderId, { collectionUid = nul
   }
   bound.push(paging.limit);
   const { results } = await db.prepare(
-    `SELECT id, collection_uid, author_email, body, created_at FROM shared_comments WHERE ${where} ORDER BY created_at DESC, rowid DESC LIMIT ?`
+    `SELECT id, collection_uid, author_email, author_first_name, body, created_at FROM shared_comments WHERE ${where} ORDER BY created_at DESC, rowid DESC LIMIT ?`
   ).bind(...bound).all();
   const { results: countRows } = await db.prepare(
     'SELECT collection_uid, COUNT(*) AS n FROM shared_comments WHERE folder_id = ? AND deleted = 0 GROUP BY collection_uid'
@@ -125,7 +129,9 @@ export async function listComments(db, identity, folderId, { collectionUid = nul
     ok: true,
     data: {
       comments: results.map((r) => ({
-        id: r.id, collectionUid: r.collection_uid, authorEmail: r.author_email, body: r.body, createdAt: r.created_at,
+        id: r.id, collectionUid: r.collection_uid, authorEmail: r.author_email,
+        ...(r.author_first_name ? { authorFirstName: r.author_first_name } : {}),
+        body: r.body, createdAt: r.created_at,
       })),
       counts: countRows.map((r) => ({ collectionUid: r.collection_uid, n: r.n })),
     },
@@ -151,9 +157,13 @@ export async function postComment(db, identity, folderId, { collectionUid = null
   const id = crypto.randomUUID();
   const authorEmail = identity.email.toLowerCase();
   await db.prepare(
-    'INSERT INTO shared_comments (id, folder_id, collection_uid, author_email, body, created_at, deleted) VALUES (?,?,?,?,?,?,0)'
-  ).bind(id, folderId, uid, authorEmail, text, nowMs).run();
-  return { ok: true, data: { comment: { id, collectionUid: uid, authorEmail, body: text, createdAt: nowMs } } };
+    'INSERT INTO shared_comments (id, folder_id, collection_uid, author_email, author_first_name, body, created_at, deleted) VALUES (?,?,?,?,?,?,?,0)'
+  ).bind(id, folderId, uid, authorEmail, identity.firstName || null, text, nowMs).run();
+  return { ok: true, data: { comment: {
+    id, collectionUid: uid, authorEmail,
+    ...(identity.firstName ? { authorFirstName: identity.firstName } : {}),
+    body: text, createdAt: nowMs,
+  } } };
 }
 
 // Only the author may delete their own comment. Everyone else gets the

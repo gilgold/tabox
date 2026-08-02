@@ -638,9 +638,12 @@ function FPSidebar({
                 })}
             </nav>
 
-            {/* Shared folders + pending invite ghosts */}
-            {!collapsed && (sharedFolders.length > 0 || pendingInvites.length > 0) && (
-                <div className="fp-sidebar-shared-section">
+            {/* Folders scroll region */}
+            {!collapsed && (
+                <div className="fp-sidebar-folders">
+                    {/* Shared folders + pending invite ghosts */}
+                    {(sharedFolders.length > 0 || pendingInvites.length > 0) && (
+                        <div className="fp-sidebar-shared-section">
                     <div className="fp-sidebar-folders-header">
                         <span className="fp-sidebar-folders-title fp-sidebar-shared-title">
                             <MdFolderShared size={16} className="fp-sidebar-shared-title-icon" aria-hidden="true" />
@@ -683,7 +686,7 @@ function FPSidebar({
                                     <span className="fp-sidebar-ghost-copy">
                                         <span className="fp-sidebar-folder-name">{invite.folderName}</span>
                                         <span className="fp-sidebar-ghost-owner">
-                                            {invite.ownerEmail}{invite.role === 'read' ? ' · View only' : ''}
+                                            {invite.ownerFirstName || invite.ownerEmail}{invite.role === 'read' ? ' · View only' : ''}
                                         </span>
                                     </span>
                                     <span className="fp-sidebar-ghost-actions">
@@ -694,7 +697,7 @@ function FPSidebar({
                                             onClick={() => handleInviteAccept(invite)}
                                             aria-label={`Accept invite to "${invite.folderName}"`}
                                             data-tooltip-id="main-tooltip"
-                                            data-tooltip-content={`Accept invite from ${invite.ownerEmail}`}
+                                            data-tooltip-content={`Accept invite from ${invite.ownerFirstName || invite.ownerEmail}`}
                                             data-tooltip-class-name="small-tooltip"
                                         >
                                             {isBusy ? 'Accepting…' : 'Accept'}
@@ -716,12 +719,11 @@ function FPSidebar({
                             );
                         })}
                     </div>
-                </div>
-            )}
+                        </div>
+                    )}
 
-            {/* Folders */}
-            {!collapsed && (
-                <div className="fp-sidebar-folders">
+                    {/* Folders */}
+                    <div className="fp-sidebar-regular-folders">
                     <div className="fp-sidebar-folders-header">
                         <span className="fp-sidebar-folders-title">Folders</span>
                         <button
@@ -782,6 +784,7 @@ function FPSidebar({
                     ) : (
                         <div className="fp-sidebar-no-folders">No folders yet</div>
                     )}
+                    </div>
                 </div>
             )}
 

@@ -11,7 +11,7 @@
 
 import { readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { TIERS } from './tiers.js';
 
@@ -79,7 +79,11 @@ if ([...html].length > WIX_CUSTOM_CODE_LIMIT) {
   fail(`Generated snippet is ${[...html].length} characters; Wix allows ${WIX_CUSTOM_CODE_LIMIT}.`);
 }
 
-const outPath = join(here, 'pricing.html');
+// Tests write to a disposable path so a sandbox fixture can never replace the
+// production artifact intended for the Wix Custom Code block.
+const outPath = process.env.PRICING_OUTPUT_PATH
+  ? resolve(process.env.PRICING_OUTPUT_PATH)
+  : join(here, 'pricing.html');
 await writeFile(outPath, html, 'utf8');
 console.log(
   `✓ built ${outPath}  (env=${env}, token=${token.slice(0, 5)}…, ` +

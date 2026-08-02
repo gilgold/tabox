@@ -542,6 +542,7 @@ describe('FPSidebar Shared Folders section', () => {
         const sharedSection = container.querySelector('.fp-sidebar-shared-section');
         expect(sharedSection).toHaveTextContent('Team Folder');
         expect(sharedSection).not.toHaveTextContent('Plain Folder');
+        expect(sharedSection.closest('.fp-sidebar-folders')).not.toBeNull();
 
         // Shared folder must not be part of the sortable regular list.
         const sharedButton = screen.getByText('Team Folder').closest('button');

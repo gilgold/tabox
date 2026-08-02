@@ -49,7 +49,7 @@ export async function createOrRotateFolderLink(db, identity, folderId, { role, r
 
 async function regradeLinkMembers(db, identity, folderId, role, nowMs, isProMember) {
   const { results } = await db.prepare(
-    "SELECT email, google_id, role FROM shared_members WHERE folder_id = ? AND status = 'active' AND via_link = 1"
+    "SELECT email, google_id, first_name, role FROM shared_members WHERE folder_id = ? AND status = 'active' AND via_link = 1"
   ).bind(folderId).all();
   const updated = [];
   for (const m of results) {
@@ -57,7 +57,7 @@ async function regradeLinkMembers(db, identity, folderId, role, nowMs, isProMemb
     if (m.role === effectiveRole) continue;
     await db.prepare('UPDATE shared_members SET role = ? WHERE folder_id = ? AND email = ?')
       .bind(effectiveRole, folderId, m.email).run();
-    await recordActivity(db, folderId, identity.email, 'role_changed', m.email, { role: effectiveRole }, nowMs);
+    await recordActivity(db, folderId, identity.email, 'role_changed', m.email, { role: effectiveRole, subjectFirstName: m.first_name || null }, nowMs, identity.firstName);
     updated.push({ email: m.email, role: effectiveRole });
   }
   if (updated.length) await bumpRevision(db, folderId, identity, nowMs);
@@ -88,7 +88,7 @@ export async function deleteFolderLink(db, identity, folderId) {
 export async function joinViaFolderLink(db, identity, token, nowMs, { isPro = false } = {}) {
   if (typeof token !== 'string' || !token) return err(400, 'invalid_request');
   const link = await db.prepare(
-    `SELECT fl.folder_id, fl.role AS link_role, f.owner_google_id, f.owner_email, f.name, f.color, f.revision
+    `SELECT fl.folder_id, fl.role AS link_role, f.owner_google_id, f.owner_email, f.owner_first_name, f.name, f.color, f.revision
        FROM folder_links fl JOIN shared_folders f ON f.id = fl.folder_id WHERE fl.token = ?`
   ).bind(token).first();
   if (!link) return err(404, 'not_found');
@@ -106,11 +106,11 @@ export async function joinViaFolderLink(db, identity, token, nowMs, { isPro = fa
   const effectiveRole = link.link_role === 'write' && !isPro ? 'read' : link.link_role;
   if (!existing || existing.status !== 'active') {
     await db.prepare(
-      `INSERT INTO shared_members (folder_id, email, google_id, role, status, invited_at, responded_at, via_link)
-       VALUES (?,?,?,?,'active',?,?,1)
+      `INSERT INTO shared_members (folder_id, email, google_id, first_name, role, status, invited_at, responded_at, via_link)
+       VALUES (?,?,?,?,?,'active',?,?,1)
        ON CONFLICT(folder_id, email) DO UPDATE SET role = excluded.role, status = 'active',
-         google_id = excluded.google_id, responded_at = excluded.responded_at, via_link = 1`
-    ).bind(link.folder_id, email, identity.googleId, effectiveRole, nowMs, nowMs).run();
+         google_id = excluded.google_id, first_name = excluded.first_name, responded_at = excluded.responded_at, via_link = 1`
+    ).bind(link.folder_id, email, identity.googleId, identity.firstName || null, effectiveRole, nowMs, nowMs).run();
   }
   let memberRow = await db.prepare(
     'SELECT role FROM shared_members WHERE folder_id = ? AND email = ?'
@@ -125,12 +125,18 @@ export async function joinViaFolderLink(db, identity, token, nowMs, { isPro = fa
   // Only an actual transition to 'active' is a join — re-opening the link as
   // an already-active member records nothing.
   if (!existing || existing.status !== 'active') {
-    await recordActivity(db, link.folder_id, email, 'member_joined', email, { role: memberRow.role }, nowMs);
+    await recordActivity(db, link.folder_id, email, 'member_joined', email, { role: memberRow.role, subjectFirstName: identity.firstName || null }, nowMs, identity.firstName);
   }
   const roleDowngraded = !isPro && link.link_role === 'write' && memberRow.role === 'read';
-  const { results: members } = await db.prepare(
-    'SELECT email, role, status FROM shared_members WHERE folder_id = ? ORDER BY invited_at'
+  const { results: memberRows } = await db.prepare(
+    'SELECT email, first_name AS firstName, role, status FROM shared_members WHERE folder_id = ? ORDER BY invited_at'
   ).bind(link.folder_id).all();
+  const members = memberRows.map((member) => ({
+    email: member.email,
+    ...(member.firstName ? { firstName: member.firstName } : {}),
+    role: member.role,
+    status: member.status,
+  }));
   const { results: collections } = await db.prepare(
     'SELECT uid, data FROM shared_collections WHERE folder_id = ? AND deleted = 0'
   ).bind(link.folder_id).all();
@@ -140,7 +146,9 @@ export async function joinViaFolderLink(db, identity, token, nowMs, { isPro = fa
       accepted: true,
       folder: {
         folderId: link.folder_id, name: link.name, color: link.color, revision: link.revision,
-        role: memberRow.role, ownerEmail: link.owner_email, members,
+        role: memberRow.role, ownerEmail: link.owner_email,
+        ...(link.owner_first_name ? { ownerFirstName: link.owner_first_name } : {}),
+        members,
       },
       collections: collections.map((r) => ({ uid: r.uid, data: JSON.parse(r.data) })),
       ...(roleDowngraded ? { roleDowngraded: true } : {}),
@@ -198,14 +206,18 @@ export async function deleteCollectionLink(db, identity, uid) {
 export async function getPublicLinkInfo(db, token) {
   if (typeof token !== 'string' || !token) return err(404, 'not_found');
   const fl = await db.prepare(
-    `SELECT fl.role, f.id, f.name, f.owner_email FROM folder_links fl
+    `SELECT fl.role, f.id, f.name, f.owner_email, f.owner_first_name FROM folder_links fl
        JOIN shared_folders f ON f.id = fl.folder_id WHERE fl.token = ?`
   ).bind(token).first();
   if (fl) {
     const count = await db.prepare(
       'SELECT COUNT(*) AS n FROM shared_collections WHERE folder_id = ? AND deleted = 0'
     ).bind(fl.id).first();
-    return { ok: true, data: { kind: 'folder', name: fl.name, ownerEmail: fl.owner_email, role: fl.role, collectionCount: count.n } };
+    return { ok: true, data: {
+      kind: 'folder', name: fl.name, ownerEmail: fl.owner_email,
+      ...(fl.owner_first_name ? { ownerFirstName: fl.owner_first_name } : {}),
+      role: fl.role, collectionCount: count.n,
+    } };
   }
   const cl = await db.prepare('SELECT name, owner_email, data FROM collection_links WHERE token = ?').bind(token).first();
   if (!cl) return err(404, 'not_found');

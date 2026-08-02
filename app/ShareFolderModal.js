@@ -99,7 +99,10 @@ export default function ShareFolderModal() {
     const normalizedMemberSearch = memberSearch.trim().toLowerCase();
     const filteredMembers = useMemo(() => {
         if (!normalizedMemberSearch) return members;
-        return members.filter((member) => member.email.toLowerCase().includes(normalizedMemberSearch));
+        return members.filter((member) => (
+            member.email.toLowerCase().includes(normalizedMemberSearch)
+            || (member.firstName || '').toLowerCase().includes(normalizedMemberSearch)
+        ));
     }, [members, normalizedMemberSearch]);
     const selectedEmailSet = useMemo(() => new Set(selectedEmails), [selectedEmails]);
     const selectableFilteredMembers = useMemo(
@@ -646,8 +649,9 @@ export default function ShareFolderModal() {
                                             />
                                             <span aria-hidden="true"><MdCheck size={13} /></span>
                                         </label>
-                                        <span className="share-member-avatar" aria-hidden="true">{m.email.charAt(0).toUpperCase()}</span>
+                                        <span className="share-member-avatar" aria-hidden="true">{(m.firstName || m.email).charAt(0).toUpperCase()}</span>
                                         <div className="share-member-identity">
+                                            {m.firstName && <span className="share-member-name">{m.firstName}</span>}
                                             <span className="share-member-email">{m.email}</span>
                                             <span className={`share-member-status status-${m.status}`}>
                                                 <span className="share-member-status-dot" aria-hidden="true" />

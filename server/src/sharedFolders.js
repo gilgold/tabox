@@ -7,6 +7,14 @@ const MAX_COLLECTION_JSON_DEPTH = 10_000;
 const ROLES = ['read', 'write'];
 const err = (status, error) => ({ ok: false, status, error });
 
+async function refreshIdentityName(db, identity) {
+  if (!identity?.firstName) return;
+  await db.prepare('UPDATE shared_folders SET owner_first_name = ? WHERE owner_google_id = ? AND (owner_first_name IS NULL OR owner_first_name != ?)')
+    .bind(identity.firstName, identity.googleId, identity.firstName).run();
+  await db.prepare("UPDATE shared_members SET first_name = ? WHERE email = ? AND status = 'active' AND (first_name IS NULL OR first_name != ?)")
+    .bind(identity.firstName, identity.email.toLowerCase(), identity.firstName).run();
+}
+
 export async function isProUser(env, googleId) {
   const raw = await env.ENTITLEMENTS.get(`ent:${googleId}`);
   let record = null;
@@ -90,8 +98,8 @@ export async function createSharedFolder(db, identity, { folderId, name, color =
   const existing = await db.prepare('SELECT id FROM shared_folders WHERE id = ?').bind(folderId).first();
   if (existing) return err(409, 'already_shared');
   await db.prepare(
-    'INSERT INTO shared_folders (id, owner_google_id, owner_email, name, color, revision, created_at, updated_at, updated_by) VALUES (?,?,?,?,?,1,?,?,?)'
-  ).bind(folderId, identity.googleId, identity.email.toLowerCase(), name, color, nowMs, nowMs, identity.email.toLowerCase()).run();
+    'INSERT INTO shared_folders (id, owner_google_id, owner_email, owner_first_name, name, color, revision, created_at, updated_at, updated_by) VALUES (?,?,?,?,?,?,1,?,?,?)'
+  ).bind(folderId, identity.googleId, identity.email.toLowerCase(), identity.firstName || null, name, color, nowMs, nowMs, identity.email.toLowerCase()).run();
   for (const c of collections) {
     await db.prepare(
       'INSERT INTO shared_collections (folder_id, uid, data, rev, deleted, updated_at, updated_by) VALUES (?,?,?,1,0,?,?)'
@@ -104,12 +112,18 @@ async function membersOf(db, folderId) {
   // Declined members are INCLUDED (status:'declined') so the owner sees who declined
   // and can re-invite; only the member cap excludes them (see inviteMember).
   const { results } = await db.prepare(
-    'SELECT email, role, status FROM shared_members WHERE folder_id = ? ORDER BY invited_at'
+    'SELECT email, first_name AS firstName, role, status FROM shared_members WHERE folder_id = ? ORDER BY invited_at'
   ).bind(folderId).all();
-  return results;
+  return results.map((member) => ({
+    email: member.email,
+    ...(member.firstName ? { firstName: member.firstName } : {}),
+    role: member.role,
+    status: member.status,
+  }));
 }
 
 export async function listSharedFolders(db, identity) {
+  await refreshIdentityName(db, identity);
   const email = identity.email.toLowerCase();
   const { results } = await db.prepare(
     `SELECT f.*, CASE WHEN f.owner_google_id = ?1 THEN 'owner' ELSE m.role END AS role
@@ -121,7 +135,9 @@ export async function listSharedFolders(db, identity) {
   for (const f of results) {
     folders.push({
       folderId: f.id, name: f.name, color: f.color, revision: f.revision,
-      role: f.role, ownerEmail: f.owner_email, members: await membersOf(db, f.id),
+      role: f.role, ownerEmail: f.owner_email,
+      ...(f.owner_first_name ? { ownerFirstName: f.owner_first_name } : {}),
+      members: await membersOf(db, f.id),
     });
   }
   return { ok: true, data: { folders } };
@@ -130,6 +146,7 @@ export async function listSharedFolders(db, identity) {
 const ROLE_RANK = { read: 1, write: 2, owner: 3 };
 
 export async function requireFolderAccess(db, identity, folderId, minRole) {
+  await refreshIdentityName(db, identity);
   const folder = await db.prepare('SELECT * FROM shared_folders WHERE id = ?').bind(folderId).first();
   if (!folder) return err(404, 'not_found');
   let role = null;
@@ -170,12 +187,21 @@ export async function inviteMember(db, identity, folderId, { email, role }, nowM
 }
 
 export async function listInvites(db, identity) {
+  await refreshIdentityName(db, identity);
   const { results } = await db.prepare(
-    `SELECT m.folder_id AS folderId, f.name AS folderName, f.owner_email AS ownerEmail, m.role, m.invited_at AS invitedAt
+    `SELECT m.folder_id AS folderId, f.name AS folderName, f.owner_email AS ownerEmail,
+            f.owner_first_name AS ownerFirstName, m.role, m.invited_at AS invitedAt
        FROM shared_members m JOIN shared_folders f ON f.id = m.folder_id
       WHERE m.email = ? AND m.status = 'invited' ORDER BY m.invited_at`
   ).bind(identity.email.toLowerCase()).all();
-  return { ok: true, data: { invites: results } };
+  return { ok: true, data: { invites: results.map((invite) => ({
+    folderId: invite.folderId,
+    folderName: invite.folderName,
+    ownerEmail: invite.ownerEmail,
+    ...(invite.ownerFirstName ? { ownerFirstName: invite.ownerFirstName } : {}),
+    role: invite.role,
+    invitedAt: invite.invitedAt,
+  })) } };
 }
 
 // Entitlement gate on the RECIPIENT: a non-Pro user can only ever hold 'read'.
@@ -190,10 +216,10 @@ export async function respondInvite(db, identity, folderId, accept, nowMs, { isP
   const status = accept ? 'active' : 'declined';
   const effectiveRole = accept && invite.role === 'write' && !isPro ? 'read' : invite.role;
   await db.prepare(
-    'UPDATE shared_members SET status = ?, role = ?, google_id = ?, responded_at = ? WHERE folder_id = ? AND email = ?'
-  ).bind(status, effectiveRole, identity.googleId, nowMs, folderId, email).run();
+    'UPDATE shared_members SET status = ?, role = ?, google_id = ?, first_name = ?, responded_at = ? WHERE folder_id = ? AND email = ?'
+  ).bind(status, effectiveRole, identity.googleId, identity.firstName || null, nowMs, folderId, email).run();
   if (!accept) return { ok: true, data: { accepted: false } };
-  await recordActivity(db, folderId, email, 'member_joined', email, { role: effectiveRole }, nowMs);
+  await recordActivity(db, folderId, email, 'member_joined', email, { role: effectiveRole, subjectFirstName: identity.firstName || null }, nowMs, identity.firstName);
   const f = await db.prepare('SELECT * FROM shared_folders WHERE id = ?').bind(folderId).first();
   const { results } = await db.prepare(
     'SELECT uid, data FROM shared_collections WHERE folder_id = ? AND deleted = 0'
@@ -204,7 +230,9 @@ export async function respondInvite(db, identity, folderId, accept, nowMs, { isP
       accepted: true,
       folder: {
         folderId: f.id, name: f.name, color: f.color, revision: f.revision,
-        role: effectiveRole, ownerEmail: f.owner_email, members: await membersOf(db, folderId),
+        role: effectiveRole, ownerEmail: f.owner_email,
+        ...(f.owner_first_name ? { ownerFirstName: f.owner_first_name } : {}),
+        members: await membersOf(db, folderId),
       },
       collections: results.map((r) => ({ uid: r.uid, data: JSON.parse(r.data) })),
       ...(effectiveRole !== invite.role ? { roleDowngraded: true } : {}),
@@ -266,7 +294,7 @@ export async function putCollection(db, identity, folderId, uid, { data, baseRev
   ).bind(folderId, uid, JSON.stringify(data ?? null), revision, nowMs, identity.email.toLowerCase()).run();
   // A row that only exists as a tombstone (deleted = 1) reads as "added" again.
   const action = row && !row.deleted ? 'collection_updated' : 'collection_added';
-  await recordActivity(db, folderId, identity.email, action, uid, collectionNameDetail(data), nowMs);
+  await recordActivity(db, folderId, identity.email, action, uid, collectionNameDetail(data), nowMs, identity.firstName);
   return { ok: true, data: { revision } };
 }
 
@@ -295,7 +323,7 @@ export async function deleteCollection(db, identity, folderId, uid, nowMs, baseR
      ON CONFLICT(folder_id, uid) DO UPDATE SET data = NULL, rev = excluded.rev, deleted = 1,
        updated_at = excluded.updated_at, updated_by = excluded.updated_by`
   ).bind(folderId, uid, revision, nowMs, identity.email.toLowerCase()).run();
-  await recordActivity(db, folderId, identity.email, 'collection_deleted', uid, snapshot, nowMs);
+  await recordActivity(db, folderId, identity.email, 'collection_deleted', uid, snapshot, nowMs, identity.firstName);
   return { ok: true, data: { revision } };
 }
 
@@ -308,7 +336,7 @@ export async function updateFolderMeta(db, identity, folderId, { name, color }, 
     .bind(name ?? f.name, color === undefined ? f.color : color, folderId).run();
   const revision = await bumpRevision(db, folderId, identity, nowMs);
   if (name != null && name !== f.name) {
-    await recordActivity(db, folderId, identity.email, 'folder_renamed', null, { from: f.name, to: name }, nowMs);
+    await recordActivity(db, folderId, identity.email, 'folder_renamed', null, { from: f.name, to: name }, nowMs, identity.firstName);
   }
   return { ok: true, data: { revision } };
 }
@@ -319,11 +347,14 @@ export async function updateMemberRole(db, identity, folderId, email, role, nowM
   if (!ROLES.includes(role)) return err(400, 'invalid_role');
   // An explicit per-member grant detaches the member from the share link:
   // later link role changes must not clobber what the owner set by hand.
+  const target = String(email).toLowerCase();
+  const member = await db.prepare('SELECT first_name FROM shared_members WHERE folder_id = ? AND email = ?')
+    .bind(folderId, target).first();
   const res = await db.prepare('UPDATE shared_members SET role = ?, via_link = 0 WHERE folder_id = ? AND email = ?')
-    .bind(role, folderId, String(email).toLowerCase()).run();
+    .bind(role, folderId, target).run();
   if (res.meta.changes === 0) return err(404, 'not_found');
   await bumpRevision(db, folderId, identity, nowMs);
-  await recordActivity(db, folderId, identity.email, 'role_changed', String(email).toLowerCase(), { role }, nowMs);
+  await recordActivity(db, folderId, identity.email, 'role_changed', target, { role, subjectFirstName: member?.first_name || null }, nowMs, identity.firstName);
   return { ok: true, data: { members: await membersOf(db, folderId) } };
 }
 
@@ -332,10 +363,12 @@ export async function removeMember(db, identity, folderId, email, nowMs) {
   const isSelf = target === identity.email.toLowerCase();
   const access = await requireFolderAccess(db, identity, folderId, isSelf ? 'read' : 'owner');
   if (access.ok === false) return access;
+  const member = await db.prepare('SELECT first_name FROM shared_members WHERE folder_id = ? AND email = ?')
+    .bind(folderId, target).first();
   const res = await db.prepare('DELETE FROM shared_members WHERE folder_id = ? AND email = ?').bind(folderId, target).run();
   if (res.meta.changes === 0) return err(404, 'not_found');
   await bumpRevision(db, folderId, identity, nowMs);
-  await recordActivity(db, folderId, identity.email, isSelf ? 'member_left' : 'member_removed', target, null, nowMs);
+  await recordActivity(db, folderId, identity.email, isSelf ? 'member_left' : 'member_removed', target, { subjectFirstName: member?.first_name || null }, nowMs, identity.firstName);
   return { ok: true, data: { members: await membersOf(db, folderId) } };
 }
 

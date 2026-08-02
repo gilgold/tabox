@@ -294,6 +294,211 @@ html.fullpage-mode .manage-sub-controls-inline .manage-sub-actions {
     justify-content: flex-start;
 }
 
+/* Compact inline billing screen inside the popup's two-column settings modal. */
+.fp-settings-modal-shell--popup .manage-sub-controls-inline {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 100%;
+    min-width: 0;
+}
+
+.fp-settings-modal-shell--popup .manage-sub-inline-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 12px;
+}
+
+.fp-settings-modal-shell--popup .manage-sub-inline-header h4 {
+    margin: 0;
+    color: var(--color-text);
+    font-family: var(--fp-font-display);
+    font-size: 17px;
+    line-height: 1.25;
+}
+
+.fp-settings-modal-shell--popup .manage-sub-inline-header p {
+    max-width: 320px;
+    margin: 4px 0 0;
+    color: var(--color-text-muted);
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.fp-settings-modal-shell--popup .manage-sub-back {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 32px;
+    padding: 6px 10px;
+    border: 1px solid var(--color-border-strong);
+    border-radius: 9px;
+    background: var(--color-surface-muted);
+    color: var(--color-text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+.fp-settings-modal-shell--popup .manage-sub-back:hover {
+    border-color: rgba(99, 102, 241, 0.55);
+    background: rgba(99, 102, 241, 0.12);
+    color: var(--color-text);
+}
+
+.fp-settings-modal-shell--popup .manage-sub-controls-inline .manage-sub-body {
+    gap: 12px;
+    color: var(--color-text);
+    font-size: 12px;
+}
+
+.fp-settings-modal-shell--popup .manage-sub-controls-inline .manage-sub-summary {
+    gap: 8px;
+    padding: 14px 16px;
+    border: 1px solid rgba(124, 108, 242, 0.38);
+    border-radius: 14px;
+    background:
+        radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.14), transparent 38%),
+        linear-gradient(145deg, var(--color-surface), rgba(99, 102, 241, 0.1));
+    box-shadow:
+        0 8px 22px rgba(30, 64, 175, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.fp-settings-modal-shell--popup .manage-sub-controls-inline .manage-sub-row {
+    align-items: center;
+    min-height: 20px;
+    gap: 16px;
+}
+
+.fp-settings-modal-shell--popup .manage-sub-controls-inline .manage-sub-row:first-child {
+    margin-bottom: 2px;
+    padding-bottom: 9px;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.fp-settings-modal-shell--popup .manage-sub-controls-inline .manage-sub-label {
+    color: var(--color-text-muted);
+    font-size: 11px;
+    opacity: 1;
+}
+
+.fp-settings-modal-shell--popup .manage-sub-controls-inline .manage-sub-value {
+    color: var(--color-text);
+    font-size: 12px;
+    font-weight: 750;
+    text-align: right;
+}
+
+.fp-settings-modal-shell--popup .manage-sub-controls-inline .manage-sub-plan-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    width: 100%;
+}
+
+.fp-settings-modal-shell--popup .manage-sub-controls-inline .manage-sub-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    min-height: 40px;
+    padding: 9px 12px;
+    border-color: var(--color-border-strong);
+    border-radius: 11px;
+    background: var(--color-surface-muted);
+    color: var(--color-text);
+    font-size: 12px;
+    line-height: 1.2;
+    text-align: center;
+    transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.fp-settings-modal-shell--popup .manage-sub-controls-inline .manage-sub-btn:not(:disabled):hover {
+    transform: translateY(-1px);
+}
+
+.fp-settings-modal-shell--popup .manage-sub-controls-inline .manage-sub-btn-primary {
+    border: 0;
+    background: linear-gradient(110deg, #168fe7, #536de8 55%, #7867ee);
+    color: #fff;
+    box-shadow: 0 7px 16px rgba(54, 91, 218, 0.25);
+}
+
+.fp-settings-modal-shell--popup .manage-sub-controls-inline .manage-sub-btn-primary:not(:disabled):hover {
+    background: linear-gradient(110deg, #249ff4, #6078ef 55%, #8775f5);
+    box-shadow: 0 10px 20px rgba(54, 91, 218, 0.32);
+}
+
+.fp-settings-modal-shell--popup .manage-sub-controls-inline .manage-sub-btn-danger {
+    border-color: rgba(220, 38, 38, 0.35);
+    background: rgba(220, 38, 38, 0.06);
+    color: #ef4444;
+}
+
+.fp-settings-modal-shell--popup .manage-sub-controls-inline .manage-sub-link {
+    display: flex;
+    justify-content: center;
+    min-height: 34px;
+    padding: 8px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    background: var(--color-surface-muted);
+    color: #7c6cf2;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.fp-settings-modal-shell--popup .manage-sub-controls-inline .manage-sub-link:hover {
+    border-color: rgba(124, 108, 242, 0.45);
+    background: rgba(124, 108, 242, 0.1);
+    text-decoration: none;
+}
+
+.fp-settings-modal-shell--popup .manage-sub-confirm-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    border-radius: 14px;
+    background: linear-gradient(145deg, var(--color-surface), rgba(99, 102, 241, 0.08));
+}
+
+.fp-settings-modal-shell--popup .manage-sub-confirm-panel.is-danger {
+    border-color: rgba(220, 38, 38, 0.3);
+    background: linear-gradient(145deg, var(--color-surface), rgba(220, 38, 38, 0.06));
+}
+
+.fp-settings-modal-shell--popup .manage-sub-confirm-title {
+    color: var(--color-text);
+    font-size: 15px;
+}
+
+.fp-settings-modal-shell--popup .manage-sub-confirm-details,
+.fp-settings-modal-shell--popup .manage-sub-confirm-text {
+    color: var(--color-text-muted);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.fp-settings-modal-shell--popup .manage-sub-controls-inline .manage-sub-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.fp-settings-modal-shell--popup .manage-sub-controls-inline .manage-sub-loading,
+.fp-settings-modal-shell--popup .manage-sub-controls-inline .manage-sub-notice,
+.fp-settings-modal-shell--popup .manage-sub-controls-inline .manage-sub-error {
+    padding: 12px 14px;
+    border-radius: 11px;
+}
+
 @media (max-width: 640px) {
     html.fullpage-mode .manage-sub-inline-header {
         flex-direction: column;

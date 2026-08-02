@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useAtomValue } from 'jotai';
+import { useAtom, useAtomValue } from 'jotai';
 import { MdClose, MdDeleteOutline, MdSend } from 'react-icons/md';
 import { isProState } from '../atoms/premiumState';
 import { selectedCollectionUidState } from '../atoms/globalAppSettingsState';
+import { sharedActivityCacheState, sharedCommentsCacheState } from '../atoms/sharedFoldersState';
 import { browser } from '../../static/globals';
 import { showErrorToast } from '../toastHelpers';
 import ProBadge from '../ProBadge';
@@ -12,6 +13,16 @@ import './FPSharedPanel.css';
 const POLL_INTERVAL_MS = 30000;
 const SYNC_STATE_KEY = 'shared_sync_state';
 const SEEN_KEY = 'shared_activity_seen';
+const EMPTY_ACTIVITY = { events: [] };
+const EMPTY_COMMENTS = { comments: [], counts: [] };
+const commentsCacheKey = (folderUid, threadUid) => `${folderUid || ''}\u0000${threadUid || ''}`;
+
+const LoadingStatus = ({ children }) => (
+    <div className="fp-shared-panel-status fp-shared-panel-loading" role="status" aria-live="polite">
+        <span className="fp-shared-panel-spinner" aria-hidden="true" />
+        <span>{children}</span>
+    </div>
+);
 
 /**
  * Unread-dot state for a shared folder's activity feed.
@@ -115,9 +126,13 @@ const parseDetail = (detail) => {
 export function describeActivityEvent(event, selfEmail = '') {
     const detail = parseDetail(event.detail);
     const actorEmail = (event.actorEmail || '').toLowerCase();
-    const actor = actorEmail && actorEmail === selfEmail ? 'You' : (event.actorEmail || 'Someone');
+    const actor = actorEmail && actorEmail === selfEmail
+        ? 'You'
+        : (event.actorFirstName || event.actorEmail || 'Someone');
     const subjectEmail = (event.subject || '').toLowerCase();
-    const member = subjectEmail && subjectEmail === selfEmail ? 'you' : (event.subject || 'a member');
+    const member = subjectEmail && subjectEmail === selfEmail
+        ? 'you'
+        : (detail.subjectFirstName || event.subject || 'a member');
     const name = detail.name || event.subject || 'a collection';
 
     switch (event.action) {
@@ -170,18 +185,28 @@ function FPSharedPanel({ folder, collections, isOpen, onClose }) {
     const isPro = useAtomValue(isProState);
     const startProCheckout = useProCheckout();
     const selectedCollectionUid = useAtomValue(selectedCollectionUidState);
+    const [activityCache, setActivityCache] = useAtom(sharedActivityCacheState);
+    const [commentsCache, setCommentsCache] = useAtom(sharedCommentsCacheState);
 
     const folderUid = folder?.uid || null;
 
     const [tab, setTab] = useState('activity');
     const [selfEmail, setSelfEmail] = useState('');
-    const [activity, setActivity] = useState({ loading: false, error: false, events: [] });
-    const [comments, setComments] = useState({ loading: false, error: false, comments: [], counts: [] });
+    const [activityRequest, setActivityRequest] = useState({ key: null, loading: false, error: false });
+    const [commentsRequest, setCommentsRequest] = useState({ key: null, loading: false, error: false });
     // null = folder-level "Folder discussion" thread, otherwise a collection uid.
     const [activeThread, setActiveThread] = useState(null);
     const [body, setBody] = useState('');
     const [posting, setPosting] = useState(false);
     const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+
+    const activeCommentsCacheKey = commentsCacheKey(folderUid, activeThread);
+    const activityData = activityCache[folderUid] || EMPTY_ACTIVITY;
+    const commentsData = commentsCache[activeCommentsCacheKey] || EMPTY_COMMENTS;
+    const activityLoading = activityRequest.key === folderUid && activityRequest.loading;
+    const activityError = activityRequest.key === folderUid && activityRequest.error;
+    const commentsLoading = commentsRequest.key === activeCommentsCacheKey && commentsRequest.loading;
+    const commentsError = commentsRequest.key === activeCommentsCacheKey && commentsRequest.error;
 
     const folderCollections = useMemo(
         () => (collections || []).filter((collection) => collection.parentId === folderUid),
@@ -203,29 +228,39 @@ function FPSharedPanel({ folder, collections, isOpen, onClose }) {
         setActiveThread(null);
         setBody('');
         setConfirmDeleteId(null);
-        setActivity({ loading: false, error: false, events: [] });
-        setComments({ loading: false, error: false, comments: [], counts: [] });
     }, [folderUid]);
 
     const fetchActivity = useCallback(async () => {
         if (!folderUid) return;
-        setActivity((previous) => ({ ...previous, loading: previous.events.length === 0, error: false }));
+        const requestKey = folderUid;
+        setActivityRequest({ key: requestKey, loading: true, error: false });
         try {
             const res = await browser.runtime.sendMessage({ type: 'sharedGetActivity', folderId: folderUid });
             if (res?.ok) {
-                setActivity({ loading: false, error: false, events: res.data?.events || [] });
+                setActivityCache((previous) => ({
+                    ...previous,
+                    [requestKey]: { events: res.data?.events || [] },
+                }));
+                setActivityRequest((previous) => (
+                    previous.key === requestKey ? { key: requestKey, loading: false, error: false } : previous
+                ));
                 await markActivitySeen(folderUid);
             } else {
-                setActivity((previous) => ({ ...previous, loading: false, error: true }));
+                setActivityRequest((previous) => (
+                    previous.key === requestKey ? { key: requestKey, loading: false, error: true } : previous
+                ));
             }
         } catch {
-            setActivity((previous) => ({ ...previous, loading: false, error: true }));
+            setActivityRequest((previous) => (
+                previous.key === requestKey ? { key: requestKey, loading: false, error: true } : previous
+            ));
         }
-    }, [folderUid]);
+    }, [folderUid, setActivityCache]);
 
     const fetchComments = useCallback(async () => {
         if (!folderUid) return;
-        setComments((previous) => ({ ...previous, loading: previous.comments.length === 0, error: false }));
+        const requestKey = commentsCacheKey(folderUid, activeThread);
+        setCommentsRequest({ key: requestKey, loading: true, error: false });
         try {
             const res = await browser.runtime.sendMessage({
                 type: 'sharedGetComments',
@@ -233,19 +268,27 @@ function FPSharedPanel({ folder, collections, isOpen, onClose }) {
                 ...(activeThread ? { collectionUid: activeThread } : {}),
             });
             if (res?.ok) {
-                setComments({
-                    loading: false,
-                    error: false,
-                    comments: res.data?.comments || [],
-                    counts: res.data?.counts || [],
-                });
+                setCommentsCache((previous) => ({
+                    ...previous,
+                    [requestKey]: {
+                        comments: res.data?.comments || [],
+                        counts: res.data?.counts || [],
+                    },
+                }));
+                setCommentsRequest((previous) => (
+                    previous.key === requestKey ? { key: requestKey, loading: false, error: false } : previous
+                ));
             } else {
-                setComments((previous) => ({ ...previous, loading: false, error: true }));
+                setCommentsRequest((previous) => (
+                    previous.key === requestKey ? { key: requestKey, loading: false, error: true } : previous
+                ));
             }
         } catch {
-            setComments((previous) => ({ ...previous, loading: false, error: true }));
+            setCommentsRequest((previous) => (
+                previous.key === requestKey ? { key: requestKey, loading: false, error: true } : previous
+            ));
         }
-    }, [folderUid, activeThread]);
+    }, [folderUid, activeThread, setCommentsCache]);
 
     // Fetch on open / tab switch / thread switch.
     useEffect(() => {
@@ -343,7 +386,7 @@ function FPSharedPanel({ folder, collections, isOpen, onClose }) {
     const groupedActivity = useMemo(() => {
         const groups = [];
         let current = null;
-        (activity.events || []).forEach((event) => {
+        (activityData.events || []).forEach((event) => {
             const label = formatDayLabel(event.createdAt);
             if (!current || current.label !== label) {
                 current = { label, events: [] };
@@ -352,14 +395,14 @@ function FPSharedPanel({ folder, collections, isOpen, onClose }) {
             current.events.push(event);
         });
         return groups;
-    }, [activity.events]);
+    }, [activityData.events]);
 
     const countForThread = useCallback((collectionUid) => {
-        const entry = (comments.counts || []).find(
+        const entry = (commentsData.counts || []).find(
             (count) => (count.collectionUid || null) === (collectionUid || null),
         );
         return entry?.n || 0;
-    }, [comments.counts]);
+    }, [commentsData.counts]);
 
     if (!folder) return null;
 
@@ -411,19 +454,25 @@ function FPSharedPanel({ folder, collections, isOpen, onClose }) {
 
                 {tab === 'activity' && (
                     <div className="fp-shared-panel-body" role="tabpanel" aria-label="Activity">
-                        {activity.loading && (
-                            <div className="fp-shared-panel-status">Loading activity…</div>
+                        {activityLoading && (
+                            <LoadingStatus>
+                                {activityData.events.length > 0 ? 'Refreshing activity…' : 'Loading activity…'}
+                            </LoadingStatus>
                         )}
-                        {!activity.loading && activity.error && (
+                        {!activityLoading && activityError && (
                             <div className="fp-shared-panel-status fp-shared-panel-error">
-                                <span>Couldn’t load activity.</span>
+                                <span>
+                                    {activityData.events.length > 0
+                                        ? 'Couldn’t refresh activity.'
+                                        : 'Couldn’t load activity.'}
+                                </span>
                                 <button className="fp-shared-panel-retry" onClick={fetchActivity}>Retry</button>
                             </div>
                         )}
-                        {!activity.loading && !activity.error && activity.events.length === 0 && (
+                        {!activityLoading && !activityError && activityData.events.length === 0 && (
                             <div className="fp-shared-panel-status">No activity yet.</div>
                         )}
-                        {!activity.loading && !activity.error && groupedActivity.map((group) => (
+                        {groupedActivity.map((group) => (
                             <div className="fp-shared-activity-group" key={group.label}>
                                 <div className="fp-shared-activity-day">{group.label}</div>
                                 <ul className="fp-shared-activity-list">
@@ -460,27 +509,33 @@ function FPSharedPanel({ folder, collections, isOpen, onClose }) {
                         </select>
 
                         <div className="fp-shared-comments-list">
-                            {comments.loading && (
-                                <div className="fp-shared-panel-status">Loading comments…</div>
+                            {commentsLoading && (
+                                <LoadingStatus>
+                                    {commentsData.comments.length > 0 ? 'Refreshing comments…' : 'Loading comments…'}
+                                </LoadingStatus>
                             )}
-                            {!comments.loading && comments.error && (
+                            {!commentsLoading && commentsError && (
                                 <div className="fp-shared-panel-status fp-shared-panel-error">
-                                    <span>Couldn’t load comments.</span>
+                                    <span>
+                                        {commentsData.comments.length > 0
+                                            ? 'Couldn’t refresh comments.'
+                                            : 'Couldn’t load comments.'}
+                                    </span>
                                     <button className="fp-shared-panel-retry" onClick={fetchComments}>Retry</button>
                                 </div>
                             )}
-                            {!comments.loading && !comments.error && comments.comments.length === 0 && (
+                            {!commentsLoading && !commentsError && commentsData.comments.length === 0 && (
                                 <div className="fp-shared-panel-status">
                                     No comments yet — start the discussion.
                                 </div>
                             )}
-                            {!comments.loading && !comments.error && comments.comments.map((comment) => (
+                            {commentsData.comments.map((comment) => (
                                 <div className="fp-shared-comment" key={comment.id}>
                                     <div className="fp-shared-comment-meta">
                                         <span className="fp-shared-comment-author">
                                             {(comment.authorEmail || '').toLowerCase() === selfEmail
                                                 ? 'You'
-                                                : highlightEmails(comment.authorEmail)}
+                                                : (comment.authorFirstName || highlightEmails(comment.authorEmail))}
                                         </span>
                                         <span className="fp-shared-comment-time">
                                             {formatRelativeTime(comment.createdAt)}

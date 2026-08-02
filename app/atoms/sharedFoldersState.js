@@ -18,6 +18,12 @@ export const shareCollectionLinkModalState = atom(null);
 // once the popup opens; cleared on join, dismiss, or background redemption.
 export const pendingLinkJoinState = atom(null);
 
+// Session caches for the full-page shared-folder panel. Activity is keyed by
+// folder uid; comments are keyed by folder uid + thread uid. Keeping these in
+// atoms lets the panel remount without discarding the latest successful data.
+export const sharedActivityCacheState = atom({});
+export const sharedCommentsCacheState = atom({});
+
 // Leave/Unshare confirmation modal (SharedActionConfirmModal): holds
 // { kind: 'unshare' | 'leave', folder } while open, or null when closed.
 // A single shared atom so every entry point (FolderContainer, FPSidebar,

@@ -77,7 +77,7 @@ function LinkJoinToastHost({ t, stash, onAccepted }) {
   return (
     <SharedInviteToast
       visible={t.visible}
-      invite={{ folderId: 'link-join', folderName: stash.name, ownerEmail: stash.ownerEmail, role: stash.role }}
+      invite={{ folderId: 'link-join', folderName: stash.name, ownerEmail: stash.ownerEmail, ownerFirstName: stash.ownerFirstName, role: stash.role }}
       busy={busy}
       onAccept={handleAccept}
       onDecline={handleDismiss}
