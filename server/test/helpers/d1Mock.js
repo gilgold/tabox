@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -16,7 +16,7 @@ function convertSqlParameters(sql, bound) {
     for (const num of referencedNumbers) {
       paramMap[String(num)] = bound[num - 1];
     }
-    // Pass the ORIGINAL sql (no rewrite) with the object; better-sqlite3 binds ?N directly
+    // Pass the original SQL with the object; node:sqlite binds ?N directly.
     return { sql, params: paramMap };
   } else {
     // Use positional parameters (spread args)
@@ -25,8 +25,8 @@ function convertSqlParameters(sql, bound) {
 }
 
 export function makeDB() {
-  const db = new Database(':memory:');
-  db.pragma('foreign_keys = ON');
+  const db = new DatabaseSync(':memory:');
+  db.exec('PRAGMA foreign_keys = ON');
   for (const file of readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql')).sort()) {
     db.exec(readFileSync(join(MIGRATIONS_DIR, file), 'utf8'));
   }

@@ -3,6 +3,7 @@ import { recordActivity } from './sharedActivity.js';
 
 export const MAX_MEMBERS_PER_FOLDER = 20;
 export const MAX_COLLECTION_BYTES = 512 * 1024;
+const MAX_COLLECTION_JSON_DEPTH = 10_000;
 const ROLES = ['read', 'write'];
 const err = (status, error) => ({ ok: false, status, error });
 
@@ -13,15 +14,31 @@ export async function isProUser(env, googleId) {
   return decideEntitlement(record).entitled;
 }
 
-// B3 fix: JSON.stringify is recursive and can blow the call stack on a
-// pathologically deep (but otherwise small) structure well before any byte
-// cap is reached — a RangeError from here used to propagate uncaught past
-// this point to handleShared's generic try/catch, surfacing as a 500. Every
-// caller below treats a throw here as a clean validation failure (400), not
-// a size violation, so `ok:false` (rather than a size number) always means
-// "reject with invalid_request".
+// Keep validation deterministic across Node runtimes. Some JSON.stringify
+// implementations throw on extremely deep input while newer ones can encode
+// it successfully; either way, structures this deep are invalid collection
+// data and must not reach persistence.
+function hasValidCollectionDepth(data) {
+  const pending = [{ value: data, depth: 0 }];
+  const seen = new WeakSet();
+
+  while (pending.length > 0) {
+    const { value, depth } = pending.pop();
+    if (value === null || typeof value !== 'object') continue;
+    if (depth > MAX_COLLECTION_JSON_DEPTH) return false;
+    if (seen.has(value)) continue;
+    seen.add(value);
+    for (const child of Object.values(value)) {
+      pending.push({ value: child, depth: depth + 1 });
+    }
+  }
+
+  return true;
+}
+
 export function safeCollectionSize(data) {
   try {
+    if (!hasValidCollectionDepth(data)) return { ok: false };
     return { ok: true, size: JSON.stringify(data ?? null).length };
   } catch {
     return { ok: false };

@@ -15,16 +15,6 @@
 
 // Collection names are capped at 50 chars in CollectionDetailPanel's input.
 const MAX_NAME_LENGTH = 50;
-const MAX_TABS = 30;
-
-const NAME_SCHEMA = {
-    type: 'object',
-    properties: {
-        name: { type: 'string', maxLength: MAX_NAME_LENGTH },
-    },
-    required: ['name'],
-    additionalProperties: false,
-};
 
 function tabLines(collection, cap) {
     return (collection.tabs || []).slice(0, cap).map((tab) => {
@@ -37,10 +27,6 @@ function tabLines(collection, cap) {
         const title = tab.title || domain || 'Untitled';
         return `- ${title}${domain ? ` (${domain})` : ''}`;
     });
-}
-
-function buildNamePrompt(collection) {
-    return `Suggest a short, descriptive name for a group of browser tabs.\n\nTabs:\n${tabLines(collection, MAX_TABS).join('\n')}\n\nRespond with JSON: {"name": "..."}`;
 }
 
 // Batch naming: name many collections in ONE request to cut round-trips and
@@ -304,7 +290,6 @@ function normalizeOrganizePlan(raw, capped, existingGroups) {
 // duplicate-sweep constants + builder
 // ---------------------------------------------------------------------------
 
-const DEDUP_NEW_NAME_MAX = 40;
 const DEDUP_MESSAGE_MAX = 240;
 
 // Deterministic recommendation for a duplicate group. `keeperUid` is chosen by
@@ -325,7 +310,6 @@ function buildDeterministicDedupSuggestion(group, collectionNamesByUid = {}, kee
 // ---------------------------------------------------------------------------
 // split-collection constants + builder + normalizer
 // ---------------------------------------------------------------------------
-const SPLIT_MIN_TABS = 30;        // keep in sync with app/utils/sharedConstants.js
 const SPLIT_MAX_GROUPS = 4;
 const SPLIT_MIN_GROUPS = 2;
 const SPLIT_NAME_MAX = 40;
@@ -529,9 +513,6 @@ function normalizeSplitPlan(raw, tabs) {
 const taboxAIPlannersApi = {
     // suggestCollectionName
     MAX_NAME_LENGTH,
-    MAX_TABS,
-    NAME_SCHEMA,
-    buildNamePrompt,
     BATCH_NAME_SIZE,
     MAX_BATCH_TABS,
     BATCH_NAME_SCHEMA,
@@ -552,7 +533,6 @@ const taboxAIPlannersApi = {
     buildOrganizePrompt,
     normalizeOrganizePlan,
     // split-collection
-    SPLIT_MIN_TABS,
     SPLIT_MAX_GROUPS,
     SPLIT_SINGLE_SHOT_MAX,
     SPLIT_THEME_SAMPLE_MAX,
@@ -567,7 +547,6 @@ const taboxAIPlannersApi = {
     buildSplitPrompt,
     normalizeSplitPlan,
     // duplicate-sweep
-    DEDUP_NEW_NAME_MAX,
     DEDUP_MESSAGE_MAX,
     buildDeterministicDedupSuggestion,
 };

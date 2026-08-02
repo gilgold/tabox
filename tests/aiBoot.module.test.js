@@ -21,8 +21,18 @@ test('every task module self-registers into the registry', () => {
   // but globalThis.TaboxAIRegistry still points to the same registry object.
   // This ensures register() fires against the current (reset) registry even though
   // these modules were previously cached at the outer Jest module scope.
-  ['ai-task-auto-rename','ai-task-auto-arrange','ai-task-smart-organize','ai-task-split-collection'].forEach((m) => { jest.isolateModules(() => require(`../chrome/${m}.js`)); });
-  expect(registry.allTasks().map((t) => t.id).sort()).toEqual(['auto-arrange','auto-rename','smart-organize','split-collection']);
+  const taskModules = [
+    ['ai-task-auto-rename', 'auto-rename'],
+    ['ai-task-auto-arrange', 'auto-arrange'],
+    ['ai-task-smart-organize', 'smart-organize'],
+    ['ai-task-split-collection', 'split-collection'],
+  ];
+  taskModules.forEach(([moduleName]) => {
+    jest.isolateModules(() => require(`../chrome/${moduleName}.js`));
+  });
+  taskModules.forEach(([, taskId]) => {
+    expect(registry.getTask(taskId)).toEqual(expect.objectContaining({ id: taskId }));
+  });
 });
 
 test('AI globals do not collide with existing Tabox SW globals', () => {

@@ -3,7 +3,6 @@
 // drops the pending invite).
 import { browser } from '../static/globals';
 import { pollInvites, respondToInvite, SHARED_PENDING_INVITES_KEY, SHARED_SYNC_STATE_KEY } from '../chrome/shared-folders';
-import * as bgUtils from '../chrome/background-utils';
 
 jest.mock('../chrome/background-utils', () => ({
   ...jest.requireActual('../chrome/background-utils'),

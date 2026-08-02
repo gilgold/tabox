@@ -111,7 +111,7 @@ async function executeGroupAction(group, action, keeperUid) {
             created = await S.createCollectionBG({ name: (group.recommendation && group.recommendation.suggestedNewCollectionName) || 'Shared Tabs', tabs });
             await applyRemovals(S, removed);
         } catch (err) {
-            if (created) { try { await S.deleteCollectionBG(created.uid); } catch (_) { /* best-effort rollback */ } }
+            if (created) { try { await S.deleteCollectionBG(created.uid); } catch { /* best-effort rollback */ } }
             throw err;
         }
         return { actionId: newActionId(), groupId: group.id, action: 'extract', createdCollectionUid: created.uid, removedTabs: toRemovedTabs(group, removed) };
@@ -204,23 +204,7 @@ async function doUndoDuplicateSweepLast() {
 
 async function dismissDuplicateSweep() { return serialized(async () => { await local.remove(DUPLICATE_SWEEP_KEY); return { ok: true }; }); }
 
-// Called by the scan task as each AI recommendation arrives: swap in the refined
-// recommendation, but only while the group is still pending — never rewrite a
-// group the user has already acted on.
-function updateDuplicateSweepRecommendation({ groupId, recommendation } = {}) {
-    return serialized(async () => {
-        const state = await readState();
-        if (!state) return { ok: false, reason: 'missing' };
-        const g = state.groups.find((x) => x.id === groupId);
-        if (!g) return { ok: false, reason: 'unknown-group' };
-        if (g.status !== 'pending') return { ok: false, reason: 'not-pending' };
-        g.recommendation = recommendation;
-        await writeState(state);
-        return { ok: true };
-    });
-}
-
-const taboxDuplicateSweepApi = { DUPLICATE_SWEEP_KEY, applyDuplicateSweepAction, undoDuplicateSweepLast, dismissDuplicateSweep, updateDuplicateSweepRecommendation };
+const taboxDuplicateSweepApi = { DUPLICATE_SWEEP_KEY, applyDuplicateSweepAction, undoDuplicateSweepLast, dismissDuplicateSweep };
 /* istanbul ignore next */ if (typeof globalThis !== 'undefined') globalThis.TaboxDuplicateSweep = taboxDuplicateSweepApi;
 /* istanbul ignore next */ if (typeof module !== 'undefined' && module.exports) module.exports = taboxDuplicateSweepApi;
 })();

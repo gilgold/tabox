@@ -410,7 +410,8 @@ async function overwriteBackupSelection(payload = {}) {
       return { ...folder, shared: currentFolder.shared };
     }
     if (!folder.shared) return folder;
-    const { shared, ...rest } = folder;
+    const rest = { ...folder };
+    delete rest.shared;
     return rest;
   });
   const currentCollections = await loadAllCollectionsBG(true);

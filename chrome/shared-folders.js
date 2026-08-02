@@ -117,10 +117,12 @@ async function unmarkLocalFolderShared(folderId) {
       DELETED_COLLECTION_TOMBSTONES_KEY, DELETED_FOLDER_TOMBSTONES_KEY,
     ]);
     if (!got[key]) return;
-    const { shared, ...rest } = got[key];
+    const rest = { ...got[key] };
+    delete rest.shared;
     const index = got.folders_index || {};
     if (index[folderId]) {
-      const { shared: removedShared, ...restIdx } = index[folderId];
+      const restIdx = { ...index[folderId] };
+      delete restIdx.shared;
       index[folderId] = restIdx;
     }
     // Inline the sync-state clear (rather than calling the locked
@@ -1188,8 +1190,6 @@ async function handleSharedMessage(request) {
         `/shared/folders/${encodeURIComponent(request.folderId)}/comments/${encodeURIComponent(request.commentId)}`,
         { method: 'DELETE' }
       );
-    case 'sharedGetInvites':
-      return sharedApiFetch('/shared/invites');
     case 'sharedRespondInvite':
       return respondToInvite(request);
     case 'sharedSyncNow':

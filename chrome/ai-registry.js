@@ -1,6 +1,6 @@
 // chrome/ai-registry.js
 // The AI-task extension point. Each chrome/ai-task-*.js file calls register()
-// at load. The engine consumes getTask/allTasks. Nothing here knows about any
+// at load. The engine consumes getTask. Nothing here knows about any
 // specific task.
 (() => {
 const tasks = new Map();
@@ -10,10 +10,9 @@ function register(def) {
     return def;
 }
 function getTask(id) { return tasks.get(id) || null; }
-function allTasks() { return Array.from(tasks.values()); }
 function _reset() { tasks.clear(); } // test-only
 
-const api = { register, getTask, allTasks, _reset };
+const api = { register, getTask, _reset };
 /* istanbul ignore next */ if (typeof globalThis !== 'undefined') globalThis.TaboxAIRegistry = api;
 /* istanbul ignore next */ if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })();

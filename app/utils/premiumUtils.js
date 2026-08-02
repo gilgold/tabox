@@ -4,7 +4,6 @@
  * and whether it needs to be refreshed from the server.
  */
 
-export const PREMIUM_STORAGE_KEY = 'premiumEntitlement';
 export const REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
 export const OFFLINE_GRACE_MS = 72 * 60 * 60 * 1000;
 

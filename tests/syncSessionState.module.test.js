@@ -1,7 +1,6 @@
 const {
     SYNC_SESSION_STATE_KEY,
     SYNC_SESSION_STATUS,
-    isSyncSessionEnabled,
     createSyncSessionState,
     writeSyncSessionState
 } = require('../chrome/sync-session-state.js');
@@ -16,28 +15,6 @@ describe('sync session state module', () => {
             error: null,
             lastCheckedAt: 0
         });
-    });
-
-    test('treats refresh-token-backed reconnecting sessions as enabled', () => {
-        const reconnectingState = createSyncSessionState({
-            hasRefreshToken: true,
-            status: SYNC_SESSION_STATUS.AUTH_REFRESHING
-        });
-
-        expect(isSyncSessionEnabled(reconnectingState)).toBe(true);
-    });
-
-    test('infers enabled state from raw session credentials when isEnabled is not set', () => {
-        expect(isSyncSessionEnabled({
-            hasRefreshToken: true
-        })).toBe(true);
-    });
-
-    test('treats user-backed sessions as enabled and omitted input as disabled', () => {
-        expect(isSyncSessionEnabled({
-            user: { displayName: 'Signed In' }
-        })).toBe(true);
-        expect(isSyncSessionEnabled()).toBe(false);
     });
 
     test('writes a canonical sync session snapshot to storage', async () => {

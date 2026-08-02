@@ -7516,15 +7516,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-countdown-circle-timer@npm:^3.2.1":
-  version: 3.2.1
-  resolution: "react-countdown-circle-timer@npm:3.2.1"
-  peerDependencies:
-    react: ">=16.8.0"
-  checksum: 10/6d8b1e4c620c51cf4f9036fe85b1bbb2b7d096f292cc3f1f442a31d1708927132fa479bb6172a4601ab1f9a0f07dc43f7a625b82cc5e2503db667b7797bd8b5b
-  languageName: node
-  linkType: hard
-
 "react-dom@npm:^19.0.0":
   version: 19.2.0
   resolution: "react-dom@npm:19.2.0"
@@ -8545,7 +8536,6 @@ __metadata:
     jest-webextension-mock: "npm:^3.9.0"
     jotai: "npm:^2.15.1"
     react: "npm:^19.0.0"
-    react-countdown-circle-timer: "npm:^3.2.1"
     react-dom: "npm:^19.0.0"
     react-hot-toast: "npm:^2.6.0"
     react-icons: "npm:^5.5.0"

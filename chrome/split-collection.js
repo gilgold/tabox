@@ -91,7 +91,7 @@ async function undoSplitCollection({ opId } = {}) {
             color: o.color, size: JSON.stringify(o).length, parentId: o.parentId ?? null, order: o.order,
         };
     await local.set({ [`collection_${o.uid}`]: o, collections_index: index });
-    if (o.parentId) { try { await S().updateFolderCountsBG([o.parentId]); } catch (_) { /* folder may be gone */ } }
+    if (o.parentId) { try { await S().updateFolderCountsBG([o.parentId]); } catch { /* folder may be gone */ } }
     await local.remove(SPLIT_COLLECTION_UNDO_KEY);
     return { success: true };
 }

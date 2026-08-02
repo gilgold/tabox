@@ -3,7 +3,7 @@ import { test, expect } from 'crxbox';
 // E2E (full-page variant): fullpage.html → Settings → "Recovery" category →
 // rich SyncDebugRecoveryPanel → Restore an auto backup → collections updated.
 //
-// This is the OTHER restore path (distinct from the popup's SyncDebugModal):
+// This exercises the full-page recovery path:
 //  - Rendered only in the full-page settings (app/fullpage/FPTopBar.js renders
 //    <SettingsMenu variant="fullpage">; the "Recovery" category renders
 //    <SyncDebugRecoveryPanel mode="recovery">).

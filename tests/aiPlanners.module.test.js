@@ -1,16 +1,10 @@
 const {
-    buildNamePrompt, buildArrangePrompt, normalizeArrangePlan,
+    buildArrangePrompt, normalizeArrangePlan,
     normalizeOrganizePlan, CATCHALL_FOLDER_NAME, GROUP_COLORS,
     buildBatchNamePrompt, BATCH_NAME_SCHEMA, BATCH_NAME_SIZE, MAX_BATCH_TABS,
 } = require('../chrome/ai-planners.js');
 
 describe('ai-planners module', () => {
-    test('buildNamePrompt lists tab titles', () => {
-        const p = buildNamePrompt({ tabs: [{ title: 'Docs', url: 'https://example.com/x' }] });
-        expect(p).toContain('Docs');
-        expect(p).toContain('example.com');
-    });
-
     test('buildBatchNamePrompt labels each collection by index and lists its tabs', () => {
         const p = buildBatchNamePrompt([
             { tabs: [{ title: 'React', url: 'https://react.dev' }] },

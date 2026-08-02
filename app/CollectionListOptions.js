@@ -18,7 +18,6 @@ import {
     MdCreateNewFolder,
 } from 'react-icons/md';
 import { TbFileImport } from 'react-icons/tb';
-import Modal from 'react-modal';
 import { CollectionFilter } from './CollectionFilter';
 import { showSuccessToast, showErrorToast } from './toastHelpers';
 import { Tooltip } from 'react-tooltip';

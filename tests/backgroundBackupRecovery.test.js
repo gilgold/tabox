@@ -82,17 +82,6 @@ describe('background backup recovery handlers', () => {
             return true;
         });
         global.forceLegacyStorageSync = jest.fn(async () => {});
-        global.updateAllCollectionsBG = jest.fn(async (collections) => {
-            for (const collection of collections) {
-                const index = collectionsState.findIndex((entry) => entry.uid === collection.uid);
-                if (index > -1) {
-                    collectionsState[index] = { ...collectionsState[index], ...collection };
-                } else {
-                    collectionsState.push({ ...collection });
-                }
-            }
-            return true;
-        });
         global.generateUid = jest.fn(() => `generated-${Math.random().toString(36).slice(2, 8)}`);
         global.applyUid = jest.fn((value) => value);
     });
@@ -110,7 +99,6 @@ describe('background backup recovery handlers', () => {
         delete global.saveSingleFolderBG;
         delete global.deleteSingleFolderBG;
         delete global.forceLegacyStorageSync;
-        delete global.updateAllCollectionsBG;
         delete global.generateUid;
         delete global.applyUid;
     });

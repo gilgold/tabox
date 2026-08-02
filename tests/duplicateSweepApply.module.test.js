@@ -98,38 +98,3 @@ test('undo restores full tab fidelity (pinned/favicon) when occurrence carries t
   expect(restored.pinned).toBe(true);
   expect(restored.favIconUrl).toBe('ic');
 });
-
-test('updateDuplicateSweepRecommendation swaps the recommendation of a pending group', async () => {
-  const rec = { recommendedKeeperUid: 'A', message: 'AI refined', suggestedNewCollectionName: 'New', bestTitlePerUrl: [] };
-  const res = await sweep.updateDuplicateSweepRecommendation({ groupId: 'cross:A|D', recommendation: rec });
-  expect(res).toEqual({ ok: true });
-  const st = (await local.get(KEY))[KEY];
-  expect(st.groups[0].recommendation).toEqual(rec);
-  expect(st.groups[0].status).toBe('pending');
-});
-
-test('updateDuplicateSweepRecommendation refuses resolved groups and missing state', async () => {
-  await sweep.applyDuplicateSweepAction({ groupId: 'cross:A|D', action: 'discard-all' });
-  const rec = { recommendedKeeperUid: 'A', message: 'late', suggestedNewCollectionName: 'S', bestTitlePerUrl: [] };
-  expect(await sweep.updateDuplicateSweepRecommendation({ groupId: 'cross:A|D', recommendation: rec }))
-    .toEqual({ ok: false, reason: 'not-pending' });
-  expect(await sweep.updateDuplicateSweepRecommendation({ groupId: 'nope', recommendation: rec }))
-    .toEqual({ ok: false, reason: 'unknown-group' });
-  await sweep.dismissDuplicateSweep();
-  expect(await sweep.updateDuplicateSweepRecommendation({ groupId: 'cross:A|D', recommendation: rec }))
-    .toEqual({ ok: false, reason: 'missing' });
-});
-
-test('sweep mutations are serialized: a recommendation update never clobbers a concurrent user action', async () => {
-  const rec = { recommendedKeeperUid: 'A', message: 'AI refined', suggestedNewCollectionName: 'S', bestTitlePerUrl: [] };
-  // Fire both without awaiting in between — they must apply in order, on fresh reads.
-  const [applyRes, updateRes] = await Promise.all([
-    sweep.applyDuplicateSweepAction({ groupId: 'cross:A|D', action: 'discard-all' }),
-    sweep.updateDuplicateSweepRecommendation({ groupId: 'cross:A|D', recommendation: rec }),
-  ]);
-  expect(applyRes.ok).toBe(true);
-  expect(updateRes).toEqual({ ok: false, reason: 'not-pending' });
-  const st = (await local.get(KEY))[KEY];
-  expect(st.groups[0].status).toBe('resolved');
-  expect(st.history).toHaveLength(1);
-});

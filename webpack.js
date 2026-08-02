@@ -89,7 +89,7 @@ module.exports = (env, argv) => {
           },
           // Group UI libraries
           ui: {
-            test: /[\\/]node_modules[\\/](react-icons|react-modal|react-select|react-tooltip|react-tiny-popover|react-hot-toast|react-countdown-circle-timer|react-time-ago)[\\/]/,
+            test: /[\\/]node_modules[\\/](react-icons|react-modal|react-select|react-tooltip|react-tiny-popover|react-hot-toast|react-time-ago)[\\/]/,
             name: 'vendor-ui',
             chunks: 'all',
             priority: 30,

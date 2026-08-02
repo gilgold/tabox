@@ -13,9 +13,6 @@ const subtle = webcrypto.subtle;
 function b64u(buf) {
   return Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
-function unb64u(str) {
-  return Buffer.from(String(str).replace(/-/g, '+').replace(/_/g, '/'), 'base64');
-}
 function hkdf(salt, ikm, info, length) {
   const prk = createHmac('sha256', salt).update(ikm).digest();
   const okm = createHmac('sha256', prk).update(Buffer.concat([Buffer.from(info), Buffer.from([1])])).digest();

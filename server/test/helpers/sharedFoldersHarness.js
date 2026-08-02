@@ -4,7 +4,7 @@
 // createRequire + a require-cache injection for its two dependencies
 // (./background-utils and ./pro-config), wires its `fetch()` calls into the
 // REAL worker (server/src/index.js's default export) against a REAL
-// better-sqlite3-backed D1 mock (server/test/helpers/d1Mock.js), and lets a
+// node:sqlite-backed D1 mock (server/test/helpers/d1Mock.js), and lets a
 // test simulate any number of independent "devices" — each with its own
 // isolated in-memory browser.storage.local and its own identity/token.
 //

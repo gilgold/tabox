@@ -286,20 +286,11 @@ const createVersion40RemoteDocument = (options = {}) => {
     return document;
 };
 
-const summarizeCollections = (collections) => collections.map((collection) => ({
-    uid: collection.uid,
-    name: collection.name,
-    parentId: collection.parentId || null,
-    order: collection.order,
-    tabCount: collection.tabs?.length || 0
-}));
-
 module.exports = {
     COLLECTIONS_INDEX,
     FOLDERS_INDEX,
     COLLECTION_PREFIX,
     FOLDER_PREFIX,
     createVersion40LocalSnapshot,
-    createVersion40RemoteDocument,
-    summarizeCollections
+    createVersion40RemoteDocument
 };

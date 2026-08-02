@@ -21,7 +21,6 @@ describe('onboarding eligibility triggers in background.js', () => {
     describe('versionAtLeast gate logic', () => {
         // Evaluate the helper exactly as it exists in the shipped source.
         const helperSource = updateBranch.match(/const versionAtLeast = ([\s\S]*?\n\s*};)/)?.[1];
-        // eslint-disable-next-line no-eval
         const versionAtLeast = eval(`(${helperSource.replace(/;\s*$/, '')})`);
 
         test.each([

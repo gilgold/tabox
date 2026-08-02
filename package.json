@@ -114,7 +114,6 @@
     "javascript-time-ago": "^2.5.11",
     "jotai": "^2.15.1",
     "react": "^19.0.0",
-    "react-countdown-circle-timer": "^3.2.1",
     "react-dom": "^19.0.0",
     "react-hot-toast": "^2.6.0",
     "react-icons": "^5.5.0",

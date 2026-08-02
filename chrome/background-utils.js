@@ -72,8 +72,7 @@ const syncApplyApi = typeof require === 'function'
 
 const {
     SERVER_FILE_TIMESTAMP_STATE,
-    fetchServerFileTimestampState,
-    getServerFileTimestampOrFalse
+    fetchServerFileTimestampState
 } = syncTransportApi;
 const {
     normalizeSyncSnapshot,
@@ -338,9 +337,7 @@ const loadLooseCollectionSummariesBG = async (maxTitles = 5) => {
 // Throttled tabsArray mirror sync (prevent excessive updates)
 // Keep the local tabsArray mirror available for same-version repair and backup/export flows.
 let legacySyncTimeout = null;
-let legacySyncEnabled = true;
 const syncLegacyStorageThrottled = async () => {
-    if (!legacySyncEnabled) return; // Skip if lazy sync is disabled
     if (legacySyncTimeout) return; // Already scheduled
     
     legacySyncTimeout = setTimeout(async () => {
@@ -358,16 +355,6 @@ const syncLegacyStorageThrottled = async () => {
     }, 5000); // Sync legacy storage at most once every 5 seconds
 };
 
-// Enable tabsArray mirror sync (for repair or backup/export operations)
-const enableLegacyStorageSync = () => {
-    legacySyncEnabled = true;
-};
-
-// Disable tabsArray mirror sync when batching larger write operations
-const disableLegacyStorageSync = () => {
-    legacySyncEnabled = false;
-};
-
 // Force immediate tabsArray mirror sync (for backup/export operations)
 const forceLegacyStorageSync = async () => {
     try {
@@ -379,129 +366,6 @@ const forceLegacyStorageSync = async () => {
         return true;
     } catch (error) {
         console.error('Background: Failed to force sync legacy storage:', error);
-        return false;
-    }
-};
-
-// Helper function to batch write collections with chunking
-const batchWriteCollections = async (updates, chunkSize = 50) => {
-    const keys = Object.keys(updates);
-    const totalChunks = Math.ceil(keys.length / chunkSize);
-    
-    for (let i = 0; i < totalChunks; i++) {
-        const chunkKeys = keys.slice(i * chunkSize, (i + 1) * chunkSize);
-        const chunkUpdates = {};
-        
-        chunkKeys.forEach(key => {
-            chunkUpdates[key] = updates[key];
-        });
-        
-        try {
-            await browser.storage.local.set(chunkUpdates);
-            
-            // Small delay between chunks to avoid quota issues
-            if (i < totalChunks - 1) {
-                await new Promise(resolve => setTimeout(resolve, 50));
-            }
-        } catch (error) {
-            if (error.message && error.message.includes('QUOTA_EXCEEDED')) {
-                console.error(`Quota exceeded at chunk ${i + 1}/${totalChunks}, reducing chunk size`);
-                // Retry with smaller chunks
-                const smallerChunkSize = Math.floor(chunkSize / 2);
-                if (smallerChunkSize > 0) {
-                    return await batchWriteCollections(updates, smallerChunkSize);
-                }
-            }
-            throw error;
-        }
-    }
-    
-    return true;
-};
-
-// Update entire collections array with backward compatibility (OPTIMIZED with batching)
-const updateAllCollectionsBG = async (collections) => {
-    try {
-        // Try to use new indexed storage first
-        const index = await loadCollectionsIndexBG();
-        const hasIndexedStorage = Object.keys(index).length > 0 || collections.length > 0;
-        
-        if (hasIndexedStorage) {
-            // OPTIMIZATION: Batch all updates into a single write operation
-            const now = Date.now();
-            const updates = {};
-            const newIndex = { ...index };
-            
-            // Prepare all updates
-            for (const rawCollection of collections) {
-                const collection = normalizeCollectionRecordBG(rawCollection);
-                if (!collection.uid) {
-                    console.error('Collection missing UID, skipping:', collection.name);
-                    continue;
-                }
-                
-                const collectionKey = `${STORAGE_KEYS.COLLECTION_PREFIX}${collection.uid}`;
-                const lastUpdated = collection.lastUpdated !== null && collection.lastUpdated !== undefined ? collection.lastUpdated : now;
-                
-                // Preserve existing order if not provided in the collection data
-                const existingOrder = newIndex[collection.uid]?.order;
-                const collectionOrder = collection.order !== undefined ? collection.order : existingOrder;
-                
-                // Prepare collection data (include order)
-                    updates[collectionKey] = {
-                        uid: collection.uid,
-                        name: collection.name,
-                        tabs: collection.tabs || [],
-                    color: collection.color,
-                        createdOn: collection.createdOn || now,
-                        lastUpdated: lastUpdated,
-                        lastOpened: collection.lastOpened !== null && collection.lastOpened !== undefined ? collection.lastOpened : null,
-                        chromeGroups: collection.chromeGroups || [],
-                        parentId: collection.parentId !== undefined ? collection.parentId : null,
-                        ...collection,
-                        order: collectionOrder // Ensure order is preserved in collection data
-                };
-                
-                // Update index entry
-                const collectionSize = JSON.stringify(updates[collectionKey]).length;
-                
-                newIndex[collection.uid] = {
-                    name: collection.name,
-                    type: 'collection',
-                    tabCount: collection.tabs ? collection.tabs.length : 0,
-                    lastUpdated: lastUpdated,
-                    lastOpened: collection.lastOpened !== null && collection.lastOpened !== undefined ? collection.lastOpened : null,
-                    createdOn: collection.createdOn || now,
-                    color: collection.color || 'default',
-                    size: collectionSize,
-                    parentId: collection.parentId !== undefined ? collection.parentId : null,
-                    order: collectionOrder // Include order in index for proper sorting
-                };
-            }
-            
-            // OPTIMIZATION: Single batched write with chunking for Chrome limits
-            await batchWriteCollections(updates, 50);
-            
-            // Update index in a single write
-            await browser.storage.local.set({
-                [STORAGE_KEYS.COLLECTIONS_INDEX]: newIndex
-            });
-            
-            
-            // Schedule throttled legacy storage sync (non-blocking)
-            syncLegacyStorageThrottled();
-            return true;
-        }
-        
-        // Fallback to legacy storage
-        await browser.storage.local.set({ 
-            [STORAGE_KEYS.LEGACY_TABS_ARRAY]: collections,
-            localTimestamp: Date.now() 
-        });
-        return true;
-        
-    } catch (error) {
-        console.error('Background: Failed to update collections:', error);
         return false;
     }
 };
@@ -666,65 +530,6 @@ const loadAllFoldersBG = async () => {
     }
 };
 
-// Update all folders from sync data
-const updateAllFoldersBG = async (folders) => {
-    try {
-        logSyncOperation('info', 'updateAllFoldersBG starting', { folderCount: folders?.length || 0 });
-        
-        if (!folders || folders.length === 0) {
-            logSyncOperation('info', 'updateAllFoldersBG: No folders to update');
-            return true;
-        }
-        
-        // IMPORTANT: Save folders SEQUENTIALLY to avoid race condition on folders index
-        // Each saveSingleFolderBG loads, updates, and saves the index
-        // Running in parallel would cause overwrites
-        let successCount = 0;
-        for (const folder of folders) {
-            const success = await saveSingleFolderBG(folder);
-            if (success) successCount++;
-        }
-        
-        logSyncOperation('info', 'updateAllFoldersBG completed', { 
-            successCount, 
-            totalCount: folders.length,
-            allSuccess: successCount === folders.length 
-        });
-        
-        return successCount === folders.length;
-        
-    } catch (error) {
-        logSyncOperation('error', 'updateAllFoldersBG failed', { error: error.message });
-        return false;
-    }
-};
-
-// Delete a single collection in background script
-const deleteSingleCollectionBG = async (uid) => {
-    try {
-        if (!uid) {
-            console.error('Background: Cannot delete collection - no UID provided');
-            return false;
-        }
-
-        const collectionKey = `${STORAGE_KEYS.COLLECTION_PREFIX}${uid}`;
-        await browser.storage.local.remove(collectionKey);
-
-        const index = await loadCollectionsIndexBG();
-        if (index[uid]) {
-            delete index[uid];
-            await browser.storage.local.set({
-                [STORAGE_KEYS.COLLECTIONS_INDEX]: index
-            });
-        }
-
-        return true;
-    } catch (error) {
-        console.error(`Background: Failed to delete collection ${uid}:`, error);
-        return false;
-    }
-};
-
 // Delete a single folder in background script
 const deleteSingleFolderBG = async (uid) => {
     try {
@@ -762,7 +567,6 @@ let lastValidated = 0;
 let syncLock = false; // Prevent concurrent sync operations
 let syncLockOperation = null; // Track what operation holds the lock
 let syncLockTime = 0; // Track when lock was acquired
-let syncQueue = []; // Queue pending sync operations
 
 // Enhanced error handling with retry logic (OPTIMIZED: reduced retries from 5 to 3)
 async function handleRequest(url, options = null, maxRetries = 3, delay = 1000) {
@@ -927,9 +731,6 @@ async function createPreSyncBackup(label = 'pre-sync') {
                 })) || []
             }))
         };
-        
-        // Calculate backup size
-        const backupSize = JSON.stringify(backup).length;
         
         preSyncBackups.unshift(backup);
         
@@ -1453,13 +1254,6 @@ async function getGoogleUser(token) {
     return false;
 }
 
-async function removeToken(token) {
-    const _token = token === -1 ? (await browser.storage.local.get('googleToken')).googleToken : token;
-    const url = 'https://accounts.google.com/o/oauth2/revoke?token=' + _token;
-    await browser.storage.local.remove('googleToken');
-    if (_token) await handleRequest(url);
-}
-
 async function getOrCreateSyncFile(token) {
     const { syncFileId } = await browser.storage.sync.get('syncFileId');
     console.log('🔑 getOrCreateSyncFile: Current syncFileId from storage.sync:', syncFileId || 'NOT FOUND');
@@ -1525,16 +1319,6 @@ async function _createNewSyncFile(token) {
         return response.id;
     }
     return false;
-}
-
-async function _getServerFileTimestamp(token, fileId) {
-    const timestampResult = await fetchServerFileTimestampState({
-        token,
-        fileId,
-        fetchImpl: fetch
-    });
-
-    return getServerFileTimestampOrFalse(timestampResult);
 }
 
 async function _getServerFileTimestampState(token, fileId) {
@@ -2255,8 +2039,6 @@ const cleanupLargeBackups = async () => {
         const totalBackupSize = preSyncSize + autoBackupSize;
         
         
-        let cleaned = false;
-        
         // Clean up oversized preSyncBackups (convert old full backups to metadata)
         if (preSyncSize > 500 * 1024) { // > 500KB
             const cleanedPreSync = preSyncBackups.map(backup => {
@@ -2285,20 +2067,12 @@ const cleanupLargeBackups = async () => {
             }).slice(0, 3); // Keep only 3 most recent
             
             await browser.storage.local.set({ preSyncBackups: cleanedPreSync });
-            cleaned = true;
         }
         
         // Clean up oversized autoBackups
         if (autoBackupSize > 1.5 * 1024 * 1024) { // > 1.5MB
             const cleanedAutoBackups = autoBackups.slice(0, 2); // Keep only 2 most recent
             await browser.storage.local.set({ autoBackups: cleanedAutoBackups });
-            cleaned = true;
-        }
-        
-        if (cleaned) {
-            // Recalculate after cleanup
-            const { preSyncBackups: newPreSync = [], autoBackups: newAuto = [] } = await browser.storage.local.get(['preSyncBackups', 'autoBackups']);
-            const newTotal = JSON.stringify(newPreSync).length + JSON.stringify(newAuto).length;
         }
         
         return totalBackupSize;
@@ -2591,76 +2365,6 @@ const prepareSyncDataForUpload = async (collections, useIncrementalSync = false)
     }
 };
 
-// Automatic authentication recovery function
-async function attemptAuthRecovery(operation = 'unknown', maxAttempts = 3) {
-    logSyncOperation('info', `Attempting authentication recovery for: ${operation}`);
-    
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        try {
-            // Check if we have a refresh token
-            const { googleRefreshToken } = await browser.storage.local.get('googleRefreshToken');
-            if (!googleRefreshToken) {
-                logSyncOperation('error', 'No refresh token available for auth recovery');
-                return false;
-            }
-            
-            // Clear current invalid token
-            await browser.storage.local.remove(['googleToken', 'tokenExpiryTime']);
-            
-            // Wait a bit before retry to avoid rate limiting
-            if (attempt > 1) {
-                const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000); // Max 10 seconds
-                await new Promise(resolve => setTimeout(resolve, delay));
-            }
-            
-            // Try to get a new token
-            const newToken = await getNewAccessToken();
-            if (newToken !== false) {
-                logSyncOperation('success', `Authentication recovery successful on attempt ${attempt}`);
-                return newToken;
-            }
-            
-            logSyncOperation('info', `Auth recovery attempt ${attempt} failed, trying again`, {
-                attempt,
-                maxAttempts
-            });
-            
-        } catch (error) {
-            logSyncOperation('error', `Exception during auth recovery attempt ${attempt}`, {
-                error: error.message,
-                attempt,
-                maxAttempts
-            });
-        }
-    }
-    
-    logSyncOperation('error', `Authentication recovery failed after ${maxAttempts} attempts`);
-    return false;
-}
-
-// Enhanced authentication wrapper that provides seamless recovery
-async function getAuthTokenWithRecovery(operation = 'unknown') {
-    try {
-        // First try normal token retrieval
-        const token = await getAuthToken();
-        if (token !== false) {
-            return token;
-        }
-        
-        // If that fails, attempt recovery
-        logSyncOperation('info', `Normal auth failed for ${operation}, attempting recovery`);
-        return await attemptAuthRecovery(operation);
-        
-    } catch (error) {
-        logSyncOperation('error', `Exception in getAuthTokenWithRecovery for ${operation}`, {
-            error: error.message
-        });
-        
-        // Still try recovery even if there was an exception
-        return await attemptAuthRecovery(operation);
-    }
-}
-
 const backgroundUtilsApi = {
     STORAGE_KEYS,
     SYNC_VERSION,
@@ -2672,13 +2376,10 @@ const backgroundUtilsApi = {
     markCollectionOpenedBG,
     loadAllCollectionsBG,
     loadLooseCollectionSummariesBG,
-    updateAllCollectionsBG,
-    deleteSingleCollectionBG,
     loadFoldersIndexBG,
     loadSingleFolderBG,
     saveSingleFolderBG,
     loadAllFoldersBG,
-    updateAllFoldersBG,
     deleteSingleFolderBG,
     handleRequest,
     logSyncOperation,
@@ -2691,13 +2392,10 @@ const backgroundUtilsApi = {
     validateToken,
     getAuthToken,
     getGoogleUser,
-    removeToken,
     getOrCreateSyncFile,
-    _getServerFileTimestamp,
     updateRemote,
     updateLocalDataFromServer,
     syncData,
-    getAuthTokenWithRecovery,
     createPreSyncBackup,
     recoverFromBackup,
     updateCollection,
