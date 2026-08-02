@@ -3,12 +3,13 @@
 // the module wires against a fake worker origin.
 jest.mock('../chrome/background-utils', () => ({
   getAuthToken: jest.fn(),
+  getAuthTokenForAI: jest.fn(),
 }));
 jest.mock('../chrome/pro-config', () => ({
   PRO_API_BASE: 'https://worker.test',
 }));
 
-const { getAuthToken } = require('../chrome/background-utils');
+const { getAuthToken, getAuthTokenForAI } = require('../chrome/background-utils');
 
 function mockFetch({ body = { content: '{"name":"Reading"}' }, ok = true, status = 200 } = {}) {
   return jest.fn(async () => ({ ok, status, json: async () => body }));
@@ -22,6 +23,8 @@ describe('ai-client module (SW → Worker proxy)', () => {
   beforeEach(() => {
     getAuthToken.mockReset();
     getAuthToken.mockResolvedValue('g-token');
+    getAuthTokenForAI.mockReset();
+    getAuthTokenForAI.mockResolvedValue('g-token');
   });
 
   afterEach(() => { delete global.fetch; });
@@ -29,13 +32,15 @@ describe('ai-client module (SW → Worker proxy)', () => {
   test('aiAvailability returns "available" when signed in', async () => {
     const { aiAvailability } = loadClient();
     expect(await aiAvailability()).toBe('available');
+    expect(getAuthTokenForAI).toHaveBeenCalled();
+    expect(getAuthToken).not.toHaveBeenCalled();
   });
 
   test('aiAvailability returns "sign-in-required" when signed out or token fetch fails', async () => {
     const { aiAvailability } = loadClient();
-    getAuthToken.mockResolvedValue(null);
+    getAuthTokenForAI.mockResolvedValue(null);
     expect(await aiAvailability()).toBe('sign-in-required');
-    getAuthToken.mockRejectedValue(new Error('no session'));
+    getAuthTokenForAI.mockRejectedValue(new Error('no session'));
     expect(await aiAvailability()).toBe('sign-in-required');
   });
 
@@ -82,7 +87,7 @@ describe('ai-client module (SW → Worker proxy)', () => {
     global.fetch = mockFetch();
     const { createAISession } = loadClient();
     const session = await createAISession({});
-    getAuthToken.mockResolvedValue(null);
+    getAuthTokenForAI.mockResolvedValue(null);
     await expect(session.prompt('hello')).rejects.toThrow(/sign in/i);
     expect(global.fetch).not.toHaveBeenCalled();
   });

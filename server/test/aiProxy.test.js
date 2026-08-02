@@ -96,6 +96,7 @@ describe('POST /ai/complete', () => {
     const upstream = JSON.parse(calls.openrouter[0].opts.body);
     expect(upstream.model).toBe('deepseek/deepseek-v4-flash');
     expect(upstream.max_tokens).toBe(8192);
+    expect(upstream.provider).toEqual({ sort: 'throughput', require_parameters: true });
     expect(upstream.temperature).toBe(0);
     expect(upstream.messages).toEqual(VALID_BODY.messages);
     expect(upstream.response_format.json_schema.schema).toEqual({ type: 'object' });

@@ -109,4 +109,37 @@ describe('getAuthToken network-failure handling', () => {
 
         expect(token).toBe('fresh-token');
     });
+
+    test('AI auth uses a cached non-expiring token without a validation request', async () => {
+        await browser.storage.local.set({
+            googleToken: 'cached-token',
+            tokenExpiryTime: Date.now() + 60 * 60 * 1000,
+        });
+        bgUtils = loadUtils();
+
+        const token = await bgUtils.getAuthTokenForAI();
+
+        expect(token).toBe('cached-token');
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    test('AI auth refreshes a token that expires within five minutes', async () => {
+        await browser.storage.local.set({
+            googleToken: 'expiring-token',
+            tokenExpiryTime: Date.now() + 60 * 1000,
+            googleRefreshToken: 'refresh-token',
+        });
+        fetchMock.mockImplementation(async (url) => {
+            if (String(url).includes('/auth/token')) {
+                return { ok: true, status: 200, json: async () => ({ access_token: 'fresh-token', expires_in: 3600 }) };
+            }
+            throw new Error(`Unexpected fetch: ${url}`);
+        });
+        bgUtils = loadUtils();
+
+        const token = await bgUtils.getAuthTokenForAI();
+
+        expect(token).toBe('fresh-token');
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
 });

@@ -21,7 +21,7 @@ const AI_API_BASE = typeof require === 'function'
 // Returns: 'available' | 'sign-in-required'
 async function aiAvailability() {
     try {
-        const token = await aiClientBgUtils.getAuthToken();
+        const token = await aiClientBgUtils.getAuthTokenForAI();
         return token ? 'available' : 'sign-in-required';
     } catch {
         return 'sign-in-required';
@@ -33,7 +33,7 @@ async function aiAvailability() {
 // session don't get slower or costlier over a long run.
 async function createAISession({ systemPrompt, temperature, topK, signal } = {}) {
     // Prefetch/refresh the auth token so the first prompt doesn't pay for it.
-    aiClientBgUtils.getAuthToken().catch(() => {});
+    aiClientBgUtils.getAuthTokenForAI().catch(() => {});
     return {
         prompt: (text, options = {}) => requestCompletion(
             { systemPrompt, temperature, topK },
@@ -63,7 +63,7 @@ async function promptForJSON(session, prompt, schema, signal) {
 const AI_REQUEST_TIMEOUT_MS = 90_000;
 
 async function requestCompletion(config, text, { responseConstraint, signal } = {}) {
-    const token = await aiClientBgUtils.getAuthToken();
+    const token = await aiClientBgUtils.getAuthTokenForAI();
     if (!token) throw new Error('Tabox AI: sign in to Tabox to use AI features');
     // One internal controller drives the fetch; the caller's signal and the
     // deadline both funnel into it. Manual wiring (no AbortSignal.timeout/any —

@@ -6,6 +6,7 @@
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MODEL = 'deepseek/deepseek-v4-flash';
 const MAX_OUTPUT_TOKENS = 8192;
+const PROVIDER_PREFERENCES = { sort: 'throughput', require_parameters: true };
 const MAX_MESSAGES = 8;
 // Total prompt budget per request. Generous for the biggest legit prompt
 // (auto-arrange over a large library) while still bounding per-call spend.
@@ -67,7 +68,12 @@ export async function completeAI(env, validated, fetchImpl = fetch, sleepImpl = 
       res = await fetchImpl(OPENROUTER_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.OPENROUTER_API_KEY}` },
-        body: JSON.stringify({ model: MODEL, max_tokens: MAX_OUTPUT_TOKENS, ...validated.request }),
+        body: JSON.stringify({
+          model: MODEL,
+          max_tokens: MAX_OUTPUT_TOKENS,
+          provider: PROVIDER_PREFERENCES,
+          ...validated.request,
+        }),
       });
     } catch {
       return { ok: false, status: 502, error: 'upstream_error' };

@@ -1230,6 +1230,19 @@ async function getAuthToken() {
     return await getNewAccessToken();
 }
 
+// AI requests are authenticated again by the Tabox Worker before inference.
+// When the extension already has a token with trustworthy expiry metadata,
+// avoid a redundant Google tokeninfo round-trip here. Missing/expiring tokens
+// still use the normal refresh/validation path.
+async function getAuthTokenForAI() {
+    const { googleToken, tokenExpiryTime } = await browser.storage.local.get(['googleToken', 'tokenExpiryTime']);
+    const refreshCutoff = Date.now() + (5 * 60 * 1000);
+    if (googleToken && tokenExpiryTime && tokenExpiryTime > refreshCutoff) {
+        return googleToken;
+    }
+    return await getAuthToken();
+}
+
 async function getGoogleUser(token) {
     const { googleUser } = await browser.storage.local.get('googleUser');
     if (googleUser) return googleUser;
@@ -2391,6 +2404,7 @@ const backgroundUtilsApi = {
     getTokens,
     validateToken,
     getAuthToken,
+    getAuthTokenForAI,
     getGoogleUser,
     getOrCreateSyncFile,
     updateRemote,
