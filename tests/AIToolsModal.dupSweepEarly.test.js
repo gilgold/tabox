@@ -1,7 +1,6 @@
 /** @jest-environment jsdom */
-// The duplicate scan publishes its sweep state right after detection, before the
-// AI finishes refining recommendations. The modal must switch from the scanning
-// animation to the interactive panel as soon as that fresh state appears.
+// The duplicate scan publishes its fully named sweep just before aiTaskState
+// flips to done. The modal should show that fresh interactive state immediately.
 import { act, render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { Provider, createStore } from 'jotai';
@@ -93,10 +92,10 @@ describe('AIToolsModal duplicate sweep early panel', () => {
         await fireStorageChange({ aiTaskState: { newValue: { id: 't1', type: 'duplicate-sweep', status: 'running' } } });
         expect(screen.getByText(/Scanning for duplicates/i)).toBeInTheDocument();
 
-        // Early publish from the SW: fresh sweep state while status is still 'running'.
+        // Final sweep publish from the SW can arrive while status is still 'running'.
         await fireStorageChange({ duplicateSweep: { newValue: sweepState(Date.now() + 60000) } });
         expect(screen.queryByText(/Scanning for duplicates/i)).not.toBeInTheDocument();
-        expect(screen.getByText(/Step 1 of 1/i)).toBeInTheDocument();
+        expect(screen.getByText(/1 of 1 duplicate groups/i)).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /End sweep/i })).toBeInTheDocument();
     });
 
@@ -122,6 +121,6 @@ describe('AIToolsModal duplicate sweep early panel', () => {
         await fireStorageChange({ duplicateSweep: { newValue: sweepState(Date.now() - 60000) } });
         await fireStorageChange({ aiTaskState: { newValue: { id: 't1', type: 'duplicate-sweep', status: 'running' } } });
         expect(screen.getByText(/Scanning for duplicates/i)).toBeInTheDocument();
-        expect(screen.queryByText(/Step 1 of 1/i)).not.toBeInTheDocument();
+        expect(screen.queryByText(/1 of 1 duplicate groups/i)).not.toBeInTheDocument();
     });
 });

@@ -92,6 +92,26 @@ describe('Smart Organize panel (popup)', () => {
         });
     });
 
+    test('shows determinate service-worker progress while organizing tabs', async () => {
+        await openModal();
+        fireEvent.click(screen.getByText('Smart Tab Grouping'));
+        await waitFor(() => expect(screen.getByText(/2 ungrouped tabs/i)).toBeInTheDocument());
+
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /organize/i })); });
+        await fireStorageChange({
+            taskId: 'so-progress',
+            type: 'smart-organize',
+            status: 'running',
+            progress: 35,
+            currentLabel: 'Step 2 of 3: Asking AI to group tabs…',
+        });
+
+        const progressBar = screen.getByRole('progressbar', { name: /smart tab grouping progress/i });
+        expect(progressBar).toHaveAttribute('aria-valuenow', '35');
+        expect(progressBar.querySelector('.ai-rename-progress-fill')).toHaveStyle({ width: '35%' });
+        expect(screen.getByText('Step 2 of 3: Asking AI to group tabs…')).toBeInTheDocument();
+    });
+
     test('a done plan state applies the plan, renders the summary, and fires the undo toast', async () => {
         await openModal();
         fireEvent.click(screen.getByText('Smart Tab Grouping'));

@@ -1,97 +1,519 @@
-.dup-sweep { display: flex; flex-direction: column; gap: 12px; color: var(--text-color); flex: 1 1 auto; min-height: 0; }
-/* Scrollable body: message + reveal list + action buttons. Progress line and
-   bottom bar stay pinned so the modal never grows past the popup. */
-.dup-sweep-scroll {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
+.dup-sweep {
     display: flex;
+    flex: 1 1 auto;
     flex-direction: column;
     gap: 12px;
-    padding-right: 4px;
+    min-height: 0;
+    color: var(--text-color);
 }
-.dup-sweep-empty, .dup-sweep-done { padding: 24px 8px; text-align: center; opacity: 0.8; color: var(--text-color); }
-/* Progress header: step counter + End-sweep on one line, thin bar below. */
-.dup-sweep-progress { display: flex; flex-direction: column; gap: 6px; }
-.dup-sweep-progress-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.dup-sweep-step { font-size: 12px; opacity: 0.7; }
+
+.dup-sweep-scroll {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+    padding-right: 4px;
+    overflow-y: auto;
+}
+
+.dup-sweep-empty {
+    padding: 24px 8px;
+    color: var(--text-color);
+    text-align: center;
+    opacity: 0.8;
+}
+
+.dup-sweep-done {
+    position: relative;
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    color: var(--text-color);
+}
+
+.dup-sweep-done-content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 28px 12px 20px;
+    text-align: center;
+    animation: dup-sweep-done-enter 240ms cubic-bezier(0.215, 0.61, 0.355, 1) both;
+}
+
+.dup-sweep-done-icon {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    color: #fff;
+    background: linear-gradient(135deg, #2aa876, #22b989);
+    border-radius: 50%;
+    box-shadow: 0 8px 24px rgba(42, 168, 118, 0.28);
+    font-size: 24px;
+    font-weight: 800;
+}
+
+.dup-sweep-done-title {
+    margin: 12px 0 2px;
+    font-size: 20px;
+    line-height: 1.25;
+}
+
+.dup-sweep-done-message {
+    margin: 0;
+    font-size: 12px;
+    opacity: 0.7;
+}
+
+.dup-sweep-results {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    width: 100%;
+    max-width: 430px;
+    margin: 20px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.dup-sweep-results li {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    padding: 11px 7px;
+    background: var(--input-bg-color);
+    border: 1px solid var(--divider-color);
+    border-radius: 9px;
+}
+
+.dup-sweep-results strong {
+    color: var(--color-secondary);
+    font-size: 20px;
+    line-height: 1.1;
+}
+
+.dup-sweep-results span {
+    overflow: hidden;
+    font-size: 10px;
+    line-height: 1.3;
+    opacity: 0.72;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dup-sweep-skipped {
+    margin-top: 10px;
+    font-size: 10px;
+    opacity: 0.6;
+}
+
+.dup-sweep-done-actions {
+    position: relative;
+    z-index: 2;
+}
+
+.dup-sweep-confetti {
+    position: absolute;
+    z-index: 0;
+    inset: 0 0 auto;
+    height: 230px;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.dup-sweep-confetti-piece {
+    position: absolute;
+    top: -12px;
+    left: var(--confetti-left);
+    width: 7px;
+    height: 11px;
+    background: var(--confetti-color);
+    border-radius: 2px;
+    opacity: 0;
+    transform: translate3d(0, -16px, 0) rotate(0deg);
+    animation: dup-sweep-confetti-fall var(--confetti-duration) var(--confetti-delay) cubic-bezier(0.215, 0.61, 0.355, 1) forwards;
+    will-change: transform, opacity;
+}
+
+.dup-sweep-confetti-piece:nth-child(3n) { width: 9px; height: 5px; border-radius: 50%; }
+
+@keyframes dup-sweep-done-enter {
+    from { opacity: 0; transform: translate3d(0, 8px, 0) scale(0.98); }
+    to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes dup-sweep-confetti-fall {
+    0% { opacity: 0; transform: translate3d(0, -16px, 0) rotate(0deg); }
+    12% { opacity: 1; }
+    82% { opacity: 1; }
+    100% { opacity: 0; transform: translate3d(var(--confetti-drift), 225px, 0) rotate(var(--confetti-rotation)); }
+}
+
+.dup-sweep-progress {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.dup-sweep-progress-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.dup-sweep-step {
+    font-size: 12px;
+    opacity: 0.7;
+}
+
 .dup-sweep-finish {
+    padding: 0;
+    color: var(--primary-color);
     background: none;
     border: none;
-    padding: 0;
     font-size: 12px;
-    color: var(--text-color);
-    opacity: 0.7;
     cursor: pointer;
-    text-decoration: underline;
 }
-.dup-sweep-finish:hover { opacity: 1; }
+
+.dup-sweep-finish:hover { text-decoration: underline; }
+
 .dup-sweep-progress-bar {
     height: 4px;
-    border-radius: 999px;
-    background: var(--divider-color);
     overflow: hidden;
+    background: var(--divider-color);
+    border-radius: 999px;
 }
+
 .dup-sweep-progress-fill {
     height: 100%;
+    background: linear-gradient(90deg, #4361ee, #22d3ee);
     border-radius: inherit;
-    background: linear-gradient(90deg, #322c7a, #0f8a8a);
     transition: width 250ms ease;
 }
-@media (prefers-reduced-motion: reduce) {
-    .dup-sweep-progress-fill { transition: none; }
-}
-.dup-sweep-message { margin: 0; line-height: 1.4; }
 
-/* Reveal/hide the tabs this group is about. */
-.dup-sweep-reveal {
-    align-self: flex-start;
-    background: none;
-    border: none;
-    padding: 0;
-    font-size: 12px;
-    color: var(--primary-color);
-    cursor: pointer;
-    text-decoration: underline;
+.dup-sweep-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    background: var(--input-bg-color);
+    border: 1px solid var(--divider-color);
+    border-radius: 10px;
 }
-.dup-sweep-reveal:hover { color: var(--link-hover-color, var(--primary-color)); }
 
-/* No independent scroll here — the whole .dup-sweep-scroll region (description
-   through action buttons) scrolls as one unit; only the footer stays static. */
-.dup-tab-list {
-    list-style: none;
+.dup-sweep-summary-label {
+    font-size: 10px;
+    font-weight: 750;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.7;
+}
+
+.dup-sweep-collection-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
     margin: 0;
     padding: 0;
+    list-style: none;
+}
+
+.dup-sweep-collection-name {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    padding: 4px 8px;
+    overflow: hidden;
+    color: var(--primary-color);
+    background: var(--primary-hover-bg);
+    border: 1px solid var(--primary-color);
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dup-sweep-summary-count {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.dup-sweep-question {
+    margin: 0;
+    font-size: 16px;
+    line-height: 1.3;
+}
+
+.dup-sweep-choice-list {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.dup-sweep-choice {
+    display: grid;
+    grid-template-columns: 18px 32px minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    align-items: center;
+    gap: 3px 9px;
+    width: 100%;
+    min-height: 68px;
+    padding: 9px 11px;
+    color: var(--text-color);
+    text-align: left;
+    background: var(--input-bg-color);
+    border: 1px solid var(--divider-color);
+    border-radius: 9px;
+    cursor: pointer;
+    transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+}
+
+.dup-sweep-choice:hover { border-color: var(--primary-color); }
+
+.dup-sweep-choice--selected {
+    background: var(--primary-hover-bg);
+    border-color: var(--color-secondary);
+    box-shadow: inset 0 0 0 1px var(--color-secondary);
+}
+
+.dup-sweep-choice-radio {
+    grid-row: 1 / 3;
+    width: 14px;
+    height: 14px;
+    border: 2px solid currentColor;
+    border-radius: 50%;
+    opacity: 0.75;
+}
+
+.dup-sweep-choice--selected .dup-sweep-choice-radio {
+    background: var(--primary-color);
+    border: 4px solid var(--bg-color);
+    box-shadow: 0 0 0 2px var(--primary-color);
+    opacity: 1;
+}
+
+.dup-sweep-choice-icon {
+    display: grid;
+    grid-row: 1 / 3;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    color: #fff;
+    background: #4361ee;
+    border-radius: 7px;
+    font-size: 17px;
+    font-weight: 700;
+}
+
+.dup-sweep-choice-icon--extract { background: #0f8a8a; }
+.dup-sweep-choice-icon--skip { background: #9a6a20; }
+.dup-sweep-choice-icon--discard-all { background: #c8463c; }
+
+.dup-sweep-choice-copy {
+    display: flex;
+    grid-column: 3;
+    grid-row: 1;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.dup-sweep-choice-title {
+    font-size: 13px;
+    line-height: 1.3;
+}
+
+.dup-sweep-choice-description {
+    overflow: hidden;
+    font-size: 11px;
+    line-height: 1.35;
+    opacity: 0.72;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dup-sweep-choice-description strong {
+    color: var(--color-secondary);
+    opacity: 1;
+}
+
+.dup-sweep-choice-badge {
+    grid-column: 4;
+    grid-row: 1 / 3;
+    align-self: center;
+    padding: 5px 10px;
+    color: var(--color-secondary);
+    border: 1px solid var(--color-secondary);
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 750;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    transform-origin: center;
+    animation: dup-sweep-badge-pulse 3.8s 700ms ease-in-out infinite;
+    will-change: transform, opacity;
+}
+
+@keyframes dup-sweep-badge-pulse {
+    0%, 75%, 100% { transform: scale(1); opacity: 0.9; }
+    83% { transform: scale(1.06); opacity: 1; }
+    91% { transform: scale(1); opacity: 0.9; }
+}
+
+.dup-sweep-choice-outcome {
+    display: flex;
+    grid-column: 3 / 5;
+    grid-row: 2;
+    align-items: center;
+    gap: 0;
+    min-width: 0;
+    overflow: hidden;
+    color: #2aa876;
+    font-size: 10px;
+    line-height: 1.3;
+    white-space: nowrap;
+}
+
+.dup-sweep-choice--has-badge .dup-sweep-choice-outcome { grid-column: 3 / 4; }
+
+.dup-sweep-outcome-prefix,
+.dup-sweep-outcome-more { flex: 0 0 auto; }
+
+.dup-sweep-outcome-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dup-sweep-outcome-more { font-weight: 750; }
+
+.dup-sweep-choice-outcome::before {
+    content: "✓";
+    margin-right: 5px;
+    font-weight: 800;
+}
+
+.dup-sweep-choice-icon--skip + .dup-sweep-choice-copy + .dup-sweep-choice-outcome { color: var(--text-color); opacity: 0.65; }
+.dup-sweep-choice--destructive .dup-sweep-choice-outcome { color: #d6544a; }
+
+.dup-sweep-choice--destructive.dup-sweep-choice--selected {
+    background: rgba(214, 84, 74, 0.1);
+    border-color: #d6544a;
+    box-shadow: inset 0 0 0 1px #d6544a;
+}
+
+.dup-tab-preview {
+    flex: 0 0 auto;
+    overflow: hidden;
+    background: var(--input-bg-color);
     border: 1px solid var(--divider-color);
     border-radius: 8px;
-    background: var(--input-bg-color);
 }
+
+.dup-sweep-reveal {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 9px 11px;
+    color: var(--text-color);
+    text-align: left;
+    background: transparent;
+    border: none;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.dup-sweep-reveal:hover { background: var(--single-tab-row-hover-color); }
+.dup-tab-preview--expanded .dup-sweep-reveal { border-bottom: 1px solid var(--divider-color); }
+
+.dup-tab-list {
+    max-height: 180px;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    list-style: none;
+}
+
 .dup-tab-row {
     display: flex;
     align-items: center;
     gap: 8px;
     padding: 6px 10px;
-    font-size: 13px;
+    overflow: hidden;
     color: var(--text-color);
     border-bottom: 1px solid var(--divider-color);
-    overflow: hidden;
+    font-size: 12px;
 }
+
 .dup-tab-row:last-child { border-bottom: none; }
 .dup-tab-favicon { width: 16px; height: 16px; flex-shrink: 0; border-radius: 3px; object-fit: contain; }
 .dup-tab-favicon--blank { background: var(--divider-color); }
 .dup-tab-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* Stacked, equal-width, centered actions. */
-.dup-sweep-actions {
-    position: relative;
+.dup-sweep-bottom {
     display: flex;
-    flex-direction: column;
     align-items: center;
     gap: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--divider-color);
 }
 
-/* Action tooltips: exactly two lines, broken where the content string says so
-   (white-space: pre keeps those breaks and adds none of its own). */
+.dup-sweep-applyall {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    color: var(--text-color);
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.dup-sweep-undo,
+.dup-sweep-close {
+    padding: 6px 8px;
+    color: var(--text-color);
+    background: none;
+    border: none;
+    font-size: 11px;
+    cursor: pointer;
+    opacity: 0.72;
+}
+
+.dup-sweep-undo { margin-left: auto; }
+.dup-sweep-undo:hover:not(:disabled),
+.dup-sweep-close:hover { opacity: 1; }
+.dup-sweep-undo:disabled { cursor: default; opacity: 0.35; }
+
+.dup-sweep-apply {
+    min-width: 100px;
+    padding: 8px 14px;
+    color: #fff;
+    background: linear-gradient(135deg, #4361ee, #2563eb);
+    border: none;
+    border-radius: 7px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.dup-sweep-apply:hover:not(:disabled) { filter: brightness(1.12); }
+.dup-sweep-apply:disabled { cursor: default; opacity: 0.55; }
+
 .dup-action-tip {
     font-size: 12px !important;
     line-height: 1.4 !important;
@@ -99,110 +521,24 @@
     white-space: pre !important;
 }
 
-/* All actions share one borderless pill shape: a subtle gradient fill, no
-   outline. Each variant only differs by the hue of its gradient.
-
-   Hover: a quick, uniform deepen of the fill. The inset shadow already covers
-   the whole pill (transparent at rest) and only its colour fades in, so there's
-   no slow inward growth. It paints above the background but below the label, so
-   text stays readable. --dup-fill is the per-variant colour; NO transform. */
-.dup-pill {
-    position: relative;
-    box-sizing: border-box;
-    width: 100%;
-    max-width: 300px;
-    text-align: center;
-    border: none;
-    border-radius: 999px;
-    padding: 9px 16px;
-    font-size: 13px;
-    color: var(--text-color);
-    cursor: pointer;
-    background: linear-gradient(135deg, rgba(130, 140, 165, 0.16), rgba(130, 140, 165, 0.07));
-    --dup-fill: rgba(130, 140, 165, 0.24);
-    box-shadow: inset 0 0 0 200px transparent;
-    transition: box-shadow 130ms ease;
+@media (max-width: 520px) {
+    .dup-sweep-choice { grid-template-columns: 18px 30px minmax(0, 1fr); }
+    .dup-sweep-choice-badge { grid-column: 3; grid-row: 3; justify-self: start; margin-top: 3px; }
+    .dup-sweep-choice-outcome { grid-column: 3; grid-row: 2; }
+    .dup-sweep-bottom { flex-wrap: wrap; }
+    .dup-sweep-applyall { width: 100%; }
+    .dup-sweep-undo { margin-left: 0; }
+    .dup-sweep-apply { margin-left: auto; }
 }
-.dup-pill:hover { box-shadow: inset 0 0 0 200px var(--dup-fill); }
-
-/* Extract — "send somewhere new": a solid dark-turquoise gradient with white
-   text, distinct from the neutral Keep pills. */
-.dup-pill-extract {
-    color: #fff;
-    background: linear-gradient(135deg, #0f8a8a, #0a5c63);
-    --dup-fill: rgba(0, 0, 0, 0.18);
-}
-
-/* Discard — destructive: a solid red gradient with white text. */
-.dup-pill-discard {
-    color: #fff;
-    background: linear-gradient(135deg, #d6544a, #b23b30);
-    --dup-fill: rgba(0, 0, 0, 0.18);
-}
-
-/* Recommended action: the button stays a normal centered pill, identical in
-   size and position to the others. The badge is a pure overlay pinned to the
-   right edge of the row, so it never affects the button's size or position. */
-.dup-rec-wrap {
-    position: relative;
-    width: 100%;
-    max-width: 300px;
-}
-.dup-rec-wrap .dup-pill { max-width: none; }
-
-/* Badge with a left-pointing arrow aimed at the action. Darker fill for legible
-   white text. Pinned just to the right of the button so it reads as attached. */
-.dup-pill-badge {
-    position: absolute;
-    left: calc(100% + 8px);
-    top: 50%;
-    transform: translateY(-50%);
-    padding: 4px 9px;
-    font-size: 9px;
-    font-weight: 700;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
-    line-height: 1.3;
-    color: #fff;
-    white-space: nowrap;
-    border-radius: 6px;
-    background: linear-gradient(135deg, #322c7a, #115766);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
-    pointer-events: none;
-}
-.dup-pill-badge::before {
-    content: "";
-    position: absolute;
-    left: -5px;
-    top: 50%;
-    transform: translateY(-50%);
-    border-style: solid;
-    border-width: 5px 5px 5px 0;
-    border-color: transparent #322c7a transparent transparent;
-}
-
-.dup-sweep-bottom { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--divider-color); }
-.dup-sweep-applyall { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-color); cursor: pointer; }
-.dup-sweep-skip { background: none; border: none; color: var(--text-color); opacity: 0.7; cursor: pointer; text-decoration: underline; }
-.dup-sweep-skip:hover { opacity: 1; }
-
-/* Secondary button — theme-aware so it stays visible on dark backgrounds. */
-.dup-sweep-undo {
-    margin-left: auto;
-    background: var(--input-bg-color);
-    color: var(--text-color);
-    border: 1px solid var(--divider-color);
-    border-radius: 999px;
-    padding: 6px 14px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background 200ms ease, border-color 200ms ease;
-}
-.dup-sweep-undo:hover:not(:disabled) { background: var(--single-tab-row-hover-color); border-color: var(--primary-color); }
-.dup-sweep-undo:disabled { opacity: 0.45; cursor: default; }
-.dup-sweep-close { background: none; border: none; cursor: pointer; color: var(--text-color); opacity: 0.8; }
-.dup-sweep-close:hover { opacity: 1; }
 
 @media (prefers-reduced-motion: reduce) {
-    .dup-pill { transition: none; }
+    .dup-sweep-progress-fill,
+    .dup-sweep-choice { transition: none; }
+    .dup-sweep-choice-badge { animation: none; }
+    .dup-sweep-done-content { animation: none; }
+    .dup-sweep-confetti { display: none; }
 }
+
+html.performance-mode .dup-sweep-choice-badge,
+html.performance-mode .dup-sweep-done-content { animation: none; }
+html.performance-mode .dup-sweep-confetti { display: none; }

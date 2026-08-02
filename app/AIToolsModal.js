@@ -845,9 +845,9 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
         const { status } = aiTaskState;
 
         if (status === 'running') {
-            // The scan publishes the sweep state right after detection, before the
-            // AI finishes refining recommendations — switch to the interactive
-            // panel as soon as this run's state exists instead of waiting.
+            // The scan publishes the sweep after AI names every duplicate group,
+            // just before the engine flips to done. Switch as soon as that fresh,
+            // fully prepared state exists instead of waiting for the final tick.
             const st = duplicateSweep.state;
             const fresh = st && Array.isArray(st.groups) && st.createdAt >= dupRunStartedAtRef.current;
             setPanelStatus(fresh ? 'done' : 'running');
@@ -885,6 +885,12 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
         ? [...AI_TOOLS, AI_NAME_SUGGESTION_TOOL].find((tool) => tool.id === activeToolId)
         : null;
     const showProUpsell = Boolean(activeTool && isToolLocked(activeTool));
+    const smartOrganizeProgress = aiTaskState?.type === 'smart-organize' && Number.isFinite(aiTaskState.progress)
+        ? Math.max(0, Math.min(100, aiTaskState.progress))
+        : 0;
+    const smartOrganizeProgressLabel = aiTaskState?.type === 'smart-organize' && aiTaskState.currentLabel
+        ? aiTaskState.currentLabel
+        : 'Organizing tabs…';
 
     return (
         <Modal
@@ -1062,10 +1068,20 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
                             <>
                                 <SmartOrganizeFoldAnimation />
                                 <div className="ai-rename-progress">
-                                    <div className="ai-rename-progress-track">
-                                        <div className="ai-rename-progress-fill ai-rename-progress-fill--animated" />
+                                    <div
+                                        className="ai-rename-progress-track"
+                                        role="progressbar"
+                                        aria-label="Smart Tab Grouping progress"
+                                        aria-valuemin="0"
+                                        aria-valuemax="100"
+                                        aria-valuenow={smartOrganizeProgress}
+                                    >
+                                        <div
+                                            className="ai-rename-progress-fill"
+                                            style={{ width: `${smartOrganizeProgress}%` }}
+                                        />
                                     </div>
-                                    <span className="ai-rename-progress-label">Organizing tabs…</span>
+                                    <span className="ai-rename-progress-label">{smartOrganizeProgressLabel}</span>
                                 </div>
                                 <button
                                     type="button"
@@ -1382,7 +1398,7 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
                                             ))}
                                         </div>
                                     </div>
-                                    <span className="ai-rename-progress-label">Scanning for duplicates…</span>
+                                    <span className="ai-rename-progress-label">Scanning for duplicates and naming groups…</span>
                                 </div>
                                 <button
                                     type="button"
