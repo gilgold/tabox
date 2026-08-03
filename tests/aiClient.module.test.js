@@ -99,6 +99,43 @@ describe('ai-client module (SW → Worker proxy)', () => {
     await expect(session.prompt('hello')).rejects.toThrow(/429.*rate_limited/);
   });
 
+  test('a 403 pro_required throws a friendly coded error and refreshes the entitlement cache', async () => {
+    global.fetch = mockFetch({ ok: false, status: 403, body: { error: 'pro_required' } });
+    globalThis.refreshProEntitlement = jest.fn().mockResolvedValue({ entitled: false });
+    try {
+      const { createAISession } = loadClient();
+      const session = await createAISession({});
+      const err = await session.prompt('hello').then(() => null, (e) => e);
+      expect(err.code).toBe('pro_required');
+      expect(err.message).toMatch(/Tabox Pro/);
+      expect(err.message).not.toMatch(/403/);
+      expect(globalThis.refreshProEntitlement).toHaveBeenCalled();
+    } finally {
+      delete globalThis.refreshProEntitlement;
+    }
+  });
+
+  test('non-pro_required failures do not touch the entitlement cache', async () => {
+    global.fetch = mockFetch({ ok: false, status: 429, body: { error: 'rate_limited' } });
+    globalThis.refreshProEntitlement = jest.fn();
+    try {
+      const { createAISession } = loadClient();
+      const session = await createAISession({});
+      await expect(session.prompt('hello')).rejects.toThrow(/rate_limited/);
+      expect(globalThis.refreshProEntitlement).not.toHaveBeenCalled();
+    } finally {
+      delete globalThis.refreshProEntitlement;
+    }
+  });
+
+  test('a 403 pro_required still throws cleanly when no refresh helper is present (Jest/legacy)', async () => {
+    global.fetch = mockFetch({ ok: false, status: 403, body: { error: 'pro_required' } });
+    const { createAISession } = loadClient();
+    const session = await createAISession({});
+    const err = await session.prompt('hello').then(() => null, (e) => e);
+    expect(err.code).toBe('pro_required');
+  });
+
   test('a hung request rejects with TimeoutError instead of hanging forever', async () => {
     jest.useFakeTimers();
     try {

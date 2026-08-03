@@ -111,6 +111,18 @@ async function requestCompletion(config, text, { responseConstraint, signal } = 
     }
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
+        if (response.status === 403 && data.error === 'pro_required') {
+            // The Worker says entitlement is gone (expired trial, cancellation)
+            // while the popup's cached record may still say Pro for up to 24h.
+            // Refresh the cache in the background: the storage.local write flips
+            // isPro in any open popup (usePremiumEntitlement's onChanged
+            // listener), swapping the tool panel for the upsell. Fire-and-forget
+            // so a slow refresh can't delay the error surfacing.
+            try { Promise.resolve(globalThis.refreshProEntitlement?.()).catch(() => {}); } catch { /* no-op */ }
+            const proError = new Error('Tabox AI requires Tabox Pro. Upgrade to keep using AI tools.');
+            proError.code = 'pro_required';
+            throw proError;
+        }
         throw new Error(`Tabox AI: request failed (${response.status}): ${data.error || 'request_failed'}`);
     }
     if (typeof data.content !== 'string' || !data.content) throw new Error('Tabox AI: empty completion');
