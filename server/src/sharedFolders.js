@@ -8,11 +8,18 @@ const ROLES = ['read', 'write'];
 const err = (status, error) => ({ ok: false, status, error });
 
 async function refreshIdentityName(db, identity) {
-  if (!identity?.firstName) return;
-  await db.prepare('UPDATE shared_folders SET owner_first_name = ? WHERE owner_google_id = ? AND (owner_first_name IS NULL OR owner_first_name != ?)')
-    .bind(identity.firstName, identity.googleId, identity.firstName).run();
-  await db.prepare("UPDATE shared_members SET first_name = ? WHERE email = ? AND status = 'active' AND (first_name IS NULL OR first_name != ?)")
-    .bind(identity.firstName, identity.email.toLowerCase(), identity.firstName).run();
+  if (identity?.firstName) {
+    await db.prepare('UPDATE shared_folders SET owner_first_name = ? WHERE owner_google_id = ? AND (owner_first_name IS NULL OR owner_first_name != ?)')
+      .bind(identity.firstName, identity.googleId, identity.firstName).run();
+    await db.prepare("UPDATE shared_members SET first_name = ? WHERE email = ? AND status = 'active' AND (first_name IS NULL OR first_name != ?)")
+      .bind(identity.firstName, identity.email.toLowerCase(), identity.firstName).run();
+  }
+  if (identity?.photoLink) {
+    await db.prepare('UPDATE shared_folders SET owner_photo_link = ? WHERE owner_google_id = ? AND (owner_photo_link IS NULL OR owner_photo_link != ?)')
+      .bind(identity.photoLink, identity.googleId, identity.photoLink).run();
+    await db.prepare("UPDATE shared_members SET photo_link = ? WHERE email = ? AND status = 'active' AND (photo_link IS NULL OR photo_link != ?)")
+      .bind(identity.photoLink, identity.email.toLowerCase(), identity.photoLink).run();
+  }
 }
 
 export async function isProUser(env, googleId) {
@@ -98,8 +105,8 @@ export async function createSharedFolder(db, identity, { folderId, name, color =
   const existing = await db.prepare('SELECT id FROM shared_folders WHERE id = ?').bind(folderId).first();
   if (existing) return err(409, 'already_shared');
   await db.prepare(
-    'INSERT INTO shared_folders (id, owner_google_id, owner_email, owner_first_name, name, color, revision, created_at, updated_at, updated_by) VALUES (?,?,?,?,?,?,1,?,?,?)'
-  ).bind(folderId, identity.googleId, identity.email.toLowerCase(), identity.firstName || null, name, color, nowMs, nowMs, identity.email.toLowerCase()).run();
+    'INSERT INTO shared_folders (id, owner_google_id, owner_email, owner_first_name, owner_photo_link, name, color, revision, created_at, updated_at, updated_by) VALUES (?,?,?,?,?,?,?,1,?,?,?)'
+  ).bind(folderId, identity.googleId, identity.email.toLowerCase(), identity.firstName || null, identity.photoLink || null, name, color, nowMs, nowMs, identity.email.toLowerCase()).run();
   for (const c of collections) {
     await db.prepare(
       'INSERT INTO shared_collections (folder_id, uid, data, rev, deleted, updated_at, updated_by) VALUES (?,?,?,1,0,?,?)'
@@ -112,11 +119,12 @@ async function membersOf(db, folderId) {
   // Declined members are INCLUDED (status:'declined') so the owner sees who declined
   // and can re-invite; only the member cap excludes them (see inviteMember).
   const { results } = await db.prepare(
-    'SELECT email, first_name AS firstName, role, status FROM shared_members WHERE folder_id = ? ORDER BY invited_at'
+    'SELECT email, first_name AS firstName, photo_link AS photoLink, role, status FROM shared_members WHERE folder_id = ? ORDER BY invited_at'
   ).bind(folderId).all();
   return results.map((member) => ({
     email: member.email,
     ...(member.firstName ? { firstName: member.firstName } : {}),
+    ...(member.photoLink ? { photoLink: member.photoLink } : {}),
     role: member.role,
     status: member.status,
   }));
@@ -137,6 +145,7 @@ export async function listSharedFolders(db, identity) {
       folderId: f.id, name: f.name, color: f.color, revision: f.revision,
       role: f.role, ownerEmail: f.owner_email,
       ...(f.owner_first_name ? { ownerFirstName: f.owner_first_name } : {}),
+      ...(f.owner_photo_link ? { ownerPhotoLink: f.owner_photo_link } : {}),
       members: await membersOf(db, f.id),
     });
   }
@@ -216,10 +225,10 @@ export async function respondInvite(db, identity, folderId, accept, nowMs, { isP
   const status = accept ? 'active' : 'declined';
   const effectiveRole = accept && invite.role === 'write' && !isPro ? 'read' : invite.role;
   await db.prepare(
-    'UPDATE shared_members SET status = ?, role = ?, google_id = ?, first_name = ?, responded_at = ? WHERE folder_id = ? AND email = ?'
-  ).bind(status, effectiveRole, identity.googleId, identity.firstName || null, nowMs, folderId, email).run();
+    'UPDATE shared_members SET status = ?, role = ?, google_id = ?, first_name = ?, photo_link = ?, responded_at = ? WHERE folder_id = ? AND email = ?'
+  ).bind(status, effectiveRole, identity.googleId, identity.firstName || null, identity.photoLink || null, nowMs, folderId, email).run();
   if (!accept) return { ok: true, data: { accepted: false } };
-  await recordActivity(db, folderId, email, 'member_joined', email, { role: effectiveRole, subjectFirstName: identity.firstName || null }, nowMs, identity.firstName);
+  await recordActivity(db, folderId, email, 'member_joined', email, { role: effectiveRole, subjectFirstName: identity.firstName || null }, nowMs, identity.firstName, identity.photoLink);
   const f = await db.prepare('SELECT * FROM shared_folders WHERE id = ?').bind(folderId).first();
   const { results } = await db.prepare(
     'SELECT uid, data FROM shared_collections WHERE folder_id = ? AND deleted = 0'
@@ -232,6 +241,7 @@ export async function respondInvite(db, identity, folderId, accept, nowMs, { isP
         folderId: f.id, name: f.name, color: f.color, revision: f.revision,
         role: effectiveRole, ownerEmail: f.owner_email,
         ...(f.owner_first_name ? { ownerFirstName: f.owner_first_name } : {}),
+        ...(f.owner_photo_link ? { ownerPhotoLink: f.owner_photo_link } : {}),
         members: await membersOf(db, folderId),
       },
       collections: results.map((r) => ({ uid: r.uid, data: JSON.parse(r.data) })),
@@ -263,7 +273,14 @@ export async function getFolderDelta(db, identity, folderId, sinceRev = 0) {
       revision: folder.revision,
       role,
       lastActivityId: (lastAct && lastAct.m) || 0,
-      folder: { name: folder.name, color: folder.color, updatedBy: folder.updated_by },
+      // Owner name/photo ride the delta so members' cached owner details
+      // refresh on every pull (the owner is not in the members list).
+      folder: {
+        name: folder.name, color: folder.color, updatedBy: folder.updated_by,
+        ownerEmail: folder.owner_email,
+        ...(folder.owner_first_name ? { ownerFirstName: folder.owner_first_name } : {}),
+        ...(folder.owner_photo_link ? { ownerPhotoLink: folder.owner_photo_link } : {}),
+      },
       members: await membersOf(db, folderId),
       collections: results.map((r) => ({
         uid: r.uid, data: r.data == null || r.deleted ? null : JSON.parse(r.data),
@@ -294,7 +311,7 @@ export async function putCollection(db, identity, folderId, uid, { data, baseRev
   ).bind(folderId, uid, JSON.stringify(data ?? null), revision, nowMs, identity.email.toLowerCase()).run();
   // A row that only exists as a tombstone (deleted = 1) reads as "added" again.
   const action = row && !row.deleted ? 'collection_updated' : 'collection_added';
-  await recordActivity(db, folderId, identity.email, action, uid, collectionNameDetail(data), nowMs, identity.firstName);
+  await recordActivity(db, folderId, identity.email, action, uid, collectionNameDetail(data), nowMs, identity.firstName, identity.photoLink);
   return { ok: true, data: { revision } };
 }
 
@@ -323,7 +340,7 @@ export async function deleteCollection(db, identity, folderId, uid, nowMs, baseR
      ON CONFLICT(folder_id, uid) DO UPDATE SET data = NULL, rev = excluded.rev, deleted = 1,
        updated_at = excluded.updated_at, updated_by = excluded.updated_by`
   ).bind(folderId, uid, revision, nowMs, identity.email.toLowerCase()).run();
-  await recordActivity(db, folderId, identity.email, 'collection_deleted', uid, snapshot, nowMs, identity.firstName);
+  await recordActivity(db, folderId, identity.email, 'collection_deleted', uid, snapshot, nowMs, identity.firstName, identity.photoLink);
   return { ok: true, data: { revision } };
 }
 
@@ -336,7 +353,7 @@ export async function updateFolderMeta(db, identity, folderId, { name, color }, 
     .bind(name ?? f.name, color === undefined ? f.color : color, folderId).run();
   const revision = await bumpRevision(db, folderId, identity, nowMs);
   if (name != null && name !== f.name) {
-    await recordActivity(db, folderId, identity.email, 'folder_renamed', null, { from: f.name, to: name }, nowMs, identity.firstName);
+    await recordActivity(db, folderId, identity.email, 'folder_renamed', null, { from: f.name, to: name }, nowMs, identity.firstName, identity.photoLink);
   }
   return { ok: true, data: { revision } };
 }
@@ -354,7 +371,7 @@ export async function updateMemberRole(db, identity, folderId, email, role, nowM
     .bind(role, folderId, target).run();
   if (res.meta.changes === 0) return err(404, 'not_found');
   await bumpRevision(db, folderId, identity, nowMs);
-  await recordActivity(db, folderId, identity.email, 'role_changed', target, { role, subjectFirstName: member?.first_name || null }, nowMs, identity.firstName);
+  await recordActivity(db, folderId, identity.email, 'role_changed', target, { role, subjectFirstName: member?.first_name || null }, nowMs, identity.firstName, identity.photoLink);
   return { ok: true, data: { members: await membersOf(db, folderId) } };
 }
 
@@ -368,7 +385,7 @@ export async function removeMember(db, identity, folderId, email, nowMs) {
   const res = await db.prepare('DELETE FROM shared_members WHERE folder_id = ? AND email = ?').bind(folderId, target).run();
   if (res.meta.changes === 0) return err(404, 'not_found');
   await bumpRevision(db, folderId, identity, nowMs);
-  await recordActivity(db, folderId, identity.email, isSelf ? 'member_left' : 'member_removed', target, { subjectFirstName: member?.first_name || null }, nowMs, identity.firstName);
+  await recordActivity(db, folderId, identity.email, isSelf ? 'member_left' : 'member_removed', target, { subjectFirstName: member?.first_name || null }, nowMs, identity.firstName, identity.photoLink);
   return { ok: true, data: { members: await membersOf(db, folderId) } };
 }
 

@@ -291,3 +291,47 @@ describe('GET /shared/folders/:id/activity', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('actor photos', () => {
+  const PIC_OWNER = 'https://lh3.googleusercontent.com/a/owner=s64';
+  const PIC_GUEST = 'https://lh3.googleusercontent.com/a/guest=s64';
+  const OWNER_P = { ...OWNER, photoLink: PIC_OWNER };
+  const GUEST_P = { ...GUEST, photoLink: PIC_GUEST };
+
+  it('mutators record actorPhotoLink and listActivity returns it (absent when identity has none)', async () => {
+    const db = await seed({ withGuest: false });
+    await putCollection(db, OWNER_P, 'f1', 'c1', { data: { name: 'Research' } }, 2000);
+    await putCollection(db, OWNER, 'f1', 'c2', { data: { name: 'NoPhoto' } }, 3000 + 20 * MIN);
+    const evs = await events(db);
+    expect(evs[1]).toMatchObject({ action: 'collection_added', actorPhotoLink: PIC_OWNER });
+    expect(evs[0].actorPhotoLink).toBeUndefined();
+  });
+
+  it('member_joined carries the joiner photo, and members/owner expose photoLink via the delta', async () => {
+    const db = await seed({ withGuest: false });
+    await inviteMember(db, OWNER_P, 'f1', { email: 'guest@x.com', role: 'write' }, 1000);
+    await respondInvite(db, GUEST_P, 'f1', true, 1001, { isPro: true });
+    expect((await events(db))[0]).toMatchObject({ action: 'member_joined', actorPhotoLink: PIC_GUEST });
+    const delta = await getFolderDelta(db, OWNER_P, 'f1', 0);
+    expect(delta.data.members).toEqual([
+      expect.objectContaining({ email: 'guest@x.com', photoLink: PIC_GUEST }),
+    ]);
+    // Owner details ride the delta too (the owner is not in `members`).
+    expect(delta.data.folder).toMatchObject({
+      ownerEmail: 'owner@x.com', ownerFirstName: 'Olivia', ownerPhotoLink: PIC_OWNER,
+    });
+  });
+
+  it('refreshIdentityName-style backfill: a later authenticated call fills missing photos', async () => {
+    const db = await seed(); // owner + guest created with NO photos
+    // Any read with a photo-bearing identity backfills owner/member rows.
+    await getFolderDelta(db, OWNER_P, 'f1', 0);
+    await getFolderDelta(db, GUEST_P, 'f1', 0);
+    const { listSharedFolders } = await import('../src/sharedFolders.js');
+    const listed = (await listSharedFolders(db, OWNER_P)).data.folders[0];
+    expect(listed.ownerPhotoLink).toBe(PIC_OWNER);
+    expect(listed.members).toEqual([
+      expect.objectContaining({ email: 'guest@x.com', photoLink: PIC_GUEST }),
+    ]);
+  });
+});

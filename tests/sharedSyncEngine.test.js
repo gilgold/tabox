@@ -289,6 +289,37 @@ describe('applyDeltaLocally folder-name truncation', () => {
   });
 });
 
+// Owner details ride the delta: the owner is not in `members`, so a member's
+// cached ownerFirstName/ownerPhotoLink (used by the activity/comments panel's
+// avatars + hover cards) must refresh from delta.folder on every pull.
+describe('applyDeltaLocally owner name/photo refresh', () => {
+  test('ownerFirstName and ownerPhotoLink from delta.folder land in the stored shared marker', async () => {
+    await seedLocal();
+    const pic = 'https://lh3.googleusercontent.com/a/owner=s64';
+    global.fetch.mockResolvedValue(deltaResponse({
+      folder: { name: 'Team', color: null, updatedBy: 'o@x.com', ownerEmail: 'o@x.com', ownerFirstName: 'Olivia', ownerPhotoLink: pic },
+      collections: [],
+    }));
+    await syncSharedFolders();
+    const store = await browser.storage.local.get(['folder_f1', 'folders_index']);
+    expect(store.folder_f1.shared).toMatchObject({ ownerFirstName: 'Olivia', ownerPhotoLink: pic });
+    expect(store.folders_index.f1.shared).toMatchObject({ ownerFirstName: 'Olivia', ownerPhotoLink: pic });
+  });
+
+  test('a delta without owner fields (older worker) leaves cached owner details untouched', async () => {
+    const pic = 'https://lh3.googleusercontent.com/a/owner=s64';
+    const sharedWithOwner = { ...SHARED_FOLDER.shared, ownerFirstName: 'Olivia', ownerPhotoLink: pic };
+    await seedLocal({
+      folder_f1: { ...SHARED_FOLDER, shared: sharedWithOwner },
+      folders_index: { f1: { uid: 'f1', name: 'Team', shared: sharedWithOwner } },
+    });
+    global.fetch.mockResolvedValue(deltaResponse({ collections: [] }));
+    await syncSharedFolders();
+    const store = await browser.storage.local.get('folder_f1');
+    expect(store.folder_f1.shared).toMatchObject({ ownerFirstName: 'Olivia', ownerPhotoLink: pic });
+  });
+});
+
 // Task 15 review: the popup previously drained shared_folder_events with a plain
 // storage.local.get followed by a separate storage.local.set([]) - a read-then-clear
 // that can race a concurrent event append and silently drop it. sharedDrainEvents reads

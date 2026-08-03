@@ -43,7 +43,7 @@ function parsePaging({ beforeId, limit } = {}) {
 // (actor_email, action, subject) and is < 10 minutes old, bump its created_at
 // and refresh detail instead of inserting ("updated × 12" noise killer).
 // Retention: newest MAX_ACTIVITY_ROWS rows per folder, pruned on insert.
-export async function recordActivity(db, folderId, actorEmail, action, subject, detail, nowMs, actorFirstName = null) {
+export async function recordActivity(db, folderId, actorEmail, action, subject, detail, nowMs, actorFirstName = null, actorPhotoLink = null) {
   try {
     const email = String(actorEmail || '').toLowerCase();
     const subj = subject ?? null;
@@ -55,13 +55,13 @@ export async function recordActivity(db, folderId, actorEmail, action, subject, 
       last && last.actor_email === email && last.action === action &&
       (last.subject ?? null) === subj && nowMs - last.created_at < ACTIVITY_COALESCE_MS
     ) {
-      await db.prepare('UPDATE shared_activity SET created_at = ?, detail = ?, actor_first_name = ? WHERE id = ?')
-        .bind(nowMs, detailJson, actorFirstName, last.id).run();
+      await db.prepare('UPDATE shared_activity SET created_at = ?, detail = ?, actor_first_name = ?, actor_photo_link = ? WHERE id = ?')
+        .bind(nowMs, detailJson, actorFirstName, actorPhotoLink ?? null, last.id).run();
       return;
     }
     await db.prepare(
-      'INSERT INTO shared_activity (folder_id, actor_email, actor_first_name, action, subject, detail, created_at) VALUES (?,?,?,?,?,?,?)'
-    ).bind(folderId, email, actorFirstName, action, subj, detailJson, nowMs).run();
+      'INSERT INTO shared_activity (folder_id, actor_email, actor_first_name, actor_photo_link, action, subject, detail, created_at) VALUES (?,?,?,?,?,?,?,?)'
+    ).bind(folderId, email, actorFirstName, actorPhotoLink ?? null, action, subj, detailJson, nowMs).run();
     await db.prepare(
       'DELETE FROM shared_activity WHERE folder_id = ?1 AND id NOT IN (SELECT id FROM shared_activity WHERE folder_id = ?1 ORDER BY id DESC LIMIT ?2)'
     ).bind(folderId, MAX_ACTIVITY_ROWS).run();
@@ -83,7 +83,7 @@ export async function listActivity(db, identity, folderId, { beforeId, limit } =
   }
   bound.push(paging.limit);
   const { results } = await db.prepare(
-    `SELECT id, actor_email, actor_first_name, action, subject, detail, created_at FROM shared_activity WHERE ${where} ORDER BY id DESC LIMIT ?`
+    `SELECT id, actor_email, actor_first_name, actor_photo_link, action, subject, detail, created_at FROM shared_activity WHERE ${where} ORDER BY id DESC LIMIT ?`
   ).bind(...bound).all();
   return {
     ok: true,
@@ -94,6 +94,7 @@ export async function listActivity(db, identity, folderId, { beforeId, limit } =
         return {
           id: r.id, actorEmail: r.actor_email,
           ...(r.actor_first_name ? { actorFirstName: r.actor_first_name } : {}),
+          ...(r.actor_photo_link ? { actorPhotoLink: r.actor_photo_link } : {}),
           action: r.action, subject: r.subject, detail, createdAt: r.created_at,
         };
       }),
@@ -120,7 +121,7 @@ export async function listComments(db, identity, folderId, { collectionUid = nul
   }
   bound.push(paging.limit);
   const { results } = await db.prepare(
-    `SELECT id, collection_uid, author_email, author_first_name, body, created_at FROM shared_comments WHERE ${where} ORDER BY created_at DESC, rowid DESC LIMIT ?`
+    `SELECT id, collection_uid, author_email, author_first_name, author_photo_link, body, created_at FROM shared_comments WHERE ${where} ORDER BY created_at DESC, rowid DESC LIMIT ?`
   ).bind(...bound).all();
   const { results: countRows } = await db.prepare(
     'SELECT collection_uid, COUNT(*) AS n FROM shared_comments WHERE folder_id = ? AND deleted = 0 GROUP BY collection_uid'
@@ -131,6 +132,7 @@ export async function listComments(db, identity, folderId, { collectionUid = nul
       comments: results.map((r) => ({
         id: r.id, collectionUid: r.collection_uid, authorEmail: r.author_email,
         ...(r.author_first_name ? { authorFirstName: r.author_first_name } : {}),
+        ...(r.author_photo_link ? { authorPhotoLink: r.author_photo_link } : {}),
         body: r.body, createdAt: r.created_at,
       })),
       counts: countRows.map((r) => ({ collectionUid: r.collection_uid, n: r.n })),
@@ -157,11 +159,12 @@ export async function postComment(db, identity, folderId, { collectionUid = null
   const id = crypto.randomUUID();
   const authorEmail = identity.email.toLowerCase();
   await db.prepare(
-    'INSERT INTO shared_comments (id, folder_id, collection_uid, author_email, author_first_name, body, created_at, deleted) VALUES (?,?,?,?,?,?,?,0)'
-  ).bind(id, folderId, uid, authorEmail, identity.firstName || null, text, nowMs).run();
+    'INSERT INTO shared_comments (id, folder_id, collection_uid, author_email, author_first_name, author_photo_link, body, created_at, deleted) VALUES (?,?,?,?,?,?,?,?,0)'
+  ).bind(id, folderId, uid, authorEmail, identity.firstName || null, identity.photoLink || null, text, nowMs).run();
   return { ok: true, data: { comment: {
     id, collectionUid: uid, authorEmail,
     ...(identity.firstName ? { authorFirstName: identity.firstName } : {}),
+    ...(identity.photoLink ? { authorPhotoLink: identity.photoLink } : {}),
     body: text, createdAt: nowMs,
   } } };
 }

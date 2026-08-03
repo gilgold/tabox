@@ -343,7 +343,16 @@ async function applyDeltaLocally(folder, delta, myEmail, pendingLocalRemovals = 
     }
 
     // Folder meta + role + members refresh on every pull, regardless of who last touched it.
-    const updatedShared = { ...localFolder.shared, role: delta.role, members: delta.members };
+    // Owner name/photo too — the owner is not in `members`, so without this a
+    // member's cached owner details (used by the activity/comments panel)
+    // would only ever refresh via the LIST short-circuit path.
+    const updatedShared = {
+      ...localFolder.shared,
+      role: delta.role,
+      members: delta.members,
+      ...(delta.folder?.ownerFirstName ? { ownerFirstName: delta.folder.ownerFirstName } : {}),
+      ...(delta.folder?.ownerPhotoLink ? { ownerPhotoLink: delta.folder.ownerPhotoLink } : {}),
+    };
     updates[`folder_${folderId}`] = {
       ...localFolder,
       name: safeFolderName,
@@ -504,7 +513,7 @@ async function pollInvites() {
 // this helper only ever touches folder_*/collection_*/*_index keys, never
 // SHARED_SYNC_STATE_KEY, and never appends timeline events (a rematerialized
 // folder isn't a "change" a user needs toasted at them).
-async function materializeSharedFolderLocally({ folderId, name, color, role, ownerEmail, ownerFirstName, members, collections, now = Date.now() }) {
+async function materializeSharedFolderLocally({ folderId, name, color, role, ownerEmail, ownerFirstName, ownerPhotoLink, members, collections, now = Date.now() }) {
   return withStorageLock(async () => {
     const got = await browser.storage.local.get(['folders_index', 'collections_index']);
     const fIndex = got.folders_index || {};
@@ -546,7 +555,7 @@ async function materializeSharedFolderLocally({ folderId, name, color, role, own
       }
     }
 
-    const shared = { folderId, role, ownerEmail, ...(ownerFirstName ? { ownerFirstName } : {}), members };
+    const shared = { folderId, role, ownerEmail, ...(ownerFirstName ? { ownerFirstName } : {}), ...(ownerPhotoLink ? { ownerPhotoLink } : {}), members };
     const safeName = String(name ?? 'Untitled').slice(0, 200) || 'Untitled';
     const folderRecord = {
       uid: folderId,
@@ -624,6 +633,7 @@ async function rematerializeMissingSharedFolders() {
       role: deltaRes.data.role,
       ownerEmail: entry.ownerEmail,
       ownerFirstName: entry.ownerFirstName,
+      ownerPhotoLink: entry.ownerPhotoLink,
       members: deltaRes.data.members,
       collections: collections.map((c) => ({ uid: c.uid, data: c.data })),
       now,
@@ -666,11 +676,14 @@ async function refreshFolderMarkerFromList(folderId, listedEntry) {
     const membersChanged = JSON.stringify(record.shared.members || []) !== JSON.stringify(listedEntry.members || []);
     const ownerNameChanged = Boolean(listedEntry.ownerFirstName)
       && record.shared.ownerFirstName !== listedEntry.ownerFirstName;
-    if (!roleChanged && !membersChanged && !ownerNameChanged) return;
+    const ownerPhotoChanged = Boolean(listedEntry.ownerPhotoLink)
+      && record.shared.ownerPhotoLink !== listedEntry.ownerPhotoLink;
+    if (!roleChanged && !membersChanged && !ownerNameChanged && !ownerPhotoChanged) return;
     const shared = {
       ...record.shared,
       role: listedEntry.role,
       ...(listedEntry.ownerFirstName ? { ownerFirstName: listedEntry.ownerFirstName } : {}),
+      ...(listedEntry.ownerPhotoLink ? { ownerPhotoLink: listedEntry.ownerPhotoLink } : {}),
       members: listedEntry.members,
     };
     const index = got.folders_index || {};
@@ -716,6 +729,7 @@ async function respondToInvite({ folderId, accept }) {
     role: folder.role,
     ownerEmail: folder.ownerEmail,
     ownerFirstName: folder.ownerFirstName,
+    ownerPhotoLink: folder.ownerPhotoLink,
     members: folder.members,
     collections,
     now,
@@ -1058,7 +1072,8 @@ async function handleShareLinkRedeem(token) {
   const now = Date.now();
   await materializeSharedFolderLocally({
     folderId: folder.folderId, name: folder.name, color: folder.color, role: folder.role,
-    ownerEmail: folder.ownerEmail, ownerFirstName: folder.ownerFirstName, members: folder.members, collections, now,
+    ownerEmail: folder.ownerEmail, ownerFirstName: folder.ownerFirstName, ownerPhotoLink: folder.ownerPhotoLink,
+    members: folder.members, collections, now,
   });
   await setFolderSyncState(folder.folderId, {
     lastRev: folder.revision, lastSyncedAt: now, knownUids: collections.map((c) => c.uid),

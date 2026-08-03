@@ -17,7 +17,19 @@ export async function verifyGoogleToken(accessToken, clientId, fetchImpl = fetch
       googleId: user.permissionId,
       email: user.emailAddress || null,
       firstName: firstNameFromDisplayName(user.displayName),
+      photoLink: sanitizePhotoLink(user.photoLink),
     };
+  } catch {
+    return null;
+  }
+}
+
+// Google avatar URLs are stored verbatim and later rendered as <img src>,
+// so only plain https URLs of sane length are accepted.
+export function sanitizePhotoLink(photoLink) {
+  if (typeof photoLink !== 'string' || photoLink.length > 500) return null;
+  try {
+    return new URL(photoLink).protocol === 'https:' ? photoLink : null;
   } catch {
     return null;
   }

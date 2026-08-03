@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAtom, useAtomValue } from 'jotai';
 import { MdClose, MdDeleteOutline, MdSend } from 'react-icons/md';
 import { isProState } from '../atoms/premiumState';
@@ -120,15 +120,22 @@ const parseDetail = (detail) => {
 };
 
 /**
- * Human sentence for one activity event. `selfEmail` must be lowercase; the
+ * One activity event split into { actor, text }: `actor` describes who did it
+ * (so the caller can render a highlighted name chip with avatar + tooltip) and
+ * `text` is the rest of the sentence. `selfEmail` must be lowercase; the
  * signed-in user is rendered as "You"/"you" instead of their email.
  */
-export function describeActivityEvent(event, selfEmail = '') {
+export function describeActivityEventParts(event, selfEmail = '') {
     const detail = parseDetail(event.detail);
     const actorEmail = (event.actorEmail || '').toLowerCase();
-    const actor = actorEmail && actorEmail === selfEmail
-        ? 'You'
-        : (event.actorFirstName || event.actorEmail || 'Someone');
+    const isSelf = Boolean(actorEmail) && actorEmail === selfEmail;
+    const actor = {
+        label: isSelf ? 'You' : (event.actorFirstName || event.actorEmail || 'Someone'),
+        email: event.actorEmail || '',
+        firstName: event.actorFirstName || '',
+        photoLink: event.actorPhotoLink || '',
+        isSelf,
+    };
     const subjectEmail = (event.subject || '').toLowerCase();
     const member = subjectEmail && subjectEmail === selfEmail
         ? 'you'
@@ -137,26 +144,103 @@ export function describeActivityEvent(event, selfEmail = '') {
 
     switch (event.action) {
         case 'collection_added':
-            return `${actor} added “${name}”`;
+            return { actor, text: ` added “${name}”` };
         case 'collection_updated':
-            return `${actor} updated “${name}”`;
+            return { actor, text: ` updated “${name}”` };
         case 'collection_deleted':
-            return `${actor} deleted “${name}”`;
+            return { actor, text: ` deleted “${name}”` };
         case 'folder_renamed':
-            return detail.from && detail.to
-                ? `${actor} renamed the folder from “${detail.from}” to “${detail.to}”`
-                : `${actor} renamed the folder`;
+            return {
+                actor,
+                text: detail.from && detail.to
+                    ? ` renamed the folder from “${detail.from}” to “${detail.to}”`
+                    : ' renamed the folder',
+            };
         case 'member_joined':
-            return `${actor} joined${detail.role ? ` as ${detail.role}` : ''}`;
+            return { actor, text: ` joined${detail.role ? ` as ${detail.role}` : ''}` };
         case 'member_left':
-            return `${actor} left the folder`;
+            return { actor, text: ' left the folder' };
         case 'member_removed':
-            return `${actor} removed ${member}`;
+            return { actor, text: ` removed ${member}` };
         case 'role_changed':
-            return `${actor} changed ${member === 'you' ? 'your' : `${member}'s`} role${detail.role ? ` to ${detail.role}` : ''}`;
+            return { actor, text: ` changed ${member === 'you' ? 'your' : `${member}'s`} role${detail.role ? ` to ${detail.role}` : ''}` };
         default:
-            return `${actor} updated the folder`;
+            return { actor, text: ' updated the folder' };
     }
+}
+
+/** Full activity sentence as a plain string (actor label + remainder). */
+export function describeActivityEvent(event, selfEmail = '') {
+    const { actor, text } = describeActivityEventParts(event, selfEmail);
+    return `${actor.label}${text}`;
+}
+
+/** Stable hue per email so a user's initials avatar keeps its color. */
+export function hueForEmail(email) {
+    let hue = 0;
+    const s = String(email || '');
+    for (let i = 0; i < s.length; i++) hue = (hue * 31 + s.charCodeAt(i)) % 360;
+    return hue;
+}
+
+const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (ch) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+}[ch]));
+
+/**
+ * HTML for the rich hover card (react-tooltip `data-tooltip-html`): avatar +
+ * full name + email. All interpolated values are escaped — the tooltip
+ * renders this string as raw HTML.
+ */
+export function userCardHtml({ name, email, photoLink }) {
+    const safeName = escapeHtml(name || email || 'Unknown user');
+    const safeEmail = email ? escapeHtml(email) : '';
+    const initial = escapeHtml((name || email || '?').charAt(0).toUpperCase());
+    const avatar = photoLink && /^https:\/\//.test(photoLink)
+        ? `<img class="fp-shared-user-card-avatar" src="${escapeHtml(photoLink)}" referrerpolicy="no-referrer" alt="" />`
+        : `<span class="fp-shared-user-card-avatar fp-shared-user-avatar-fallback" style="background-color: hsl(${hueForEmail(email)}, 45%, 45%)">${initial}</span>`;
+    return `<span class="fp-shared-user-card">${avatar}<span class="fp-shared-user-card-details">`
+        + `<span class="fp-shared-user-card-name">${safeName}</span>`
+        + (safeEmail ? `<span class="fp-shared-user-card-email">${safeEmail}</span>` : '')
+        + '</span></span>';
+}
+
+/**
+ * Highlighted user mention: small avatar (photo, or colored-initial fallback —
+ * also used when the photo fails to load) + bolded name, with the rich user
+ * card on hover via the shared main-tooltip.
+ */
+export function SharedUserChip({ label, name, email, photoLink }) {
+    const [imgFailed, setImgFailed] = useState(false);
+    useEffect(() => { setImgFailed(false); }, [photoLink]);
+    const showPhoto = Boolean(photoLink) && !imgFailed;
+    const initial = (label || name || email || '?').charAt(0).toUpperCase();
+    return (
+        <span
+            className="fp-shared-user-chip"
+            data-tooltip-id="main-tooltip"
+            data-tooltip-html={userCardHtml({ name, email, photoLink })}
+        >
+            {showPhoto ? (
+                <img
+                    className="fp-shared-user-avatar"
+                    src={photoLink}
+                    referrerPolicy="no-referrer"
+                    alt=""
+                    onError={() => setImgFailed(true)}
+                />
+            ) : (
+                <span
+                    className="fp-shared-user-avatar fp-shared-user-avatar-fallback"
+                    style={{ backgroundColor: `hsl(${hueForEmail(email)}, 45%, 45%)` }}
+                    aria-hidden="true"
+                >
+                    {initial}
+                </span>
+            )}
+            <span className="fp-shared-user-name">{label}</span>
+        </span>
+    );
 }
 
 const EMAIL_PATTERN = /[^\s@“”'"]+@[^\s@“”'"]+\.[^\s@“”'".,;:!?]+/g;
@@ -191,7 +275,8 @@ function FPSharedPanel({ folder, collections, isOpen, onClose }) {
     const folderUid = folder?.uid || null;
 
     const [tab, setTab] = useState('activity');
-    const [selfEmail, setSelfEmail] = useState('');
+    const [selfUser, setSelfUser] = useState(null);
+    const selfEmail = (selfUser?.emailAddress || '').toLowerCase();
     const [activityRequest, setActivityRequest] = useState({ key: null, loading: false, error: false });
     const [commentsRequest, setCommentsRequest] = useState({ key: null, loading: false, error: false });
     // null = folder-level "Folder discussion" thread, otherwise a collection uid.
@@ -208,6 +293,32 @@ function FPSharedPanel({ folder, collections, isOpen, onClose }) {
     const commentsLoading = commentsRequest.key === activeCommentsCacheKey && commentsRequest.loading;
     const commentsError = commentsRequest.key === activeCommentsCacheKey && commentsRequest.error;
 
+    // Track which comment ids have already been rendered per thread so newly
+    // arrived comments (from polling or posting) can animate in; the first
+    // render of a thread paints without animation.
+    const seenCommentIdsRef = useRef(new Map());
+    const [enteringCommentIds, setEnteringCommentIds] = useState(() => new Set());
+    useEffect(() => {
+        const ids = commentsData.comments.map((comment) => comment.id);
+        const seen = seenCommentIdsRef.current.get(activeCommentsCacheKey);
+        if (!seen) {
+            seenCommentIdsRef.current.set(activeCommentsCacheKey, new Set(ids));
+            return undefined;
+        }
+        const fresh = ids.filter((id) => !seen.has(id));
+        if (fresh.length === 0) return undefined;
+        fresh.forEach((id) => seen.add(id));
+        setEnteringCommentIds((previous) => new Set([...previous, ...fresh]));
+        const timeoutId = setTimeout(() => {
+            setEnteringCommentIds((previous) => {
+                const next = new Set(previous);
+                fresh.forEach((id) => next.delete(id));
+                return next;
+            });
+        }, 450);
+        return () => clearTimeout(timeoutId);
+    }, [commentsData.comments, activeCommentsCacheKey]);
+
     const folderCollections = useMemo(
         () => (collections || []).filter((collection) => collection.parentId === folderUid),
         [collections, folderUid],
@@ -217,7 +328,7 @@ function FPSharedPanel({ folder, collections, isOpen, onClose }) {
         let live = true;
         browser.storage.local.get('googleUser')
             .then((stored) => {
-                if (live) setSelfEmail((stored?.googleUser?.emailAddress || '').toLowerCase());
+                if (live) setSelfUser(stored?.googleUser || null);
             })
             .catch(() => {});
         return () => { live = false; };
@@ -230,10 +341,12 @@ function FPSharedPanel({ folder, collections, isOpen, onClose }) {
         setConfirmDeleteId(null);
     }, [folderUid]);
 
-    const fetchActivity = useCallback(async () => {
+    // silent: background refresh — no loader, and transient failures keep the
+    // current list instead of swapping it for an error state.
+    const fetchActivity = useCallback(async ({ silent = false } = {}) => {
         if (!folderUid) return;
         const requestKey = folderUid;
-        setActivityRequest({ key: requestKey, loading: true, error: false });
+        if (!silent) setActivityRequest({ key: requestKey, loading: true, error: false });
         try {
             const res = await browser.runtime.sendMessage({ type: 'sharedGetActivity', folderId: folderUid });
             if (res?.ok) {
@@ -245,22 +358,24 @@ function FPSharedPanel({ folder, collections, isOpen, onClose }) {
                     previous.key === requestKey ? { key: requestKey, loading: false, error: false } : previous
                 ));
                 await markActivitySeen(folderUid);
-            } else {
+            } else if (!silent) {
                 setActivityRequest((previous) => (
                     previous.key === requestKey ? { key: requestKey, loading: false, error: true } : previous
                 ));
             }
         } catch {
-            setActivityRequest((previous) => (
-                previous.key === requestKey ? { key: requestKey, loading: false, error: true } : previous
-            ));
+            if (!silent) {
+                setActivityRequest((previous) => (
+                    previous.key === requestKey ? { key: requestKey, loading: false, error: true } : previous
+                ));
+            }
         }
     }, [folderUid, setActivityCache]);
 
-    const fetchComments = useCallback(async () => {
+    const fetchComments = useCallback(async ({ silent = false } = {}) => {
         if (!folderUid) return;
         const requestKey = commentsCacheKey(folderUid, activeThread);
-        setCommentsRequest({ key: requestKey, loading: true, error: false });
+        if (!silent) setCommentsRequest({ key: requestKey, loading: true, error: false });
         try {
             const res = await browser.runtime.sendMessage({
                 type: 'sharedGetComments',
@@ -278,15 +393,17 @@ function FPSharedPanel({ folder, collections, isOpen, onClose }) {
                 setCommentsRequest((previous) => (
                     previous.key === requestKey ? { key: requestKey, loading: false, error: false } : previous
                 ));
-            } else {
+            } else if (!silent) {
                 setCommentsRequest((previous) => (
                     previous.key === requestKey ? { key: requestKey, loading: false, error: true } : previous
                 ));
             }
         } catch {
-            setCommentsRequest((previous) => (
-                previous.key === requestKey ? { key: requestKey, loading: false, error: true } : previous
-            ));
+            if (!silent) {
+                setCommentsRequest((previous) => (
+                    previous.key === requestKey ? { key: requestKey, loading: false, error: true } : previous
+                ));
+            }
         }
     }, [folderUid, activeThread, setCommentsCache]);
 
@@ -313,9 +430,9 @@ function FPSharedPanel({ folder, collections, isOpen, onClose }) {
         if (!isOpen || !folderUid) return undefined;
         const intervalId = setInterval(() => {
             if (tab === 'activity') {
-                fetchActivity();
+                fetchActivity({ silent: true });
             } else {
-                fetchComments();
+                fetchComments({ silent: true });
             }
         }, POLL_INTERVAL_MS);
         return () => clearInterval(intervalId);
@@ -343,7 +460,7 @@ function FPSharedPanel({ folder, collections, isOpen, onClose }) {
             });
             if (res?.ok) {
                 setBody('');
-                await fetchComments();
+                await fetchComments({ silent: true });
             } else if (res?.error === 'pro_required') {
                 showErrorToast('Posting comments requires Tabox Pro.');
             } else {
@@ -366,7 +483,7 @@ function FPSharedPanel({ folder, collections, isOpen, onClose }) {
                 commentId,
             });
             if (res?.ok) {
-                await fetchComments();
+                await fetchComments({ silent: true });
             } else {
                 showErrorToast('Could not delete the comment.');
             }
@@ -403,6 +520,43 @@ function FPSharedPanel({ folder, collections, isOpen, onClose }) {
         );
         return entry?.n || 0;
     }, [commentsData.counts]);
+
+    // email (lowercase) → { firstName, photoLink } from the folder's member
+    // list + owner, used to fill user details missing on old activity/comment
+    // rows (rows written before names/photos were recorded).
+    const memberDirectory = useMemo(() => {
+        const directory = {};
+        const shared = folder?.shared;
+        if (shared?.ownerEmail) {
+            directory[shared.ownerEmail.toLowerCase()] = {
+                firstName: shared.ownerFirstName || '',
+                photoLink: shared.ownerPhotoLink || '',
+            };
+        }
+        (shared?.members || []).forEach((member) => {
+            if (!member?.email) return;
+            directory[member.email.toLowerCase()] = {
+                firstName: member.firstName || '',
+                photoLink: member.photoLink || '',
+            };
+        });
+        return directory;
+    }, [folder?.shared]);
+
+    // Fullest available details for one user, for the hover card. Row-level
+    // fields win (they're refreshed by the server), then the member
+    // directory, then the signed-in user's own Google profile.
+    const resolveUserDetails = useCallback((email, firstName, photoLink) => {
+        const key = (email || '').toLowerCase();
+        const member = memberDirectory[key] || {};
+        const isSelf = Boolean(key) && key === selfEmail;
+        return {
+            name: (isSelf && selfUser?.displayName)
+                || firstName || member.firstName || email || 'Someone',
+            email: email || '',
+            photoLink: photoLink || member.photoLink || (isSelf ? selfUser?.photoLink || '' : ''),
+        };
+    }, [memberDirectory, selfEmail, selfUser]);
 
     if (!folder) return null;
 
@@ -476,16 +630,26 @@ function FPSharedPanel({ folder, collections, isOpen, onClose }) {
                             <div className="fp-shared-activity-group" key={group.label}>
                                 <div className="fp-shared-activity-day">{group.label}</div>
                                 <ul className="fp-shared-activity-list">
-                                    {group.events.map((event) => (
-                                        <li className="fp-shared-activity-entry" key={event.id}>
-                                            <span className="fp-shared-activity-text">
-                                                {highlightEmails(describeActivityEvent(event, selfEmail))}
-                                            </span>
-                                            <span className="fp-shared-activity-time">
-                                                {formatRelativeTime(event.createdAt)}
-                                            </span>
-                                        </li>
-                                    ))}
+                                    {group.events.map((event) => {
+                                        const { actor, text } = describeActivityEventParts(event, selfEmail);
+                                        const details = resolveUserDetails(actor.email, actor.firstName, actor.photoLink);
+                                        return (
+                                            <li className="fp-shared-activity-entry" key={event.id}>
+                                                <span className="fp-shared-activity-text">
+                                                    <SharedUserChip
+                                                        label={actor.label}
+                                                        name={details.name}
+                                                        email={details.email}
+                                                        photoLink={details.photoLink}
+                                                    />
+                                                    {highlightEmails(text)}
+                                                </span>
+                                                <span className="fp-shared-activity-time">
+                                                    {formatRelativeTime(event.createdAt)}
+                                                </span>
+                                            </li>
+                                        );
+                                    })}
                                 </ul>
                             </div>
                         ))}
@@ -529,13 +693,24 @@ function FPSharedPanel({ folder, collections, isOpen, onClose }) {
                                     No comments yet — start the discussion.
                                 </div>
                             )}
-                            {commentsData.comments.map((comment) => (
-                                <div className="fp-shared-comment" key={comment.id}>
+                            {commentsData.comments.map((comment) => {
+                                const isOwnComment = (comment.authorEmail || '').toLowerCase() === selfEmail;
+                                const authorDetails = resolveUserDetails(
+                                    comment.authorEmail, comment.authorFirstName, comment.authorPhotoLink,
+                                );
+                                return (
+                                <div
+                    className={`fp-shared-comment${enteringCommentIds.has(comment.id) ? ' fp-shared-comment-enter' : ''}`}
+                    key={comment.id}
+                >
                                     <div className="fp-shared-comment-meta">
                                         <span className="fp-shared-comment-author">
-                                            {(comment.authorEmail || '').toLowerCase() === selfEmail
-                                                ? 'You'
-                                                : (comment.authorFirstName || highlightEmails(comment.authorEmail))}
+                                            <SharedUserChip
+                                                label={isOwnComment ? 'You' : (comment.authorFirstName || comment.authorEmail)}
+                                                name={authorDetails.name}
+                                                email={authorDetails.email}
+                                                photoLink={authorDetails.photoLink}
+                                            />
                                         </span>
                                         <span className="fp-shared-comment-time">
                                             {formatRelativeTime(comment.createdAt)}
@@ -570,7 +745,8 @@ function FPSharedPanel({ folder, collections, isOpen, onClose }) {
                                     </div>
                                     <div className="fp-shared-comment-body">{comment.body}</div>
                                 </div>
-                            ))}
+                                );
+                            })}
                         </div>
 
                         <div className={`fp-shared-composer ${isPro ? '' : 'fp-shared-composer-locked'}`}>

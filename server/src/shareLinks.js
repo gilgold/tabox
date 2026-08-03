@@ -57,7 +57,7 @@ async function regradeLinkMembers(db, identity, folderId, role, nowMs, isProMemb
     if (m.role === effectiveRole) continue;
     await db.prepare('UPDATE shared_members SET role = ? WHERE folder_id = ? AND email = ?')
       .bind(effectiveRole, folderId, m.email).run();
-    await recordActivity(db, folderId, identity.email, 'role_changed', m.email, { role: effectiveRole, subjectFirstName: m.first_name || null }, nowMs, identity.firstName);
+    await recordActivity(db, folderId, identity.email, 'role_changed', m.email, { role: effectiveRole, subjectFirstName: m.first_name || null }, nowMs, identity.firstName, identity.photoLink);
     updated.push({ email: m.email, role: effectiveRole });
   }
   if (updated.length) await bumpRevision(db, folderId, identity, nowMs);
@@ -88,7 +88,7 @@ export async function deleteFolderLink(db, identity, folderId) {
 export async function joinViaFolderLink(db, identity, token, nowMs, { isPro = false } = {}) {
   if (typeof token !== 'string' || !token) return err(400, 'invalid_request');
   const link = await db.prepare(
-    `SELECT fl.folder_id, fl.role AS link_role, f.owner_google_id, f.owner_email, f.owner_first_name, f.name, f.color, f.revision
+    `SELECT fl.folder_id, fl.role AS link_role, f.owner_google_id, f.owner_email, f.owner_first_name, f.owner_photo_link, f.name, f.color, f.revision
        FROM folder_links fl JOIN shared_folders f ON f.id = fl.folder_id WHERE fl.token = ?`
   ).bind(token).first();
   if (!link) return err(404, 'not_found');
@@ -106,11 +106,12 @@ export async function joinViaFolderLink(db, identity, token, nowMs, { isPro = fa
   const effectiveRole = link.link_role === 'write' && !isPro ? 'read' : link.link_role;
   if (!existing || existing.status !== 'active') {
     await db.prepare(
-      `INSERT INTO shared_members (folder_id, email, google_id, first_name, role, status, invited_at, responded_at, via_link)
-       VALUES (?,?,?,?,?,'active',?,?,1)
+      `INSERT INTO shared_members (folder_id, email, google_id, first_name, photo_link, role, status, invited_at, responded_at, via_link)
+       VALUES (?,?,?,?,?,?,'active',?,?,1)
        ON CONFLICT(folder_id, email) DO UPDATE SET role = excluded.role, status = 'active',
-         google_id = excluded.google_id, first_name = excluded.first_name, responded_at = excluded.responded_at, via_link = 1`
-    ).bind(link.folder_id, email, identity.googleId, identity.firstName || null, effectiveRole, nowMs, nowMs).run();
+         google_id = excluded.google_id, first_name = excluded.first_name, photo_link = excluded.photo_link,
+         responded_at = excluded.responded_at, via_link = 1`
+    ).bind(link.folder_id, email, identity.googleId, identity.firstName || null, identity.photoLink || null, effectiveRole, nowMs, nowMs).run();
   }
   let memberRow = await db.prepare(
     'SELECT role FROM shared_members WHERE folder_id = ? AND email = ?'
@@ -125,15 +126,16 @@ export async function joinViaFolderLink(db, identity, token, nowMs, { isPro = fa
   // Only an actual transition to 'active' is a join — re-opening the link as
   // an already-active member records nothing.
   if (!existing || existing.status !== 'active') {
-    await recordActivity(db, link.folder_id, email, 'member_joined', email, { role: memberRow.role, subjectFirstName: identity.firstName || null }, nowMs, identity.firstName);
+    await recordActivity(db, link.folder_id, email, 'member_joined', email, { role: memberRow.role, subjectFirstName: identity.firstName || null }, nowMs, identity.firstName, identity.photoLink);
   }
   const roleDowngraded = !isPro && link.link_role === 'write' && memberRow.role === 'read';
   const { results: memberRows } = await db.prepare(
-    'SELECT email, first_name AS firstName, role, status FROM shared_members WHERE folder_id = ? ORDER BY invited_at'
+    'SELECT email, first_name AS firstName, photo_link AS photoLink, role, status FROM shared_members WHERE folder_id = ? ORDER BY invited_at'
   ).bind(link.folder_id).all();
   const members = memberRows.map((member) => ({
     email: member.email,
     ...(member.firstName ? { firstName: member.firstName } : {}),
+    ...(member.photoLink ? { photoLink: member.photoLink } : {}),
     role: member.role,
     status: member.status,
   }));
@@ -148,6 +150,7 @@ export async function joinViaFolderLink(db, identity, token, nowMs, { isPro = fa
         folderId: link.folder_id, name: link.name, color: link.color, revision: link.revision,
         role: memberRow.role, ownerEmail: link.owner_email,
         ...(link.owner_first_name ? { ownerFirstName: link.owner_first_name } : {}),
+        ...(link.owner_photo_link ? { ownerPhotoLink: link.owner_photo_link } : {}),
         members,
       },
       collections: collections.map((r) => ({ uid: r.uid, data: JSON.parse(r.data) })),

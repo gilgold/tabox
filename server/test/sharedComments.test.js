@@ -242,3 +242,16 @@ describe('/shared/folders/:id/comments routes', () => {
     }
   });
 });
+
+describe('author photos', () => {
+  const PIC = 'https://lh3.googleusercontent.com/a/olivia=s64';
+
+  it('postComment stores authorPhotoLink and listComments returns it (absent when identity has none)', async () => {
+    const db = await seed();
+    await postComment(db, { ...OWNER, photoLink: PIC }, 'f1', { body: 'with photo' }, 2000, PRO);
+    await postComment(db, GUEST, 'f1', { body: 'no photo' }, 3000, PRO);
+    const { comments } = (await listComments(db, OWNER, 'f1', {})).data;
+    expect(comments[1]).toMatchObject({ body: 'with photo', authorPhotoLink: PIC });
+    expect(comments[0].authorPhotoLink).toBeUndefined();
+  });
+});

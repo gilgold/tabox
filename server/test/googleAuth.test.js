@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { verifyGoogleToken, exchangeGoogleToken } from '../src/googleAuth.js';
+import { verifyGoogleToken, exchangeGoogleToken, sanitizePhotoLink } from '../src/googleAuth.js';
 
 const CLIENT_ID = 'test-client-id.apps.googleusercontent.com';
 const okJson = (body) => ({ ok: true, json: async () => body });
@@ -8,8 +8,10 @@ describe('verifyGoogleToken', () => {
   it('returns identity for a valid token with matching aud', async () => {
     const fetchImpl = vi.fn()
       .mockResolvedValueOnce(okJson({ aud: CLIENT_ID, expires_in: '3000' }))
-      .mockResolvedValueOnce(okJson({ user: { permissionId: 'g-123', emailAddress: 'a@b.c', displayName: '  Amy Example  ' } }));
-    expect(await verifyGoogleToken('tok', CLIENT_ID, fetchImpl)).toEqual({ googleId: 'g-123', email: 'a@b.c', firstName: 'Amy' });
+      .mockResolvedValueOnce(okJson({ user: { permissionId: 'g-123', emailAddress: 'a@b.c', displayName: '  Amy Example  ', photoLink: 'https://lh3.googleusercontent.com/a/pic' } }));
+    expect(await verifyGoogleToken('tok', CLIENT_ID, fetchImpl)).toEqual({
+      googleId: 'g-123', email: 'a@b.c', firstName: 'Amy', photoLink: 'https://lh3.googleusercontent.com/a/pic',
+    });
     expect(fetchImpl.mock.calls[0][0]).toContain('tokeninfo?access_token=tok');
     expect(fetchImpl.mock.calls[1][1].headers.Authorization).toBe('Bearer tok');
   });
@@ -43,6 +45,21 @@ describe('verifyGoogleToken', () => {
   it('resolves null when tokeninfo body is malformed (json() rejects)', async () => {
     const fetchImpl = vi.fn().mockResolvedValueOnce({ ok: true, json: async () => { throw new Error('bad json'); } });
     await expect(verifyGoogleToken('tok', CLIENT_ID, fetchImpl)).resolves.toBeNull();
+  });
+});
+
+describe('sanitizePhotoLink', () => {
+  it('accepts plain https URLs', () => {
+    expect(sanitizePhotoLink('https://lh3.googleusercontent.com/a/pic=s64')).toBe('https://lh3.googleusercontent.com/a/pic=s64');
+  });
+
+  it('rejects non-https, malformed, oversized, and non-string values', () => {
+    expect(sanitizePhotoLink('http://lh3.googleusercontent.com/a/pic')).toBeNull();
+    expect(sanitizePhotoLink('javascript:alert(1)')).toBeNull();
+    expect(sanitizePhotoLink('not a url')).toBeNull();
+    expect(sanitizePhotoLink(`https://x.com/${'a'.repeat(500)}`)).toBeNull();
+    expect(sanitizePhotoLink(undefined)).toBeNull();
+    expect(sanitizePhotoLink(123)).toBeNull();
   });
 });
 

@@ -3,7 +3,9 @@
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { Provider, createStore } from 'jotai';
-import FPSharedPanel, { describeActivityEvent, highlightEmails } from '../app/fullpage/FPSharedPanel';
+import FPSharedPanel, {
+    describeActivityEvent, describeActivityEventParts, highlightEmails, userCardHtml, hueForEmail,
+} from '../app/fullpage/FPSharedPanel';
 import { premiumEntitlementState } from '../app/atoms/premiumState';
 import { sharedPanelOpenState } from '../app/atoms/sharedFoldersState';
 import { detailPanelOpenState, selectedCollectionUidState } from '../app/atoms/globalAppSettingsState';
@@ -112,6 +114,12 @@ const renderPanel = ({ pro = true, store = createStore(), props = {} } = {}) => 
 
 const callsOfType = (type) => browser.runtime.sendMessage.mock.calls.filter(([m]) => m?.type === type);
 
+// The actor renders as a user chip (avatar + name) beside the sentence text,
+// so full sentences only exist at the .fp-shared-activity-text level.
+const findActivityText = (pattern) => screen.findByText((content, node) => (
+    Boolean(node?.classList?.contains('fp-shared-activity-text')) && pattern.test(node.textContent)
+));
+
 beforeEach(() => {
     jest.clearAllMocks();
     installSendMessageMock();
@@ -122,7 +130,7 @@ describe('FPSharedPanel', () => {
     test('renders the Activity tab by default with verbs, "You" for self, and day grouping', async () => {
         const { container } = renderPanel();
 
-        expect(await screen.findByText(/You added “Research”/)).toBeInTheDocument();
+        expect(await findActivityText(/You added “Research”/)).toBeInTheDocument();
         // The actor email is wrapped in a highlight span, so match across elements.
         const joinEntry = [...container.querySelectorAll('.fp-shared-activity-text')]
             .find((node) => /Amy joined as write/.test(node.textContent));
@@ -148,7 +156,7 @@ describe('FPSharedPanel', () => {
     test('keeps cached activity visible with a refreshing state after the panel remounts', async () => {
         const store = createStore();
         const firstRender = renderPanel({ store });
-        expect(await screen.findByText(/You added “Research”/)).toBeInTheDocument();
+        expect(await findActivityText(/You added “Research”/)).toBeInTheDocument();
         firstRender.unmount();
 
         let resolveRefresh;
@@ -158,7 +166,7 @@ describe('FPSharedPanel', () => {
         renderPanel({ store });
 
         expect(await screen.findByText('Refreshing activity…')).toBeInTheDocument();
-        expect(await screen.findByText(/You added “Research”/)).toBeInTheDocument();
+        expect(await findActivityText(/You added “Research”/)).toBeInTheDocument();
 
         await act(async () => {
             resolveRefresh({ ok: true, data: { events: activityEvents } });
@@ -309,7 +317,7 @@ describe('FPSharedPanel', () => {
         expect(await screen.findByText('Couldn’t load activity.')).toBeInTheDocument();
         fail = false;
         fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-        expect(await screen.findByText(/You added “Research”/)).toBeInTheDocument();
+        expect(await findActivityText(/You added “Research”/)).toBeInTheDocument();
     });
 
     test('opening the shared panel closes the detail panel (mutual exclusion, atom level)', () => {
@@ -358,5 +366,110 @@ describe('highlightEmails', () => {
 
     it('returns plain text unchanged when there is no email', () => {
         expect(highlightEmails('You renamed the folder')).toBe('You renamed the folder');
+    });
+});
+
+describe('user chips (avatars + rich tooltip)', () => {
+    const AMY_PIC = 'https://lh3.googleusercontent.com/a/amy=s64';
+
+    test('activity actor with a photo renders an avatar img and a user-card tooltip with name + email', async () => {
+        installSendMessageMock({
+            sharedGetActivity: () => ({
+                ok: true,
+                data: {
+                    events: [{
+                        id: 9,
+                        actorEmail: 'amy@example.com',
+                        actorFirstName: 'Amy',
+                        actorPhotoLink: AMY_PIC,
+                        action: 'collection_added',
+                        subject: 'c1',
+                        detail: JSON.stringify({ name: 'Research' }),
+                        createdAt: NOW - 60 * 1000,
+                    }],
+                },
+            }),
+        });
+        const { container } = renderPanel();
+        expect(await findActivityText(/Amy added “Research”/)).toBeInTheDocument();
+
+        const chip = container.querySelector('.fp-shared-user-chip');
+        expect(chip).toHaveAttribute('data-tooltip-id', 'main-tooltip');
+        expect(chip.getAttribute('data-tooltip-html')).toContain('Amy');
+        expect(chip.getAttribute('data-tooltip-html')).toContain('amy@example.com');
+        expect(chip.getAttribute('data-tooltip-html')).toContain(AMY_PIC);
+        const avatar = chip.querySelector('img.fp-shared-user-avatar');
+        expect(avatar).toHaveAttribute('src', AMY_PIC);
+    });
+
+    test('actor without a photo falls back to a colored-initial avatar', async () => {
+        const { container } = renderPanel();
+        expect(await findActivityText(/You added “Research”/)).toBeInTheDocument();
+        const chips = container.querySelectorAll('.fp-shared-user-chip');
+        expect(chips.length).toBeGreaterThan(0);
+        const fallback = chips[0].querySelector('.fp-shared-user-avatar-fallback');
+        expect(fallback).toBeTruthy();
+        expect(fallback.textContent).toBe('Y'); // "You"
+        expect(chips[0].querySelector('img')).toBeNull();
+    });
+
+    test('a photo missing on the row is filled from the folder member directory', async () => {
+        const folderWithMembers = {
+            ...folder,
+            shared: {
+                ...folder.shared,
+                members: [{ email: 'amy@example.com', firstName: 'Amy', photoLink: AMY_PIC, role: 'write', status: 'active' }],
+            },
+        };
+        const { container } = renderPanel({ props: { folder: folderWithMembers } });
+        // The member_joined fixture event for Amy has no actorPhotoLink.
+        await findActivityText(/Amy joined as write/);
+        const amyChip = [...container.querySelectorAll('.fp-shared-user-chip')]
+            .find((chip) => chip.textContent.includes('Amy'));
+        expect(amyChip.querySelector('img.fp-shared-user-avatar')).toHaveAttribute('src', AMY_PIC);
+    });
+
+    test('comment author renders a chip with tooltip details', async () => {
+        installSendMessageMock({
+            sharedGetComments: () => ({
+                ok: true,
+                data: {
+                    comments: [{ ...defaultComments.comments[0], authorPhotoLink: AMY_PIC }],
+                    counts: defaultComments.counts,
+                },
+            }),
+        });
+        const { container } = renderPanel();
+        fireEvent.click(screen.getByRole('tab', { name: 'Comments' }));
+        expect(await screen.findByText('Hello from Amy')).toBeInTheDocument();
+        const chip = container.querySelector('.fp-shared-comment-author .fp-shared-user-chip');
+        expect(chip).toHaveTextContent('Amy');
+        expect(chip.getAttribute('data-tooltip-html')).toContain('amy@example.com');
+        expect(chip.querySelector('img.fp-shared-user-avatar')).toHaveAttribute('src', AMY_PIC);
+    });
+
+    test('describeActivityEventParts splits actor from sentence remainder', () => {
+        const { actor, text } = describeActivityEventParts(
+            { actorEmail: 'amy@x.com', actorFirstName: 'Amy', actorPhotoLink: AMY_PIC, action: 'member_left' },
+            'gil@example.com',
+        );
+        expect(actor).toEqual({ label: 'Amy', email: 'amy@x.com', firstName: 'Amy', photoLink: AMY_PIC, isSelf: false });
+        expect(text).toBe(' left the folder');
+    });
+
+    test('userCardHtml escapes interpolated values and rejects non-https photos', () => {
+        const html = userCardHtml({ name: '<img onerror=x>', email: 'a&b@x.com', photoLink: 'javascript:alert(1)' });
+        expect(html).not.toContain('<img onerror');
+        expect(html).toContain('&lt;img onerror=x&gt;');
+        expect(html).toContain('a&amp;b@x.com');
+        expect(html).not.toContain('javascript:');
+        expect(html).toContain('fp-shared-user-avatar-fallback');
+    });
+
+    test('hueForEmail is stable and within [0, 360)', () => {
+        const hue = hueForEmail('amy@example.com');
+        expect(hue).toBe(hueForEmail('amy@example.com'));
+        expect(hue).toBeGreaterThanOrEqual(0);
+        expect(hue).toBeLessThan(360);
     });
 });
