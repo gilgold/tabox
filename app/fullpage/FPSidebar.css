@@ -373,6 +373,30 @@
     padding: 4px 10px;
     min-height: 0;
     overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+}
+
+.fp-sidebar-folders:hover {
+    scrollbar-color: var(--fp-border-strong) transparent;
+}
+
+/* Beats html.fullpage-mode .fp-layout ::-webkit-scrollbar-thumb (FPLayout.css) */
+html .fp-layout .fp-sidebar-folders::-webkit-scrollbar-thumb,
+html.fullpage-mode .fp-layout .fp-sidebar-folders::-webkit-scrollbar-thumb {
+    background: transparent;
+}
+
+html .fp-layout .fp-sidebar-folders:hover::-webkit-scrollbar-thumb {
+    background: var(--fp-border-strong);
+}
+
+html.fullpage-mode .fp-layout .fp-sidebar-folders:hover::-webkit-scrollbar-thumb {
+    background: var(--color-border-strong);
+}
+
+html .fp-layout .fp-sidebar-folders:hover::-webkit-scrollbar-thumb:hover {
+    background: var(--setting-row-border-color);
 }
 
 .fp-sidebar-folders-header {
