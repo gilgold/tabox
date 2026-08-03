@@ -1,5 +1,5 @@
 // app/DuplicateSweepPanel.js
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import './DuplicateSweepPanel.css';
 
 const CONFETTI_COLORS = ['#4361ee', '#22d3ee', '#2aa876', '#f6b73c', '#ef476f', '#9b5de5'];
@@ -36,7 +36,131 @@ function resultLabel(count, singular, plural = `${singular}s`) {
     return count === 1 ? singular : plural;
 }
 
-function SweepComplete({ history, onUndo, onDone }) {
+function describeCleanupCounts(cleanup) {
+    const parts = [];
+    if (cleanup.collections.length) parts.push(`${cleanup.collections.length} ${resultLabel(cleanup.collections.length, 'collection')}`);
+    if (cleanup.folders.length) parts.push(`${cleanup.folders.length} ${resultLabel(cleanup.folders.length, 'folder')}`);
+    return parts.join(' and ');
+}
+
+// One selectable chip per empty collection/folder. Selected = will be removed.
+function CleanupChip({ item, kind, selected, disabled, disabledTooltip, onToggle }) {
+    return (
+        <button
+            type="button"
+            role="checkbox"
+            aria-checked={selected}
+            aria-disabled={disabled || undefined}
+            className={`dup-sweep-cleanup-chip${selected ? ' dup-sweep-cleanup-chip--selected' : ''}${disabled ? ' dup-sweep-cleanup-chip--disabled' : ''}`}
+            onClick={disabled ? undefined : () => onToggle(item.uid)}
+            data-tooltip-id={disabled ? 'main-tooltip' : undefined}
+            data-tooltip-class-name={disabled ? 'small-tooltip' : undefined}
+            data-tooltip-content={disabledTooltip}
+        >
+            <span className="dup-sweep-cleanup-check" aria-hidden="true">{selected ? '✓' : ''}</span>
+            {kind === 'folder' && <span className="dup-sweep-cleanup-kind">Folder</span>}
+            <span className="dup-sweep-cleanup-chip-name">{item.name}</span>
+        </button>
+    );
+}
+
+// Lists collections the sweep emptied (and folders left holding only those) as
+// selectable chips — everything selected by default — and deletes the selected
+// ones. Deleting is a sweep history entry, so the Undo button restores everything.
+function SweepCleanup({ sweep, historyLength }) {
+    const [cleanup, setCleanup] = useState(null);
+    // Tracks what the user turned OFF, so "everything selected" needs no state sync.
+    const [deselected, setDeselected] = useState(() => new Set());
+    const [removing, setRemoving] = useState(false);
+    const [removedCount, setRemovedCount] = useState(0);
+    const { cleanupPreview } = sweep;
+
+    useEffect(() => {
+        if (!cleanupPreview) return undefined;
+        let alive = true;
+        cleanupPreview().then((res) => {
+            if (alive && res && res.ok) {
+                setCleanup({ collections: res.collections || [], folders: res.folders || [] });
+                setDeselected(new Set());
+            }
+        }).catch(() => {});
+        return () => { alive = false; };
+    }, [cleanupPreview, historyLength]);
+
+    const hasItems = cleanup && (cleanup.collections.length > 0 || cleanup.folders.length > 0);
+    if (!hasItems) {
+        return removedCount > 0
+            ? <p className="dup-sweep-cleanup-removed" role="status">{removedCount} empty {resultLabel(removedCount, 'item')} removed.</p>
+            : null;
+    }
+
+    const toggle = (uid) => setDeselected((prev) => {
+        const next = new Set(prev);
+        if (next.has(uid)) next.delete(uid); else next.add(uid);
+        return next;
+    });
+
+    const selectedCollections = cleanup.collections.filter((c) => !deselected.has(c.uid));
+    // A folder only empties out if every one of its collections is removed too.
+    const folderEligible = (f) => (f.collectionUids || []).every((uid) => !deselected.has(uid));
+    const selectedFolders = cleanup.folders.filter((f) => !deselected.has(f.uid) && folderEligible(f));
+    const selectedCount = selectedCollections.length + selectedFolders.length;
+
+    const handleRemove = async () => {
+        setRemoving(true);
+        try {
+            const res = await sweep.cleanup({
+                collectionUids: selectedCollections.map((c) => c.uid),
+                folderUids: selectedFolders.map((f) => f.uid),
+            });
+            if (res && res.ok) setRemovedCount((res.removedCollections || 0) + (res.removedFolders || 0));
+        } finally {
+            setRemoving(false);
+        }
+    };
+
+    return (
+        <section className="dup-sweep-cleanup" aria-label="Empty items left by the sweep">
+            <p className="dup-sweep-cleanup-title">The sweep left {describeCleanupCounts(cleanup)} empty.</p>
+            <p className="dup-sweep-cleanup-hint">Pick what to remove — unselect anything you want to keep:</p>
+            <ul className="dup-sweep-cleanup-list" aria-label="Empty collections and folders">
+                {cleanup.folders.map((f) => {
+                    const eligible = folderEligible(f);
+                    return (
+                        <li key={f.uid}>
+                            <CleanupChip
+                                item={f}
+                                kind="folder"
+                                selected={eligible && !deselected.has(f.uid)}
+                                disabled={!eligible}
+                                disabledTooltip={eligible ? undefined : 'Kept because one of its collections is kept.'}
+                                onToggle={toggle}
+                            />
+                        </li>
+                    );
+                })}
+                {cleanup.collections.map((c) => (
+                    <li key={c.uid}>
+                        <CleanupChip item={c} kind="collection" selected={!deselected.has(c.uid)} onToggle={toggle} />
+                    </li>
+                ))}
+            </ul>
+            <button
+                type="button"
+                className="dup-sweep-cleanup-remove"
+                disabled={removing || selectedCount === 0}
+                onClick={handleRemove}
+                data-tooltip-id="main-tooltip"
+                data-tooltip-class-name="small-tooltip"
+                data-tooltip-content="Delete the selected empty items. Undo restores them."
+            >
+                Remove selected{selectedCount > 0 ? ` (${selectedCount})` : ''}
+            </button>
+        </section>
+    );
+}
+
+function SweepComplete({ sweep, history, onUndo, onDone }) {
     const stats = summarizeHistory(history);
     return (
         <div className="dup-sweep-done" role="status">
@@ -75,6 +199,7 @@ function SweepComplete({ history, onUndo, onDone }) {
                     </li>
                 </ul>
                 {stats.skipped > 0 && <span className="dup-sweep-skipped">{stats.skipped} skipped</span>}
+                <SweepCleanup sweep={sweep} historyLength={history.length} />
             </div>
             <div className="dup-sweep-bottom dup-sweep-done-actions">
                 <button type="button" className="dup-sweep-undo" disabled={!history.length} onClick={onUndo}>
@@ -310,7 +435,7 @@ export function DuplicateSweepPanel({ sweep, namesByUid }) {
     if (!active) {
         return (
             <div className="dup-sweep">
-                <SweepComplete history={history} onUndo={() => sweep.undo()} onDone={() => sweep.dismiss()} />
+                <SweepComplete sweep={sweep} history={history} onUndo={() => sweep.undo()} onDone={() => sweep.dismiss()} />
             </div>
         );
     }

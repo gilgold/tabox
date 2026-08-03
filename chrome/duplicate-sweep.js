@@ -180,6 +180,83 @@ async function doApplyDuplicateSweepAction({ groupId, action, keeperUid, applyTo
     return { ok: true, applied };
 }
 
+// Collections the sweep emptied (touched by a history entry, now 0 tabs) and
+// folders that would be left with no collections once those are removed.
+// Pre-existing empty collections/folders the sweep never touched are excluded.
+async function computeCleanupCandidates(state) {
+    const S = storageApi();
+    const touched = new Set();
+    for (const entry of state.history || []) {
+        for (const r of (entry.removedTabs || [])) touched.add(r.collectionUid);
+    }
+    const cIndex = await S.loadCollectionsIndexBG();
+    const collections = [...touched]
+        .filter((uid) => cIndex[uid] && (cIndex[uid].tabCount || 0) === 0)
+        .map((uid) => ({ uid, name: cIndex[uid].name || 'Untitled collection' }));
+    const emptySet = new Set(collections.map((c) => c.uid));
+    const fIndex = await S.loadFoldersIndexBG();
+    const folders = [];
+    for (const [fuid, f] of Object.entries(fIndex)) {
+        const children = Object.entries(cIndex).filter(([, c]) => c.parentId === fuid).map(([cuid]) => cuid);
+        if (children.length > 0 && children.every((cuid) => emptySet.has(cuid))) {
+            folders.push({ uid: fuid, name: f.name || 'Untitled folder', collectionUids: children });
+        }
+    }
+    return { collections, folders };
+}
+
+function previewDuplicateSweepCleanup() {
+    return serialized(async () => {
+        const state = await readState();
+        if (!state) return { ok: false, reason: 'missing', collections: [], folders: [] };
+        const { collections, folders } = await computeCleanupCandidates(state);
+        return { ok: true, collections, folders };
+    });
+}
+
+// Deletes the requested empty collections/folders, validated against a fresh
+// candidate computation so a stale popup can never delete non-empty data. The
+// deleted records are kept in the history entry so undo can restore them.
+function applyDuplicateSweepCleanup(args) { return serialized(() => doApplyDuplicateSweepCleanup(args)); }
+async function doApplyDuplicateSweepCleanup({ collectionUids, folderUids } = {}) {
+    const state = await readState();
+    if (!state) return { ok: false, reason: 'missing' };
+    const S = storageApi();
+    const candidates = await computeCleanupCandidates(state);
+    const wantedCollections = new Set(Array.isArray(collectionUids) ? collectionUids : []);
+    const wantedFolders = new Set(Array.isArray(folderUids) ? folderUids : []);
+    const collectionsToDelete = candidates.collections.filter((c) => wantedCollections.has(c.uid));
+    const deleteSet = new Set(collectionsToDelete.map((c) => c.uid));
+
+    // A folder may only go if every collection it still holds is being deleted now.
+    const cIndex = await S.loadCollectionsIndexBG();
+    const foldersToDelete = candidates.folders.filter((f) => {
+        if (!wantedFolders.has(f.uid)) return false;
+        return Object.entries(cIndex)
+            .filter(([, c]) => c.parentId === f.uid)
+            .every(([cuid]) => deleteSet.has(cuid));
+    });
+    if (!collectionsToDelete.length && !foldersToDelete.length) return { ok: true, removedCollections: 0, removedFolders: 0 };
+
+    const collectionRecs = await local.get(collectionsToDelete.map((c) => `collection_${c.uid}`));
+    const folderRecs = await local.get(foldersToDelete.map((f) => `folder_${f.uid}`));
+    const removedCollections = collectionsToDelete.map((c) => collectionRecs[`collection_${c.uid}`]).filter(Boolean);
+    const removedFolders = foldersToDelete.map((f) => folderRecs[`folder_${f.uid}`]).filter(Boolean);
+
+    if (collectionsToDelete.length) await S.deleteCollectionsBG(collectionsToDelete.map((c) => c.uid));
+    if (foldersToDelete.length) await S.deleteFoldersBG(foldersToDelete.map((f) => f.uid));
+
+    // Surviving folders that just lost an empty collection need fresh counts.
+    const deletedFolderSet = new Set(foldersToDelete.map((f) => f.uid));
+    const survivingParents = [...new Set(removedCollections.map((r) => r.parentId).filter(Boolean))]
+        .filter((uid) => !deletedFolderSet.has(uid));
+    if (survivingParents.length) await S.updateFolderCountsBG(survivingParents);
+
+    state.history.push({ actionId: newActionId(), action: 'cleanup', removedTabs: [], removedCollections, removedFolders });
+    await writeState(state);
+    return { ok: true, removedCollections: removedCollections.length, removedFolders: removedFolders.length };
+}
+
 // Pops and reverses the most recent action (multi-level; newest first). Known
 // v1 limitation: if an applyToAll run auto-resolved a later group as a no-op
 // because an earlier group removed their shared tabs, undoing the earlier group
@@ -191,6 +268,14 @@ async function doUndoDuplicateSweepLast() {
     if (!state || !state.history.length) return { ok: false, reason: 'empty' };
     const S = storageApi();
     const entry = state.history.pop();
+    if (entry.action === 'cleanup') {
+        if (entry.removedFolders && entry.removedFolders.length) await S.restoreFoldersBG(entry.removedFolders);
+        if (entry.removedCollections && entry.removedCollections.length) await S.restoreCollectionsBG(entry.removedCollections);
+        const parents = [...new Set((entry.removedCollections || []).map((r) => r.parentId).filter(Boolean))];
+        if (parents.length) await S.updateFolderCountsBG(parents);
+        await writeState(state);
+        return { ok: true };
+    }
     if (entry.action === 'extract' && entry.createdCollectionUid) await S.deleteCollectionBG(entry.createdCollectionUid);
     if (entry.removedTabs && entry.removedTabs.length) await S.restoreTabsToCollectionsBG(entry.removedTabs);
     if (entry.titleEdits && entry.titleEdits.length) {
@@ -204,7 +289,7 @@ async function doUndoDuplicateSweepLast() {
 
 async function dismissDuplicateSweep() { return serialized(async () => { await local.remove(DUPLICATE_SWEEP_KEY); return { ok: true }; }); }
 
-const taboxDuplicateSweepApi = { DUPLICATE_SWEEP_KEY, applyDuplicateSweepAction, undoDuplicateSweepLast, dismissDuplicateSweep };
+const taboxDuplicateSweepApi = { DUPLICATE_SWEEP_KEY, applyDuplicateSweepAction, undoDuplicateSweepLast, dismissDuplicateSweep, previewDuplicateSweepCleanup, applyDuplicateSweepCleanup };
 /* istanbul ignore next */ if (typeof globalThis !== 'undefined') globalThis.TaboxDuplicateSweep = taboxDuplicateSweepApi;
 /* istanbul ignore next */ if (typeof module !== 'undefined' && module.exports) module.exports = taboxDuplicateSweepApi;
 })();

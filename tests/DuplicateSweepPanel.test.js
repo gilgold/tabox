@@ -1,5 +1,5 @@
 /** @jest-environment jsdom */
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { DuplicateSweepPanel } from '../app/DuplicateSweepPanel';
 
@@ -174,6 +174,87 @@ test('End sweep dismisses the session, keeping choices made so far', () => {
   expect(end).toHaveAttribute('data-tooltip-id', 'main-tooltip');
   fireEvent.click(end);
   expect(sweep.dismiss).toHaveBeenCalled();
+});
+
+const makeDoneSweep = (overrides = {}) => ({
+  ...sweep,
+  state: {
+    groups: [{ ...sweep.state.groups[0], id: 'g1', status: 'resolved' }],
+    history: [{ actionId: '1', action: 'keep-one', removedTabs: [{ collectionUid: 'A' }] }],
+  },
+  cleanupPreview: jest.fn(async () => ({
+    ok: true,
+    collections: [{ uid: 'A', name: 'Work' }, { uid: 'B', name: 'Old Stuff' }],
+    folders: [{ uid: 'F', name: 'Archive', collectionUids: ['A'] }],
+  })),
+  cleanup: jest.fn(async () => ({ ok: true, removedCollections: 2, removedFolders: 1 })),
+  ...overrides,
+});
+
+test('completion screen lists sweep-emptied items as chips, all selected, and removes them', async () => {
+  const done = makeDoneSweep();
+  render(<DuplicateSweepPanel sweep={done} namesByUid={namesByUid} />);
+
+  expect(await screen.findByText(/left 2 collections and 1 folder empty/i)).toBeInTheDocument();
+  const list = screen.getByRole('list', { name: /Empty collections and folders/i });
+  for (const name of ['Work', 'Old Stuff', 'Archive']) {
+    expect(within(list).getByRole('checkbox', { name: new RegExp(name) })).toHaveAttribute('aria-checked', 'true');
+  }
+
+  const remove = screen.getByRole('button', { name: /Remove selected \(3\)/i });
+  // rich tooltip, not native title
+  expect(remove).not.toHaveAttribute('title');
+  expect(remove).toHaveAttribute('data-tooltip-id', 'main-tooltip');
+  fireEvent.click(remove);
+  expect(done.cleanup).toHaveBeenCalledWith({ collectionUids: ['A', 'B'], folderUids: ['F'] });
+  await waitFor(() => expect(remove).toBeEnabled()); // async handler settles
+});
+
+test('deselecting a chip excludes it; deselecting a folder’s last collection disables the folder', async () => {
+  const done = makeDoneSweep();
+  render(<DuplicateSweepPanel sweep={done} namesByUid={namesByUid} />);
+  await screen.findByText(/left 2 collections and 1 folder empty/i);
+
+  // Deselect the "Old Stuff" collection — count drops, it's excluded from the payload.
+  fireEvent.click(screen.getByRole('checkbox', { name: /Old Stuff/ }));
+  expect(screen.getByRole('checkbox', { name: /Old Stuff/ })).toHaveAttribute('aria-checked', 'false');
+  expect(screen.getByRole('button', { name: /Remove selected \(2\)/i })).toBeInTheDocument();
+
+  // Deselect "Work" — folder Archive only holds Work, so it can't be removed anymore.
+  fireEvent.click(screen.getByRole('checkbox', { name: /Work/ }));
+  const folderChip = screen.getByRole('checkbox', { name: /Archive/ });
+  expect(folderChip).toHaveAttribute('aria-checked', 'false');
+  expect(folderChip).toHaveAttribute('aria-disabled', 'true');
+  expect(folderChip).toHaveAttribute('data-tooltip-id', 'main-tooltip');
+  const remove = screen.getByRole('button', { name: /Remove selected/i });
+  expect(remove).toBeDisabled();
+
+  // Clicking the disabled folder chip does nothing; re-selecting Work re-enables it.
+  fireEvent.click(folderChip);
+  expect(folderChip).toHaveAttribute('aria-checked', 'false');
+  fireEvent.click(screen.getByRole('checkbox', { name: /Work/ }));
+  expect(screen.getByRole('checkbox', { name: /Archive/ })).toHaveAttribute('aria-checked', 'true');
+
+  fireEvent.click(screen.getByRole('button', { name: /Remove selected \(2\)/i }));
+  expect(done.cleanup).toHaveBeenCalledWith({ collectionUids: ['A'], folderUids: ['F'] });
+  await waitFor(() => expect(screen.getByRole('button', { name: /Remove selected/i })).toBeEnabled());
+});
+
+test('completion screen shows no cleanup section when nothing was left empty', async () => {
+  const done = {
+    ...sweep,
+    state: {
+      groups: [{ ...sweep.state.groups[0], id: 'g1', status: 'resolved' }],
+      history: [{ actionId: '1', action: 'skip', removedTabs: [] }],
+    },
+    cleanupPreview: jest.fn(async () => ({ ok: true, collections: [], folders: [] })),
+    cleanup: jest.fn(),
+  };
+  render(<DuplicateSweepPanel sweep={done} namesByUid={namesByUid} />);
+  await screen.findByRole('heading', { name: /Sweep complete/i });
+  expect(done.cleanupPreview).toHaveBeenCalled();
+  expect(screen.queryByText(/left .* empty/i)).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /Remove them/i })).not.toBeInTheDocument();
 });
 
 test('reveals/hides the duplicated tabs with favicon, title, and url tooltip', () => {

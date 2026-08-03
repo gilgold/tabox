@@ -105,12 +105,44 @@ async function createFolderBG(name, color, collapsed) {
 }
 
 async function deleteFolderBG(uid) {
+    return deleteFoldersBG([uid]);
+}
+
+async function deleteFoldersBG(uids) {
+    if (!Array.isArray(uids) || uids.length === 0) return false;
     const index = await loadFoldersIndexBG();
-    delete index[uid];
     const tombs = (await getKey(KEYS.DELETED_FOLDER_TOMBSTONES)) || {};
-    tombs[uid] = Date.now();
+    const now = Date.now();
+    for (const uid of uids) {
+        delete index[uid];
+        tombs[uid] = now;
+    }
     await local.set({ [KEYS.FOLDERS_INDEX]: index, [KEYS.DELETED_FOLDER_TOMBSTONES]: tombs });
-    await local.remove(`${KEYS.FOLDER_PREFIX}${uid}`);
+    await local.remove(uids.map((uid) => `${KEYS.FOLDER_PREFIX}${uid}`));
+    return true;
+}
+
+// Re-adds previously deleted folder records with a fresh lastUpdated so sync's
+// tombstone check (entity newer than tombstone survives) keeps them alive.
+async function restoreFoldersBG(records) {
+    if (!Array.isArray(records) || records.length === 0) return false;
+    const index = await loadFoldersIndexBG();
+    const tombs = (await getKey(KEYS.DELETED_FOLDER_TOMBSTONES)) || {};
+    const now = Date.now();
+    const writes = {};
+    for (const rec of records) {
+        if (!rec || !rec.uid) continue;
+        const folder = { ...rec, lastUpdated: now };
+        index[folder.uid] = {
+            name: folder.name, color: folder.color, collapsed: !!folder.collapsed,
+            order: folder.order, lastUpdated: now, collectionCount: folder.collectionCount || 0,
+        };
+        writes[`${KEYS.FOLDER_PREFIX}${folder.uid}`] = folder;
+        delete tombs[folder.uid];
+    }
+    writes[KEYS.FOLDERS_INDEX] = index;
+    writes[KEYS.DELETED_FOLDER_TOMBSTONES] = tombs;
+    await local.set(writes);
     return true;
 }
 
@@ -271,20 +303,54 @@ async function createCollectionsBG(specs) {
 }
 
 async function deleteCollectionBG(uid) {
+    return deleteCollectionsBG([uid]);
+}
+
+async function deleteCollectionsBG(uids) {
+    if (!Array.isArray(uids) || uids.length === 0) return false;
     const index = await loadCollectionsIndexBG();
-    delete index[uid];
     const tombs = (await getKey(KEYS.DELETED_COLLECTION_TOMBSTONES)) || {};
-    tombs[uid] = Date.now();
+    const now = Date.now();
+    for (const uid of uids) {
+        delete index[uid];
+        tombs[uid] = now;
+    }
     await local.set({ [KEYS.COLLECTIONS_INDEX]: index, [KEYS.DELETED_COLLECTION_TOMBSTONES]: tombs });
-    await local.remove(`${KEYS.COLLECTION_PREFIX}${uid}`);
+    await local.remove(uids.map((uid) => `${KEYS.COLLECTION_PREFIX}${uid}`));
+    return true;
+}
+
+// Re-adds previously deleted collection records with a fresh lastUpdated so
+// sync's tombstone check (entity newer than tombstone survives) keeps them alive.
+async function restoreCollectionsBG(records) {
+    if (!Array.isArray(records) || records.length === 0) return false;
+    const index = await loadCollectionsIndexBG();
+    const tombs = (await getKey(KEYS.DELETED_COLLECTION_TOMBSTONES)) || {};
+    const now = Date.now();
+    const writes = {};
+    for (const rec of records) {
+        if (!rec || !rec.uid) continue;
+        const record = { ...rec, lastUpdated: now };
+        index[record.uid] = {
+            name: record.name, type: 'collection', tabCount: (record.tabs || []).length,
+            lastUpdated: now, lastOpened: record.lastOpened || null, createdOn: record.createdOn || now,
+            color: record.color, size: JSON.stringify(record).length,
+            parentId: record.parentId ?? null, order: record.order,
+        };
+        writes[`${KEYS.COLLECTION_PREFIX}${record.uid}`] = record;
+        delete tombs[record.uid];
+    }
+    writes[KEYS.COLLECTIONS_INDEX] = index;
+    writes[KEYS.DELETED_COLLECTION_TOMBSTONES] = tombs;
+    await local.set(writes);
     return true;
 }
 
 const aiStorageApi = {
     loadCollectionsIndexBG, loadFoldersIndexBG, renameCollectionsBG,
-    moveCollectionsToFoldersBG, createFolderBG, createFoldersBG, deleteFolderBG, updateFolderCountsBG,
+    moveCollectionsToFoldersBG, createFolderBG, createFoldersBG, deleteFolderBG, deleteFoldersBG, restoreFoldersBG, updateFolderCountsBG,
     removeTabsFromCollectionsBG, restoreTabsToCollectionsBG, setTabTitlesBG,
-    createCollectionBG, createCollectionsBG, deleteCollectionBG,
+    createCollectionBG, createCollectionsBG, deleteCollectionBG, deleteCollectionsBG, restoreCollectionsBG,
 };
 /* istanbul ignore next */
 if (typeof globalThis !== 'undefined') globalThis.TaboxAIStorage = aiStorageApi;

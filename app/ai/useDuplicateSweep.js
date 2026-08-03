@@ -28,6 +28,9 @@ export function useDuplicateSweep() {
         browser.runtime.sendMessage({ type: 'duplicateSweepApply', groupId, action, keeperUid, applyToAll: !!applyToAll }), []);
     const undo = useCallback(() => browser.runtime.sendMessage({ type: 'duplicateSweepUndo' }), []);
     const dismiss = useCallback(() => browser.runtime.sendMessage({ type: 'duplicateSweepDismiss' }), []);
+    const cleanupPreview = useCallback(() => browser.runtime.sendMessage({ type: 'duplicateSweepCleanupPreview' }), []);
+    const cleanup = useCallback(({ collectionUids, folderUids }) =>
+        browser.runtime.sendMessage({ type: 'duplicateSweepCleanup', collectionUids, folderUids }), []);
 
-    return { state, apply, undo, dismiss };
+    return { state, apply, undo, dismiss, cleanupPreview, cleanup };
 }

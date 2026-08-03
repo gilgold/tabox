@@ -99,6 +99,38 @@ describe('AIToolsModal duplicate sweep early panel', () => {
         expect(screen.getByRole('button', { name: /End sweep/i })).toBeInTheDocument();
     });
 
+    test('applying a sweep action pushes the deterministic data refresh to the app', async () => {
+        const store = createStore();
+        store.set(aiToolsModalOpenState, true);
+        store.set(aiToolsScopeState, { type: 'all' });
+        store.set(aiToolsInitialToolState, 'duplicate-sweep');
+        store.set(premiumEntitlementState, PRO);
+        const onDataUpdate = jest.fn();
+
+        await act(async () => {
+            render(
+                <Provider store={store}>
+                    <AIToolsModal updateRemoteData={jest.fn()} onDataUpdate={onDataUpdate} />
+                </Provider>
+            );
+        });
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /Scan for duplicate tabs/i }));
+        });
+        await fireStorageChange({ aiTaskState: { newValue: { id: 't1', type: 'duplicate-sweep', status: 'running' } } });
+        await fireStorageChange({ duplicateSweep: { newValue: sweepState(Date.now() + 60000) } });
+
+        loadAllCollections.mockClear();
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /Apply choice/i }));
+        });
+        expect(browser.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'duplicateSweepApply' }));
+        // SW mutation done → modal snapshot and App collections both refresh.
+        expect(loadAllCollections).toHaveBeenCalled();
+        expect(onDataUpdate).toHaveBeenCalled();
+    });
+
     test('stale sweep state from an earlier run does not open the panel early', async () => {
         const store = createStore();
         store.set(aiToolsModalOpenState, true);

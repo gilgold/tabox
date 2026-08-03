@@ -79,7 +79,7 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
     const [isCancelling, setIsCancelling] = useState(false);
     // Bulk-run progress (i/N label + determinate bar)
     const [progressLabel, setProgressLabel] = useState('');
-    const [progressFill, setProgressFill] = useState(0); // 0–100
+    const [progressFill, setProgressFill] = useState(null); // 0–100, null = indeterminate
     // uids whose per-row undo is in flight (button disabled until the SW writes back)
     const [revertingUids, setRevertingUids] = useState([]);
 
@@ -160,7 +160,7 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
         setError(null);
         setIsCancelling(false);
         setProgressLabel('');
-        setProgressFill(0);
+        setProgressFill(null);
         // Reset Smart Organize panel state
         setSoWindowId(null);
         setSoStructure(null);
@@ -259,6 +259,15 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
         }
     }, [onDataUpdate]);
     const sendAiUndoItems = useCallback((uids) => browser.runtime.sendMessage({ type: 'aiUndoItems', uids }), []);
+
+    // Duplicate sweep mutations (apply/undo/cleanup) run in the SW; chain the
+    // deterministic refresh so the collection list reflects them immediately.
+    const duplicateSweepWithRefresh = useMemo(() => ({
+        ...duplicateSweep,
+        apply: (args) => duplicateSweep.apply(args).then((res) => { refreshDataAfterAiWrite(); return res; }),
+        undo: () => duplicateSweep.undo().then((res) => { refreshDataAfterAiWrite(); return res; }),
+        cleanup: (args) => duplicateSweep.cleanup(args).then((res) => { refreshDataAfterAiWrite(); return res; }),
+    }), [duplicateSweep, refreshDataAfterAiWrite]);
 
     // ── Split Collection ─────────────────────────────────────────────────────
     const startSplitScan = useCallback((uid) => {
@@ -403,7 +412,7 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
         setError(null);
         setIsCancelling(false);
         setProgressLabel('');
-        setProgressFill(0);
+        setProgressFill(null);
         setRevertingUids([]);
         setAiProcessingUids(targets.map((t) => t.uid));
 
@@ -432,8 +441,10 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
 
         if (status === 'running') {
             setPanelStatus('running');
-            setProgressLabel(total ? `Renaming ${filed + 1} of ${total}: ${currentLabel || ''}` : 'Renaming collections with AI…');
-            setProgressFill(total ? Math.round((filed / total) * 100) : 0);
+            // Batched reporting can land filed === total while still running —
+            // clamp so the label never reads past the total.
+            setProgressLabel(total ? `Renaming ${Math.min(filed + 1, total)} of ${total}: ${currentLabel || ''}` : 'Renaming collections with AI…');
+            setProgressFill(total ? Math.round((filed / total) * 100) : null);
             setAiProcessingCurrentUid(currentUid || null);
             setRenameResults(results);
             setSkipped(skippedList);
@@ -504,17 +515,24 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
         const loadFullPageWindows = async () => {
             setSoLoadingWindows(true);
             try {
-                const allWins = await browser.windows.getAll({ populate: true });
+                const [allWins, currentWin] = await Promise.all([
+                    browser.windows.getAll({ populate: true }),
+                    browser.windows.getCurrent(),
+                ]);
                 if (cancelled) return;
                 const withStructure = await Promise.all(
                     allWins.map(async (win) => {
                         const structure = await readWindowStructure(win.id);
+                        const isCurrent = win.id === currentWin.id;
                         const activeTab = (win.tabs || []).find((t) => t.active);
-                        const label = `${activeTab?.title || 'Window'} (+${(win.tabs || []).length} tabs)`;
-                        return { id: win.id, label, ungroupedCount: structure.eligibleCount, structure };
+                        const label = isCurrent
+                            ? `This Window (${(win.tabs || []).length} tabs)`
+                            : `${activeTab?.title || 'Window'} (+${(win.tabs || []).length} tabs)`;
+                        return { id: win.id, label, isCurrent, ungroupedCount: structure.eligibleCount, structure };
                     })
                 );
                 if (cancelled) return;
+                withStructure.sort((a, b) => (b.isCurrent ? 1 : 0) - (a.isCurrent ? 1 : 0));
                 setSoWindows(withStructure);
             } catch (e) {
                 console.error('Smart Organize: failed to load windows', e);
@@ -1180,7 +1198,7 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
                             <>
                                 <div className="ai-rename-progress">
                                     <div className="ai-rename-progress-track">
-                                        {progressFill > 0 ? (
+                                        {progressFill != null ? (
                                             <div
                                                 className="ai-rename-progress-fill"
                                                 style={{ width: `${progressFill}%` }}
@@ -1437,7 +1455,7 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
                         {panelStatus === 'done' && (
                             <>
                                 {error && <div className="ai-tool-error">{error}</div>}
-                                <DuplicateSweepPanel sweep={duplicateSweep} namesByUid={dupNamesByUid} />
+                                <DuplicateSweepPanel sweep={duplicateSweepWithRefresh} namesByUid={dupNamesByUid} />
                             </>
                         )}
                     </div>

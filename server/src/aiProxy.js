@@ -4,7 +4,7 @@
 // general-purpose LLM proxy; the request surface is limited to exactly what
 // the Tabox AI clients send (messages + sampling params + a JSON schema).
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const MODEL = 'deepseek/deepseek-v4-flash';
+const MODEL = 'google/gemini-3.5-flash-lite';
 const MAX_OUTPUT_TOKENS = 8192;
 const PROVIDER_PREFERENCES = { sort: 'throughput', require_parameters: true };
 const MAX_MESSAGES = 8;
@@ -67,7 +67,12 @@ export async function completeAI(env, validated, fetchImpl = fetch, sleepImpl = 
     try {
       res = await fetchImpl(OPENROUTER_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.OPENROUTER_API_KEY}` },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
+          'HTTP-Referer': 'https://tabox.co',
+          'X-Title': 'Tabox',
+        },
         body: JSON.stringify({
           model: MODEL,
           max_tokens: MAX_OUTPUT_TOKENS,

@@ -2282,6 +2282,19 @@ try {
       return Promise.resolve(result);
     }
 
+    if (request.type === 'duplicateSweepCleanupPreview') {
+      const result = await globalThis.TaboxDuplicateSweep.previewDuplicateSweepCleanup();
+      return Promise.resolve(result);
+    }
+
+    if (request.type === 'duplicateSweepCleanup') {
+      const result = await globalThis.TaboxDuplicateSweep.applyDuplicateSweepCleanup({
+        collectionUids: request.collectionUids, folderUids: request.folderUids,
+      });
+      await throttleSync(() => handleRemoteUpdate());
+      return Promise.resolve(result);
+    }
+
     if (request.type === 'duplicateSweepDismiss') {
       const result = await globalThis.TaboxDuplicateSweep.dismissDuplicateSweep();
       return Promise.resolve(result);

@@ -309,6 +309,40 @@ describe('AIToolsModal – Auto-Rename driven by the service worker', () => {
         await waitFor(() => expect(screen.getByText(/Renaming 2 of 3: X/)).toBeInTheDocument());
     });
 
+    test('progress label clamps to the total when all batches have reported', async () => {
+        await renderOpenModal();
+        fireEvent.click(screen.getByText('Auto rename collections'));
+        await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /auto-rename/i })); });
+
+        // Batched reporting can push filed to total while status is still
+        // 'running' — the label must not read "20 of 19".
+        await fireStorageChange({
+            taskId: 't1', type: 'auto-rename', status: 'running',
+            filed: 3, total: 3, currentUid: 'c2', currentLabel: 'X',
+            results: [], skipped: [],
+        });
+        expect(screen.getByText(/Renaming 3 of 3/)).toBeInTheDocument();
+        expect(screen.queryByText(/Renaming 4 of 3/)).not.toBeInTheDocument();
+    });
+
+    test('progress bar starts determinate at 0% instead of the full-width shimmer', async () => {
+        await renderOpenModal();
+        fireEvent.click(screen.getByText('Auto rename collections'));
+        await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /auto-rename/i })); });
+
+        await fireStorageChange({
+            taskId: 't1', type: 'auto-rename', status: 'running',
+            filed: 0, total: 3, currentUid: 'c1', currentLabel: 'Untitled',
+            results: [], skipped: [],
+        });
+        // With a known total the bar is determinate from the first tick — the
+        // indeterminate shimmer (width: 100%) must not flash at 0 progress.
+        expect(document.querySelector('.ai-rename-progress-fill--animated')).toBeNull();
+        expect(document.querySelector('.ai-rename-progress-fill')).toHaveStyle({ width: '0%' });
+    });
+
     const driveToDone = async (overrides = {}) => {
         await renderOpenModal();
         fireEvent.click(screen.getByText('Auto rename collections'));

@@ -94,20 +94,22 @@ describe('POST /ai/complete', () => {
     expect(await res.json()).toEqual({ content: '{"name":"Research"}' });
     expect(calls.openrouter).toHaveLength(1);
     const upstream = JSON.parse(calls.openrouter[0].opts.body);
-    expect(upstream.model).toBe('deepseek/deepseek-v4-flash');
+    expect(upstream.model).toBe('google/gemini-3.5-flash-lite');
     expect(upstream.max_tokens).toBe(8192);
     expect(upstream.provider).toEqual({ sort: 'throughput', require_parameters: true });
     expect(upstream.temperature).toBe(0);
     expect(upstream.messages).toEqual(VALID_BODY.messages);
     expect(upstream.response_format.json_schema.schema).toEqual({ type: 'object' });
     expect(calls.openrouter[0].opts.headers.Authorization).toBe('Bearer sk-or-secret');
+    expect(calls.openrouter[0].opts.headers['HTTP-Referer']).toBe('https://tabox.co');
+    expect(calls.openrouter[0].opts.headers['X-Title']).toBe('Tabox');
   });
 
   it('a client-supplied model is ignored — the server pin always wins', async () => {
     const calls = mockFetch();
     const res = await worker.fetch(req('t-user', { ...VALID_BODY, model: 'openai/o5-pro' }), env(PRO_KV()));
     expect(res.status).toBe(200);
-    expect(JSON.parse(calls.openrouter[0].opts.body).model).toBe('deepseek/deepseek-v4-flash');
+    expect(JSON.parse(calls.openrouter[0].opts.body).model).toBe('google/gemini-3.5-flash-lite');
   });
 
   it('rejects malformed bodies without calling upstream', async () => {
