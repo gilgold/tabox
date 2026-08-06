@@ -155,5 +155,8 @@
     "webpack-cli": "^6.0.1",
     "webpack-extension-manifest-plugin": "^0.8.0"
   },
+  "resolutions": {
+    "@dnd-kit/utilities": "3.2.2"
+  },
   "packageManager": "yarn@4.12.0"
 }

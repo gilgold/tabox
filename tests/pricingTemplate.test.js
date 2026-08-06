@@ -1,4 +1,4 @@
-const { mkdtempSync, readFileSync, rmSync } = require('fs');
+const { existsSync, mkdtempSync, readFileSync, rmSync } = require('fs');
 const { tmpdir } = require('os');
 const { join } = require('path');
 const { spawnSync } = require('child_process');
@@ -60,7 +60,10 @@ describe('Wix pricing page template', () => {
 
     test('builds a Wix snippet within the 15,000 character limit', () => {
         const canonicalOutputPath = join(projectRoot, 'site', 'pricing', 'pricing.html');
-        const canonicalOutputBefore = readFileSync(canonicalOutputPath, 'utf8');
+        // pricing.html is gitignored build output; it exists locally but not on CI
+        const canonicalOutputBefore = existsSync(canonicalOutputPath)
+            ? readFileSync(canonicalOutputPath, 'utf8')
+            : null;
         const tempDirectory = mkdtempSync(join(tmpdir(), 'tabox-pricing-'));
         const tempOutputPath = join(tempDirectory, 'pricing.html');
 
@@ -84,7 +87,11 @@ describe('Wix pricing page template', () => {
             expect(result.status).toBe(0);
             const built = readFileSync(tempOutputPath, 'utf8');
             expect([...built].length).toBeLessThanOrEqual(15000);
-            expect(readFileSync(canonicalOutputPath, 'utf8')).toBe(canonicalOutputBefore);
+            if (canonicalOutputBefore === null) {
+                expect(existsSync(canonicalOutputPath)).toBe(false);
+            } else {
+                expect(readFileSync(canonicalOutputPath, 'utf8')).toBe(canonicalOutputBefore);
+            }
         } finally {
             rmSync(tempDirectory, { recursive: true, force: true });
         }
