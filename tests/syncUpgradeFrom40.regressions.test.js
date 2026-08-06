@@ -311,8 +311,9 @@ describe('4.0 upgrade compatibility - regressions', () => {
         expect(token).toBe(false);
         expect(browser.storage.local._data['collection_collection-root-a']).toBeDefined();
         expect(browser.storage.local._data['folder_folder-alpha']).toBeDefined();
+        expect(browser.storage.local._data.syncAuthError.type).toBe('invalid_grant');
         expect(errorSpy).toHaveBeenCalledWith(
-            expect.stringContaining('sync credentials not configured')
+            expect.stringContaining('Refresh token is invalid or expired')
         );
     });
 });

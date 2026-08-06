@@ -1,0 +1,468 @@
+/** @jest-environment jsdom */
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import '@testing-library/jest-dom';
+import { Provider, createStore } from 'jotai';
+import { aiToolsModalOpenState, aiToolsScopeState, aiProcessingUidsState, aiProcessingCurrentUidState } from '../app/atoms/aiState';
+import { premiumEntitlementState } from '../app/atoms/premiumState';
+
+const PRO = { entitled: true, status: 'active', plan: 'monthly', refreshedAt: new Date().toISOString() };
+
+jest.mock('../app/ai/aiClient', () => ({
+    getAIAvailability: jest.fn(),
+    isAISupported: jest.fn().mockReturnValue(true),
+}));
+jest.mock('../app/utils/storageUtils', () => ({
+    ...jest.requireActual('../app/utils/storageUtils'),
+    loadAllCollections: jest.fn(),
+    loadAllFolders: jest.fn().mockResolvedValue([]),
+}));
+jest.mock('../app/toastHelpers', () => ({
+    showUndoToast: jest.fn(),
+    showSuccessToast: jest.fn(),
+}));
+jest.mock('../app/ai/useSmartOrganizeUndo', () => ({
+    useSmartOrganizeUndo: () => ({ snapshot: null, undo: jest.fn(), dismiss: jest.fn() }),
+}));
+jest.mock('../app/ai/useAutoArrangeUndo', () => ({
+    useAutoArrangeUndo: () => ({ snapshot: null, undo: jest.fn(), dismiss: jest.fn() }),
+}));
+
+import { getAIAvailability } from '../app/ai/aiClient';
+import { loadAllCollections } from '../app/utils/storageUtils';
+import { showUndoToast } from '../app/toastHelpers';
+import { browser } from '../static/globals';
+import AIToolsModal from '../app/AIToolsModal';
+
+const C1 = { uid: 'c1', name: 'Untitled', tabs: [{ title: 'React Docs', url: 'https://react.dev' }] };
+const C2 = { uid: 'c2', name: 'Old News', tabs: [{ title: 'BBC News', url: 'https://bbc.com' }] };
+const C_EMPTY = { uid: 'c3', name: 'Empty', tabs: [] };
+
+// Capture the registered storage.onChanged listener so tests can simulate
+// the service worker writing aiTaskState progress.
+let storageListener;
+
+const fireStorageChange = async (newValue) => {
+    await act(async () => {
+        storageListener({ aiTaskState: { newValue } }, 'local');
+    });
+};
+
+const renderOpenModal = async ({ updateRemoteData = jest.fn(), scope = { type: 'all' } } = {}) => {
+    const store = createStore();
+    store.set(aiToolsModalOpenState, true);
+    store.set(aiToolsScopeState, scope);
+    store.set(premiumEntitlementState, PRO);
+    await act(async () => {
+        render(
+            <Provider store={store}>
+                <AIToolsModal updateRemoteData={updateRemoteData} />
+            </Provider>
+        );
+    });
+    return store;
+};
+
+describe('AIToolsModal – Auto-Rename driven by the service worker', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        loadAllCollections.mockResolvedValue([{ ...C1 }, { ...C2 }, { ...C_EMPTY }]);
+        getAIAvailability.mockResolvedValue('available');
+
+        // aiGetState → null initially; capture aiRun calls
+        browser.runtime.sendMessage = jest.fn().mockImplementation((msg) => {
+            if (msg.type === 'aiGetState') return Promise.resolve(null);
+            return Promise.resolve({});
+        });
+        storageListener = undefined;
+        browser.storage.onChanged.addListener = jest.fn((fn) => { storageListener = fn; });
+        browser.storage.onChanged.removeListener = jest.fn();
+    });
+
+    test('clicking Run dispatches aiRun(auto-rename) with target uids', async () => {
+        await renderOpenModal();
+        fireEvent.click(screen.getByText('Auto rename collections'));
+        await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /auto-rename/i }));
+        });
+
+        await waitFor(() => {
+            const runCall = browser.runtime.sendMessage.mock.calls.find((c) => c[0].type === 'aiRun');
+            expect(runCall).toBeTruthy();
+            expect(runCall[0].task).toBe('auto-rename');
+            expect(runCall[0].params.uids).toEqual(['c1', 'c2']); // c3 empty excluded
+        });
+    });
+
+    test('selected scope limits the dispatched uids', async () => {
+        await renderOpenModal({ scope: { type: 'selected', uids: ['c2'] } });
+        fireEvent.click(screen.getByText('Auto rename collections'));
+        await waitFor(() => screen.getByRole('button', { name: /auto-rename 1/i }));
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /auto-rename 1/i }));
+        });
+
+        await waitFor(() => {
+            const runCall = browser.runtime.sendMessage.mock.calls.find((c) => c[0].type === 'aiRun');
+            expect(runCall[0].params.uids).toEqual(['c2']);
+        });
+    });
+
+    test('running aiTaskState change sets processing uids and renders results live', async () => {
+        const store = await renderOpenModal();
+        fireEvent.click(screen.getByText('Auto rename collections'));
+        await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /auto-rename/i }));
+        });
+
+        // Processing uids set synchronously on Run
+        await waitFor(() => expect(store.get(aiProcessingUidsState)).toEqual(['c1', 'c2']));
+
+        // SW reports progress on c1
+        await fireStorageChange({
+            taskId: 't1', type: 'auto-rename', status: 'running',
+            filed: 0, total: 2, currentLabel: 'Untitled', currentUid: 'c1',
+            results: [{ uid: 'c1', oldName: 'Untitled', newName: 'React Learning' }], skipped: [],
+        });
+
+        expect(store.get(aiProcessingCurrentUidState)).toBe('c1');
+        expect(screen.getByText('React Learning')).toBeInTheDocument();
+    });
+
+    test('done aiTaskState change renders summary/results, clears atoms, fires toast once', async () => {
+        const store = await renderOpenModal();
+        fireEvent.click(screen.getByText('Auto rename collections'));
+        await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /auto-rename/i }));
+        });
+
+        const doneState = {
+            taskId: 't1', type: 'auto-rename', status: 'done',
+            filed: 1, total: 1,
+            results: [{ uid: 'c1', oldName: 'Untitled', newName: 'React Learning' }],
+            skipped: [],
+            summary: 'Renamed 1 collection with AI',
+        };
+        await fireStorageChange(doneState);
+
+        // Result row rendered
+        expect(screen.getByText(/Untitled/)).toBeInTheDocument();
+        expect(screen.getByText('React Learning')).toBeInTheDocument();
+
+        // Atoms cleared
+        expect(store.get(aiProcessingUidsState)).toEqual([]);
+        expect(store.get(aiProcessingCurrentUidState)).toBeNull();
+
+        // Undo toast fired once, with summary + undo action that sends aiUndo
+        expect(showUndoToast).toHaveBeenCalledTimes(1);
+        const [, message, title, undoFn] = showUndoToast.mock.calls[0];
+        expect(message).toBe('Renamed 1 collection with AI');
+        expect(title).toBe('Tabox AI');
+        await act(async () => { await undoFn(); });
+        expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'aiUndo' });
+
+        // A second identical done change must NOT re-fire the toast
+        await fireStorageChange(doneState);
+        expect(showUndoToast).toHaveBeenCalledTimes(1);
+    });
+
+    test('cancel button sends aiCancel', async () => {
+        await renderOpenModal();
+        fireEvent.click(screen.getByText('Auto rename collections'));
+        await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /auto-rename/i }));
+        });
+
+        // Enter running state via SW change
+        await fireStorageChange({
+            taskId: 't1', type: 'auto-rename', status: 'running', filed: 0, total: 2,
+            currentUid: 'c1', currentLabel: 'Untitled', results: [], skipped: [],
+        });
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+        });
+
+        expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'aiCancel' });
+    });
+
+    test('cancelled status shows the cancel note', async () => {
+        await renderOpenModal();
+        fireEvent.click(screen.getByText('Auto rename collections'));
+        await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /auto-rename/i }));
+        });
+
+        await fireStorageChange({
+            taskId: 't1', type: 'auto-rename', status: 'cancelled',
+            filed: 0, total: 2, results: [], skipped: [],
+        });
+
+        expect(screen.getByText(/cancelled — no changes made/i)).toBeInTheDocument();
+        expect(showUndoToast).not.toHaveBeenCalled();
+    });
+
+    test('error status shows the error and no toast', async () => {
+        await renderOpenModal();
+        fireEvent.click(screen.getByText('Auto rename collections'));
+        await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /auto-rename/i }));
+        });
+
+        await fireStorageChange({
+            taskId: 't1', type: 'auto-rename', status: 'error',
+            filed: 0, total: 2, results: [], skipped: [],
+        });
+
+        expect(screen.getByText(/unexpected error/i)).toBeInTheDocument();
+        expect(showUndoToast).not.toHaveBeenCalled();
+    });
+
+    test('pre-flight failure shows error and does not dispatch aiRun', async () => {
+        getAIAvailability.mockResolvedValue('unavailable');
+        await renderOpenModal();
+        fireEvent.click(screen.getByText('Auto rename collections'));
+        await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /auto-rename/i }));
+        });
+
+        await waitFor(() => expect(screen.getByText(/tabox ai is not available/i)).toBeInTheDocument());
+        expect(browser.runtime.sendMessage.mock.calls.find((c) => c[0].type === 'aiRun')).toBeUndefined();
+    });
+
+    test('reopened popup re-attaches to an in-progress run via aiGetState', async () => {
+        // aiGetState returns a running auto-rename task
+        browser.runtime.sendMessage = jest.fn().mockImplementation((msg) => {
+            if (msg.type === 'aiGetState') {
+                return Promise.resolve({
+                    taskId: 't9', type: 'auto-rename', status: 'running',
+                    filed: 1, total: 3, currentUid: 'c2', currentLabel: 'Old News',
+                    results: [{ uid: 'c1', oldName: 'Untitled', newName: 'React Learning' }], skipped: [],
+                });
+            }
+            return Promise.resolve({});
+        });
+
+        const store = await renderOpenModal();
+
+        // Reattach auto-navigates to the auto-rename panel; the in-progress
+        // result renders without clicking the tool card or Run.
+        await waitFor(() => expect(screen.getByText('React Learning')).toBeInTheDocument());
+        // The AI-border atom is restored to the running currentUid so the
+        // processed collection keeps its highlight after reattach.
+        expect(store.get(aiProcessingCurrentUidState)).toBe('c2');
+    });
+
+    test('reopening after a finished run does not re-toast and leaves the panel idle', async () => {
+        // aiGetState returns a TERMINAL done state from a prior session.
+        browser.runtime.sendMessage = jest.fn().mockImplementation((msg) => {
+            if (msg.type === 'aiGetState') {
+                return Promise.resolve({
+                    taskId: 't-old', type: 'auto-rename', status: 'done',
+                    filed: 1, total: 1,
+                    results: [{ uid: 'c1', oldName: 'Untitled', newName: 'React Learning' }],
+                    skipped: [], summary: 'Renamed 1 collection with AI',
+                });
+            }
+            return Promise.resolve({});
+        });
+
+        await renderOpenModal();
+        fireEvent.click(screen.getByText('Auto rename collections'));
+
+        // The idle run button is shown — not the done summary — and no toast fires.
+        await waitFor(() => expect(screen.getByRole('button', { name: /auto-rename/i })).toBeInTheDocument());
+        expect(screen.queryByText('React Learning')).not.toBeInTheDocument();
+        expect(showUndoToast).not.toHaveBeenCalled();
+    });
+
+    test('reopening during a running task reattaches and shows progress', async () => {
+        browser.runtime.sendMessage = jest.fn().mockImplementation((msg) => {
+            if (msg.type === 'aiGetState') {
+                return Promise.resolve({
+                    taskId: 't-run', type: 'auto-rename', status: 'running',
+                    filed: 1, total: 3, currentUid: 'c2', currentLabel: 'X',
+                    results: [], skipped: [],
+                });
+            }
+            return Promise.resolve({});
+        });
+
+        await renderOpenModal();
+
+        // Reattach auto-navigates to the auto-rename panel; the progress label
+        // reflects the running state (2 of 3: X) without clicking the tool card.
+        await waitFor(() => expect(screen.getByText(/Renaming 2 of 3: X/)).toBeInTheDocument());
+    });
+
+    test('progress label clamps to the total when all batches have reported', async () => {
+        await renderOpenModal();
+        fireEvent.click(screen.getByText('Auto rename collections'));
+        await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /auto-rename/i })); });
+
+        // Batched reporting can push filed to total while status is still
+        // 'running' — the label must not read "20 of 19".
+        await fireStorageChange({
+            taskId: 't1', type: 'auto-rename', status: 'running',
+            filed: 3, total: 3, currentUid: 'c2', currentLabel: 'X',
+            results: [], skipped: [],
+        });
+        expect(screen.getByText(/Renaming 3 of 3/)).toBeInTheDocument();
+        expect(screen.queryByText(/Renaming 4 of 3/)).not.toBeInTheDocument();
+    });
+
+    test('progress bar starts determinate at 0% instead of the full-width shimmer', async () => {
+        await renderOpenModal();
+        fireEvent.click(screen.getByText('Auto rename collections'));
+        await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /auto-rename/i })); });
+
+        await fireStorageChange({
+            taskId: 't1', type: 'auto-rename', status: 'running',
+            filed: 0, total: 3, currentUid: 'c1', currentLabel: 'Untitled',
+            results: [], skipped: [],
+        });
+        // With a known total the bar is determinate from the first tick — the
+        // indeterminate shimmer (width: 100%) must not flash at 0 progress.
+        expect(document.querySelector('.ai-rename-progress-fill--animated')).toBeNull();
+        expect(document.querySelector('.ai-rename-progress-fill')).toHaveStyle({ width: '0%' });
+    });
+
+    const driveToDone = async (overrides = {}) => {
+        await renderOpenModal();
+        fireEvent.click(screen.getByText('Auto rename collections'));
+        await waitFor(() => screen.getByRole('button', { name: /auto-rename/i }));
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /auto-rename/i })); });
+        await fireStorageChange({
+            taskId: 't1', type: 'auto-rename', status: 'done', filed: 2, total: 2,
+            results: [
+                { uid: 'c1', oldName: 'Untitled', newName: 'React Learning' },
+                { uid: 'c2', oldName: 'Old News', newName: 'World News' },
+            ],
+            skipped: [],
+            summary: 'Renamed 2 collections with AI',
+            undo: { task: 'auto-rename', renames: [
+                { uid: 'c1', oldName: 'Untitled', newName: 'React Learning' },
+                { uid: 'c2', oldName: 'Old News', newName: 'World News' },
+            ] },
+            ...overrides,
+        });
+    };
+
+    test('done panel renders a per-row undo button that sends aiUndoItems for that uid', async () => {
+        await driveToDone();
+        const undoBtns = screen.getAllByRole('button', { name: /undo rename of/i });
+        expect(undoBtns).toHaveLength(2);
+        await act(async () => { fireEvent.click(undoBtns[0]); });
+        expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'aiUndoItems', uids: ['c1'] });
+    });
+
+    test('"Undo all" sends aiUndoItems with every still-applied uid', async () => {
+        await driveToDone();
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /undo all/i })); });
+        expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'aiUndoItems', uids: ['c1', 'c2'] });
+    });
+
+    test('reverted rows show no undo button; undo-all is replaced by the reverted hint', async () => {
+        await driveToDone({
+            results: [
+                { uid: 'c1', oldName: 'Untitled', newName: 'React Learning', reverted: true },
+                { uid: 'c2', oldName: 'Old News', newName: 'World News', reverted: true },
+            ],
+            undo: null,
+        });
+        expect(screen.queryByRole('button', { name: /undo rename of/i })).toBeNull();
+        expect(screen.queryByRole('button', { name: /undo all/i })).toBeNull();
+        expect(screen.getByText(/all renames reverted/i)).toBeInTheDocument();
+    });
+
+    test('a partial revert keeps undo controls for the remaining row', async () => {
+        await driveToDone({
+            results: [
+                { uid: 'c1', oldName: 'Untitled', newName: 'React Learning', reverted: true },
+                { uid: 'c2', oldName: 'Old News', newName: 'World News' },
+            ],
+            undo: { task: 'auto-rename', renames: [{ uid: 'c2', oldName: 'Old News', newName: 'World News' }] },
+        });
+        expect(screen.getAllByRole('button', { name: /undo rename of/i })).toHaveLength(1);
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: /undo all/i })); });
+        expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'aiUndoItems', uids: ['c2'] });
+    });
+
+    test('an in-flight per-row undo disables all undo controls (serialized dispatch)', async () => {
+        await driveToDone();
+        const c1Btn = screen.getByRole('button', { name: /undo rename of React Learning/i });
+        await act(async () => { fireEvent.click(c1Btn); });
+
+        // While c1's revert is in flight, every undo control is disabled — only one
+        // aiUndoItems may be outstanding (concurrent reverts would race collections_index).
+        expect(screen.getByRole('button', { name: /undo rename of React Learning/i })).toBeDisabled();
+        expect(screen.getByRole('button', { name: /undo rename of World News/i })).toBeDisabled();
+        expect(screen.getByRole('button', { name: /undo all/i })).toBeDisabled();
+
+        // After the SW writes back the c1 revert, controls re-enable for the remaining row.
+        await fireStorageChange({
+            taskId: 't1', type: 'auto-rename', status: 'done', filed: 2, total: 2,
+            results: [
+                { uid: 'c1', oldName: 'Untitled', newName: 'React Learning', reverted: true },
+                { uid: 'c2', oldName: 'Old News', newName: 'World News' },
+            ],
+            skipped: [],
+            summary: 'Renamed 2 collections with AI',
+            undo: { task: 'auto-rename', renames: [{ uid: 'c2', oldName: 'Old News', newName: 'World News' }] },
+        });
+        expect(screen.getByRole('button', { name: /undo rename of World News/i })).not.toBeDisabled();
+    });
+
+    test('per-row undo disables its button until the SW writes back, then prunes', async () => {
+        await driveToDone();
+        const c1Btn = screen.getByRole('button', { name: /undo rename of React Learning/i });
+        await act(async () => { fireEvent.click(c1Btn); });
+        // disabled while the revert is in flight
+        expect(screen.getByRole('button', { name: /undo rename of React Learning/i })).toBeDisabled();
+
+        // SW writes back the partial revert: c1 reverted, c2 still applied
+        await fireStorageChange({
+            taskId: 't1', type: 'auto-rename', status: 'done', filed: 2, total: 2,
+            results: [
+                { uid: 'c1', oldName: 'Untitled', newName: 'React Learning', reverted: true },
+                { uid: 'c2', oldName: 'Old News', newName: 'World News' },
+            ],
+            skipped: [],
+            summary: 'Renamed 2 collections with AI',
+            undo: { task: 'auto-rename', renames: [{ uid: 'c2', oldName: 'Old News', newName: 'World News' }] },
+        });
+
+        // c1 is now reverted (button gone); c2 remains and its button is NOT stuck disabled
+        expect(screen.queryByRole('button', { name: /undo rename of React Learning/i })).toBeNull();
+        expect(screen.getByRole('button', { name: /undo rename of World News/i })).not.toBeDisabled();
+    });
+
+    test('done with zero renames shows an explanatory empty state and no undo controls', async () => {
+        await driveToDone({ results: [], skipped: [], undo: null });
+        expect(screen.getByText(/no changes needed/i)).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /undo rename of/i })).toBeNull();
+        expect(screen.queryByRole('button', { name: /undo all/i })).toBeNull();
+        expect(screen.getByRole('button', { name: /^done$/i })).toBeInTheDocument();
+    });
+
+    test('done with only skipped collections explains nothing was renamed', async () => {
+        await driveToDone({ results: [], skipped: [{ uid: 'c1', reason: 'error' }], undo: null });
+        expect(screen.getByText(/no names were changed/i)).toBeInTheDocument();
+    });
+});

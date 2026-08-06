@@ -7,6 +7,7 @@ import { MdDragIndicator, MdContentCopy } from 'react-icons/md';
 import { HiOutlineExternalLink } from 'react-icons/hi';
 import { HiOutlineTrash, HiOutlineArrowRightOnRectangle } from 'react-icons/hi2';
 import { getColorCode } from './utils';
+import { FALLBACK_FAVICON } from './utils/sharedConstants';
 import { copyToClipboard, unwrapDeferredUrl } from './utils/index';
 import { showSuccessToast, showErrorToast } from './toastHelpers';
 import MoveToCollectionModal from './MoveToCollectionModal';
@@ -23,7 +24,6 @@ const TabRow = memo(({
 }) => {
     const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
     const [ctxMenu, setCtxMenu] = useState(null);
-    const fallbackFavicon = './images/favicon-fallback.png';
 
     const handleContextMenu = useCallback((event) => {
         event.preventDefault();
@@ -225,8 +225,8 @@ const TabRow = memo(({
     }, [ctxMenu]);
 
     const handleFaviconError = useCallback((e) => {
-        e.target.src = fallbackFavicon;
-    }, [fallbackFavicon]);
+        e.target.src = FALLBACK_FAVICON;
+    }, []);
 
     const handleOpenTab = useCallback(async (tabToOpen) => {
         const { chkOpenNewWindow } = await browser.storage.local.get('chkOpenNewWindow');
@@ -246,8 +246,8 @@ const TabRow = memo(({
     const faviconSrc = useMemo(() => {
         if (tab.favIconUrl) return tab.favIconUrl;
         if (tab?.url && /\.(jpg|jpeg|gif|png|ico|tiff)$/.test(tab.url.split('?')[0])) return tab.url;
-        return fallbackFavicon;
-    }, [tab.favIconUrl, tab.url, fallbackFavicon]);
+        return FALLBACK_FAVICON;
+    }, [tab.favIconUrl, tab.url]);
 
     return (
         <div className='tab-line' id={`tab-line-${tab.uid}`} key={`tab-line-${tab.uid}`}>

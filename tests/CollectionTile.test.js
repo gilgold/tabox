@@ -2,7 +2,9 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import CollectionTile from '../app/CollectionTile';
+import { aiProcessingUidsState, aiProcessingCurrentUidState } from '../app/atoms/aiState';
 import { renderWithProviders } from './helpers/renderWithProviders';
+import { createCollectionMenuItems } from '../app/utils/contextMenuItems';
 
 let mockCollectionHandlers;
 const mockUseCollectionOperations = jest.fn(() => mockCollectionHandlers);
@@ -56,6 +58,14 @@ jest.mock('javascript-time-ago', () => {
     }));
 });
 
+jest.mock('../app/ai/useTaboxAIEnabled', () => ({
+    useTaboxAIEnabled: jest.fn(() => false),
+}));
+
+jest.mock('../app/ai/aiClient', () => ({
+    isAISupported: jest.fn(() => false),
+}));
+
 describe('CollectionTile', () => {
     const baseCollection = {
         uid: 'collection-1',
@@ -74,7 +84,7 @@ describe('CollectionTile', () => {
         chromeGroups: [{ id: 'group-1' }],
     };
 
-    const renderTile = (overrideProps = {}) => renderWithProviders(
+    const renderTile = (overrideProps = {}, atomValues = []) => renderWithProviders(
         <CollectionTile
             collection={baseCollection}
             index={0}
@@ -87,7 +97,7 @@ describe('CollectionTile', () => {
             dragListeners={{}}
             {...overrideProps}
         />,
-        { withSuspense: false },
+        { withSuspense: false, atomValues },
     );
 
     beforeEach(() => {
@@ -99,9 +109,11 @@ describe('CollectionTile', () => {
             _handleOpenTabs: jest.fn(),
             _handleFocusWindow: jest.fn(),
             _handleStopTracking: jest.fn(),
+            _handleToggleFavorite: jest.fn(),
         };
 
         mockUseCollectionOperations.mockClear();
+        createCollectionMenuItems.mockClear();
         mockStorageGet.mockImplementation(async (key) => {
             if (key === 'chkEnableAutoUpdate') {
                 return { chkEnableAutoUpdate: false };
@@ -130,6 +142,9 @@ describe('CollectionTile', () => {
         expect(container.querySelector('.tile-hover-menu')).toBeInTheDocument();
         expect(container.querySelector('.tile-hover-menu [data-testid="color-picker"]')).toBeInTheDocument();
         expect(container.querySelector('.tile-color-picker')).not.toBeInTheDocument();
+        expect(createCollectionMenuItems).toHaveBeenCalledWith(
+            expect.objectContaining({ isPro: false }),
+        );
 
         fireEvent.click(container.querySelector('.collection-tile'));
         expect(onSelect).toHaveBeenCalledWith(baseCollection);
@@ -183,5 +198,48 @@ describe('CollectionTile', () => {
             uid: 'collection-1',
             color: 'green',
         }), true);
+    });
+
+    describe('AI processing overlay', () => {
+        it('renders overlay when uid is in aiProcessingUidsState', () => {
+            const { container } = renderTile({}, [
+                [aiProcessingUidsState, ['collection-1']],
+            ]);
+            const overlay = container.querySelector('.ai-processing-overlay');
+            expect(overlay).toBeInTheDocument();
+            expect(overlay).not.toHaveClass('ai-processing-overlay--current');
+        });
+
+        it('renders overlay with --current modifier when uid matches aiProcessingCurrentUidState', () => {
+            const { container } = renderTile({}, [
+                [aiProcessingUidsState, ['collection-1']],
+                [aiProcessingCurrentUidState, 'collection-1'],
+            ]);
+            const overlay = container.querySelector('.ai-processing-overlay');
+            expect(overlay).toBeInTheDocument();
+            expect(overlay).toHaveClass('ai-processing-overlay--current');
+        });
+
+        it('renders no overlay when uid is not in the processing state', () => {
+            const { container } = renderTile({}, [
+                [aiProcessingUidsState, ['other-uid']],
+                [aiProcessingCurrentUidState, 'other-uid'],
+            ]);
+            expect(container.querySelector('.ai-processing-overlay')).not.toBeInTheDocument();
+        });
+    });
+
+    describe('favorite toggle', () => {
+        it('renders an outline star and calls toggle on click', () => {
+            renderTile();
+            const starButton = screen.getByRole('button', { name: 'Add to favorites' });
+            fireEvent.click(starButton);
+            expect(mockCollectionHandlers._handleToggleFavorite).toHaveBeenCalledTimes(1);
+        });
+
+        it('renders a filled star for a favorited collection', () => {
+            renderTile({ collection: { ...baseCollection, isFavorite: true } });
+            expect(screen.getByRole('button', { name: 'Remove from favorites' })).toBeInTheDocument();
+        });
     });
 });

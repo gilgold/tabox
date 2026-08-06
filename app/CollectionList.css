@@ -601,7 +601,7 @@
 	border-radius: 6px;
 	cursor: pointer;
 	color: white;
-	font-size: 10px;
+	font-size: 11px;
 	font-weight: 600;
 	padding: 4px 10px;
 	gap: 5px;
@@ -707,6 +707,13 @@
 		0 8px 32px rgba(0, 0, 0, 0.4),
 		0 4px 16px rgba(0, 0, 0, 0.2),
 		inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Divider between menu item groups (open / main / danger) */
+.context-menu-divider {
+	height: 1px;
+	margin: 4px 8px;
+	background: var(--border-color, rgba(128, 128, 128, 0.25));
 }
 
 /* Modern Context Menu Items */
@@ -1141,14 +1148,12 @@
 }
 
 .tab-url-preview {
-	font-size: 0.68em;
-	color: var(--text-color);
-	opacity: 0.7;
+	font-size: 11px;
+	color: var(--color-secondary);
 	text-overflow: ellipsis;
 	overflow: hidden;
 	white-space: nowrap;
 	display: block;
-	font-family: monospace;
 }
 
 .tab-url-preview-button {
@@ -1158,9 +1163,14 @@
 	text-align: left;
 	width: 100%;
 	cursor: pointer;
-	font: inherit;
-	color: inherit;
-	opacity: inherit;
+	font-family: inherit;
+	font-size: 11px;
+	color: var(--color-secondary);
+}
+
+.tab-url-preview-button:hover {
+	color: var(--primary-color);
+	text-decoration: underline;
 }
 
 .tab-url-preview .search-match-text {
@@ -1384,14 +1394,14 @@ html.fullpage-mode .group-tab-count-badge {
     color: var(--text-color) !important;
     font-weight: 600 !important;
     font-size: 14px !important;
-    padding: 0 !important;
+    padding: 0 0 0 8px !important;
     margin: 0 !important;
     min-width: 120px;
 }
 
 .group-title-input:focus {
     outline: none !important;
-    padding: 2px 6px !important;
+    padding: 2px 6px 2px 8px !important;
 }
 
 /* Tab styling within groups */
@@ -1550,7 +1560,7 @@ html.fullpage-mode .group-tab-count-badge {
 	padding: 4px 8px;
 	border: none;
 	border-radius: 8px;
-	font-size: 10px;
+	font-size: 11px;
 	font-weight: 500;
 	cursor: pointer;
 	position: relative;
@@ -2533,4 +2543,25 @@ html.fullpage-mode .group-tab-count-badge {
 	opacity: 1 !important;
 	visibility: visible !important;
 	z-index: 1000 !important;
+}
+
+/* Favorite star toggle (list rows + shared) */
+.favorite-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    padding: 2px;
+    color: var(--text-color);
+    opacity: 0.45;
+}
+
+.favorite-toggle:hover {
+    opacity: 1;
+}
+
+.favorite-toggle.is-favorite {
+    color: var(--favorite-star-color);
+    opacity: 1;
 }

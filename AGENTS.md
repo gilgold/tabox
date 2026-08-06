@@ -41,7 +41,6 @@ chrome/               # Extension files
   manifest.json       # Manifest v3
   background.js       # Service worker
   background-utils.js # Background script helpers
-  api-keys.json       # API keys (gitignored — see setup below)
 static/               # Entry points and static assets
   index.js            # React entry point
   index.html          # Popup HTML template
@@ -63,15 +62,10 @@ webpack.js            # Webpack config
 ## Development Setup
 
 1. `yarn install`
-2. Copy API keys into `chrome/api-keys.json` (gitignored):
-   ```json
-   {
-     "googleDrive": "<GOOGLE_API_KEY>",
-     "clientSecret": "<CLIENT_SECRET>"
-   }
-   ```
-3. `yarn dev` to start watch mode
-4. Load the `build/` folder as an unpacked extension in `chrome://extensions` (enable Developer mode)
+2. `yarn dev` to start watch mode
+3. Load the `build/` folder as an unpacked extension in `chrome://extensions` (enable Developer mode)
+
+No API keys are bundled with the extension. All secrets live only as wrangler secrets on the Cloudflare Worker (`server/`): Google OAuth token exchanges go through `POST /auth/token` (secret `GOOGLE_CLIENT_SECRET`).
 
 ## Architecture
 
@@ -97,7 +91,7 @@ webpack.js            # Webpack config
 ### Sync subsystem (read before touching sync — it is subtle and has regressed repeatedly)
 - **Flow**: UI triggers a sync via `triggerBackgroundSync()` (`app/utils/sharedSync.js`) or `App._update()` → sends an `updateRemote` message → background `handleRemoteUpdate()` → `syncData()`. `syncData` either does a full download (`_loadSettingsFile`) or, when local/remote timestamps are within ~60s (the "conflict window"), a three-way merge via `mergeSyncSnapshots()`. Uploads go through `uploadPreparedSyncData()` (a blind PATCH overwrite — it does **not** merge), and incoming data is applied atomically via `applySyncSnapshotAtomically()`.
 - **Pure, testable sync modules**, loaded by `background.js` via `importScripts` and dual-exported (`globalThis.*` + `module.exports`), each with a `*.module.test.js`: `chrome/sync-merge.js`, `sync-apply.js`, `sync-throttle.js`, `sync-transport.js`, `sync-session-state.js`. Prefer adding logic here (unit-testable) over inlining in `background.js`.
-- **`STORAGE_KEYS` is duplicated in THREE files that MUST stay in sync**: `app/utils/sharedConstants.js`, `chrome/background-utils.js`, and `chrome/sync-apply.js`. `sharedConstants.test.js` enforces the key set.
+- **`STORAGE_KEYS` is duplicated in FOUR files that MUST stay in sync**: `app/utils/sharedConstants.js`, `chrome/background-utils.js`, `chrome/sync-apply.js`, and `chrome/ai-storage.js`. `sharedConstants.test.js` enforces the key set.
 - **Deletions propagate via tombstones, not absence.** Keys: `deleted_collection_tombstones`, `deleted_folder_tombstones`. Adding a new deletable entity type requires wiring the tombstone through the *entire* pipeline: mark on delete + clear on save (`storageUtils.js`), include in the upload payload (`prepareSyncDataForUpload` in `background-utils.js`), merge/apply/serialize (`sync-merge.js`), and persist + add to `SYNC_MANAGED_KEYS` (`sync-apply.js`). The timestamp heuristic in `resolveSingleSidedEntity` is only an unreliable fallback — without a tombstone a deleted entity gets resurrected (or its deletion is dropped) on the other device.
 - **Merge timestamp semantics**: the local snapshot fed to `mergeSyncSnapshots` must carry the persisted `localTimestamp` (real last-local-change time), **not** `Date.now()`. Using `Date.now()` makes the single-sided-deletion heuristic treat every brand-new remote entity as a local deletion and drop it.
 - **Both devices must run the same extension version** for sync to converge — a device on an older build that lacks a tombstone type (or a merge fix) produces the asymmetric "folder lingers empty / item resurrects" symptoms. When debugging "X doesn't sync", confirm the build/version on *both* devices first.
@@ -105,6 +99,19 @@ webpack.js            # Webpack config
 ### MV3 service-worker constraints (sync reliability)
 - **Always `await triggerBackgroundSync()`** in operations that mutate then sync (folder create/update/delete/duplicate/move). Fire-and-forget returns before the `updateRemote` message is dispatched, and the SW/popup can tear down before the round-trip completes → the sync is lost.
 - **Do not defer sync work to a standalone `setTimeout`** in the service worker — it can be discarded when the worker goes idle. Keep the triggering message handler awaiting the work instead. (This is why `chrome/sync-throttle.js` coalesces overlapping syncs into an awaited trailing run rather than scheduling a timer, and must never silently drop a sync.)
+
+### Command palette (popup ↔ full-page parity)
+- The command palette (`app/CommandPalette.js`, opened with Ctrl/⌘+K) renders in **both** the popup and the full-page view. **Keep them at full parity:** whenever you add a setting or a user-facing action, register it in the shared command-palette registries so it appears in both views. The registries: `EXTENSION_ACTIONS` (global actions), `SETTINGS_TOGGLES` (settings), `COLLECTION_SUB_ACTIONS` (per-collection actions), and `AI_ACTIONS` (AI Tools modal actions, built from the canonical `AI_TOOLS` in `app/ai/aiTasks.js`).
+- View-specific behavior is gated by `isFullPage` (`viewContextState`). Only differ between views when a feature is inherently view-bound (e.g. `open-fullpage` is hidden in full-page); a new setting/action is **not** a valid reason to diverge.
+- AI Tools modal actions open `AIToolsModal` pre-navigated to a tool via the `aiToolsInitialToolState` atom (App's `cmdOpenAiTool` → `onOpenAiTool` prop). Add a new AI tool to `AI_TOOLS` and it should also get an `AI_ACTIONS` keyword entry so it surfaces in the palette.
+
+### AI tasks (MUST run in the service worker)
+- AI features use Chrome's built-in Gemini Nano (`globalThis.LanguageModel`, wrapped in `app/ai/aiClient.js`). That global is available in the MV3 service worker, not only the popup.
+- **Every AI task's long-running work must execute in the service worker** (`chrome/background.js` / `background-utils.js`), driven by `browser.runtime.sendMessage` from the popup — so closing the popup does NOT abort it. The popup only initiates the task, observes progress, and renders results; it is a detachable observer, never the owner of the work.
+- Persist progress/state to `chrome.storage.local` (like `SMART_ORGANIZE_UNDO_KEY` / `AUTO_ARRANGE_UNDO_KEY`) so a reopened popup can reattach and re-render progress. Push updates back via messages / `storage.onChanged`.
+- Follow the existing `smartOrganizeApply` handler (`background-utils.js` ~line 1067) as the reference pattern. Respect the MV3 SW constraints above: keep the message handler awaiting the work; never defer it to a standalone `setTimeout` (the worker can be discarded).
+- Fast one-shot suggestions (suggest collection/folder name) are exempt; anything that loops over multiple collections/tabs is not.
+- **Existing tasks still running inline in the popup (must be migrated):** Auto-Rename Collections, Auto-Arrange into Folders, and Smart Organize *planning*.
 
 ### Sync UI feedback
 - The "Syncing…" indicator (Header/Footer) is driven by the `syncInProgressState` Jotai atom. `App._update()` toggles it; plain `triggerBackgroundSync()` does **not**. Operations that trigger their own sync should use the `useTrackedSync()` hook (`app/useTrackedSync.js`) so the indicator reflects the sync.
@@ -119,6 +126,7 @@ webpack.js            # Webpack config
 - **Styling**: Co-located CSS files (e.g., `CollectionList.js` + `CollectionList.css`)
 - **No prop-types** — disabled in ESLint
 - **No Prettier** — ESLint only
+- **Tooltips**: NEVER use the native `title` attribute for tooltips. Always use the shared rich tooltip (`react-tooltip`): put `data-tooltip-id="main-tooltip"` + `data-tooltip-content="…"` (optionally `data-tooltip-class-name="small-tooltip"`) on the anchor element. The global `<Tooltip id="main-tooltip">` instance lives in `app/App.js` (portaled to `document.body`, theme-aware, `whiteSpace: pre-line`). Native `title` is unstyled, theme-blind, and slow to appear.
 
 ## Testing
 
@@ -136,9 +144,13 @@ webpack.js            # Webpack config
 
 ## Important Notes
 
-- `chrome/api-keys.json` is gitignored — never commit real API keys
-- CI injects API keys via secrets during build
+- The extension bundle carries NO credentials — Google OAuth token exchanges run on the Worker (`POST /auth/token`, wrangler secret `GOOGLE_CLIENT_SECRET`)
 - The extension targets Chrome 89+ (Manifest v3)
 - Webpack splits vendor chunks (React, UI libs, dnd-kit)
 - Release builds strip `console.log` via Terser
 - After any code change, always run `yarn prod` before considering the work complete
+
+## Git & Registry Rules
+
+- **Git identity**: this project must use the **gilgold** GitHub account — never **gil-wix**. Before ANY git action (commit, push, PR via `gh`), verify `git config user.name` / `user.email` and `gh auth status` resolve to gilgold; fix the repo-local config / `gh auth switch` first if not.
+- **npm registry**: this machine installs through the Wix internal npm registry, but Wix registry URLs must NEVER reach the remote. Before any push, check staged changes (`yarn.lock`, `.npmrc`, `.yarnrc.yml`) for Wix registry hostnames (e.g. `wixpress`) and replace them with public npm registry URLs (`registry.npmjs.org` / `registry.yarnpkg.com`).

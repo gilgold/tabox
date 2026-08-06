@@ -150,55 +150,6 @@ export function createCollectionDropTargetId(target) {
     return null;
 }
 
-export function parseCollectionDropTargetId(id) {
-    if (typeof id !== 'string') {
-        return null;
-    }
-
-    const parts = id.split(':');
-    const [type, value, detail] = parts;
-
-    if (type === DROP_TARGET_TYPE.COLLECTION_EDGE && value) {
-        return {
-            type,
-            position: value,
-        };
-    }
-
-    if (type === DROP_TARGET_TYPE.TAB_ROW && value) {
-        return {
-            type,
-            tabId: value,
-        };
-    }
-
-    if (type === DROP_TARGET_TYPE.TAB_EDGE && value && detail) {
-        return {
-            type,
-            tabId: value,
-            side: detail,
-        };
-    }
-
-    if (type === DROP_TARGET_TYPE.GROUP_EDGE && value && detail) {
-        return {
-            type,
-            groupUid: value,
-            side: detail,
-        };
-    }
-
-    if (type === DROP_TARGET_TYPE.GROUP_APPEND && value) {
-        return {
-            type,
-            groupUid: value,
-            surface: detail || 'body',
-        };
-    }
-
-    return null;
-}
-
 export function buildCollectionDragModel(collection, search = '') {
     const tabs = normalizeTabs(collection);
     const groups = normalizeGroups(collection);

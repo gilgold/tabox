@@ -1,0 +1,117 @@
+/* ── AI Processing Effects ──────────────────────────────────────────────────
+ * Shared keyframes and utility classes for animated gradient border + lightning
+ * sweep shown on elements while an AI rename is in flight.
+ *
+ * Classes:
+ *   .ai-processing-overlay         — dedicated child overlay (ring + streak);
+ *                                    place as last child of a position:relative
+ *                                    card root to avoid pseudo-element conflicts
+ *   .ai-processing-overlay--current — same but faster / brighter
+ *   .ai-name-processing            — title-slot variant (applied directly; the
+ *                                    slot has no competing pseudo-elements)
+ *
+ * Performance fallback: html.performance-mode strips all animation and keeps
+ * only a static purple ring.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+@keyframes ai-gradient-shift {
+    0%   { background-position: 0%   0%; }
+    100% { background-position: 300% 0%; }
+}
+
+@keyframes ai-lightning-sweep {
+    0%   { transform: translateX(-130%) skewX(-20deg); }
+    100% { transform: translateX(230%)  skewX(-20deg); }
+}
+
+/* ── Effect hosts ─────────────────────────────────────────────────────────── */
+
+/* Title slot: class applied directly while a panel AI rename is running.
+   No padding here — layout must not shift when the effect toggles. */
+.ai-name-processing {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    border-radius: 8px;
+}
+
+/* Card overlay: rendered as the last child of a position:relative card root. */
+.ai-processing-overlay {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 5;
+}
+
+/* ── Gradient ring via mask-composite ─────────────────────────────────────── */
+
+.ai-name-processing::before,
+.ai-processing-overlay::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 2px;
+    background: linear-gradient(
+        120deg,
+        #7c3aed,
+        #2563eb,
+        #38bdf8,
+        #ec4899,
+        #7c3aed
+    ) 0 0 / 300% 100%;
+    -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+    mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+    -webkit-mask-composite: destination-out;
+    mask-composite: exclude;
+    animation: ai-gradient-shift 2.2s linear infinite;
+    pointer-events: none;
+    z-index: 2;
+}
+
+/* ── Lightning streak ─────────────────────────────────────────────────────── */
+
+.ai-name-processing::after,
+.ai-processing-overlay::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 45%;
+    background: linear-gradient(
+        100deg,
+        transparent,
+        rgba(255, 255, 255, 0.35) 50%,
+        transparent
+    );
+    animation: ai-lightning-sweep 1.4s ease-in-out infinite;
+    pointer-events: none;
+    z-index: 3;
+}
+
+/* ── Current-item variant (stronger / faster) ─────────────────────────────── */
+
+.ai-processing-overlay--current::before {
+    animation-duration: 1.1s;
+    filter: brightness(1.2);
+}
+
+/* ── Performance-mode static fallback ────────────────────────────────────── */
+
+html.performance-mode .ai-processing-overlay::before,
+html.performance-mode .ai-name-processing::before {
+    animation: none !important;
+    background: #7c3aed;
+}
+
+html.performance-mode .ai-processing-overlay::after,
+html.performance-mode .ai-name-processing::after {
+    display: none;
+}

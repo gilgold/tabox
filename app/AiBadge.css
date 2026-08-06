@@ -1,0 +1,15 @@
+/* "AI" pill with the Tabox AI purple/blue gradient (matches AIButton.css). */
+.ai-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    line-height: 1.4;
+    color: #fff;
+    background: linear-gradient(135deg, #3a63db 0%, #5b4fd6 100%);
+}

@@ -7,6 +7,7 @@ import { browser } from '../../static/globals';
 import { STORAGE_KEYS, CURRENT_STORAGE_VERSION } from './sharedConstants';
 import { assessMigrationSupport40 } from './migrationSupport40';
 import { withDataSafetyGuard } from './migrationSafety';
+import { naturalCompare } from './naturalCompare';
 
 // Re-export for backward compatibility
 export { STORAGE_KEYS, CURRENT_STORAGE_VERSION };
@@ -278,12 +279,9 @@ export const sortCollectionsForDisplay = (collections = [], options = {}) => {
         const bVal = b?.[sortBy];
 
         if (sortBy === 'name' || sortBy === 'color') {
-            const aStr = (aVal || '').toString().toLowerCase();
-            const bStr = (bVal || '').toString().toLowerCase();
-
             return sortOrder === 'desc'
-                ? bStr.localeCompare(aStr)
-                : aStr.localeCompare(bStr);
+                ? naturalCompare(bVal, aVal)
+                : naturalCompare(aVal, bVal);
         }
 
         const aNum = aVal || 0;
@@ -492,19 +490,36 @@ export const saveSingleCollection = async (collection, forceUpdateTimestamp = fa
             siblingEntries.sort((a, b) => a.normalizedOrder - b.normalizedOrder);
             
             if (siblingEntries.length > 0) {
+                // Shared folders: members can only converge on the same
+                // in-folder order if the shifted siblings SYNC — and the
+                // shared push engine only picks up rows whose (index)
+                // lastUpdated moved past its watermark. Bump the timestamp on
+                // shifted siblings when the parent is a shared folder so
+                // their new order values travel to every member. Displayed
+                // order is unaffected (explicit `order` beats the date sort).
+                let bumpShiftedTimestamps = false;
+                if (targetParentId) {
+                    const { folders_index: foldersIndex = {} } = await browser.storage.local.get('folders_index');
+                    bumpShiftedTimestamps = Boolean(foldersIndex[targetParentId]?.shared?.folderId);
+                }
+
                 const siblingKeys = siblingEntries.map(entry => `${STORAGE_KEYS.COLLECTION_PREFIX}${entry.uid}`);
                 const siblingData = await browser.storage.local.get(siblingKeys);
                 const updatedRecords = {};
-                
+
                 siblingEntries.forEach((entry, indexPosition) => {
                     const newOrderValue = indexPosition + 1; // Start from 1 so new collection can take 0
                     index[entry.uid].order = newOrderValue;
+                    if (bumpShiftedTimestamps) {
+                        index[entry.uid].lastUpdated = now;
+                    }
                     const recordKey = `${STORAGE_KEYS.COLLECTION_PREFIX}${entry.uid}`;
                     const record = siblingData[recordKey];
                     if (record) {
                         updatedRecords[recordKey] = {
                             ...record,
-                            order: newOrderValue
+                            order: newOrderValue,
+                            ...(bumpShiftedTimestamps ? { lastUpdated: now } : {})
                         };
                     }
                 });
@@ -564,7 +579,13 @@ export const saveSingleCollection = async (collection, forceUpdateTimestamp = fa
             color: collectionToSave.color || 'default',
             size: collectionSize,
             parentId: collectionToSave.parentId || null,
-            order: resolvedOrder
+            order: resolvedOrder,
+            // collectionToSave is merged from the existing stored record, so a partial
+            // update that omits isFavorite/favoriteOrder inherits them from storage
+            isFavorite: collectionToSave.isFavorite === true,
+            ...(collectionToSave.isFavorite === true && typeof collectionToSave.favoriteOrder === 'number'
+                ? { favoriteOrder: collectionToSave.favoriteOrder }
+                : {})
         };
         
         await browser.storage.local.set({
@@ -858,6 +879,12 @@ const migrateLegacyStorageUnsafe = async () => {
             const lastUpdated = record.lastUpdated != null ? record.lastUpdated : (meta.lastUpdated != null ? meta.lastUpdated : createdOn);
             const order = record.order !== undefined ? record.order : (meta.order !== undefined ? meta.order : folderIndex);
 
+            // The shared marker MUST survive the rebuild (migration only augments,
+            // never destroys — see also sync-apply's identical carry-through).
+            const sharedMarker = record.shared?.folderId
+                ? record.shared
+                : (meta.shared?.folderId ? meta.shared : null);
+
             const normalizedFolder = {
                 uid,
                 name: record.name || meta.name || 'Untitled Folder',
@@ -867,6 +894,7 @@ const migrateLegacyStorageUnsafe = async () => {
                 createdOn,
                 lastUpdated,
                 order,
+                ...(sharedMarker ? { shared: sharedMarker } : {}),
             };
 
             const recordNeedsPatch = record.lastUpdated === undefined || record.order === undefined || record.createdOn === undefined;
@@ -884,6 +912,7 @@ const migrateLegacyStorageUnsafe = async () => {
                 createdOn: normalizedFolder.createdOn,
                 order: normalizedFolder.order,
                 size: JSON.stringify(normalizedFolder).length,
+                ...(sharedMarker ? { shared: sharedMarker } : {}),
             };
         });
 
@@ -1115,7 +1144,24 @@ export const batchUpdateCollections = async (collections) => {
                 // No order in index and none in collection - leave undefined
             }
             // If collection has order but index doesn't, keep collection's order
-            
+
+            // Favorite fields: prefer incoming values, fall back to the existing
+            // index entry so stale in-memory objects can't silently un-favorite.
+            // resolvedFavoriteOrder is only persisted when resolvedIsFavorite is true.
+            const resolvedIsFavorite = collection.isFavorite !== undefined
+                ? collection.isFavorite === true
+                : existingIndexEntry.isFavorite === true;
+            const resolvedFavoriteOrder = collection.favoriteOrder !== undefined
+                ? collection.favoriteOrder
+                : existingIndexEntry.favoriteOrder;
+
+            collectionForStorage.isFavorite = resolvedIsFavorite;
+            if (resolvedIsFavorite && typeof resolvedFavoriteOrder === 'number') {
+                collectionForStorage.favoriteOrder = resolvedFavoriteOrder;
+            } else {
+                delete collectionForStorage.favoriteOrder;
+            }
+
             const collectionSize = JSON.stringify(collectionForStorage).length;
             
             // Add to batch update - preserve existing lastUpdated and lastOpened timestamps
@@ -1135,7 +1181,11 @@ export const batchUpdateCollections = async (collections) => {
                 createdOn: collectionForStorage.createdOn || now,
                 color: collectionForStorage.color || 'default',
                 size: collectionSize,
-                parentId: collectionForStorage.parentId || null
+                parentId: collectionForStorage.parentId || null,
+                isFavorite: resolvedIsFavorite,
+                ...(resolvedIsFavorite && typeof resolvedFavoriteOrder === 'number'
+                    ? { favoriteOrder: resolvedFavoriteOrder }
+                    : {})
             };
             
             // Handle order field:
@@ -1217,7 +1267,14 @@ export const saveSingleFolder = async (folder, forceUpdateTimestamp = false) => 
         // Calculate collection count from collections index
         const collectionsIndex = await loadCollectionsIndex();
         const collectionCount = Object.values(collectionsIndex).filter(c => c.parentId === folder.uid).length;
-        
+
+        // Preserve an existing shared marker when the caller passes a folder
+        // without one — overwriting the record would silently unshare it.
+        const { [folderKey]: existingRecord } = await browser.storage.local.get(folderKey);
+        const recordSharedMarker = folder.shared?.folderId
+            ? folder.shared
+            : (existingRecord?.shared?.folderId ? existingRecord.shared : null);
+
         // Save folder data
         await browser.storage.local.set({
             [folderKey]: {
@@ -1230,14 +1287,23 @@ export const saveSingleFolder = async (folder, forceUpdateTimestamp = false) => 
                 lastUpdated: lastUpdated,
                 collectionCount: collectionCount,
                 // Store any other folder properties
-                ...folder
+                ...folder,
+                ...(recordSharedMarker ? { shared: recordSharedMarker } : {})
             }
         });
         
         // Update folders index
         const foldersIndex = await loadFoldersIndex();
         const folderSize = JSON.stringify(folder).length;
-        
+
+        // The shared marker MUST survive the rebuild (delete guards, AI-task
+        // exclusion, and sync-apply's rematerialize all key off it). Prefer the
+        // saved folder's marker; fall back to the existing index entry so a
+        // caller passing a marker-less folder can't silently unshare it.
+        const sharedMarker = folder.shared?.folderId
+            ? folder.shared
+            : (foldersIndex[folder.uid]?.shared?.folderId ? foldersIndex[folder.uid].shared : null);
+
         foldersIndex[folder.uid] = {
             name: folder.name,
             type: 'folder',
@@ -1247,7 +1313,8 @@ export const saveSingleFolder = async (folder, forceUpdateTimestamp = false) => 
             lastUpdated: lastUpdated,
             createdOn: folder.createdOn || now,
             order: folder.order !== undefined ? folder.order : Object.keys(foldersIndex).length, // Maintain sort order
-            size: folderSize
+            size: folderSize,
+            ...(sharedMarker ? { shared: sharedMarker } : {})
         };
         
         await browser.storage.local.set({

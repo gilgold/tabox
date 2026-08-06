@@ -1,0 +1,139 @@
+/* Split Collection scan animation.
+   A source collection of tabs. A highlighted tab group flies sideways; once it
+   lands, a card frame fades in BEHIND those same tabs, forming them into a
+   sub-collection. First left, then right. Every keyframe track ends where it
+   starts (opacity 0 / base transform) so the loop is seamless. Compositor-
+   friendly: only transform + opacity animate. */
+
+.split-scan {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 0 4px;
+}
+
+.split-scan-stage {
+    position: relative;
+    width: 300px;
+    height: 132px;
+}
+
+/* The source collection — always present, centered. */
+.ssc-source {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 92px;
+    box-sizing: border-box;
+    padding: 10px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    background: #fff;
+    border: 1px solid rgba(91, 79, 214, 0.25);
+    border-radius: 10px;
+    box-shadow: 0 4px 14px rgba(58, 99, 219, 0.12);
+    z-index: 2;
+}
+
+.ssc-row {
+    height: 8px;
+    border-radius: 3px;
+    background: linear-gradient(90deg, rgba(120, 120, 140, 0.35), rgba(120, 120, 140, 0.16));
+}
+
+/* A flying tab group: its tab rows stack in normal flow; the .ssc-frame child
+   is absolutely positioned behind them (z-index 0) and fades in once landed. */
+.ssc-fly {
+    position: absolute;
+    left: 50%;
+    width: 68px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    opacity: 0;
+    z-index: 3;
+}
+
+.ssc-frame {
+    position: absolute;
+    inset: -7px -8px;
+    background: #fff;
+    border: 1px solid rgba(91, 79, 214, 0.45);
+    border-radius: 9px;
+    box-shadow: 0 4px 12px rgba(58, 99, 219, 0.18);
+    opacity: 0;
+    z-index: 0;
+}
+
+.ssc-fly-row {
+    position: relative;
+    z-index: 1;
+    height: 7px;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #3a63db, #5b4fd6);
+}
+
+.ssc-fly--left {
+    top: 28px;
+    transform: translateX(-50%);
+    animation: sscFlyLeft 4.8s ease-in-out infinite;
+}
+.ssc-fly--left .ssc-frame { animation: sscFrameLeft 4.8s ease-in-out infinite; }
+
+.ssc-fly--right {
+    bottom: 28px;
+    transform: translateX(-50%);
+    animation: sscFlyRight 4.8s ease-in-out infinite;
+}
+.ssc-fly--right .ssc-frame { animation: sscFrameRight 4.8s ease-in-out infinite; }
+
+/* Left group: highlight at center, fly left, hold while its frame forms, fade. */
+@keyframes sscFlyLeft {
+    0% { opacity: 0; transform: translateX(-50%) scale(1); }
+    5% { opacity: 1; transform: translateX(-50%) scale(1); }
+    14% { opacity: 1; transform: translateX(-50%) scale(1); }
+    30% { opacity: 1; transform: translateX(calc(-50% - 104px)) scale(1); }
+    46% { opacity: 1; transform: translateX(calc(-50% - 104px)) scale(1); }
+    52% { opacity: 0; transform: translateX(calc(-50% - 104px)) scale(1); }
+    100% { opacity: 0; transform: translateX(-50%) scale(1); }
+}
+/* Frame appears only after the group has landed (~30%), behind the tabs. */
+@keyframes sscFrameLeft {
+    0%, 30% { opacity: 0; transform: scale(0.82); }
+    40% { opacity: 1; transform: scale(1); }
+    46% { opacity: 1; transform: scale(1); }
+    52%, 100% { opacity: 0; transform: scale(0.82); }
+}
+
+/* Right group: same, in the second half of the loop. */
+@keyframes sscFlyRight {
+    0%, 48% { opacity: 0; transform: translateX(-50%) scale(1); }
+    53% { opacity: 1; transform: translateX(-50%) scale(1); }
+    62% { opacity: 1; transform: translateX(-50%) scale(1); }
+    78% { opacity: 1; transform: translateX(calc(-50% + 104px)) scale(1); }
+    94% { opacity: 1; transform: translateX(calc(-50% + 104px)) scale(1); }
+    100% { opacity: 0; transform: translateX(-50%) scale(1); }
+}
+@keyframes sscFrameRight {
+    0%, 78% { opacity: 0; transform: scale(0.82); }
+    88% { opacity: 1; transform: scale(1); }
+    94% { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(0.82); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ssc-fly--left,
+    .ssc-fly--right,
+    .ssc-fly--left .ssc-frame,
+    .ssc-fly--right .ssc-frame {
+        animation: none;
+    }
+    .ssc-fly--left,
+    .ssc-fly--right { opacity: 1; }
+    .ssc-fly--left { transform: translateX(calc(-50% - 104px)); }
+    .ssc-fly--right { transform: translateX(calc(-50% + 104px)); }
+    .ssc-frame { opacity: 1; }
+}

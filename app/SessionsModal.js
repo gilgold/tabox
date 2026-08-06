@@ -5,9 +5,10 @@ import { SlClose } from 'react-icons/sl';
 import TimeAgo from 'javascript-time-ago';
 import { buildCollectionFromSnapshot } from './utils/saveCollectionSnapshot';
 import { restoreBrowserSession } from './utils/browserSessions';
+import { countNonEmptyGroups } from './utils/groupCount';
 
 const buildCollectionTitle = (tabs = [], chromeGroups = []) => {
-    const totalGroups = chromeGroups.length;
+    const totalGroups = countNonEmptyGroups({ tabs, chromeGroups });
     return `${tabs.length} tab${tabs.length > 1 ? 's' : ''} ${totalGroups > 0 ? `(${totalGroups} group${totalGroups > 1 ? 's' : ''})` : '' }`;
 };
 

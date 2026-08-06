@@ -1764,3 +1764,15 @@
     font-family: inherit;
     font-size: 11px;
 }
+
+.create-folder-input-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.create-folder-input-row .create-folder-input {
+    flex: 1;
+    min-width: 0;
+}

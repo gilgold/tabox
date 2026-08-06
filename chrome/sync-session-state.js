@@ -12,17 +12,6 @@ const SYNC_SESSION_STATUS = {
     ERROR: 'error'
 };
 
-function isSyncSessionEnabled(syncSessionState = {}) {
-    if (typeof syncSessionState.isEnabled === 'boolean') {
-        return syncSessionState.isEnabled;
-    }
-
-    return Boolean(
-        syncSessionState.hasRefreshToken ||
-        syncSessionState.user
-    );
-}
-
 function createSyncSessionState(overrides = {}) {
     const hasRefreshToken = Boolean(overrides.hasRefreshToken);
     const user = overrides.user || null;
@@ -62,7 +51,6 @@ async function writeSyncSessionState(storageArea, nextState) {
 const syncSessionStateApi = {
     SYNC_SESSION_STATE_KEY,
     SYNC_SESSION_STATUS,
-    isSyncSessionEnabled,
     createSyncSessionState,
     writeSyncSessionState
 };

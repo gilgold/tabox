@@ -1,0 +1,285 @@
+/* ========================================
+   SharedInviteToast — shared-folder invite
+   Distinctive card with an animated gradient
+   ring; bottom-right in popup AND full page.
+   ======================================== */
+
+@property --sit-angle {
+    syntax: '<angle>';
+    initial-value: 0deg;
+    inherits: false;
+}
+
+/* ---------- Outer shell = animated gradient ring ---------- */
+.shared-invite-toast {
+    position: relative;
+    padding: 1.5px; /* ring thickness */
+    border-radius: 16px;
+    background: conic-gradient(
+        from var(--sit-angle),
+        var(--gradient-blue, #1698e2),
+        var(--gradient-purple, #8B5DFF),
+        var(--gradient-orange, #FF8C42),
+        var(--gradient-purple, #8B5DFF),
+        var(--gradient-blue, #1698e2)
+    );
+    box-shadow:
+        0 12px 32px rgba(0, 0, 0, 0.18),
+        0 0 26px rgba(139, 93, 255, 0.22);
+    animation: sitRingSpin 5s linear infinite;
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+    transition:
+        opacity 0.3s var(--fp-ease, cubic-bezier(0.22, 1, 0.36, 1)),
+        transform 0.3s var(--fp-ease, cubic-bezier(0.22, 1, 0.36, 1));
+    pointer-events: auto;
+    user-select: none;
+    font-family: var(--fp-font-body, "Helvetica Neue", Helvetica, Arial, "Lucida Grande", sans-serif);
+}
+
+.shared-invite-toast--visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+.shared-invite-toast *,
+.shared-invite-toast *::before,
+.shared-invite-toast *::after {
+    box-sizing: border-box;
+}
+
+@keyframes sitRingSpin {
+    to { --sit-angle: 360deg; }
+}
+
+/* ---------- Inner card ---------- */
+.shared-invite-toast-card {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    min-width: 340px;
+    max-width: 420px;
+    padding: 14px 16px;
+    border-radius: 14.5px;
+    background: var(--settings-bg-color, #fff);
+    color: var(--text-color);
+}
+
+/* ---------- Glowing folder badge ---------- */
+.shared-invite-toast-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+    border-radius: 12px;
+    color: #fff;
+    background: linear-gradient(135deg, var(--gradient-blue, #1698e2), var(--gradient-purple, #8B5DFF));
+    box-shadow: 0 4px 14px rgba(139, 93, 255, 0.45);
+    animation: sitBadgeGlow 2.6s ease-in-out infinite;
+}
+
+@keyframes sitBadgeGlow {
+    0%, 100% { box-shadow: 0 4px 14px rgba(139, 93, 255, 0.45); }
+    50%      { box-shadow: 0 4px 20px rgba(22, 152, 226, 0.6); }
+}
+
+/* ---------- Text content ---------- */
+.shared-invite-toast-content {
+    flex: 1;
+    min-width: 0;
+    padding-right: 14px; /* keep clear of the dismiss button */
+}
+
+.shared-invite-toast-kicker {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: linear-gradient(90deg, var(--gradient-blue, #1698e2), var(--gradient-purple, #8B5DFF));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 3px;
+}
+
+.shared-invite-toast-text {
+    font-size: 13px;
+    line-height: 1.45;
+    word-break: break-word;
+}
+
+.shared-invite-toast-text strong {
+    font-weight: 700;
+}
+
+.shared-invite-toast-role {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 7px;
+    border-radius: 100px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    color: var(--gradient-purple, #8B5DFF);
+    background: rgba(139, 93, 255, 0.12);
+    border: 1px solid rgba(139, 93, 255, 0.3);
+    vertical-align: 1px;
+    white-space: nowrap;
+}
+
+/* ---------- Action buttons ---------- */
+.shared-invite-toast-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.shared-invite-toast-accept,
+.shared-invite-toast-decline {
+    border-radius: 100px;
+    padding: 6px 16px;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    transition:
+        transform var(--fp-duration, 0.2s) var(--fp-ease, ease),
+        box-shadow var(--fp-duration, 0.2s) var(--fp-ease, ease),
+        background var(--fp-duration, 0.2s) var(--fp-ease, ease);
+}
+
+.shared-invite-toast-accept {
+    border: none;
+    color: #fff;
+    background: linear-gradient(135deg, var(--gradient-blue, #1698e2), var(--gradient-purple, #8B5DFF));
+    box-shadow: 0 3px 10px rgba(22, 152, 226, 0.35);
+}
+
+.shared-invite-toast-accept:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 5px 14px rgba(139, 93, 255, 0.45);
+}
+
+.shared-invite-toast-accept:active:not(:disabled) {
+    transform: scale(0.97);
+}
+
+.shared-invite-toast-decline {
+    color: var(--text-color);
+    background: transparent;
+    border: 1px solid var(--setting-row-border-color, rgba(0, 0, 0, 0.15));
+    opacity: 0.85;
+}
+
+.shared-invite-toast-decline:hover:not(:disabled) {
+    background: var(--setting-row-hover-bg-color, rgba(0, 0, 0, 0.06));
+    opacity: 1;
+}
+
+.shared-invite-toast-accept:disabled,
+.shared-invite-toast-decline:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+/* ---------- Dismiss (close without responding) ---------- */
+.shared-invite-toast-dismiss {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-color);
+    opacity: 0.45;
+    cursor: pointer;
+    transition:
+        opacity var(--fp-duration, 0.2s) var(--fp-ease, ease),
+        background var(--fp-duration, 0.2s) var(--fp-ease, ease);
+}
+
+.shared-invite-toast-dismiss:hover {
+    opacity: 0.85;
+    background: var(--setting-row-hover-bg-color, rgba(0, 0, 0, 0.08));
+}
+
+/* ---------- Popup: slightly more compact ---------- */
+.tabox-toast-viewport--popup .shared-invite-toast-card {
+    min-width: 0;
+    max-width: 320px;
+    padding: 11px 12px;
+    gap: 10px;
+}
+
+.tabox-toast-viewport--popup .shared-invite-toast-badge {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+}
+
+.tabox-toast-viewport--popup .shared-invite-toast-badge svg {
+    width: 17px;
+    height: 17px;
+}
+
+.tabox-toast-viewport--popup .shared-invite-toast-text {
+    font-size: 12px;
+}
+
+.tabox-toast-viewport--popup .shared-invite-toast-actions {
+    margin-top: 8px;
+}
+
+.tabox-toast-viewport--popup .shared-invite-toast-accept,
+.tabox-toast-viewport--popup .shared-invite-toast-decline {
+    padding: 5px 13px;
+    font-size: 11px;
+}
+
+/* ========================================
+   Dark theme
+   ======================================== */
+[data-theme="dark"] .shared-invite-toast {
+    box-shadow:
+        0 12px 32px rgba(0, 0, 0, 0.5),
+        0 0 30px rgba(168, 85, 247, 0.28);
+}
+
+[data-theme="dark"] .shared-invite-toast-role {
+    color: #c4a6ff;
+    background: rgba(168, 85, 247, 0.18);
+    border-color: rgba(168, 85, 247, 0.4);
+}
+
+[data-theme="dark"] .shared-invite-toast-badge {
+    box-shadow: 0 4px 16px rgba(168, 85, 247, 0.5);
+}
+
+[data-theme="dark"] .shared-invite-toast-kicker {
+    background: linear-gradient(90deg, #6db3f0, #c4a6ff);
+    -webkit-background-clip: text;
+    background-clip: text;
+}
+
+/* ---------- Reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+    .shared-invite-toast {
+        animation: none !important;
+        transition: opacity 0.2s ease !important;
+        transform: none !important;
+    }
+
+    .shared-invite-toast-badge {
+        animation: none !important;
+    }
+}

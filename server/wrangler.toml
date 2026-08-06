@@ -1,0 +1,49 @@
+name = "tabox-api"
+main = "src/index.js"
+compatibility_date = "2026-07-01"
+
+kv_namespaces = [
+  { binding = "ENTITLEMENTS", id = "97529b2ae7b84becbbe83cf9129b8387" }
+]
+
+[vars]
+GOOGLE_CLIENT_ID = "701423091804-t6v1r6mkl4jdptge49gb7sfstj4holfr.apps.googleusercontent.com"
+PRICE_MONTHLY = "pri_01kxk6xwxdgmtr2eat3xqacs3z"
+PRICE_ANNUAL = "pri_01kxk6xx37e1h9pdjvmvy457br"
+PADDLE_API_BASE = "https://api.paddle.com"
+VAPID_PUBLIC_KEY = "BApsYowPf5VhtXCdG_vnb6-GDt_HACafMtAsCsgPoubW_a8OX5wc8o6Jp9fyJzWeLCL3OQ399TCRXry1R8hXkqA"
+VAPID_SUBJECT = "mailto:support@tabox.co"
+
+[[d1_databases]]
+binding = "SHARED_DB"
+database_name = "tabox-shared"
+database_id = "3485b44f-32bd-4007-b0fd-9c79dc199290"
+migrations_dir = "migrations"
+
+# Secrets (set via `wrangler secret put`): PADDLE_WEBHOOK_SECRET, JWT_SECRET, PADDLE_API_KEY, OPENROUTER_API_KEY, VAPID_PRIVATE_KEY, GOOGLE_CLIENT_SECRET.
+# GOOGLE_CLIENT_SECRET is the OAuth client secret for GOOGLE_CLIENT_ID — it backs
+# POST /auth/token (the extension's code/refresh-token exchange) and must never
+# ship in the extension bundle. Until it is set, /auth/token 500s (not_configured).
+# VAPID_PRIVATE_KEY must be the P-256 private key as a JWK JSON string (NOT raw base64url) and must be the pair of VAPID_PUBLIC_KEY — a mismatch fails silently (push services 403, swallowed by notifyEmails).
+# Sandbox environment: deploy with `wrangler deploy --env sandbox`;
+# secrets set per-env via `wrangler secret put <NAME> --env sandbox`.
+
+[env.sandbox]
+name = "tabox-api-sandbox"
+kv_namespaces = [
+  { binding = "ENTITLEMENTS", id = "0e3bdb08cb254007b176730d68383330" }
+]
+
+[env.sandbox.vars]
+GOOGLE_CLIENT_ID = "701423091804-t6v1r6mkl4jdptge49gb7sfstj4holfr.apps.googleusercontent.com"
+PRICE_MONTHLY = "pri_01kxmrtyxwk2x1qt6kxvbc57m1"
+PRICE_ANNUAL = "pri_01kxmrtz4894fc464tm48qjmvy"
+PADDLE_API_BASE = "https://sandbox-api.paddle.com"
+VAPID_PUBLIC_KEY = "BFKhknaosNAOD_YlEG-3eaGw2s3tYAfwh0hPbk1ZQOU1w4Loe8G1FKyir66KfaNuLnjPT7syrwvR5wB62X9OoO8"
+VAPID_SUBJECT = "mailto:support@tabox.co"
+
+[[env.sandbox.d1_databases]]
+binding = "SHARED_DB"
+database_name = "tabox-shared-sandbox"
+database_id = "850ff30f-4669-4241-8c0f-55a806b3b208"
+migrations_dir = "migrations"

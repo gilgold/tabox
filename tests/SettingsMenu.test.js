@@ -5,6 +5,12 @@ import '@testing-library/jest-dom';
 import { Provider, createStore } from 'jotai';
 import SettingsMenu from '../app/SettingsMenu';
 import { isLoggedInState, themeState } from '../app/atoms/globalAppSettingsState';
+import { getAIAvailability } from '../app/ai/aiClient';
+
+// Mock the AI client so these unrelated tests never touch the network.
+jest.mock('../app/ai/aiClient', () => ({
+    getAIAvailability: jest.fn(),
+}));
 
 const seedBrowserStorage = (overrides = {}) => {
     browser.storage.local._data = {
@@ -101,6 +107,7 @@ const syncRecoveryCss = fs.readFileSync(path.join(__dirname, '../app/SyncDebugRe
 describe('SettingsMenu', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        getAIAvailability.mockResolvedValue(undefined);
     });
 
     test('renders the full-page variant as a modal with sidebar categories', async () => {
@@ -115,6 +122,24 @@ describe('SettingsMenu', () => {
         expect(screen.getByRole('button', { name: 'When opening collections' })).toBeInTheDocument();
         expect(screen.getByText('Switch Tabox between light and dark themes.')).toBeInTheDocument();
         expect(document.querySelector('.fp-settings-item-control .switch--manual-animation')).toBeInTheDocument();
+    });
+
+    test('promotes Tabox Pro with shared animated gradient styling in both modal variants', () => {
+        const { container } = renderSettingsMenu({ variant: 'fullpage' });
+
+        openSettings(container);
+
+        const settingsNav = screen.getByLabelText('Settings categories');
+        const firstCategory = settingsNav.querySelector('.fp-settings-sidebar-item');
+        const proGradientRule = settingsCss.match(/(?:^|\n)\.fp-settings-sidebar-item\.tabox-pro-option > span\s*{[^}]+}/)?.[0] || '';
+
+        expect(firstCategory).toHaveTextContent('Tabox Pro');
+        expect(firstCategory).toHaveClass('tabox-pro-option');
+        expect(proGradientRule).toContain('background-clip: text');
+        expect(proGradientRule).toContain('color: transparent');
+        expect(proGradientRule).toContain('animation: tabox-pro-gradient');
+        expect(settingsCss).not.toContain('html.fullpage-mode .fp-settings-sidebar-item.tabox-pro-option > span');
+        expect(settingsCss).toContain('@keyframes tabox-pro-gradient');
     });
 
     test('switches the active full-page category and keeps the matching settings ids', async () => {
@@ -200,17 +225,74 @@ describe('SettingsMenu', () => {
         expect(await screen.findByRole('button', { name: /Force Download from Server/i })).toBeInTheDocument();
     });
 
-    test('keeps the popup variant on the existing drawer layout', async () => {
+    test('uses the settings modal and full category set in the popup', async () => {
         const { container } = renderSettingsMenu({ variant: 'popup' });
 
         openSettings(container);
 
-        expect(await screen.findByText('General Settings')).toBeInTheDocument();
-        expect(document.querySelector('.custom-drawer.open')).toBeInTheDocument();
-        expect(document.querySelector('.fp-settings-modal-shell')).not.toBeInTheDocument();
-        expect(document.querySelector('.custom-drawer .switch--manual-animation')).not.toBeInTheDocument();
-        expect(screen.getByText('When editing collections')).toBeInTheDocument();
-        expect(screen.getByText('Backup & Restore')).toBeInTheDocument();
+        expect(await screen.findByText('Customize how Tabox saves, opens, and restores your collections.')).toBeInTheDocument();
+        expect(document.querySelector('.custom-drawer')).not.toBeInTheDocument();
+        expect(document.querySelector('.fp-settings-modal--popup')).toBeInTheDocument();
+        expect(document.querySelector('.fp-settings-modal-shell--popup')).toBeInTheDocument();
+        expect(document.querySelector('.fp-settings-modal-shell--popup .switch--manual-animation')).toBeInTheDocument();
+
+        const settingsNav = screen.getByLabelText('Settings categories');
+        const firstPopupCategory = settingsNav.querySelector('.fp-settings-sidebar-item');
+        expect(firstPopupCategory).toHaveTextContent('Tabox Pro');
+        expect(firstPopupCategory).toHaveClass('tabox-pro-option');
+        expect(screen.getByRole('button', { name: 'Export All Collections' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Recovery' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Diagnostics' })).toBeInTheDocument();
+    });
+
+    test('keeps every popup settings section independently navigable', async () => {
+        const { container } = renderSettingsMenu({ variant: 'popup', isLoggedIn: true });
+
+        openSettings(container);
+        fireEvent.click(screen.getByRole('button', { name: 'Tabox Pro' }));
+        await screen.findByText('Everything included');
+
+        const cases = [
+            ['General Settings', 'darkModeToggle'],
+            ['When adding a collection', 'chkIgnorePinned'],
+            ['When opening collections', 'chkEnableTabDiscard'],
+            ['When editing collections', 'chkColEditIgnoreDuplicateTabs'],
+            ['Auto update collections', 'chkEnableAutoUpdate'],
+        ];
+
+        for (const [category, settingId] of cases) {
+            fireEvent.click(screen.getByRole('button', { name: category }));
+            await waitFor(() => expect(document.querySelector(`#${settingId}`)).toBeInTheDocument());
+        }
+
+        fireEvent.click(screen.getByRole('button', { name: 'Export All Collections' }));
+        expect(await screen.findByRole('button', { name: /Export all collections & folders/i })).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Recovery' }));
+        expect(await screen.findByText('Recover from backups')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Diagnostics' }));
+        expect(await screen.findByText('Sync Logs')).toBeInTheDocument();
+    });
+
+    test('keeps the shared two-column settings modal in the popup with compact constraints', () => {
+        const popupModalRule = settingsCss.match(/\.fp-settings-modal--popup\s*{[^}]+}/)?.[0] || '';
+        const popupShellRule = settingsCss.match(/\.fp-settings-modal-shell--popup\s*{[^}]+}/)?.[0] || '';
+        const popupNavRule = settingsCss.match(/\.fp-settings-modal-shell--popup \.fp-settings-sidebar-nav\s*{[^}]+}/)?.[0] || '';
+        const popupItemRule = settingsCss.match(/\.fp-settings-modal-shell--popup \.fp-settings-sidebar-item\s*{[^}]+}/)?.[0] || '';
+        const popupContentRule = settingsCss.match(/\.fp-settings-modal-shell--popup \.fp-settings-main-content\s*{[^}]+}/)?.[0] || '';
+        const proCss = fs.readFileSync(path.join(__dirname, '../app/TaboxProOverview.css'), 'utf8');
+        const popupProLayoutRule = proCss.match(/\.fp-settings-modal-shell--popup \.fp-pro-overview--compact \.fp-pro-overview-layout\s*{[^}]+}/)?.[0] || '';
+
+        expect(popupModalRule).toContain('width: calc(100vw - 12px)');
+        expect(popupModalRule).toContain('height: calc(100vh - 12px)');
+        expect(popupShellRule).toContain('grid-template-columns: 190px minmax(0, 1fr)');
+        expect(popupShellRule).toContain('grid-template-rows: minmax(0, 1fr)');
+        expect(popupNavRule).toContain('flex-direction: column');
+        expect(popupNavRule).toContain('overflow-y: auto');
+        expect(popupItemRule).toContain('width: 100%');
+        expect(popupContentRule).toContain('padding: 12px 16px 18px');
+        expect(popupProLayoutRule).toContain('grid-template-columns: 1fr');
     });
 
     test('applies PipelinePro styling to the full-page settings modal and controls', () => {

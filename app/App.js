@@ -8,9 +8,12 @@ import CollectionList from './CollectionList';
 import Footer from './Footer';
 import FPLayout from './fullpage/FPLayout';
 import CommandPalette from './CommandPalette';
+import TabSwitcher from './TabSwitcher';
 import { useAtom, useSetAtom, useAtomValue } from 'jotai';
 import { highlightedCollectionUidState } from './atoms/animationsState';
 import { commandPaletteOpenState } from './atoms/commandPaletteState';
+import { aiToolsModalOpenState, aiToolsInitialToolState } from './atoms/aiState';
+import { tabSwitcherOpenState } from './atoms/tabSwitcherState';
 import { sidebarNavigationState } from './atoms/fullpageState';
 import {
     settingsDataState,
@@ -30,7 +33,7 @@ import { browser } from '../static/globals';
 import { filterByColors } from './utils/colorMigration';
 import TimeAgo from 'javascript-time-ago';
 import en from 'javascript-time-ago/locale/en';
-import { showSuccessToast, showErrorToast, setToastViewContext } from './toastHelpers';
+import { showSuccessToast, showErrorToast, showInfoToast, setToastViewContext } from './toastHelpers';
 import { Tooltip } from 'react-tooltip';
 import { CollectionListOptions } from './CollectionListOptions';
 
@@ -60,11 +63,24 @@ import { createFolder } from './utils/folderOperations';
 import useOrphanRecovery from './useOrphanRecovery';
 import OrphanRecoveryModal from './OrphanRecoveryModal';
 import { OrphanRecoveryContext } from './OrphanRecoveryContext';
+import AIToolsModal from './AIToolsModal';
+import ManageSubscriptionModal from './ManageSubscriptionModal';
+import { manageSubscriptionOpenState } from './atoms/premiumState';
+import { usePremiumEntitlement } from './usePremiumEntitlement';
+import useProCheckout from './useProCheckout';
+import NoPermissionModal from './NoPermissionModal';
+import SharedActionConfirmModal from './SharedActionConfirmModal';
+import { noPermissionOpenState, pendingInvitesState, pendingLinkJoinState, shareCollectionLinkModalState, shareFolderModalState } from './atoms/sharedFoldersState';
+import { guardFolderEdit, isSharedFolder } from './utils/sharedFolderUtils';
+import ShareFolderModal from './ShareFolderModal';
+import ShareCollectionLinkModal from './ShareCollectionLinkModal';
+import SharedInviteToastController from './SharedInviteToastController';
+import OnboardingGuide from './OnboardingGuide';
 
 // Migration system imports - wrapped in try/catch for compatibility
 const PERF_NAMESPACE = 'tabox:popup';
 const PERF_MEASURE_PREFIX = `${PERF_NAMESPACE}:measure:`;
-const DEFAULT_COLLECTION_FILTERS = { recentlyOpenedActual: false, colors: [] };
+const DEFAULT_COLLECTION_FILTERS = { recentlyOpenedActual: false, colors: [], favoritesOnly: false };
 
 const makeMarkName = (label) => `${PERF_NAMESPACE}:${label}`;
 
@@ -155,6 +171,10 @@ const INITIAL_COLLECTION_BATCH_SIZE = 20;
 const HYDRATION_BATCH_SIZE = 50;
 const MIGRATION_SESSION_KEY = 'tabox:migrationChecked';
 const SYNC_SESSION_STATE_KEY = 'syncSessionState';
+const SHARED_PENDING_INVITES_KEY = 'shared_pending_invites';
+const SHARED_PENDING_LINK_JOIN_KEY = 'shared_pending_link_join';
+const SHARED_EVENTS_KEY = 'shared_folder_events';
+const SHARED_SYNC_INTERVAL_MS = 8000;
 const DEFAULT_SYNC_SESSION_STATE = {
   isEnabled: false,
   status: 'disabled',
@@ -236,16 +256,26 @@ let assessMigrationNeeds, executeMigration;
 let timeAgoLocaleInitialized = false;
 function App({ mode = 'popup' }) {
   const isFullPage = mode === 'fullpage';
+  const startProCheckout = useProCheckout();
   const [settingsData, setSettingsData] = useAtom(settingsDataState);
   const setHighlightedCollectionUid = useSetAtom(highlightedCollectionUidState);
   const [themeMode, setThemeMode] = useAtom(themeState);
   const [isLoggedIn, setIsLoggedIn] = useAtom(isLoggedInState);
-  const [, setSyncSessionState] = useAtom(syncSessionStateState);
+  const [syncSessionState, setSyncSessionState] = useAtom(syncSessionStateState);
   const setSyncInProgress = useSetAtom(syncInProgressState);
   const setLastSyncTime = useSetAtom(lastSyncTimeState);
   const setViewContext = useSetAtom(viewContextState);
   const isPanelOpen = useAtomValue(detailPanelOpenState);
   const setCommandPaletteOpen = useSetAtom(commandPaletteOpenState);
+  const setAiToolsModalOpen = useSetAtom(aiToolsModalOpenState);
+  const setAiToolsInitialTool = useSetAtom(aiToolsInitialToolState);
+  const setManageSubscriptionOpen = useSetAtom(manageSubscriptionOpenState);
+  const setNoPermissionOpen = useSetAtom(noPermissionOpenState);
+  const setShareFolderModal = useSetAtom(shareFolderModalState);
+  const setShareCollectionLink = useSetAtom(shareCollectionLinkModalState);
+  const setPendingInvites = useSetAtom(pendingInvitesState);
+  const setPendingLinkJoin = useSetAtom(pendingLinkJoinState);
+  const setTabSwitcherOpen = useSetAtom(tabSwitcherOpenState);
   const setSidebarNavigation = useSetAtom(sidebarNavigationState);
   const search = useAtomValue(searchState);
   const [listKey, setListKey] = useAtom(listKeyState);
@@ -738,12 +768,34 @@ function App({ mode = 'popup' }) {
     }
   }
 
+  // Shared-folder collections are owned by the Worker shared-sync engine, not
+  // Google Drive — Drive uploads exclude them entirely. Mutations that only
+  // touch shared data must NOT stamp the Drive watermark (localTimestamp) or
+  // trigger a Drive sync; instead we nudge the shared engine so the change
+  // pushes promptly instead of waiting for the 15s interval.
+  const nudgeSharedSync = () => {
+    browser.runtime.sendMessage({ type: 'sharedSyncNow' }).catch(() => {});
+  };
+
   // Updated to use new storage system
   const updateCollection = async (newCollection, isManualUpdate = false) => {
-    
+    // Opening/focus-tracking updates (lastOpened only) are marked with
+    // __skipFolderGuard and must never be blocked (reading is never blocked).
+    const isLastOpenedOnly = Boolean(newCollection?.__skipFolderGuard);
+    if (isLastOpenedOnly) {
+      newCollection = { ...newCollection };
+      delete newCollection.__skipFolderGuard;
+    } else {
+      const parentFolder = foldersData.find(f => f.uid === newCollection?.parentId);
+      if (!guardFolderEdit(parentFolder, () => setNoPermissionOpen(true))) return;
+    }
+
     try {
-      // Use new single collection update for better performance
-      const success = await saveSingleCollection(newCollection, true); // Force timestamp update for user changes
+      // Use new single collection update for better performance.
+      // I2 fix: a lastOpened-only update must NOT force-bump lastUpdated —
+      // doing so marks the collection sync-dirty and pushes it (with a toast
+      // to every shared-folder member) just because someone opened it locally.
+      const success = await saveSingleCollection(newCollection, !isLastOpenedOnly); // Force timestamp update for user changes, but not for opens
       
       if (success) {
         // Update local state using functional update to avoid stale closure issues
@@ -762,10 +814,22 @@ function App({ mode = 'popup' }) {
           setHighlightedCollectionUid(newCollection.uid);
         }
         
+        // Shared-only mutation: the collection stays inside the same shared
+        // folder, so Drive-owned data is untouched — skip the Drive watermark
+        // and Drive sync. Moves across the shared boundary (parentId change)
+        // alter the Drive payload and must keep stamping.
+        const previousParentId = settingsData?.find(c => c.uid === newCollection.uid)?.parentId;
+        const nextParentFolder = foldersData.find(f => f.uid === newCollection?.parentId);
+        const isSharedOnlyUpdate = isSharedFolder(nextParentFolder) && previousParentId === newCollection?.parentId;
+
         // Continue with sync if logged in
-        await browser.storage.local.set({ localTimestamp: Date.now() });
+        if (isSharedOnlyUpdate) {
+          nudgeSharedSync();
+        } else {
+          await browser.storage.local.set({ localTimestamp: Date.now() });
+        }
         await browser.runtime.sendMessage({ type: 'addCollection' });
-        if (!isLoggedIn) return;
+        if (isSharedOnlyUpdate || !isLoggedIn) return;
         _update();
       } else {
         console.error(`❌ Failed to update collection ${newCollection.uid}`);
@@ -808,6 +872,9 @@ function App({ mode = 'popup' }) {
 
   // Updated to use new storage system
   const addCollection = async (newCollection, skipContextMenuUpdate = false, skipStateUpdate = false) => {
+    const parentFolder = foldersData.find(f => f.uid === newCollection?.parentId);
+    if (!guardFolderEdit(parentFolder, () => setNoPermissionOpen(true))) return;
+
     try {
       // Use new single collection save for better performance
       const success = await saveSingleCollection(newCollection, true); // Force timestamp update for new collections
@@ -820,16 +887,23 @@ function App({ mode = 'popup' }) {
           setHighlightedCollectionUid(newCollection.uid);
         }
         
-        // Continue with sync and auto-update logic
-        await browser.storage.local.set({ localTimestamp: Date.now() });
-        
+        // Continue with sync and auto-update logic. Adding into a shared
+        // folder is a shared-only mutation — skip the Drive watermark and
+        // Drive sync, and nudge the shared engine instead.
+        const isSharedOnlyAdd = isSharedFolder(parentFolder);
+        if (isSharedOnlyAdd) {
+          nudgeSharedSync();
+        } else {
+          await browser.storage.local.set({ localTimestamp: Date.now() });
+        }
+
         // Only trigger context menu update if not skipped (to prevent race conditions in batch operations)
         if (!skipContextMenuUpdate) {
           await browser.runtime.sendMessage({ type: 'addCollection' });
         }
-        
+
         // Only sync if logged in - throttling prevents duplicate syncs
-        if (isLoggedIn && !skipStateUpdate) {
+        if (!isSharedOnlyAdd && isLoggedIn && !skipStateUpdate) {
           _update();
         }
         
@@ -928,6 +1002,12 @@ function App({ mode = 'popup' }) {
     await reloadCollectionsAndFoldersFromStorage({ updateSyncTime: true });
   };
 
+  // Stable ref to the latest refresh callback above (it's redefined every
+  // render), so the mount-only shared-folder effects below can call the
+  // current version without needing to resubscribe their listeners/timers.
+  const refreshDataAfterFolderOperationRef = useRef(refreshDataAfterFolderOperation);
+  refreshDataAfterFolderOperationRef.current = refreshDataAfterFolderOperation;
+
   // Enable orphan detection once migration has been checked — NOT on dataLoaded,
   // which never flips on some paths (e.g. the full-page view hydrated via sync).
   // A fallback timer guarantees detection still runs if no signal arrives, so it
@@ -940,6 +1020,8 @@ function App({ mode = 'popup' }) {
     const fallback = setTimeout(() => setOrphanScanReady(true), 2000);
     return () => clearTimeout(fallback);
   }, [migrationChecked, dataLoaded]);
+
+  usePremiumEntitlement();
 
   const orphanRecovery = useOrphanRecovery(orphanScanReady, {
     onRecovered: async (count) => {
@@ -1667,6 +1749,12 @@ function App({ mode = 'popup' }) {
           scheduleStorageDrivenReload();
         }
 
+        if (changes.theme) {
+          const newTheme = changes.theme.newValue || 'light';
+          setThemeMode(newTheme);
+          document.documentElement.setAttribute('data-theme', newTheme);
+        }
+
         if (changes.lastSuccessfulSyncTime) {
           setLastSyncTime(changes.lastSuccessfulSyncTime.newValue || null);
         }
@@ -1753,13 +1841,134 @@ function App({ mode = 'popup' }) {
     };
   }, [applyCollectionUpdates]);
 
+  // Shared folders: keep pendingInvitesState (the invite banner) in sync with
+  // storage — load it once on mount, then follow storage.onChanged so an
+  // invite that lands while this view is open shows up without a reload.
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadPendingInvites = async () => {
+      const { [SHARED_PENDING_INVITES_KEY]: stored, [SHARED_PENDING_LINK_JOIN_KEY]: linkJoin } =
+        await browser.storage.local.get([SHARED_PENDING_INVITES_KEY, SHARED_PENDING_LINK_JOIN_KEY]);
+      if (isMounted) {
+        // C1 fix: storage holds { invites, notifiedFolderIds } (see
+        // chrome/shared-folders.js's pollInvites) — unwrap to the invites array
+        // the banner expects instead of feeding it the whole object.
+        setPendingInvites(stored?.invites || []);
+        setPendingLinkJoin(linkJoin || null);
+      }
+    };
+    loadPendingInvites();
+
+    const handlePendingInvitesChange = (changes, areaName) => {
+      if (areaName === 'local' && changes[SHARED_PENDING_INVITES_KEY]) {
+        setPendingInvites(changes[SHARED_PENDING_INVITES_KEY].newValue?.invites || []);
+      }
+      if (areaName === 'local' && changes[SHARED_PENDING_LINK_JOIN_KEY]) {
+        setPendingLinkJoin(changes[SHARED_PENDING_LINK_JOIN_KEY].newValue || null);
+      }
+    };
+    browser.storage.onChanged.addListener(handlePendingInvitesChange);
+
+    return () => {
+      isMounted = false;
+      browser.storage.onChanged.removeListener(handlePendingInvitesChange);
+    };
+  }, [setPendingInvites, setPendingLinkJoin]);
+
+  // Shared folders: drain background-queued change events (revoked/deleted/
+  // renamed/updated) into info toasts, then refresh so pulled changes render.
+  // Uses sharedDrainEvents message for atomic read+clear under mutex.
+  useEffect(() => {
+    const drainSharedFolderEvents = async () => {
+      try {
+        const res = await browser.runtime.sendMessage({ type: 'sharedDrainEvents' });
+        const events = res?.ok ? res.data.events : [];
+        if (!events.length) {
+          return;
+        }
+        for (const e of events.slice(-3)) {
+          if (e.kind === 'revoked') {
+            showInfoToast(`Your access to "${e.folderName}" ended. A local copy was kept.`);
+          } else if (e.kind === 'conflict') {
+            // I3 fix: a locally-dirty (unsynced) edit lost a fair race against
+            // another member's newer change to the same collection — tell the
+            // user their change was replaced instead of silently discarding it.
+            showInfoToast(`${e.actorEmail}'s newer change to "${e.collectionName}" replaced yours in ${e.folderName}`);
+          } else if (e.kind === 'deleted') {
+            showInfoToast(`${e.actorEmail} removed a collection from "${e.folderName}"`);
+          } else if (e.kind === 'renamed') {
+            showInfoToast(`${e.actorEmail} renamed a shared folder to "${e.folderName}"`);
+          } else {
+            showInfoToast(`${e.actorEmail} updated "${e.collectionName}" in ${e.folderName}`);
+          }
+        }
+        await refreshDataAfterFolderOperationRef.current?.();
+      } catch (error) {
+        console.warn('Failed to drain shared folder events:', error);
+      }
+    };
+    drainSharedFolderEvents();
+
+    const handleSharedEventsChange = (changes, areaName) => {
+      if (areaName === 'local' && changes[SHARED_EVENTS_KEY]?.newValue?.length) {
+        drainSharedFolderEvents();
+      }
+    };
+    browser.storage.onChanged.addListener(handleSharedEventsChange);
+
+    return () => {
+      browser.storage.onChanged.removeListener(handleSharedEventsChange);
+    };
+  }, []);
+
+  // Shared folders: near-real-time sync trigger for BOTH views (signed-in
+  // users only). Web-push tickles are the primary wake signal for the
+  // background engine, but they are best-effort — a silently-broken push
+  // channel leaves only the 60-minute fallback alarm, which read as "shared
+  // changes never show up until I reload". So any open view also nudges the
+  // engine itself: on mount, whenever the view regains focus/visibility
+  // (e.g. switching back to the full-page tab after editing elsewhere), and
+  // on an interval while visible. The engine's revision short-circuit makes
+  // each no-change nudge a single cheap list GET, and syncSharedFolders
+  // coalesces overlapping runs.
+  useEffect(() => {
+    if (!syncSessionState.hasRefreshToken) {
+      return undefined;
+    }
+
+    const triggerSharedSync = () => {
+      browser.runtime.sendMessage({ type: 'sharedSyncNow' }).catch(() => {});
+    };
+    triggerSharedSync();
+
+    // A hidden full-page tab shouldn't poll all day — interval ticks are
+    // gated on visibility, and the visibility/focus listeners deliver the
+    // immediate catch-up nudge the moment the user comes back to the view.
+    const nudgeIfVisible = () => {
+      if (document.visibilityState !== 'hidden') {
+        triggerSharedSync();
+      }
+    };
+    const intervalId = setInterval(nudgeIfVisible, SHARED_SYNC_INTERVAL_MS);
+    document.addEventListener('visibilitychange', nudgeIfVisible);
+    window.addEventListener('focus', nudgeIfVisible);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', nudgeIfVisible);
+      window.removeEventListener('focus', nudgeIfVisible);
+    };
+  }, [syncSessionState.hasRefreshToken]);
+
   // Check if any filters are currently active
   const hasActiveFilters = useMemo(() => {
     const hasSearch = search && search.trim() !== '';
     const hasRecentlyOpenedFilter = filters.recentlyOpenedActual;
     const hasColorFilter = filters.colors && filters.colors.length > 0;
+    const hasFavoritesFilter = filters.favoritesOnly === true;
 
-    return hasSearch || hasRecentlyOpenedFilter || hasColorFilter;
+    return hasSearch || hasRecentlyOpenedFilter || hasColorFilter || hasFavoritesFilter;
   }, [search, filters]);
 
   const collectionsToShow = useMemo(() => {
@@ -1782,6 +1991,11 @@ function App({ mode = 'popup' }) {
     
     // Apply color filter (multi-select, OR semantics)
     filteredCollections = filterByColors(filteredCollections, filters.colors);
+
+    // Apply favorites filter
+    if (filters.favoritesOnly) {
+      filteredCollections = filteredCollections.filter(collection => collection.isFavorite === true);
+    }
 
     return filteredCollections;
   }, [
@@ -1820,17 +2034,23 @@ function App({ mode = 'popup' }) {
     };
   }, [isFullPage, setViewContext]);
 
-  // Command Palette: global Cmd/Ctrl+K shortcut
+  // Command Palette (Cmd/Ctrl+K) and Tab Switcher (Cmd/Ctrl+Shift+S) shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === 'k') {
         e.preventDefault();
+        setTabSwitcherOpen(false);
         setCommandPaletteOpen(prev => !prev);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        setCommandPaletteOpen(false);
+        setTabSwitcherOpen(prev => !prev);
       }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [setCommandPaletteOpen]);
+  }, [setCommandPaletteOpen, setTabSwitcherOpen]);
 
   // Build folder name lookup map for command palette hints
   const folderNameMap = useMemo(() => {
@@ -1889,6 +2109,23 @@ function App({ mode = 'popup' }) {
     }
   }, [isFullPage, setSidebarNavigation]);
 
+  const cmdOpenAiTool = useCallback((toolId) => {
+    setAiToolsInitialTool(toolId);
+    setAiToolsModalOpen(true);
+  }, [setAiToolsInitialTool, setAiToolsModalOpen]);
+
+  const cmdManageSubscription = useCallback(() => {
+    setManageSubscriptionOpen(true);
+  }, [setManageSubscriptionOpen]);
+
+  const cmdUpgradeToPro = useCallback(() => {
+    startProCheckout({ ensureLogin: true });
+  }, [startProCheckout]);
+
+  const cmdShareFolder = useCallback((folder) => {
+    setShareFolderModal(folder);
+  }, [setShareFolderModal]);
+
   const cmdCollectionAction = useCallback(async (collection, actionId, payload) => {
     switch (actionId) {
       case 'open': {
@@ -1909,16 +2146,24 @@ function App({ mode = 'popup' }) {
       case 'move': {
         const { moveCollectionToFolder, removeCollectionFromFolder } = await import('./utils/folderOperations');
         const targetFolderId = payload?.targetFolderId;
+        const sourceFolder = collection.parentId ? foldersData.find(f => f.uid === collection.parentId) : null;
+        const targetFolder = targetFolderId ? foldersData.find(f => f.uid === targetFolderId) : null;
+        if (!guardFolderEdit(sourceFolder, () => setNoPermissionOpen(true)) ||
+            !guardFolderEdit(targetFolder, () => setNoPermissionOpen(true))) {
+          break;
+        }
         let success;
         if (targetFolderId === null) {
           success = await removeCollectionFromFolder(collection.uid);
         } else {
           success = await moveCollectionToFolder(collection.uid, targetFolderId);
         }
-        if (success) {
+        if (success === true) {
           await refreshDataAfterFolderOperation();
           const targetName = targetFolderId === null ? 'root' : (folderNameMap[targetFolderId] || 'folder');
           showSuccessToast(`Moved "${collection.name}" to ${targetName}`);
+        } else if (success && success.blocked) {
+          setNoPermissionOpen(true);
         } else {
           showErrorToast('Failed to move collection');
         }
@@ -1950,7 +2195,13 @@ function App({ mode = 'popup' }) {
         downloadTextFile(JSON.stringify(collection, null, 2), collection.name);
         break;
       }
+      case 'share-link': {
+        setShareCollectionLink(collection);
+        break;
+      }
       case 'delete': {
+        const parentFolder = collection.parentId ? foldersData.find(f => f.uid === collection.parentId) : null;
+        if (!guardFolderEdit(parentFolder, () => setNoPermissionOpen(true))) break;
         const { deleteSingleCollection, updateFolderCollectionCount } = await import('./utils/storageUtils');
         const parentFolderId = collection.parentId;
         await deleteSingleCollection(collection.uid);
@@ -1964,13 +2215,13 @@ function App({ mode = 'popup' }) {
         break;
       }
     }
-  }, [addCollection, updateCollection, updateRemoteData, refreshDataAfterFolderOperation, folderNameMap]);
+  }, [addCollection, updateCollection, updateRemoteData, refreshDataAfterFolderOperation, folderNameMap, foldersData, setNoPermissionOpen, setShareCollectionLink]);
 
   const tooltipPortal = ReactDOM.createPortal(
     <Tooltip
       id="main-tooltip"
       delayShow={200}
-      variant={themeMode === 'light' ? 'dark' : 'light'}
+      variant={themeMode === 'dark' ? 'dark' : 'light'}
       place="bottom"
       style={{ zIndex: 2147483647, whiteSpace: 'pre-line' }}
     />,
@@ -1988,8 +2239,20 @@ function App({ mode = 'popup' }) {
       onOpenFullPage={cmdOpenFullPage}
       onRestoreSession={cmdRestoreSession}
       onCollectionAction={cmdCollectionAction}
+      onOpenAiTool={cmdOpenAiTool}
+      onUpgradeToPro={cmdUpgradeToPro}
+      onManageSubscription={cmdManageSubscription}
+      onShareFolder={cmdShareFolder}
     />
   );
+
+  const tabSwitcherEl = <TabSwitcher />;
+  const aiToolsModalEl = <AIToolsModal updateRemoteData={updateRemoteData} onDataUpdate={refreshDataAfterFolderOperation} />;
+  const manageSubscriptionModalEl = <ManageSubscriptionModal />;
+  const shareFolderModalEl = <ShareFolderModal />;
+  const shareCollectionLinkModalEl = <ShareCollectionLinkModal />;
+  const noPermissionModalEl = <NoPermissionModal />;
+  const sharedActionConfirmModalEl = <SharedActionConfirmModal onConfirmed={refreshDataAfterFolderOperation} />;
 
   if (isFullPage) {
     return <>
@@ -2004,6 +2267,15 @@ function App({ mode = 'popup' }) {
         />
         {tooltipPortal}
         {commandPaletteEl}
+        {tabSwitcherEl}
+        {aiToolsModalEl}
+        {manageSubscriptionModalEl}
+        {shareFolderModalEl}
+        {shareCollectionLinkModalEl}
+        {noPermissionModalEl}
+        {sharedActionConfirmModalEl}
+        <OnboardingGuide mode={mode} />
+        <SharedInviteToastController onAccepted={refreshDataAfterFolderOperation} />
         <FPLayout
           folders={displayFolders}
           collections={collectionsToShow}
@@ -2047,13 +2319,24 @@ function App({ mode = 'popup' }) {
       />
       {tooltipPortal}
       {commandPaletteEl}
+      {tabSwitcherEl}
+      {aiToolsModalEl}
+      {manageSubscriptionModalEl}
+      {shareFolderModalEl}
+      {shareCollectionLinkModalEl}
+      {noPermissionModalEl}
+      {sharedActionConfirmModalEl}
+      <OnboardingGuide mode={mode} />
       <div className={`App${isFullPage ? ' fullpage' : ''}`}>
       <Header
         isFullPage={isFullPage}
         applyDataFromServer={applyDataFromServer}
         updateRemoteData={updateRemoteData}
+        onDataUpdate={refreshDataAfterFolderOperation}
+        addCollection={addCollection}
         logout={logout} />
       <div className={`main-content-wrapper${isFullPage && isPanelOpen ? ' panel-open' : ''}`}>
+                <SharedInviteToastController onAccepted={refreshDataAfterFolderOperation} />
                 <AddNewTextbox addCollection={addCollection} addFolder={addFolder} updateRemoteData={updateRemoteData} onDataUpdate={refreshDataAfterFolderOperation} />
         <CollectionListOptions
           key={`${sortValue}-select`}

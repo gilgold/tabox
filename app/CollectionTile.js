@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef, useEffectEvent, useCallback } from 'react';
 import { MdCenterFocusWeak, MdOutlineLaunch } from 'react-icons/md';
-import { FaTrash } from 'react-icons/fa';
+import { FaTrash, FaStar, FaRegStar } from 'react-icons/fa';
 import { BsIncognito } from 'react-icons/bs';
 
 import ContextMenu from './ContextMenu';
@@ -9,9 +9,15 @@ import TimeAgo from 'javascript-time-ago';
 import { useSetAtom, useAtomValue } from 'jotai';
 import { highlightedCollectionUidState, deletingCollectionUidsState } from './atoms/animationsState';
 import { trackingStateVersion } from './atoms/globalAppSettingsState';
+import { aiProcessingUidsState, aiProcessingCurrentUidState, aiSplitTargetState, aiToolsModalOpenState, aiToolsScopeState } from './atoms/aiState';
+import { shareCollectionLinkModalState } from './atoms/sharedFoldersState';
+import { isProState } from './atoms/premiumState';
+import { useTaboxAIEnabled } from './ai/useTaboxAIEnabled';
+import { isAISupported } from './ai/aiClient';
+import './AIEffects.css';
 
 import { getColorValue } from './utils/colorMigration';
-import { buildCollectionUrlList, copyToClipboard } from './utils/index';
+import { buildCollectionUrlList, copyToClipboard, countNonEmptyGroups } from './utils/index';
 import { showSuccessToast, showErrorToast, showInfoToast } from './toastHelpers';
 import ColorPicker from './ColorPicker';
 import { useCollectionOperations } from './useCollectionOperations';
@@ -24,6 +30,8 @@ function CollectionTile(props) {
     const setHighlightedCollectionUid = useSetAtom(highlightedCollectionUidState);
     const deletingCollectionUids = useAtomValue(deletingCollectionUidsState);
     const setDeletingCollectionUids = useSetAtom(deletingCollectionUidsState);
+    const aiProcessingUids = useAtomValue(aiProcessingUidsState);
+    const aiProcessingCurrentUid = useAtomValue(aiProcessingCurrentUidState);
     const [collectionName] = useState(props.collection.name);
     const [isAutoUpdate, setIsAutoUpdate] = useState(false);
     const mountedRef = useRef(true);
@@ -31,9 +39,27 @@ function CollectionTile(props) {
 
     // Check if this tile should be highlighted
     const isHighlighted = highlightedCollectionUid === props.collection.uid;
-    
+
     // Check if this tile is being deleted
     const isDeleting = deletingCollectionUids.has(props.collection.uid);
+
+    // AI processing state
+    const isAiProcessing = aiProcessingUids.includes(props.collection.uid);
+    const isAiCurrent = aiProcessingCurrentUid === props.collection.uid;
+
+    // AI Split Collection
+    const setAIToolsOpen = useSetAtom(aiToolsModalOpenState);
+    const setAIToolsScope = useSetAtom(aiToolsScopeState);
+    const setSplitTarget = useSetAtom(aiSplitTargetState);
+    const setShareCollectionLink = useSetAtom(shareCollectionLinkModalState);
+    const isPro = useAtomValue(isProState);
+    const aiEnabled = useTaboxAIEnabled() && isAISupported();
+
+    const _handleSplitCollection = () => {
+        setAIToolsScope({ type: 'selected', uids: [props.collection.uid] });
+        setSplitTarget({ uid: props.collection.uid });
+        setAIToolsOpen(true);
+    };
 
     // Use shared collection operations
     const {
@@ -42,7 +68,9 @@ function CollectionTile(props) {
         _exportCollectionToFile,
         _handleUpdate,
         _handleOpenTabs,
-        _handleStopTracking
+        _handleFocusWindow,
+        _handleStopTracking,
+        _handleToggleFavorite
     } = useCollectionOperations({
         collection: props.collection,
         removeCollection: props.removeCollection,
@@ -52,7 +80,8 @@ function CollectionTile(props) {
         index: props.index,
         setDeletingCollectionUids,
         addCollection: props.addCollection,
-        onDataUpdate: props.onDataUpdate
+        onDataUpdate: props.onDataUpdate,
+        folders: props.folders
     });
 
     // Copy all collection URLs to the clipboard
@@ -143,7 +172,7 @@ function CollectionTile(props) {
 
     const timeAgo = useMemo(() => new TimeAgo('en-US'), []);
     const tabCount = props.collection.tabs?.length || 0;
-    const groupCount = props.collection.chromeGroups?.length || 0;
+    const groupCount = countNonEmptyGroups(props.collection);
 
     // Get first 10 favicons
     const favicons = useMemo(() => {
@@ -202,7 +231,14 @@ function CollectionTile(props) {
         <DroppableCollection collection={props.collection}>
             <div
                 ref={tileRef}
-                className={`collection-tile ${props.activeId === props.collection.uid ? 'dragging' : ''} ${isAutoUpdate ? 'active-auto-tracking' : ''} ${isHighlighted ? 'new-tile-highlight' : ''} ${isDeleting ? 'new-tile-deleting' : ''} ${props.lightningEffect ? 'lightning-effect' : ''}`}
+                className={[
+                    'collection-tile',
+                    props.activeId === props.collection.uid ? 'dragging' : '',
+                    isAutoUpdate ? 'active-auto-tracking' : '',
+                    isHighlighted ? 'new-tile-highlight' : '',
+                    isDeleting ? 'new-tile-deleting' : '',
+                    props.lightningEffect ? 'lightning-effect' : '',
+                ].filter(Boolean).join(' ')}
                 style={{
                     ...(props.collection.color && props.collection.color !== 'default' && props.collection.color !== 'var(--setting-row-border-color)' && props.collection.color !== 'var(--collection-default-color)' && { borderColor: getColorValue(props.collection.color) })
                 }}
@@ -217,6 +253,20 @@ function CollectionTile(props) {
                     <h3 className="tile-title" title={collectionName}>
                         {highlightMatchInName !== null ? highlightMatchInName : collectionName}
                     </h3>
+                    <button
+                        className={`favorite-toggle tile-favorite-toggle ${props.collection.isFavorite ? 'is-favorite' : ''}`}
+                        aria-label={props.collection.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                        data-tooltip-id="main-tooltip"
+                        data-tooltip-content={props.collection.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                        onClick={async (e) => {
+                            e.stopPropagation();
+                            await _handleToggleFavorite();
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => e.stopPropagation()}
+                    >
+                        {props.collection.isFavorite ? <FaStar size={12} /> : <FaRegStar size={12} />}
+                    </button>
                     {wasFromIncognito && (
                         <span 
                             className="incognito-indicator" 
@@ -299,12 +349,21 @@ function CollectionTile(props) {
                     <ContextMenu
                         menuItems={createCollectionMenuItems({
                             isAutoUpdate,
+                            onOpenTabs: _handleOpenTabs,
+                            onFocusWindow: _handleFocusWindow,
                             onExport: _exportCollectionToFile,
                             onDelete: _handleDelete,
                             onUpdate: _handleUpdate,
                             onStopTracking: _handleStopTracking,
                             onDuplicate: _handleDuplicate,
-                            onCopyUrls: _handleCopyUrls
+                            onCopyUrls: _handleCopyUrls,
+                            isFavorite: props.collection.isFavorite === true,
+                            onToggleFavorite: _handleToggleFavorite,
+                            aiEnabled,
+                            isPro,
+                            tabCount,
+                            onSplitCollection: _handleSplitCollection,
+                            onShareLink: () => setShareCollectionLink(props.collection),
                         })}
                         tooltip="Collection options"
                         tooltipPlace="right"
@@ -343,6 +402,9 @@ function CollectionTile(props) {
                     <span className="tile-menu-label">Delete</span>
                 </button>
             </div>
+            {isAiProcessing && (
+                <div className={`ai-processing-overlay${isAiCurrent ? ' ai-processing-overlay--current' : ''}`} aria-hidden="true" />
+            )}
         </div>
         </DroppableCollection>
     );

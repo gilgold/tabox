@@ -167,6 +167,7 @@ const createBrowserHarness = (options = {}) => {
     const alarmsOnAlarm = createEventMock();
     const local = createStorageArea(storageChanged, 'local', localData, localStorageBehavior);
     const sync = createStorageArea(storageChanged, 'sync', syncData, syncStorageBehavior);
+    const session = createStorageArea(storageChanged, 'session', {});
     const alarms = [];
     let nextTabId = 1;
     let nextWindowId = 100;
@@ -191,6 +192,7 @@ const createBrowserHarness = (options = {}) => {
                 return undefined;
             }),
             onMessage: runtimeOnMessage,
+            onMessageExternal: createEventMock(),
             onInstalled: createEventMock(),
             onStartup: createEventMock()
         },
@@ -203,7 +205,19 @@ const createBrowserHarness = (options = {}) => {
         storage: {
             local,
             sync,
+            session,
             onChanged: storageChanged
+        },
+        permissions: {
+            contains: jest.fn(async () => false),
+            request: jest.fn(async () => false),
+            onAdded: createEventMock(),
+            onRemoved: createEventMock()
+        },
+        notifications: {
+            create: jest.fn(async () => 'notif-id'),
+            clear: jest.fn(async () => true),
+            onClicked: createEventMock()
         },
         alarms: {
             create: jest.fn((name, alarmInfo) => {
@@ -284,9 +298,11 @@ const createBrowserHarness = (options = {}) => {
             sendMessage: jest.fn(async () => undefined),
             group: jest.fn(async () => 1),
             ungroup: jest.fn(async () => undefined),
+            captureVisibleTab: jest.fn(async () => 'data:image/jpeg;base64,TEST'),
             onCreated: createEventMock(),
             onRemoved: createEventMock(),
             onUpdated: createEventMock(),
+            onActivated: createEventMock(),
             onMoved: createEventMock(),
             onAttached: createEventMock(),
             onDetached: createEventMock()

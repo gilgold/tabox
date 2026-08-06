@@ -3,6 +3,7 @@ import { useAtom, useAtomValue } from 'jotai';
 import { searchState } from '../atoms/globalAppSettingsState';
 import { sidebarNavigationState } from '../atoms/fullpageState';
 import { LoginSection, SyncStatus } from '../Header';
+import TabSwitcherButton from '../TabSwitcherButton';
 import { browser } from '../../static/globals';
 import { MdSearch } from 'react-icons/md';
 import './FPTopBar.css';
@@ -83,6 +84,8 @@ function FPTopBar({ logout, applyDataFromServer, updateRemoteData, onDataUpdate,
             {/* Right — Control Strip */}
             <div className="fp-topbar-right">
                 <div className="fp-control-strip">
+                    <TabSwitcherButton />
+                    <div className="header-separator" />
                     <SyncStatus onTriggerSync={triggerSync} />
                     <div className="header-separator" />
                     <LoginSection logout={logout} compact />

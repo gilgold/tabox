@@ -3,20 +3,30 @@ import { createPortal } from 'react-dom';
 import { MdClose, MdCenterFocusWeak, MdEdit, MdOutlineRefresh, MdContentCopy, MdDelete, MdSearch } from 'react-icons/md';
 import { FaPlay } from 'react-icons/fa';
 import { FaStop } from 'react-icons/fa6';
-import { BsIncognito } from 'react-icons/bs';
+import { BsIncognito, BsStars } from 'react-icons/bs';
 import { CiExport } from 'react-icons/ci';
 import TimeAgo from 'javascript-time-ago';
 import { useSetAtom, useAtomValue } from 'jotai';
 import { deletingCollectionUidsState } from './atoms/animationsState';
+import { aiProcessingUidsState, aiProcessingCurrentUidState } from './atoms/aiState';
 import { trackingStateVersion } from './atoms/globalAppSettingsState';
-import { showSuccessToast, showErrorToast } from './toastHelpers';
+import { showSuccessToast, showErrorToast, showUndoToast } from './toastHelpers';
+import { UNDO_TIME } from './constants';
 import { useCollectionOperations } from './useCollectionOperations';
 import { browser } from '../static/globals';
 import ColorPicker from './ColorPicker';
 import CollectionDeleteConfirmModal from './CollectionDeleteConfirmModal';
 import ExpandedCollectionData from './ExpandedCollectionData';
 import { getColorValue } from './utils/colorMigration';
+import { useTaboxAIEnabled } from './ai/useTaboxAIEnabled';
+import { isAISupported } from './ai/aiClient';
+import { isProState } from './atoms/premiumState';
+import { aiToolsInitialToolState, aiToolsModalOpenState } from './atoms/aiState';
+import { suggestCollectionName } from './ai/tasks/suggestCollectionName';
+import { loadSingleCollection } from './utils/storageUtils';
+import { countNonEmptyGroups } from './utils/groupCount';
 import './CollectionDetailPanel.css';
+import './AIEffects.css';
 
 function CollectionDetailPanel({
     collection,
@@ -28,7 +38,8 @@ function CollectionDetailPanel({
     addCollection,
     onDataUpdate,
     index = 0,
-    renderInline = false
+    renderInline = false,
+    folders = []
 }) {
     const [isAnimatingOut, setIsAnimatingOut] = useState(false);
     const [collectionName, setCollectionName] = useState(collection?.name || '');
@@ -37,6 +48,7 @@ function CollectionDetailPanel({
     const [localColor, setLocalColor] = useState(collection?.color || 'default');
     const [tabSearch, setTabSearch] = useState('');
     const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+    const [isAiRenaming, setIsAiRenaming] = useState(false);
     const mountedRef = useRef(true);
     const panelRef = useRef(null);
     const searchInputRef = useRef(null);
@@ -44,6 +56,11 @@ function CollectionDetailPanel({
     const skipTitleBlurRef = useRef(false);
 
     const setDeletingCollectionUids = useSetAtom(deletingCollectionUidsState);
+    const setAiProcessingUids = useSetAtom(aiProcessingUidsState);
+    const setAiProcessingCurrentUid = useSetAtom(aiProcessingCurrentUidState);
+    const isPro = useAtomValue(isProState);
+    const setAiToolsInitialTool = useSetAtom(aiToolsInitialToolState);
+    const setAiToolsModalOpen = useSetAtom(aiToolsModalOpenState);
 
     // Use shared collection operations
     const {
@@ -63,8 +80,74 @@ function CollectionDetailPanel({
         index,
         setDeletingCollectionUids,
         addCollection,
-        onDataUpdate
+        onDataUpdate,
+        folders
     });
+
+    const isAIEnabled = useTaboxAIEnabled();
+    const showAiRenameBtn = isAISupported() && (isAIEnabled || !isPro);
+    // The panel instance persists across collection switches; track what's
+    // displayed so an in-flight AI rename never retitles the wrong collection.
+    const displayedUidRef = useRef(collection?.uid);
+    displayedUidRef.current = collection?.uid;
+
+    const handleAiRename = async () => {
+        if (isAiRenaming) return;
+        if (!isPro) {
+            setAiToolsInitialTool('name-suggestion');
+            setAiToolsModalOpen(true);
+            return;
+        }
+        setIsAiRenaming(true);
+        const renamedUid = collection.uid;
+        // Signal AI processing to consumers (cards, etc.)
+        setAiProcessingUids([renamedUid]);
+        setAiProcessingCurrentUid(renamedUid);
+        try {
+            const newName = await suggestCollectionName(collection);
+            if (!newName || newName === collection.name) {
+                showSuccessToast('The current name already fits!');
+                return;
+            }
+            const fresh = await loadSingleCollection(renamedUid);
+            if (!fresh) {
+                showErrorToast('This collection no longer exists.');
+                return;
+            }
+            const oldName = fresh.name;
+            // Clear processing state before applying the rename so the
+            // completion lightning flash doesn't overlap the looping effect.
+            setAiProcessingUids([]);
+            setAiProcessingCurrentUid(null);
+            await updateCollection({ ...fresh, name: newName, lastUpdated: Date.now() }, true);
+            if (displayedUidRef.current === renamedUid) {
+                setCollectionName(newName);
+            }
+            showUndoToast(
+                <BsStars />,
+                `Renamed to '${newName}'`,
+                oldName,
+                async () => {
+                    const current = await loadSingleCollection(renamedUid);
+                    if (!current || current.name !== newName) return;
+                    await updateCollection({ ...current, name: oldName, lastUpdated: Date.now() }, true);
+                    if (displayedUidRef.current === renamedUid) {
+                        setCollectionName(oldName);
+                    }
+                },
+                UNDO_TIME,
+            );
+        } catch (err) {
+            console.error('AI rename failed:', err);
+            showErrorToast('Could not generate a name. Please try again.');
+        } finally {
+            // Idempotent safety: ensure atoms are cleared regardless of which
+            // branch was taken (early returns above don't reach the pre-apply clear).
+            setAiProcessingUids([]);
+            setAiProcessingCurrentUid(null);
+            setIsAiRenaming(false);
+        }
+    };
 
     // Sync local state when collection changes
     useEffect(() => {
@@ -238,7 +321,7 @@ function CollectionDetailPanel({
     if (!collection) return null;
 
     const tabCount = collection.tabs?.length || 0;
-    const groupCount = collection.chromeGroups?.length || 0;
+    const groupCount = countNonEmptyGroups(collection);
     const wasFromIncognito = collection.savedFromIncognito === true;
 
     const formatTimeAgo = (timestamp) => {
@@ -303,7 +386,20 @@ function CollectionDetailPanel({
                             >
                                 <MdEdit size={16} />
                             </button>
-                            <div className="panel-title-slot">
+                            {showAiRenameBtn && !isEditingName && (
+                                <button
+                                    type="button"
+                                    className={`panel-edit-btn panel-ai-rename-btn${isAiRenaming ? ' panel-ai-rename-btn--busy' : ''}`}
+                                    onClick={handleAiRename}
+                                    disabled={isAiRenaming}
+                                    aria-label="Auto-name with AI"
+                                    data-tooltip-id="main-tooltip"
+                                    data-tooltip-content="Auto-name with AI"
+                                >
+                                    <BsStars size={16} />
+                                </button>
+                            )}
+                            <div className={`panel-title-slot${isAiRenaming ? ' ai-name-processing' : ''}`}>
                                 {isEditingName ? (
                                     <div className="panel-title-edit panel-title-edit-active">
                                         <div className="panel-title-autosave">

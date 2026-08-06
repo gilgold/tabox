@@ -209,6 +209,30 @@
     opacity: 1;
 }
 
+.panel-ai-rename-btn {
+    color: #7c3aed;
+}
+
+.panel-ai-rename-btn:hover {
+    color: #7c3aed;
+    background: rgba(124, 58, 237, 0.12);
+}
+
+.panel-ai-rename-btn--busy {
+    cursor: wait;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .panel-ai-rename-btn--busy svg {
+        animation: panel-ai-pulse 1s ease-in-out infinite;
+    }
+}
+
+@keyframes panel-ai-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
 .panel-incognito-badge {
     display: flex;
     align-items: center;

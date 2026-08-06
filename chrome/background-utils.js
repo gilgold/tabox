@@ -15,6 +15,14 @@ const STORAGE_KEYS = {
     STORAGE_VERSION: 'tabox_storage_version'
 };
 
+// Google OAuth token exchanges go through the Tabox Worker (which holds the
+// client secret); resolve the base URL from pro-config.js in both the
+// classic-script (importScripts) world and Jest/CommonJS.
+/* global PRO_API_BASE */
+const AUTH_API_BASE = typeof require === 'function'
+    ? require('./pro-config').PRO_API_BASE
+    : PRO_API_BASE;
+
 // Deferred-loading URL helpers.
 // SYNCHRONIZED WITH app/utils/urlUtils.js (unwrapDeferredUrl / isDeferredLoadingUrl).
 // The service worker loads its scripts via importScripts and cannot import the app ES
@@ -64,8 +72,7 @@ const syncApplyApi = typeof require === 'function'
 
 const {
     SERVER_FILE_TIMESTAMP_STATE,
-    fetchServerFileTimestampState,
-    getServerFileTimestampOrFalse
+    fetchServerFileTimestampState
 } = syncTransportApi;
 const {
     normalizeSyncSnapshot,
@@ -284,9 +291,45 @@ const loadAllCollectionsBG = async (useNewStorageFirst = true) => {
         // Fallback to legacy storage
         const { [STORAGE_KEYS.LEGACY_TABS_ARRAY]: tabsArray } = await browser.storage.local.get(STORAGE_KEYS.LEGACY_TABS_ARRAY);
         return (tabsArray || []).map((collection) => normalizeCollectionRecordBG(collection));
-        
+
     } catch (error) {
         console.error('Background: Failed to load collections:', error);
+        return [];
+    }
+};
+
+// Load ONLY loose (top-level) collections, projected to a lightweight summary
+// (name + first `maxTitles` tab titles). Used by auto-arrange so a large library
+// doesn't pay the cost of reading every collection's full tab array. Falls back to
+// a legacy full load + filter when no collections_index exists.
+const loadLooseCollectionSummariesBG = async (maxTitles = 5) => {
+    const projectSummary = (collection, order) => ({
+        uid: collection.uid,
+        name: collection.name,
+        parentId: collection.parentId ?? null,
+        order: collection.order ?? order,
+        tabs: (collection.tabs || []).slice(0, maxTitles).map((t) => ({ title: t.title, url: t.url })),
+    });
+    try {
+        const index = await loadCollectionsIndexBG();
+        const uids = Object.keys(index);
+        if (uids.length === 0) {
+            const all = await loadAllCollectionsBG(true);
+            return all.filter((c) => !c.parentId).map((c) => projectSummary(c, c.order));
+        }
+        const looseUids = uids.filter((uid) => !index[uid].parentId);
+        if (looseUids.length === 0) return [];
+        const keys = looseUids.map((uid) => `${STORAGE_KEYS.COLLECTION_PREFIX}${uid}`);
+        const results = await browser.storage.local.get(keys);
+        return looseUids
+            .map((uid) => {
+                const rec = results[`${STORAGE_KEYS.COLLECTION_PREFIX}${uid}`];
+                if (!rec) return null;
+                return projectSummary(normalizeCollectionRecordBG(rec), index[uid].order);
+            })
+            .filter(Boolean);
+    } catch (error) {
+        console.error('Background: Failed to load loose collection summaries:', error);
         return [];
     }
 };
@@ -294,9 +337,7 @@ const loadAllCollectionsBG = async (useNewStorageFirst = true) => {
 // Throttled tabsArray mirror sync (prevent excessive updates)
 // Keep the local tabsArray mirror available for same-version repair and backup/export flows.
 let legacySyncTimeout = null;
-let legacySyncEnabled = true;
 const syncLegacyStorageThrottled = async () => {
-    if (!legacySyncEnabled) return; // Skip if lazy sync is disabled
     if (legacySyncTimeout) return; // Already scheduled
     
     legacySyncTimeout = setTimeout(async () => {
@@ -314,16 +355,6 @@ const syncLegacyStorageThrottled = async () => {
     }, 5000); // Sync legacy storage at most once every 5 seconds
 };
 
-// Enable tabsArray mirror sync (for repair or backup/export operations)
-const enableLegacyStorageSync = () => {
-    legacySyncEnabled = true;
-};
-
-// Disable tabsArray mirror sync when batching larger write operations
-const disableLegacyStorageSync = () => {
-    legacySyncEnabled = false;
-};
-
 // Force immediate tabsArray mirror sync (for backup/export operations)
 const forceLegacyStorageSync = async () => {
     try {
@@ -335,129 +366,6 @@ const forceLegacyStorageSync = async () => {
         return true;
     } catch (error) {
         console.error('Background: Failed to force sync legacy storage:', error);
-        return false;
-    }
-};
-
-// Helper function to batch write collections with chunking
-const batchWriteCollections = async (updates, chunkSize = 50) => {
-    const keys = Object.keys(updates);
-    const totalChunks = Math.ceil(keys.length / chunkSize);
-    
-    for (let i = 0; i < totalChunks; i++) {
-        const chunkKeys = keys.slice(i * chunkSize, (i + 1) * chunkSize);
-        const chunkUpdates = {};
-        
-        chunkKeys.forEach(key => {
-            chunkUpdates[key] = updates[key];
-        });
-        
-        try {
-            await browser.storage.local.set(chunkUpdates);
-            
-            // Small delay between chunks to avoid quota issues
-            if (i < totalChunks - 1) {
-                await new Promise(resolve => setTimeout(resolve, 50));
-            }
-        } catch (error) {
-            if (error.message && error.message.includes('QUOTA_EXCEEDED')) {
-                console.error(`Quota exceeded at chunk ${i + 1}/${totalChunks}, reducing chunk size`);
-                // Retry with smaller chunks
-                const smallerChunkSize = Math.floor(chunkSize / 2);
-                if (smallerChunkSize > 0) {
-                    return await batchWriteCollections(updates, smallerChunkSize);
-                }
-            }
-            throw error;
-        }
-    }
-    
-    return true;
-};
-
-// Update entire collections array with backward compatibility (OPTIMIZED with batching)
-const updateAllCollectionsBG = async (collections) => {
-    try {
-        // Try to use new indexed storage first
-        const index = await loadCollectionsIndexBG();
-        const hasIndexedStorage = Object.keys(index).length > 0 || collections.length > 0;
-        
-        if (hasIndexedStorage) {
-            // OPTIMIZATION: Batch all updates into a single write operation
-            const now = Date.now();
-            const updates = {};
-            const newIndex = { ...index };
-            
-            // Prepare all updates
-            for (const rawCollection of collections) {
-                const collection = normalizeCollectionRecordBG(rawCollection);
-                if (!collection.uid) {
-                    console.error('Collection missing UID, skipping:', collection.name);
-                    continue;
-                }
-                
-                const collectionKey = `${STORAGE_KEYS.COLLECTION_PREFIX}${collection.uid}`;
-                const lastUpdated = collection.lastUpdated !== null && collection.lastUpdated !== undefined ? collection.lastUpdated : now;
-                
-                // Preserve existing order if not provided in the collection data
-                const existingOrder = newIndex[collection.uid]?.order;
-                const collectionOrder = collection.order !== undefined ? collection.order : existingOrder;
-                
-                // Prepare collection data (include order)
-                    updates[collectionKey] = {
-                        uid: collection.uid,
-                        name: collection.name,
-                        tabs: collection.tabs || [],
-                    color: collection.color,
-                        createdOn: collection.createdOn || now,
-                        lastUpdated: lastUpdated,
-                        lastOpened: collection.lastOpened !== null && collection.lastOpened !== undefined ? collection.lastOpened : null,
-                        chromeGroups: collection.chromeGroups || [],
-                        parentId: collection.parentId !== undefined ? collection.parentId : null,
-                        ...collection,
-                        order: collectionOrder // Ensure order is preserved in collection data
-                };
-                
-                // Update index entry
-                const collectionSize = JSON.stringify(updates[collectionKey]).length;
-                
-                newIndex[collection.uid] = {
-                    name: collection.name,
-                    type: 'collection',
-                    tabCount: collection.tabs ? collection.tabs.length : 0,
-                    lastUpdated: lastUpdated,
-                    lastOpened: collection.lastOpened !== null && collection.lastOpened !== undefined ? collection.lastOpened : null,
-                    createdOn: collection.createdOn || now,
-                    color: collection.color || 'default',
-                    size: collectionSize,
-                    parentId: collection.parentId !== undefined ? collection.parentId : null,
-                    order: collectionOrder // Include order in index for proper sorting
-                };
-            }
-            
-            // OPTIMIZATION: Single batched write with chunking for Chrome limits
-            await batchWriteCollections(updates, 50);
-            
-            // Update index in a single write
-            await browser.storage.local.set({
-                [STORAGE_KEYS.COLLECTIONS_INDEX]: newIndex
-            });
-            
-            
-            // Schedule throttled legacy storage sync (non-blocking)
-            syncLegacyStorageThrottled();
-            return true;
-        }
-        
-        // Fallback to legacy storage
-        await browser.storage.local.set({ 
-            [STORAGE_KEYS.LEGACY_TABS_ARRAY]: collections,
-            localTimestamp: Date.now() 
-        });
-        return true;
-        
-    } catch (error) {
-        console.error('Background: Failed to update collections:', error);
         return false;
     }
 };
@@ -514,7 +422,19 @@ const saveSingleFolderBG = async (folder, forceUpdateTimestamp = false) => {
         // Calculate collection count from collections index
         const collectionsIndex = await loadCollectionsIndexBG();
         const collectionCount = Object.values(collectionsIndex).filter(c => c.parentId === folder.uid).length;
-        
+
+        // Load index first so the shared marker can be preserved in both writes.
+        const foldersIndex = await loadFoldersIndexBG();
+        // Preserve an existing shared marker when the caller passes a folder
+        // without one — a rebuild must never silently unshare the folder
+        // (delete guards, AI-task exclusion and sync rematerialize key off it).
+        const { [folderKey]: existingRecord } = await browser.storage.local.get(folderKey);
+        const sharedMarker = folder.shared?.folderId
+            ? folder.shared
+            : (existingRecord?.shared?.folderId
+                ? existingRecord.shared
+                : (foldersIndex[folder.uid]?.shared?.folderId ? foldersIndex[folder.uid].shared : null));
+
         // Save folder data
         await browser.storage.local.set({
             [folderKey]: {
@@ -527,18 +447,18 @@ const saveSingleFolderBG = async (folder, forceUpdateTimestamp = false) => {
                 lastUpdated: lastUpdated,
                 collectionCount: collectionCount,
                 // Store any other folder properties
-                ...folder
+                ...folder,
+                ...(sharedMarker ? { shared: sharedMarker } : {})
             }
         });
-        
+
         // Update folders index
-        const foldersIndex = await loadFoldersIndexBG();
         const folderSize = JSON.stringify(folder).length;
-        
+
         // Preserve existing order if not provided in the folder data
         const existingOrder = foldersIndex[folder.uid]?.order;
         const folderOrder = folder.order !== undefined ? folder.order : existingOrder;
-        
+
         foldersIndex[folder.uid] = {
             name: folder.name,
             type: 'folder',
@@ -548,7 +468,8 @@ const saveSingleFolderBG = async (folder, forceUpdateTimestamp = false) => {
             lastUpdated: lastUpdated,
             createdOn: folder.createdOn || now,
             size: folderSize,
-            order: folderOrder // Include order in index for proper sorting
+            order: folderOrder, // Include order in index for proper sorting
+            ...(sharedMarker ? { shared: sharedMarker } : {})
         };
         
         await browser.storage.local.set({
@@ -609,65 +530,6 @@ const loadAllFoldersBG = async () => {
     }
 };
 
-// Update all folders from sync data
-const updateAllFoldersBG = async (folders) => {
-    try {
-        logSyncOperation('info', 'updateAllFoldersBG starting', { folderCount: folders?.length || 0 });
-        
-        if (!folders || folders.length === 0) {
-            logSyncOperation('info', 'updateAllFoldersBG: No folders to update');
-            return true;
-        }
-        
-        // IMPORTANT: Save folders SEQUENTIALLY to avoid race condition on folders index
-        // Each saveSingleFolderBG loads, updates, and saves the index
-        // Running in parallel would cause overwrites
-        let successCount = 0;
-        for (const folder of folders) {
-            const success = await saveSingleFolderBG(folder);
-            if (success) successCount++;
-        }
-        
-        logSyncOperation('info', 'updateAllFoldersBG completed', { 
-            successCount, 
-            totalCount: folders.length,
-            allSuccess: successCount === folders.length 
-        });
-        
-        return successCount === folders.length;
-        
-    } catch (error) {
-        logSyncOperation('error', 'updateAllFoldersBG failed', { error: error.message });
-        return false;
-    }
-};
-
-// Delete a single collection in background script
-const deleteSingleCollectionBG = async (uid) => {
-    try {
-        if (!uid) {
-            console.error('Background: Cannot delete collection - no UID provided');
-            return false;
-        }
-
-        const collectionKey = `${STORAGE_KEYS.COLLECTION_PREFIX}${uid}`;
-        await browser.storage.local.remove(collectionKey);
-
-        const index = await loadCollectionsIndexBG();
-        if (index[uid]) {
-            delete index[uid];
-            await browser.storage.local.set({
-                [STORAGE_KEYS.COLLECTIONS_INDEX]: index
-            });
-        }
-
-        return true;
-    } catch (error) {
-        console.error(`Background: Failed to delete collection ${uid}:`, error);
-        return false;
-    }
-};
-
 // Delete a single folder in background script
 const deleteSingleFolderBG = async (uid) => {
     try {
@@ -705,7 +567,6 @@ let lastValidated = 0;
 let syncLock = false; // Prevent concurrent sync operations
 let syncLockOperation = null; // Track what operation holds the lock
 let syncLockTime = 0; // Track when lock was acquired
-let syncQueue = []; // Queue pending sync operations
 
 // Enhanced error handling with retry logic (OPTIMIZED: reduced retries from 5 to 3)
 async function handleRequest(url, options = null, maxRetries = 3, delay = 1000) {
@@ -870,9 +731,6 @@ async function createPreSyncBackup(label = 'pre-sync') {
                 })) || []
             }))
         };
-        
-        // Calculate backup size
-        const backupSize = JSON.stringify(backup).length;
         
         preSyncBackups.unshift(backup);
         
@@ -1057,69 +915,176 @@ function applyChromeGroupSettings(windowId, collection) {
     });
 }
 
+// ─── Smart Organize: apply + undo ────────────────────────────────────────────
+
+const SMART_ORGANIZE_UNDO_KEY = 'smartOrganizeUndo';
+
+// Apply a Smart Organize plan to a live window. Snapshots the window's current
+// tab order + the set of tabs being grouped BEFORE mutating, so undo can fully
+// restore. Tabs that no longer exist are skipped by Chrome.
+async function applySmartOrganizePlan({ windowId, plan, createdAt }) {
+    const beforeTabs = await browser.tabs.query({ windowId });
+    const orderedTabIds = beforeTabs.map((t) => t.id);
+    const affectedTabIds = [
+        ...plan.newGroups.flatMap((g) => g.tabIds),
+        ...plan.additions.flatMap((a) => a.tabIds),
+    ];
+
+    // Capture the prior collapsed state of the existing groups we're about to
+    // add tabs to (and collapse), so undo can restore exactly how the user had
+    // them. New groups are removed on undo, so they need no record.
+    const groupCollapsedBefore = {};
+    const additionGroupIds = [...new Set(plan.additions.map((a) => a.groupId))];
+    if (additionGroupIds.length && browser.tabGroups) {
+        try {
+            const existing = await browser.tabGroups.query({ windowId });
+            for (const group of existing) {
+                if (additionGroupIds.includes(group.id)) {
+                    groupCollapsedBefore[group.id] = group.collapsed === true;
+                }
+            }
+        } catch (e) {
+            console.error('Smart Organize: failed to read existing group state', e);
+        }
+    }
+
+    await browser.storage.local.set({
+        [SMART_ORGANIZE_UNDO_KEY]: {
+            windowId,
+            createdAt: createdAt || Date.now(),
+            orderedTabIds,
+            affectedTabIds,
+            groupCollapsedBefore,
+            summary: { groupsCreated: plan.newGroups.length, tabsAdded: affectedTabIds.length },
+        },
+    });
+
+    let groupsCreated = 0;
+    let tabsAdded = 0;
+
+    for (const add of plan.additions) {
+        if (!add.tabIds.length) continue;
+        try {
+            await browser.tabs.group({ groupId: add.groupId, tabIds: add.tabIds });
+            tabsAdded += add.tabIds.length;
+            // Keep the organized window tidy: collapse the group we added to.
+            // A collapse failure must not negate the successful grouping above.
+            await browser.tabGroups.update(add.groupId, { collapsed: true });
+        } catch (e) {
+            console.error('Smart Organize: addition failed for group', add.groupId, e);
+        }
+    }
+
+    for (const g of plan.newGroups) {
+        if (!g.tabIds.length) continue;
+        try {
+            const groupId = await browser.tabs.group({ createProperties: { windowId }, tabIds: g.tabIds });
+            // New groups are created expanded by default — collapse them so the
+            // organized window reads as tidy rather than a wall of open groups.
+            await browser.tabGroups.update(groupId, { title: g.name, color: g.color, collapsed: true });
+            groupsCreated += 1;
+        } catch (e) {
+            console.error('Smart Organize: new group failed', g.name, e);
+        }
+    }
+
+    return { success: true, groupsCreated, tabsAdded, skipped: plan.skippedTabIds?.length || 0 };
+}
+
+// Undo the last Smart Organize run: ungroup the tabs we grouped (empty new
+// groups auto-remove; existing groups just lose the added tabs), then restore
+// the original tab order best-effort. Clears the snapshot.
+async function undoSmartOrganize({ windowId } = {}) {
+    const stored = await browser.storage.local.get(SMART_ORGANIZE_UNDO_KEY);
+    const snap = stored[SMART_ORGANIZE_UNDO_KEY];
+    if (!snap) return { success: false, reason: 'missing' };
+
+    const targetWindowId = windowId ?? snap.windowId;
+    try {
+        await browser.windows.get(targetWindowId);
+    } catch {
+        await browser.storage.local.remove(SMART_ORGANIZE_UNDO_KEY);
+        return { success: false, reason: 'expired' };
+    }
+
+    const affected = (snap.affectedTabIds || []).filter(Boolean);
+    if (affected.length) {
+        try {
+            await browser.tabs.ungroup(affected);
+        } catch (e) {
+            console.error('Smart Organize undo: ungroup failed', e);
+        }
+    }
+
+    // Restore the prior collapsed state of existing groups we collapsed on apply.
+    const collapsedBefore = snap.groupCollapsedBefore || {};
+    if (Object.keys(collapsedBefore).length && browser.tabGroups) {
+        for (const [groupId, wasCollapsed] of Object.entries(collapsedBefore)) {
+            try {
+                await browser.tabGroups.update(Number(groupId), { collapsed: wasCollapsed });
+            } catch {
+                // Group may no longer exist (e.g. all its tabs were closed); skip.
+            }
+        }
+    }
+
+    // Restore original order best-effort: move surviving tabs back in sequence.
+    const liveIds = new Set((await browser.tabs.query({ windowId: targetWindowId })).map((t) => t.id));
+    let index = 0;
+    for (const tabId of snap.orderedTabIds || []) {
+        if (!liveIds.has(tabId)) continue;
+        try {
+            await browser.tabs.move(tabId, { index });
+        } catch {
+            // tab may be pinned or gone; skip
+        }
+        index += 1;
+    }
+
+    await browser.storage.local.remove(SMART_ORGANIZE_UNDO_KEY);
+    return { success: true };
+}
+
+// ─── end Smart Organize ──────────────────────────────────────────────────────
+
+async function readWindowForAI(windowId) {
+    const fullPageUrl = browser.runtime.getURL('fullpage.html');
+    const allTabs = await browser.tabs.query({ windowId });
+    const eligible = allTabs.filter((t) => !t.pinned && t.url !== fullPageUrl);
+    const ungroupedTabs = eligible.filter((t) => t.groupId === -1).map((t) => ({ tabId: t.id, title: t.title, url: t.url }));
+    let groups = [];
+    try { groups = await browser.tabGroups.query({ windowId }); } catch (e) { groups = []; }
+    const existingGroups = groups.map((g) => ({ id: g.id, title: g.title,
+        sampleTitles: allTabs.filter((t) => t.groupId === g.id).slice(0, 3).map((t) => t.title) }));
+    return { ungroupedTabs, existingGroups, eligibleCount: ungroupedTabs.length };
+}
+
 async function getNewAccessToken() {
     try {
-        const { oauth2 } = browser.runtime.getManifest();
-        const clientId = oauth2.client_id;
-        const keysUrl = browser.runtime.getURL('api-keys.json');
-        
-        let clientSecret;
-        try {
-            const response = await fetch(keysUrl);
-            if (!response.ok) {
-                logSyncOperation('error', 'Failed to load api-keys.json - sync credentials not configured', {
-                    status: response.status
-                });
-                return false;
-            }
-            const keys = await response.json();
-            clientSecret = keys.clientSecret;
-            
-            // Check if credentials are actually configured
-            if (!clientSecret || clientSecret.trim() === '') {
-                logSyncOperation('error', 'OAuth client secret is not configured in api-keys.json - sync will not work until credentials are added', {
-                    hint: 'For development, add your Google OAuth credentials to chrome/api-keys.json'
-                });
-                await browser.storage.local.set({ 
-                    syncAuthError: {
-                        type: 'missing_credentials',
-                        message: 'Sync credentials not configured. Please contact the developer or configure api-keys.json for development.',
-                        timestamp: Date.now()
-                    }
-                });
-                return false;
-            }
-        } catch (fetchError) {
-            logSyncOperation('error', 'Failed to fetch api-keys.json', { error: fetchError.message });
-            return false;
-        }
-        
         const { googleRefreshToken } = await browser.storage.local.get('googleRefreshToken');
-        
+
         if (!googleRefreshToken) {
             logSyncOperation('error', 'No refresh token available, user needs to re-authenticate');
             return false;
         }
-        
-        const requestBody = {
-            client_id: clientId,
-            client_secret: clientSecret,
-            refresh_token: googleRefreshToken,
-            grant_type: 'refresh_token',
-        }
-        
+
         const options = {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(requestBody)
+            body: JSON.stringify({
+                grant_type: 'refresh_token',
+                refresh_token: googleRefreshToken,
+            })
         }
-        
+
         logSyncOperation('info', 'Requesting new access token with refresh token');
-        
-        // Use direct fetch instead of handleRequest to avoid unnecessary retries
-        const tokenResponse = await fetch('https://oauth2.googleapis.com/token', options);
+
+        // The exchange runs on the Tabox Worker, which holds the OAuth client
+        // secret. Use direct fetch instead of handleRequest to avoid
+        // unnecessary retries.
+        const tokenResponse = await fetch(`${AUTH_API_BASE}/auth/token`, options);
         
         if (tokenResponse.ok) {
             const tokenData = await tokenResponse.json();
@@ -1133,6 +1098,10 @@ async function getNewAccessToken() {
                 await browser.storage.local.set({ googleRefreshToken: tokenData.refresh_token });
             }
             
+            // Any previously stored auth error is now stale since we just obtained a
+            // valid token — clear it so the UI doesn't stay stuck on "auth required".
+            await browser.storage.local.remove('syncAuthError');
+
             logSyncOperation('success', 'Successfully refreshed access token', {
                 expiresIn: tokenData.expires_in
             });
@@ -1218,8 +1187,10 @@ async function validateToken(token) {
             return false;
         }
     } catch (error) {
-        logSyncOperation('error', 'Token validation network error', { error: error.message });
-        return false;
+        // Fetch never reached Google (offline, sleep/wake, SW woke before network).
+        // Not an auth failure — let the caller decide whether the cached token is still usable.
+        logSyncOperation('info', 'Token validation skipped - network unavailable', { error: error.message });
+        return 'network_error';
     }
 }
 
@@ -1245,20 +1216,36 @@ async function getAuthToken() {
     
     const isValid = await validateToken(googleToken);
     lastValidated = Date.now();
-    
-    if (isValid) {
+
+    if (isValid === true) {
         return googleToken;
     }
-    
+
+    // Network-level validation failure with a token that isn't expired per stored
+    // expiry: keep using it — a refresh attempt would hit the same dead network.
+    if (isValid === 'network_error' && tokenExpiryTime && now < tokenExpiryTime) {
+        return googleToken;
+    }
+
     return await getNewAccessToken();
+}
+
+// AI requests are authenticated again by the Tabox Worker before inference.
+// When the extension already has a token with trustworthy expiry metadata,
+// avoid a redundant Google tokeninfo round-trip here. Missing/expiring tokens
+// still use the normal refresh/validation path.
+async function getAuthTokenForAI() {
+    const { googleToken, tokenExpiryTime } = await browser.storage.local.get(['googleToken', 'tokenExpiryTime']);
+    const refreshCutoff = Date.now() + (5 * 60 * 1000);
+    if (googleToken && tokenExpiryTime && tokenExpiryTime > refreshCutoff) {
+        return googleToken;
+    }
+    return await getAuthToken();
 }
 
 async function getGoogleUser(token) {
     const { googleUser } = await browser.storage.local.get('googleUser');
     if (googleUser) return googleUser;
-    const url = browser.runtime.getURL('api-keys.json');
-    const fileResponse = await fetch(url);
-    const { googleDrive: googleApiKey } = await fileResponse.json();
     const init = {
         method: 'GET',
         async: true,
@@ -1268,21 +1255,16 @@ async function getGoogleUser(token) {
         },
         'contentType': 'json'
     };
+    // The OAuth Bearer token authorizes the request on its own — no separate
+    // Drive API key is needed (or bundled) anymore.
     const response = await handleRequest(
-        `https://www.googleapis.com/drive/v3/about?alt=json&fields=user&prettyPrint=false&key=${googleApiKey}`,
+        'https://www.googleapis.com/drive/v3/about?alt=json&fields=user&prettyPrint=false',
         init)
     if (response) {
         await browser.storage.local.set({ googleUser: response.user });
         return response.user;
     }
     return false;
-}
-
-async function removeToken(token) {
-    const _token = token === -1 ? (await browser.storage.local.get('googleToken')).googleToken : token;
-    const url = 'https://accounts.google.com/o/oauth2/revoke?token=' + _token;
-    await browser.storage.local.remove('googleToken');
-    if (_token) await handleRequest(url);
 }
 
 async function getOrCreateSyncFile(token) {
@@ -1350,16 +1332,6 @@ async function _createNewSyncFile(token) {
         return response.id;
     }
     return false;
-}
-
-async function _getServerFileTimestamp(token, fileId) {
-    const timestampResult = await fetchServerFileTimestampState({
-        token,
-        fileId,
-        fetchImpl: fetch
-    });
-
-    return getServerFileTimestampOrFalse(timestampResult);
 }
 
 async function _getServerFileTimestampState(token, fileId) {
@@ -1449,9 +1421,12 @@ async function updateRemote(token, collections = null, skipLock = false) {
         }
         
         // 🛡️ SAFETY CHECK: Prevent pushing empty data when server has data
-        // This prevents new/empty devices from accidentally wiping existing collections
+        // This prevents new/empty devices from accidentally wiping existing collections.
+        // Folders are Drive data too (foldersArray) - a payload with folders but no
+        // collections is a legitimate push, not an empty one.
         const localCollectionCount = dataToSync.tabsArray ? dataToSync.tabsArray.length : 0;
-        if (localCollectionCount === 0) {
+        const localFolderCount = dataToSync.foldersArray ? dataToSync.foldersArray.length : 0;
+        if (localCollectionCount === 0 && localFolderCount === 0) {
             // Check if server has data before we overwrite it with nothing
             const { syncFileId } = await browser.storage.sync.get('syncFileId');
             if (syncFileId) {
@@ -1703,52 +1678,38 @@ async function updateLocalDataFromServer(token, force = false, skipLock = false)
 
 async function getTokens(code) {
     const redirectURL = browser.identity.getRedirectURL();
-    const { oauth2 } = browser.runtime.getManifest();
-    const clientId = oauth2.client_id;
-    const keysUrl = browser.runtime.getURL('api-keys.json');
-    
-    let clientSecret;
-    try {
-        const response = await fetch(keysUrl);
-        if (!response.ok) {
-            console.error('Failed to load api-keys.json - sync credentials not configured');
-            return false;
-        }
-        const keys = await response.json();
-        clientSecret = keys.clientSecret;
-        
-        if (!clientSecret || clientSecret.trim() === '') {
-            console.error('OAuth client secret is not configured in api-keys.json - login will fail');
-            logSyncOperation('error', 'Cannot complete login - OAuth credentials not configured', {
-                hint: 'Add Google OAuth credentials to chrome/api-keys.json'
-            });
-            return false;
-        }
-    } catch (fetchError) {
-        console.error('Failed to fetch api-keys.json:', fetchError);
-        return false;
-    }
-    
-    const requestBody = {
-        code: code,
-        client_id: clientId,
-        client_secret: clientSecret,
-        grant_type: 'authorization_code',
-        redirect_uri: redirectURL,
-    }
     const options = {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify({
+            grant_type: 'authorization_code',
+            code: code,
+            redirect_uri: redirectURL,
+        })
     }
-    const data = await handleRequest('https://oauth2.googleapis.com/token', options);
-    if (data && data.access_token) {
-        await browser.storage.local.set({ googleToken: data.access_token, googleRefreshToken: data.refresh_token });
-        return data.access_token;
+    // The code→token exchange runs on the Tabox Worker, which holds the OAuth
+    // client secret — the extension bundle no longer ships any credentials.
+    // Direct fetch, no retries: authorization codes are single-use, so a
+    // rejected exchange can never succeed on retry.
+    try {
+        const response = await fetch(`${AUTH_API_BASE}/auth/token`, options);
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error('Login token exchange failed:', response.status, errorData.error || '');
+            return false;
+        }
+        const data = await response.json();
+        if (data && data.access_token) {
+            await browser.storage.local.set({ googleToken: data.access_token, googleRefreshToken: data.refresh_token });
+            return data.access_token;
+        }
+        return false;
+    } catch (error) {
+        console.error('Login token exchange failed with network error:', error);
+        return false;
     }
-    return false;
 }
 
 function createAuthEndpoint() {
@@ -1976,17 +1937,40 @@ async function syncData(token) {
                 return false;
             }
         } else {
-            // Local data claims to be newer - but verify we actually have data before pushing
+            // Local data claims to be newer - but verify we actually have data before pushing.
+            // Count only NON-shared collections: shared folders/collections never enter the
+            // Drive payload (excludeSharedFromSyncData), so they must not count as "data"
+            // here either - otherwise a device whose only content is shared folders would
+            // pass this check and push an empty payload.
             const localCollections = await loadAllCollectionsBG(true);
-            const localCollectionCount = localCollections ? localCollections.length : 0;
-            
-            // 🛡️ SAFETY CHECK: If local is "newer" but EMPTY, and server has data,
-            // this is likely a new device with wrong timestamp - download instead
-            if (localCollectionCount === 0 && serverTimestamp > 0) {
+            const allLocalCollections = localCollections || [];
+            const allLocalFolders = (await loadAllFoldersBG()) || [];
+            let nonSharedCollectionCount = allLocalCollections.length;
+            let nonSharedFolderCount = allLocalFolders.length;
+            let sharedCollectionCount = 0;
+            /* istanbul ignore next */
+            const sharedFoldersHelpers = typeof require === 'function'
+                ? require('./shared-folders.js')
+                : globalThis.TaboxSharedFolders;
+            const partitionSharedUids = sharedFoldersHelpers && sharedFoldersHelpers.partitionSharedUids;
+            if (typeof partitionSharedUids === 'function') {
+                const { sharedFolderUids, sharedCollectionUids } = partitionSharedUids(allLocalFolders, allLocalCollections);
+                sharedCollectionCount = allLocalCollections.filter((collection) => sharedCollectionUids.has(collection.uid)).length;
+                nonSharedCollectionCount = allLocalCollections.length - sharedCollectionCount;
+                nonSharedFolderCount = allLocalFolders.filter((folder) => !sharedFolderUids.has(folder.uid)).length;
+            }
+
+            // 🛡️ SAFETY CHECK: If local is "newer" but EMPTY (from Drive's point of view),
+            // and server has data, this is likely a new device with wrong timestamp - download instead.
+            // Folders count as data too: they ride in the Drive payload's foldersArray, so a
+            // device whose only collections are shared but which just added a plain folder is
+            // NOT empty - forcing a download here would clobber that new folder as a stale key.
+            if (nonSharedCollectionCount === 0 && nonSharedFolderCount === 0 && serverTimestamp > 0) {
                 logSyncOperation('error', 'SAFETY BLOCK: Local claims newer but has no data while server has data - downloading instead', {
                     localTimestamp,
                     serverTimestamp,
                     localCollectionCount: 0,
+                    sharedCollectionCount,
                     action: 'Downloading from server to prevent data loss'
                 });
                 
@@ -2003,11 +1987,13 @@ async function syncData(token) {
                 return false;
             }
             
-            logSyncOperation('info', 'Local data is newer, updating remote', { 
-                serverTimestamp, 
+            logSyncOperation('info', 'Local data is newer, updating remote', {
+                serverTimestamp,
                 localTimestamp,
-                localCollectionCount,
-                isConflict 
+                localCollectionCount: nonSharedCollectionCount,
+                nonSharedFolderCount,
+                sharedCollectionCount,
+                isConflict
             });
             
             if (isConflict) {
@@ -2066,8 +2052,6 @@ const cleanupLargeBackups = async () => {
         const totalBackupSize = preSyncSize + autoBackupSize;
         
         
-        let cleaned = false;
-        
         // Clean up oversized preSyncBackups (convert old full backups to metadata)
         if (preSyncSize > 500 * 1024) { // > 500KB
             const cleanedPreSync = preSyncBackups.map(backup => {
@@ -2096,20 +2080,12 @@ const cleanupLargeBackups = async () => {
             }).slice(0, 3); // Keep only 3 most recent
             
             await browser.storage.local.set({ preSyncBackups: cleanedPreSync });
-            cleaned = true;
         }
         
         // Clean up oversized autoBackups
         if (autoBackupSize > 1.5 * 1024 * 1024) { // > 1.5MB
             const cleanedAutoBackups = autoBackups.slice(0, 2); // Keep only 2 most recent
             await browser.storage.local.set({ autoBackups: cleanedAutoBackups });
-            cleaned = true;
-        }
-        
-        if (cleaned) {
-            // Recalculate after cleanup
-            const { preSyncBackups: newPreSync = [], autoBackups: newAuto = [] } = await browser.storage.local.get(['preSyncBackups', 'autoBackups']);
-            const newTotal = JSON.stringify(newPreSync).length + JSON.stringify(newAuto).length;
         }
         
         return totalBackupSize;
@@ -2228,6 +2204,37 @@ const loadCollectionsByUids = async (uids) => {
     }
 };
 
+// Task 9: shared folders/collections (Task 8) are owned by the Cloudflare Worker, never
+// by Google Drive. This is the single chokepoint every upload path funnels through
+// (full-sync, incremental, and _createNewSyncFile all call prepareSyncDataForUpload), so
+// filtering here guarantees shared data can never leave in a sync payload. Lazily
+// required (not at module top-level) because chrome/shared-folders.js requires this very
+// module back (for getAuthToken) - a top-level require here would create a load-order
+// cycle both in the classic-script (importScripts) world and in Jest/CommonJS.
+const excludeSharedFromSyncData = async ({ tabsArray = [], foldersArray = [], deletedCollections = [], deletedFolders = [] }) => {
+    /* istanbul ignore next */
+    const sharedFoldersHelpers = typeof require === 'function'
+        ? require('./shared-folders.js')
+        : globalThis.TaboxSharedFolders;
+    const partitionSharedUids = sharedFoldersHelpers && sharedFoldersHelpers.partitionSharedUids;
+    if (typeof partitionSharedUids !== 'function') {
+        return { tabsArray, foldersArray, deletedCollections, deletedFolders };
+    }
+
+    const { sharedFolderUids, sharedCollectionUids } = partitionSharedUids(foldersArray, tabsArray);
+    const { shared_sync_state: sharedSyncState = {} } = await browser.storage.local.get('shared_sync_state');
+    const everSharedUids = new Set(Object.values(sharedSyncState).flatMap((state) => state.knownUids || []));
+
+    return {
+        tabsArray: tabsArray.filter((collection) => !sharedCollectionUids.has(collection.uid)),
+        foldersArray: foldersArray.filter((folder) => !sharedFolderUids.has(folder.uid)),
+        deletedCollections: deletedCollections.filter((tombstone) =>
+            !sharedCollectionUids.has(tombstone.uid) && !everSharedUids.has(tombstone.uid)),
+        deletedFolders: deletedFolders.filter((tombstone) =>
+            !sharedFolderUids.has(tombstone.uid) && !(tombstone.uid in sharedSyncState)),
+    };
+};
+
 // Enhanced data preparation for upload with version info.
 // Sync still emits full 4.0 snapshots by default; incremental sync remains off until the
 // wire contract is upgraded end-to-end for partial updates.
@@ -2276,23 +2283,27 @@ const prepareSyncDataForUpload = async (collections, useIncrementalSync = false)
                 }
 
                 const normalizedTabsArray = (tabsArray || []).map((collection) => normalizeCollectionRecordBG(collection));
-                
+                const filteredIncremental = await excludeSharedFromSyncData({
+                    tabsArray: normalizedTabsArray,
+                    foldersArray
+                });
+
                 // Mark this as incremental sync data
                 const syncData = {
                     timestamp: Date.now(),
-                    tabsArray: normalizedTabsArray,
-                    foldersArray: foldersArray,
+                    tabsArray: filteredIncremental.tabsArray,
+                    foldersArray: filteredIncremental.foldersArray,
                     syncVersion: SYNC_VERSION,
                     storageVersion: 3,
-                    extensionVersion: (typeof chrome !== 'undefined' && chrome.runtime) ? 
+                    extensionVersion: (typeof chrome !== 'undefined' && chrome.runtime) ?
                         chrome.runtime.getManifest().version : '4.0',
                     isIncrementalSync: true,
                     lastSyncTimestamp: lastSyncTimestamp,
-                    changedCollectionCount: normalizedTabsArray.length,
-                    changedFolderCount: foldersArray.length
+                    changedCollectionCount: filteredIncremental.tabsArray.length,
+                    changedFolderCount: filteredIncremental.foldersArray.length
                 };
-                
-                
+
+
                 return syncData;
             } else {
                 // First sync, do full sync
@@ -2317,32 +2328,48 @@ const prepareSyncDataForUpload = async (collections, useIncrementalSync = false)
             lastUpdated
         }));
 
+        const filteredFullSync = await excludeSharedFromSyncData({
+            tabsArray: normalizedTabsArray,
+            foldersArray,
+            deletedCollections,
+            deletedFolders
+        });
+
         // v4.0 enhanced sync format with version detection and folders support
         const syncData = {
             timestamp: Date.now(),
-            tabsArray: normalizedTabsArray,
-            foldersArray: foldersArray,
-            deletedCollections,
-            deletedFolders,
+            tabsArray: filteredFullSync.tabsArray,
+            foldersArray: filteredFullSync.foldersArray,
+            deletedCollections: filteredFullSync.deletedCollections,
+            deletedFolders: filteredFullSync.deletedFolders,
             syncVersion: SYNC_VERSION,
             storageVersion: 3,
-            extensionVersion: (typeof chrome !== 'undefined' && chrome.runtime) ? 
+            extensionVersion: (typeof chrome !== 'undefined' && chrome.runtime) ?
                 chrome.runtime.getManifest().version : '4.0',
             isIncrementalSync: false
         };
-        
-        console.log('📤 prepareSyncDataForUpload: Preparing sync data with', normalizedTabsArray.length, 'collections and', foldersArray.length, 'folders');
-        console.log('📤 prepareSyncDataForUpload: Folder order:', foldersArray.map(f => ({ name: f.name, order: f.order })));
-        console.log('📤 prepareSyncDataForUpload: Collection order:', normalizedTabsArray.map(c => ({ name: c.name, order: c.order, parentId: c.parentId })));
-        
+
+        console.log('📤 prepareSyncDataForUpload: Preparing sync data with', filteredFullSync.tabsArray.length, 'collections and', filteredFullSync.foldersArray.length, 'folders');
+        console.log('📤 prepareSyncDataForUpload: Folder order:', filteredFullSync.foldersArray.map(f => ({ name: f.name, order: f.order })));
+        console.log('📤 prepareSyncDataForUpload: Collection order:', filteredFullSync.tabsArray.map(c => ({ name: c.name, order: c.order, parentId: c.parentId })));
+
         return syncData;
-        
+
     } catch (error) {
         console.error('❌ Error preparing sync data:', error);
-        // Fallback to legacy format for compatibility
+        // Fallback to legacy format for compatibility. Still keep shared collections out
+        // of this last-resort payload; if the filter itself throws, fall through with the
+        // unfiltered legacy data rather than letting an already-failing path throw again.
+        const fallbackTabsArray = (collections || []).map((collection) => normalizeCollectionRecordBG(collection));
+        let safeTabsArray = fallbackTabsArray;
+        try {
+            safeTabsArray = (await excludeSharedFromSyncData({ tabsArray: fallbackTabsArray, foldersArray: [] })).tabsArray;
+        } catch {
+            // best effort only - see comment above
+        }
         return {
             timestamp: Date.now(),
-            tabsArray: (collections || []).map((collection) => normalizeCollectionRecordBG(collection)),
+            tabsArray: safeTabsArray,
             foldersArray: [],
             syncVersion: SYNC_VERSION,
             storageVersion: 3,
@@ -2350,76 +2377,6 @@ const prepareSyncDataForUpload = async (collections, useIncrementalSync = false)
         };
     }
 };
-
-// Automatic authentication recovery function
-async function attemptAuthRecovery(operation = 'unknown', maxAttempts = 3) {
-    logSyncOperation('info', `Attempting authentication recovery for: ${operation}`);
-    
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        try {
-            // Check if we have a refresh token
-            const { googleRefreshToken } = await browser.storage.local.get('googleRefreshToken');
-            if (!googleRefreshToken) {
-                logSyncOperation('error', 'No refresh token available for auth recovery');
-                return false;
-            }
-            
-            // Clear current invalid token
-            await browser.storage.local.remove(['googleToken', 'tokenExpiryTime']);
-            
-            // Wait a bit before retry to avoid rate limiting
-            if (attempt > 1) {
-                const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000); // Max 10 seconds
-                await new Promise(resolve => setTimeout(resolve, delay));
-            }
-            
-            // Try to get a new token
-            const newToken = await getNewAccessToken();
-            if (newToken !== false) {
-                logSyncOperation('success', `Authentication recovery successful on attempt ${attempt}`);
-                return newToken;
-            }
-            
-            logSyncOperation('info', `Auth recovery attempt ${attempt} failed, trying again`, {
-                attempt,
-                maxAttempts
-            });
-            
-        } catch (error) {
-            logSyncOperation('error', `Exception during auth recovery attempt ${attempt}`, {
-                error: error.message,
-                attempt,
-                maxAttempts
-            });
-        }
-    }
-    
-    logSyncOperation('error', `Authentication recovery failed after ${maxAttempts} attempts`);
-    return false;
-}
-
-// Enhanced authentication wrapper that provides seamless recovery
-async function getAuthTokenWithRecovery(operation = 'unknown') {
-    try {
-        // First try normal token retrieval
-        const token = await getAuthToken();
-        if (token !== false) {
-            return token;
-        }
-        
-        // If that fails, attempt recovery
-        logSyncOperation('info', `Normal auth failed for ${operation}, attempting recovery`);
-        return await attemptAuthRecovery(operation);
-        
-    } catch (error) {
-        logSyncOperation('error', `Exception in getAuthTokenWithRecovery for ${operation}`, {
-            error: error.message
-        });
-        
-        // Still try recovery even if there was an exception
-        return await attemptAuthRecovery(operation);
-    }
-}
 
 const backgroundUtilsApi = {
     STORAGE_KEYS,
@@ -2431,13 +2388,11 @@ const backgroundUtilsApi = {
     saveSingleCollectionBG,
     markCollectionOpenedBG,
     loadAllCollectionsBG,
-    updateAllCollectionsBG,
-    deleteSingleCollectionBG,
+    loadLooseCollectionSummariesBG,
     loadFoldersIndexBG,
     loadSingleFolderBG,
     saveSingleFolderBG,
     loadAllFoldersBG,
-    updateAllFoldersBG,
     deleteSingleFolderBG,
     handleRequest,
     logSyncOperation,
@@ -2446,21 +2401,24 @@ const backgroundUtilsApi = {
     migrateIncomingSyncData,
     prepareSyncDataForUpload,
     getNewAccessToken,
+    getTokens,
     validateToken,
     getAuthToken,
+    getAuthTokenForAI,
     getGoogleUser,
-    removeToken,
     getOrCreateSyncFile,
-    _getServerFileTimestamp,
     updateRemote,
     updateLocalDataFromServer,
     syncData,
-    getAuthTokenWithRecovery,
     createPreSyncBackup,
     recoverFromBackup,
     updateCollection,
     updateCollectionsUids,
-    createNewSyncFileAndBackup
+    createNewSyncFileAndBackup,
+    SMART_ORGANIZE_UNDO_KEY,
+    applySmartOrganizePlan,
+    undoSmartOrganize,
+    readWindowForAI,
 };
 
 if (typeof globalThis !== 'undefined') {

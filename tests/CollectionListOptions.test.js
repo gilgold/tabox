@@ -57,33 +57,6 @@ describe('Collection List Options tests', () => {
     });
   });
 
-  test('loads recently closed items through browser.sessions for the restore toolbar button', async () => {
-    browser.sessions.getRecentlyClosed.mockResolvedValue([
-      {
-        lastModified: 1710000000,
-        tab: {
-          sessionId: 'tab-session-1',
-          title: 'Closed Tab',
-          url: 'https://example.com',
-        },
-      },
-    ]);
-
-    let container;
-    await act(async () => {
-      ({ container } = render(
-        <Provider>
-          <CollectionListOptions addCollection={jest.fn()} />
-        </Provider>,
-      ));
-    });
-
-    await waitFor(() => {
-      expect(browser.sessions.getRecentlyClosed).toHaveBeenCalled();
-      expect(container.querySelector('#toolbar-restore-session button')).not.toBeDisabled();
-    });
-  });
-
   test('keeps popup import limited to legacy txt files', async () => {
     let container;
     await act(async () => {
@@ -95,5 +68,22 @@ describe('Collection List Options tests', () => {
     });
 
     expect(container.querySelector('input[type="file"]')).toHaveAttribute('accept', '.txt');
+  });
+
+  test('renders the AI button in the toolbar when Tabox AI is enabled', async () => {
+    browser.storage.local.get.mockResolvedValue({ chkTaboxAI: true });
+
+    let container;
+    await act(async () => {
+      ({ container } = render(
+        <Provider>
+          <CollectionListOptions addCollection={jest.fn()} />
+        </Provider>,
+      ));
+    });
+
+    await waitFor(() => {
+      expect(container.querySelector('.collections-toolbar .ai-button')).toBeInTheDocument();
+    });
   });
 });

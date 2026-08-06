@@ -189,7 +189,7 @@
 /* ---- Title ---- */
 .fp-card-title-row {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 8px;
 }
 
@@ -646,7 +646,7 @@ html.fullpage-mode[data-theme="dark"] .fp-collection-card .fp-card-count-chip {
 html.fullpage-mode .fp-card-actions.fp-card-hover-menu {
     --rail-item-size: 28px;
     --rail-item-gap: 2px;
-    --rail-pad: 5px;
+    --rail-pad: 10px;
     top: 50%;
     right: 8px;
     bottom: auto;
@@ -885,6 +885,28 @@ html.fullpage-mode .fp-card-actions.fp-card-hover-menu .fp-card-rail-open:focus-
 html.fullpage-mode .fp-card-actions.fp-card-hover-menu .fp-card-rail-update:hover,
 html.fullpage-mode .fp-card-actions.fp-card-hover-menu .fp-card-rail-update:focus-visible {
     color: var(--color-secondary, #06B6D4);
+}
+
+.fp-card-actions.fp-card-hover-menu .fp-card-rail-favorite:hover,
+.fp-card-actions.fp-card-hover-menu .fp-card-rail-favorite:focus-visible,
+html.fullpage-mode .fp-card-actions.fp-card-hover-menu .fp-card-rail-favorite:hover,
+html.fullpage-mode .fp-card-actions.fp-card-hover-menu .fp-card-rail-favorite:focus-visible {
+    color: var(--favorite-star-color, #f4b400);
+}
+
+.fp-card-rail-favorite .fp-star-filled {
+    display: none;
+}
+
+.fp-card-actions.fp-card-hover-menu .fp-card-rail-favorite:hover .fp-star-outline,
+html.fullpage-mode .fp-card-actions.fp-card-hover-menu .fp-card-rail-favorite:hover .fp-star-outline {
+    display: none;
+}
+
+.fp-card-actions.fp-card-hover-menu .fp-card-rail-favorite:hover .fp-star-filled,
+html.fullpage-mode .fp-card-actions.fp-card-hover-menu .fp-card-rail-favorite:hover .fp-star-filled {
+    display: inline-flex;
+    color: var(--favorite-star-color, #f4b400);
 }
 
 .fp-card-actions.fp-card-hover-menu .fp-card-rail-save:hover,
@@ -1195,4 +1217,9 @@ html.fullpage-mode .fp-card-actions.fp-card-hover-menu .fp-card-rail-delete:focu
     .fp-card-favicon {
         transition: none !important;
     }
+}
+
+.fp-card-actions.fp-card-hover-menu .fp-card-rail-favorite.is-favorite,
+html.fullpage-mode .fp-card-actions.fp-card-hover-menu .fp-card-rail-favorite.is-favorite {
+    color: var(--favorite-star-color, #f4b400) !important;
 }

@@ -1,0 +1,31 @@
+import { atom } from 'jotai';
+
+// Whether the shared AI Tools modal is open (popup and full-page).
+export const aiToolsModalOpenState = atom(false);
+
+// What the AI Tools modal operates on. The header button resets this to
+// 'all'; the full-page selection toolbar sets the checked collection uids.
+// Variants:
+//   { type: 'all' }                    — operate on every collection
+//   { type: 'selected', uids: string[] } — operate only on the listed uids
+export const aiToolsScopeState = atom({ type: 'all' });
+
+// All collection uids currently being processed by an AI rename run (bulk or
+// single). Card components render the .ai-processing-overlay for these uids.
+export const aiProcessingUidsState = atom([]);
+
+// The uid of the collection being renamed right now (the "active" card in a
+// bulk run, or the single target for a panel rename). Drives the stronger
+// .ai-processing-overlay--current variant of the effect.
+export const aiProcessingCurrentUidState = atom(null);
+
+// The AI tool the modal should jump straight to when it opens (e.g. when an AI
+// action is invoked from the command palette). null means "open the tool hub".
+// The modal consumes (reads + clears) this on open so a later hub open isn't
+// hijacked. Variant: a tool id string from AI_TOOLS (app/ai/aiTasks.js).
+export const aiToolsInitialToolState = atom(null);
+
+// The collection the Split Collection tool should operate on, set by the
+// context-menu route. null means "no pre-selected target" (modal shows the
+// picker). Variant: { uid: string }.
+export const aiSplitTargetState = atom(null);

@@ -9,6 +9,9 @@ import { triggerBackgroundSync } from './utils/sharedSync';
 import { showErrorToast } from './toastHelpers';
 import { IoClose } from 'react-icons/io5';
 import { HiOutlineDesktopComputer, HiCollection } from 'react-icons/hi';
+import AiSuggestNameButton from './AiSuggestNameButton';
+import { suggestCollectionName } from './ai/tasks/suggestCollectionName';
+import { suggestFolderName } from './ai/tasks/suggestFolderName';
 
 function SaveHighlightedOnlyLabel({ saveMode, windowCount }) {
     const [totalHighlighted, setTotalHighlighted] = useState(0);
@@ -103,6 +106,7 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
     const [hideClear, setHideClear] = useState(true);
     const [saveMode, setSaveMode] = useState('current'); // 'current' or 'all'
     const [windowCount, setWindowCount] = useState(1);
+    const [aiBusy, setAiBusy] = useState(false);
 
     useEffect(() => {
         setInputFocus();
@@ -296,9 +300,18 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
         setInputFocus();
     }
 
+    const suggestName = async () => {
+        if (saveMode === 'all' && windowCount > 1) {
+            const { collections } = await getAllWindowsTabsAndGroups('');
+            return suggestFolderName({ collections });
+        }
+        const collection = await getCurrentTabsAndGroups('');
+        return suggestCollectionName(collection);
+    };
+
     return <section className='add-collections-wrapper'>
         <div className="left-controls-group">
-            <div className="add-collection-group">
+            <div className={`add-collection-group${aiBusy ? ' ai-name-processing' : ''}`}>
                 <input
                     type="text"
                     maxLength="50"
@@ -310,6 +323,14 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
                     ref={inputRef}
                     value={collectionName} />
                 <label className="textbox_label">Search or Add collections</label>
+                <AiSuggestNameButton
+                    suggest={suggestName}
+                    onSuggested={(suggestedName) => {
+                        setName(suggestedName);
+                        setSearch(suggestedName);
+                    }}
+                    onBusyChange={setAiBusy}
+                />
                 <button
                     className="clear-button"
                     style={{ opacity: hideClear ? '0' : '1' }}

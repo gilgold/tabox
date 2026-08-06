@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback, lazy, Suspense } from 'react';
-import { createPortal } from 'react-dom';
 import { useAtomValue, useSetAtom } from 'jotai';
 import Select, { components } from 'react-select';
 import {
@@ -16,6 +15,12 @@ import {
     highlightedCollectionUidState,
 } from '../atoms/animationsState';
 import { sidebarNavigationState } from '../atoms/fullpageState';
+import { noPermissionOpenState, shareCollectionLinkModalState, shareFolderModalState, sharedActionConfirmState, sharedPanelOpenState } from '../atoms/sharedFoldersState';
+import { guardFolderEdit, isReadOnlySharedFolder, isSharedFolder } from '../utils/sharedFolderUtils';
+import { useSharedActivityUnread } from './FPSharedPanel';
+import { isProState } from '../atoms/premiumState';
+import { createCollectionMenuItems, createFolderMenuItems } from '../utils/contextMenuItems';
+import FPCtxMenu from './FPCtxMenu';
 import ColorPicker from '../ColorPicker';
 import {
     DndContext,
@@ -30,6 +35,7 @@ import {
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import FPCollectionCard from './FPCollectionCard';
+import FPFavoritesSection from './FPFavoritesSection';
 import FPCurrentWindowCard from './FPCurrentWindowCard';
 import FPSessionCard from './FPSessionCard';
 import FPSingleTabSessionRow from './FPSingleTabSessionRow';
@@ -41,6 +47,7 @@ import {
     batchDeleteCollections,
 } from '../utils/storageUtils';
 import { getColorValue, normalizeColorKey } from '../utils/colorMigration';
+import { naturalCompare } from '../utils/naturalCompare';
 import {
     MdArrowUpward,
     MdArrowDownward,
@@ -48,13 +55,9 @@ import {
     MdViewList,
     MdOpenInNew,
     MdOpenInBrowser,
-    MdEdit,
     MdPalette,
     MdClear,
     MdDelete,
-    MdOutlineRefresh,
-    MdContentCopy,
-    MdCenterFocusWeak,
     MdExpandMore,
     MdExpandLess,
     MdSave,
@@ -62,9 +65,11 @@ import {
     MdDriveFileMoveOutline,
     MdOutlineHome,
     MdSortByAlpha,
+    MdForum,
 } from 'react-icons/md';
-import { FaPlay } from 'react-icons/fa';
-import { FaStop } from 'react-icons/fa6';
+import { useTaboxAIEnabled } from '../ai/useTaboxAIEnabled';
+import { isAISupported } from '../ai/aiClient';
+import { aiToolsModalOpenState, aiToolsScopeState, aiSplitTargetState } from '../atoms/aiState';
 import { CiExport } from 'react-icons/ci';
 import { PiGridNineFill } from 'react-icons/pi';
 import { TbFileImport } from 'react-icons/tb';
@@ -107,10 +112,14 @@ import {
     duplicateFolder,
     deleteFolder,
     updateFolderDetails,
+    stopTrackingFolderCollections,
 } from '../utils/folderOperations';
 import FolderDeleteConfirmModal from '../FolderDeleteConfirmModal';
 import CreateFolderModalBase from '../CreateFolderModal';
 import { CURRENT_WINDOWS_ACCENT_COLOR } from './fpAccentColors';
+import { getFavoriteCollections } from '../utils/favoritesUtils';
+
+import AIButton from '../AIButton';
 
 const SessionsModal = lazy(() => import('../SessionsModal').then(m => ({ default: m.SessionsModal })));
 const SaveCollectionModal = lazy(() => import('./SaveCollectionModal'));
@@ -609,6 +618,7 @@ const MemoizedSortableFPCard = React.memo(SortableFPCard, (prev, next) => {
         prev.viewMode === next.viewMode &&
         prev.folderName === next.folderName &&
         prev.folderColor === next.folderColor &&
+        prev.folders === next.folders &&
         prev.onSelect === next.onSelect &&
         prev.onCardContextMenu === next.onCardContextMenu &&
         prev.isInteractionActive === next.isInteractionActive &&
@@ -666,6 +676,23 @@ function FPContentArea({
     const setSelectedCurrentWindowId = useSetAtom(selectedCurrentWindowIdState);
     const setSelectedSessionEntryKey = useSetAtom(selectedSessionEntryKeyState);
     const setCollectionRevealBatch = useSetAtom(collectionRevealBatchState);
+    const setNoPermissionOpen = useSetAtom(noPermissionOpenState);
+    const setShareFolderModal = useSetAtom(shareFolderModalState);
+    const setShareCollectionLink = useSetAtom(shareCollectionLinkModalState);
+    const setSharedActionConfirm = useSetAtom(sharedActionConfirmState);
+    const isPro = useAtomValue(isProState);
+
+    // AI: split-collection context-menu entry (mirrors the popup menu in
+    // contextMenuItems.js — the full-page menu is hand-rolled, so it's wired here).
+    const aiEnabled = useTaboxAIEnabled() && isAISupported();
+    const setAIToolsOpen = useSetAtom(aiToolsModalOpenState);
+    const setAIToolsScope = useSetAtom(aiToolsScopeState);
+    const setSplitTarget = useSetAtom(aiSplitTargetState);
+    const handleSplitCollection = useCallback((collection) => {
+        setAIToolsScope({ type: 'selected', uids: [collection.uid] });
+        setSplitTarget({ uid: collection.uid });
+        setAIToolsOpen(true);
+    }, [setAIToolsScope, setSplitTarget, setAIToolsOpen]);
 
     const dragSession = useAtomValue(dragSessionState);
 
@@ -846,9 +873,7 @@ function FPContentArea({
             const aVal = a[field];
             const bVal = b[field];
             if (field === 'name' || field === 'color') {
-                const aStr = (aVal || '').toString().toLowerCase();
-                const bStr = (bVal || '').toString().toLowerCase();
-                return sortAscending ? aStr.localeCompare(bStr) : bStr.localeCompare(aStr);
+                return sortAscending ? naturalCompare(aVal, bVal) : naturalCompare(bVal, aVal);
             }
             const aNum = aVal || 0;
             const bNum = bVal || 0;
@@ -872,6 +897,7 @@ function FPContentArea({
     const sortByField = sortFieldMap[sortType] || 'lastUpdated';
     const sortOrder = sortAscending ? 'asc' : 'desc';
     const shouldRenderGroupedAllCollections = sidebarNavigation === 'all' && !hasActiveFilters && !hasSearchQuery;
+    const isFavoritesView = sidebarNavigation === 'favorites';
     const isMixedParentFlatView = !shouldRenderGroupedAllCollections && (
         hasSearchQuery ||
         hasActiveFilters
@@ -880,7 +906,8 @@ function FPContentArea({
         sidebarNavigation === 'unorganized' ||
         (
             sidebarNavigation !== 'all' &&
-            sidebarNavigation !== 'sessions'
+            sidebarNavigation !== 'sessions' &&
+            sidebarNavigation !== 'favorites'
         )
     );
 
@@ -899,6 +926,8 @@ function FPContentArea({
                     sortOrder,
                 });
             }
+            case 'favorites':
+                return getFavoriteCollections(sourceCollections);
             case 'current-windows':
             case 'sessions':
                 return [];
@@ -978,10 +1007,33 @@ function FPContentArea({
 
     const folderUidSet = useMemo(() => new Set(folders.map(folder => folder.uid)), [folders]);
 
+    const folderByUid = useMemo(() => {
+        const map = new Map();
+        folders.forEach((folder) => map.set(folder.uid, folder));
+        return map;
+    }, [folders]);
+
+    // Guard a bulk write against every folder it touches (source folders of the
+    // affected collections, plus a move's target folder). Mirrors guardFolderEdit
+    // but fans out over a set of folder ids - opens the no-permission modal and
+    // returns false as soon as any touched folder is read-only shared.
+    const guardBulkFolderEdit = useCallback((folderIds) => {
+        const uniqueFolderIds = [...new Set([...folderIds].filter(Boolean))];
+        return uniqueFolderIds.every((folderId) => (
+            guardFolderEdit(folderByUid.get(folderId), () => setNoPermissionOpen(true))
+        ));
+    }, [folderByUid, setNoPermissionOpen]);
+
     const activeFolder = useMemo(
         () => folders.find((folder) => folder.uid === sidebarNavigation) || null,
         [folders, sidebarNavigation],
     );
+
+    // Shared "Activity & comments" panel toggle (shared folders only).
+    const sharedPanelOpen = useAtomValue(sharedPanelOpenState);
+    const setSharedPanelOpen = useSetAtom(sharedPanelOpenState);
+    const activeSharedFolderUid = activeFolder && isSharedFolder(activeFolder) ? activeFolder.uid : null;
+    const sharedActivityUnread = useSharedActivityUnread(activeSharedFolderUid);
 
     const contentHeading = useMemo(() => {
         const collectionCountLabel = `${filteredCollections.length} collection${filteredCollections.length !== 1 ? 's' : ''}`;
@@ -1042,6 +1094,14 @@ function FPContentArea({
                     subtitle: 'Everything you have saved in Tabox',
                     countLabel: collectionCountLabel,
                     accentColor: 'var(--primary-color)',
+                };
+            case 'favorites':
+                return {
+                    badge: 'Library area',
+                    title: 'Favorites',
+                    subtitle: 'Collections you starred',
+                    countLabel: collectionCountLabel,
+                    accentColor: 'var(--favorite-star-color)',
                 };
             case 'unorganized':
                 return {
@@ -1496,10 +1556,10 @@ function FPContentArea({
 
     // Panel handlers
     const handleSelectCollection = useCallback((collection) => {
-        setDetailPanelOpen(true);
         setSelectedCurrentWindowId(null);
         setSelectedSessionEntryKey(null);
         setSelectedCollectionUid(collection?.uid || null);
+        setDetailPanelOpen(true);
     }, [setDetailPanelOpen, setSelectedCollectionUid, setSelectedCurrentWindowId, setSelectedSessionEntryKey]);
 
     // Right-click context menu handlers
@@ -1718,6 +1778,55 @@ function FPContentArea({
         }
     }, [folderCtxMenu, closeFolderCtxMenu]);
 
+    const handleFolderCtxShare = useCallback(() => {
+        if (!folderCtxMenu) return;
+        const folder = folderCtxMenu.folder;
+        closeFolderCtxMenu();
+        setShareFolderModal(folder);
+    }, [folderCtxMenu, closeFolderCtxMenu, setShareFolderModal]);
+
+    // Leave/Unshare confirmation hardening: opens the shared
+    // SharedActionConfirmModal (rendered once by App.js) instead of firing
+    // the sendMessage+toast+refresh directly on a single click — that logic
+    // now lives in app/utils/sharedFolderActions.js, called by the modal's
+    // Confirm button.
+    const handleFolderCtxLeave = useCallback(() => {
+        if (!folderCtxMenu) return;
+        const folder = folderCtxMenu.folder;
+        closeFolderCtxMenu();
+        setSharedActionConfirm({ kind: 'leave', folder });
+    }, [folderCtxMenu, closeFolderCtxMenu, setSharedActionConfirm]);
+
+    const handleFolderCtxUnshare = useCallback(() => {
+        if (!folderCtxMenu) return;
+        const folder = folderCtxMenu.folder;
+        closeFolderCtxMenu();
+        setSharedActionConfirm({ kind: 'unshare', folder });
+    }, [folderCtxMenu, closeFolderCtxMenu, setSharedActionConfirm]);
+
+    // Whether any collection in the right-clicked folder is auto-tracked —
+    // gates the "Stop Auto Tracking Folder" menu entry.
+    const folderCtxHasTracked = useMemo(() => {
+        if (!folderCtxMenu || !trackedCollectionUids?.size) return false;
+        return collections.some((collection) => (
+            collection.parentId === folderCtxMenu.folder.uid && trackedCollectionUids.has(collection.uid)
+        ));
+    }, [folderCtxMenu, collections, trackedCollectionUids]);
+
+    const handleFolderCtxStopTracking = useCallback(async () => {
+        if (!folderCtxMenu) return;
+        const folder = folderCtxMenu.folder;
+        closeFolderCtxMenu();
+        try {
+            const count = await stopTrackingFolderCollections(folder.uid);
+            if (count > 0) {
+                showSuccessToast(`Stopped auto update for ${count} collection${count === 1 ? '' : 's'}`);
+            }
+        } catch {
+            showErrorToast('Failed to stop auto tracking');
+        }
+    }, [folderCtxMenu, closeFolderCtxMenu]);
+
     const handleFolderCtxDelete = useCallback(async () => {
         if (!folderCtxMenu) return;
         const folder = folderCtxMenu.folder;
@@ -1733,10 +1842,12 @@ function FPContentArea({
             showSuccessToast('Folder deleted');
             if (onDataUpdate) await onDataUpdate();
             await runTrackedSync();
+        } else if (result.blocked) {
+            setNoPermissionOpen(true);
         } else {
             showErrorToast('Failed to delete folder');
         }
-    }, [folderCtxMenu, closeFolderCtxMenu, groupedSectionCollectionsMap, onDataUpdate, runTrackedSync]);
+    }, [folderCtxMenu, closeFolderCtxMenu, groupedSectionCollectionsMap, onDataUpdate, runTrackedSync, setNoPermissionOpen]);
 
     const handleDeleteConfirm = useCallback(async (deleteCollections) => {
         if (!deleteModal) return;
@@ -1750,10 +1861,12 @@ function FPContentArea({
             showSuccessToast(msg);
             if (onDataUpdate) await onDataUpdate();
             await runTrackedSync();
+        } else if (result.blocked) {
+            setNoPermissionOpen(true);
         } else {
             showErrorToast('Failed to delete folder');
         }
-    }, [deleteModal, onDataUpdate, runTrackedSync]);
+    }, [deleteModal, onDataUpdate, runTrackedSync, setNoPermissionOpen]);
 
     const persistCollectionChanges = useCallback(async (nextCollections, affectedParentIds = []) => {
         await persistCollectionLayoutChanges({
@@ -1810,17 +1923,25 @@ function FPContentArea({
         activeCollection ? normalizeCollectionParentId(activeCollection, folderUidSet) : null
     ), [activeCollection, folderUidSet]);
 
-    // Sort handler — uses flatSort so all collections sort globally regardless of folder
+    // Sort handler — uses flatSort so all collections sort globally regardless of folder.
+    // Read-only shared collections are excluded from the write: their manual order was
+    // set by the folder's owner, not this (read-only) member, so a global sort must not
+    // touch it.
     const handleSort = async (sortBy, ascending) => {
         const { loadAllCollections, batchUpdateCollections } = await import('../utils/storageUtils');
         const sortFieldMap = { 'DATE': 'lastUpdated', 'NAME': 'name', 'COLOR': 'color' };
         const sortByField = sortFieldMap[sortBy] || 'lastUpdated';
         const sortOrder = ascending ? 'asc' : 'desc';
+        const readOnlyFolderUids = new Set(folders.filter(isReadOnlySharedFolder).map((folder) => folder.uid));
+        const isReadOnlyShared = (collection) => Boolean(collection.parentId) && readOnlyFolderUids.has(collection.parentId);
         const allCols = await loadAllCollections({ metadataOnly: false, sortBy: sortByField, sortOrder, flatSort: true });
-        const cleared = allCols.map(c => ({ ...c, order: null }));
+        const cleared = allCols
+            .filter((c) => !isReadOnlyShared(c))
+            .map(c => ({ ...c, order: null }));
         await batchUpdateCollections(cleared);
         const reloaded = await loadAllCollections({ metadataOnly: false, sortBy: sortByField, sortOrder, flatSort: true });
         const cleaned = reloaded.map((c) => {
+            if (isReadOnlyShared(c)) return c;
             const copy = { ...c };
             delete copy.order;
             return copy;
@@ -2109,6 +2230,11 @@ function FPContentArea({
             return;
         }
 
+        const affectedFolderIds = recoloredCollections.map((collection) => collection.parentId);
+        if (!guardBulkFolderEdit(affectedFolderIds)) {
+            return;
+        }
+
         const nextCollections = allCollections.map((collection) => (
             selectedIdSet.has(collection.uid)
                 ? {
@@ -2125,7 +2251,7 @@ function FPContentArea({
         }
 
         showSuccessToast(`Updated color for ${recoloredCollections.length} collection${recoloredCollections.length !== 1 ? 's' : ''}`);
-    }, [loadSelectedCollectionSnapshot, onDataUpdate, updateRemoteData]);
+    }, [guardBulkFolderEdit, loadSelectedCollectionSnapshot, onDataUpdate, updateRemoteData]);
 
     const handleOpenBulkMoveModal = useCallback(() => {
         if (!hasSelectedCollections || folders.length === 0) {
@@ -2148,6 +2274,12 @@ function FPContentArea({
 
         const movedCollections = selectedCollections.filter((collection) => collection.parentId !== targetFolderId);
         if (movedCollections.length === 0) {
+            setIsBulkMoveModalOpen(false);
+            return;
+        }
+
+        const touchedFolderIds = [targetFolderId, ...movedCollections.map((collection) => collection.parentId)];
+        if (!guardBulkFolderEdit(touchedFolderIds)) {
             setIsBulkMoveModalOpen(false);
             return;
         }
@@ -2176,12 +2308,17 @@ function FPContentArea({
         setIsBulkMoveModalOpen(false);
         const targetFolderName = folders.find((folder) => folder.uid === targetFolderId)?.name || 'folder';
         showSuccessToast(`Moved ${movedCollections.length} collection${movedCollections.length !== 1 ? 's' : ''} to ${targetFolderName}`);
-    }, [folders, loadSelectedCollectionSnapshot, onDataUpdate, updateRemoteData]);
+    }, [folders, guardBulkFolderEdit, loadSelectedCollectionSnapshot, onDataUpdate, updateRemoteData]);
 
     const handleBulkRemoveFromFolder = useCallback(async () => {
         const { selectedIdSet, allCollections, selectedCollections } = await loadSelectedCollectionSnapshot();
         const removableCollections = selectedCollections.filter((collection) => !!collection.parentId);
         if (removableCollections.length === 0) {
+            return;
+        }
+
+        const affectedFolderIds = removableCollections.map((collection) => collection.parentId);
+        if (!guardBulkFolderEdit(affectedFolderIds)) {
             return;
         }
 
@@ -2195,16 +2332,14 @@ function FPContentArea({
                 : collection
         ));
 
-        const affectedFolderIds = new Set(removableCollections.map((collection) => collection.parentId).filter(Boolean));
-
         await updateRemoteData(nextCollections);
-        await Promise.all([...affectedFolderIds].map((folderId) => updateFolderCollectionCount(folderId)));
+        await Promise.all([...new Set(affectedFolderIds.filter(Boolean))].map((folderId) => updateFolderCollectionCount(folderId)));
         if (onDataUpdate) {
             await onDataUpdate();
         }
 
         showSuccessToast(`Removed ${removableCollections.length} collection${removableCollections.length !== 1 ? 's' : ''} from folder${removableCollections.length !== 1 ? 's' : ''}`);
-    }, [loadSelectedCollectionSnapshot, onDataUpdate, updateRemoteData]);
+    }, [guardBulkFolderEdit, loadSelectedCollectionSnapshot, onDataUpdate, updateRemoteData]);
 
     const handleOpenBulkDeleteModal = useCallback(() => {
         if (!hasSelectedCollections) {
@@ -2221,6 +2356,12 @@ function FPContentArea({
             return;
         }
 
+        const affectedFolderIds = selectedCollections.map((collection) => collection.parentId);
+        if (!guardBulkFolderEdit(affectedFolderIds)) {
+            setIsBulkDeleteModalOpen(false);
+            return;
+        }
+
         const success = await batchDeleteCollections(selectedIds);
         if (!success) {
             showErrorToast('Failed to delete collections');
@@ -2228,10 +2369,9 @@ function FPContentArea({
         }
 
         const remainingCollections = allCollections.filter((collection) => !selectedIdSet.has(collection.uid));
-        const affectedFolderIds = new Set(selectedCollections.map((collection) => collection.parentId).filter(Boolean));
 
         await updateRemoteData(remainingCollections);
-        await Promise.all([...affectedFolderIds].map((folderId) => updateFolderCollectionCount(folderId)));
+        await Promise.all([...new Set(affectedFolderIds.filter(Boolean))].map((folderId) => updateFolderCollectionCount(folderId)));
 
         clearSelectedCollections();
         setIsBulkDeleteModalOpen(false);
@@ -2240,7 +2380,7 @@ function FPContentArea({
         }
 
         showSuccessToast(`Deleted ${selectedCollections.length} collection${selectedCollections.length !== 1 ? 's' : ''}`);
-    }, [batchDeleteCollections, clearSelectedCollections, loadSelectedCollectionSnapshot, onDataUpdate, updateRemoteData]);
+    }, [batchDeleteCollections, clearSelectedCollections, guardBulkFolderEdit, loadSelectedCollectionSnapshot, onDataUpdate, updateRemoteData]);
 
     const clearSelectedTabSessions = useCallback(() => {
         setSelectedTabSessionEntryKeys((previous) => (previous.size > 0 ? new Set() : previous));
@@ -2552,6 +2692,8 @@ function FPContentArea({
                     <TbFileImport size={18} />
                 </button>
             </div>
+
+            <AIButton withDivider selectedUids={selectedVisibleCollections.map((c) => c.uid)} />
         </>
     );
 
@@ -2926,6 +3068,7 @@ function FPContentArea({
                     isBulkSelected={selectedCollectionUids.has(collection.uid)}
                     onToggleBulkSelected={handleToggleCollectionSelection}
                     bulkSelectionAccentColor={bulkSelectionAccentColor}
+                    folders={folders}
                 />,
             );
 
@@ -3130,6 +3273,18 @@ function FPContentArea({
                         <p className="fp-content-heading-subtitle">{contentHeading.subtitle}</p>
                     </>
                 )}
+                {activeSharedFolderUid && (
+                    <button
+                        className={`fp-shared-panel-toggle${sharedPanelOpen ? ' active' : ''}`}
+                        onClick={() => setSharedPanelOpen(!sharedPanelOpen)}
+                        aria-label="Activity & comments"
+                        data-tooltip-id="main-tooltip"
+                        data-tooltip-content="Activity & comments"
+                    >
+                        <MdForum size={17} />
+                        {sharedActivityUnread && <span className="fp-shared-unread-dot" aria-hidden="true" />}
+                    </button>
+                )}
             </div>
 
             {/* Centered floating toolbar — hidden for lightweight live views */}
@@ -3206,7 +3361,23 @@ function FPContentArea({
                     ref={contentScrollRef}
                     className={`fp-content-grid ${showEntranceAnimation ? 'fp-content-animate-entrance' : ''} ${search ? 'fp-content-search-mode' : viewMode === 'list' ? 'fp-content-list-mode' : ''} ${shouldRenderGroupedAllCollections ? 'fp-content-grouped-mode' : ''}`}
                 >
-                    {hasRenderableCollections ? (
+                    {isFavoritesView ? (
+                        <FPFavoritesSection
+                            collections={collections}
+                            viewMode={viewMode}
+                            search={search}
+                            disableDrag={hasSearchQuery || hasSelectedCollections}
+                            updateCollection={updateCollection}
+                            removeCollection={removeCollection}
+                            updateRemoteData={updateRemoteData}
+                            addCollection={addCollection}
+                            onDataUpdate={onDataUpdate}
+                            onSelect={handleSelectCollection}
+                            onCardContextMenu={hasSelectedCollections ? undefined : handleCardContextMenu}
+                            trackedCollectionUids={trackedCollectionUids}
+                            folders={folders}
+                        />
+                    ) : hasRenderableCollections ? (
                         <DndContext
                             sensors={sensors}
                             collisionDetection={customCollisionDetection}
@@ -3241,6 +3412,7 @@ function FPContentArea({
                                             onDataUpdate={onDataUpdate}
                                             isAutoUpdate={trackedCollectionUids?.has(activeCollection.uid) === true}
                                             viewMode={viewMode}
+                                            folders={folders}
                                         />
                                     </div>
                                 ) : null}
@@ -3368,106 +3540,54 @@ function FPContentArea({
             </Suspense>
 
             {/* Right-click context menu for collection cards */}
-            {cardCtxMenu && createPortal(
-                <div
-                    ref={cardCtxMenuRef}
-                    className="fp-card-ctx-menu"
-                    style={{ top: cardCtxMenu.y, left: cardCtxMenu.x }}
-                >
-                    <button
-                        className="fp-card-ctx-item"
-                        onClick={() => handleCtxMenuAction(
-                            cardCtxMenu.isAutoUpdate
-                                ? cardCtxMenu.operations._handleFocusWindow
-                                : cardCtxMenu.operations._handleOpenTabs
-                        )}
-                    >
-                        {cardCtxMenu.isAutoUpdate
-                            ? <MdCenterFocusWeak size={16} />
-                            : <FaPlay size={12} />
-                        }
-                        <span>{cardCtxMenu.isAutoUpdate ? 'Focus Window' : 'Open Tabs'}</span>
-                    </button>
-                    <div className="fp-card-ctx-divider" />
-                    {!cardCtxMenu.isAutoUpdate && (
-                        <button
-                            className="fp-card-ctx-item"
-                            onClick={() => handleCtxMenuAction(cardCtxMenu.operations._handleUpdate)}
-                        >
-                            <MdOutlineRefresh size={16} />
-                            <span>Update Collection</span>
-                        </button>
-                    )}
-                    {cardCtxMenu.isAutoUpdate && (
-                        <button
-                            className="fp-card-ctx-item"
-                            onClick={() => handleCtxMenuAction(cardCtxMenu.operations._handleStopTracking)}
-                        >
-                            <FaStop size={14} />
-                            <span>Stop Auto Update</span>
-                        </button>
-                    )}
-                    <button
-                        className="fp-card-ctx-item"
-                        onClick={() => handleCtxMenuAction(cardCtxMenu.operations._exportCollectionToFile)}
-                    >
-                        <CiExport size={16} />
-                        <span>Export Collection</span>
-                    </button>
-                    <button
-                        className="fp-card-ctx-item"
-                        onClick={() => handleCtxMenuAction(cardCtxMenu.operations._handleDuplicate)}
-                    >
-                        <MdContentCopy size={16} />
-                        <span>Duplicate Collection</span>
-                    </button>
-                    <button
-                        className="fp-card-ctx-item"
-                        onClick={() => { const c = cardCtxMenu.collection; setCardCtxMenu(null); handleCopyCollectionUrls(c); }}
-                    >
-                        <MdContentCopy size={16} />
-                        <span>Copy all URLs</span>
-                    </button>
-                    <div className="fp-card-ctx-divider" />
-                    <button
-                        className="fp-card-ctx-item fp-card-ctx-danger"
-                        onClick={() => handleCtxMenuAction(cardCtxMenu.operations._handleDelete)}
-                    >
-                        <MdDelete size={16} />
-                        <span>Delete Collection</span>
-                    </button>
-                </div>,
-                document.body
+            {cardCtxMenu && (
+                <FPCtxMenu
+                    menuRef={cardCtxMenuRef}
+                    x={cardCtxMenu.x}
+                    y={cardCtxMenu.y}
+                    variant="card"
+                    items={createCollectionMenuItems({
+                        isAutoUpdate: cardCtxMenu.isAutoUpdate,
+                        onOpenTabs: () => handleCtxMenuAction(cardCtxMenu.operations._handleOpenTabs),
+                        onFocusWindow: () => handleCtxMenuAction(cardCtxMenu.operations._handleFocusWindow),
+                        onUpdate: () => handleCtxMenuAction(cardCtxMenu.operations._handleUpdate),
+                        onStopTracking: () => handleCtxMenuAction(cardCtxMenu.operations._handleStopTracking),
+                        onExport: () => handleCtxMenuAction(cardCtxMenu.operations._exportCollectionToFile),
+                        onShareLink: () => { const c = cardCtxMenu.collection; setCardCtxMenu(null); setShareCollectionLink(c); },
+                        onDuplicate: () => handleCtxMenuAction(cardCtxMenu.operations._handleDuplicate),
+                        isFavorite: cardCtxMenu.collection.isFavorite === true,
+                        onToggleFavorite: () => handleCtxMenuAction(cardCtxMenu.operations._handleToggleFavorite),
+                        onCopyUrls: () => { const c = cardCtxMenu.collection; setCardCtxMenu(null); handleCopyCollectionUrls(c); },
+                        aiEnabled,
+                        isPro,
+                        tabCount: cardCtxMenu.collection.tabs?.length || 0,
+                        onSplitCollection: () => { const c = cardCtxMenu.collection; setCardCtxMenu(null); handleSplitCollection(c); },
+                        onDelete: () => handleCtxMenuAction(cardCtxMenu.operations._handleDelete),
+                    })}
+                />
             )}
 
-            {folderCtxMenu && createPortal(
-                <div
-                    ref={folderCtxMenuRef}
-                    className="fp-sidebar-ctx-menu"
-                    style={{ top: folderCtxMenu.y, left: folderCtxMenu.x }}
-                >
-                    <button className="fp-sidebar-ctx-item" onClick={handleFolderCtxOpenAll}>
-                        <MdOpenInBrowser size={16} /> <span>Open All Collections</span>
-                    </button>
-                    <div className="fp-sidebar-ctx-divider" />
-                <button className="fp-sidebar-ctx-item" onClick={handleFolderCtxEdit}>
-                    <MdEdit size={16} /> <span>Edit Folder</span>
-                </button>
-                <button className="fp-sidebar-ctx-item" onClick={handleFolderCtxExport}>
-                    <CiExport size={16} /> <span>Export Folder</span>
-                </button>
-                    <button className="fp-sidebar-ctx-item" onClick={handleFolderCtxDuplicate}>
-                        <MdContentCopy size={16} /> <span>Duplicate Folder</span>
-                    </button>
-                    <button className="fp-sidebar-ctx-item" onClick={handleFolderCtxCopyUrls}>
-                        <MdContentCopy size={16} /> <span>Copy all URLs in folder</span>
-                    </button>
-                    <div className="fp-sidebar-ctx-divider" />
-                    <button className="fp-sidebar-ctx-item fp-sidebar-ctx-danger" onClick={handleFolderCtxDelete}>
-                        <MdDelete size={16} /> <span>Delete Folder</span>
-                    </button>
-                </div>,
-                document.body
+            {folderCtxMenu && (
+                <FPCtxMenu
+                    menuRef={folderCtxMenuRef}
+                    x={folderCtxMenu.x}
+                    y={folderCtxMenu.y}
+                    items={createFolderMenuItems({
+                        folder: folderCtxMenu.folder,
+                        isPro,
+                        hasTrackedCollections: folderCtxHasTracked,
+                        onOpenAll: handleFolderCtxOpenAll,
+                        onEdit: handleFolderCtxEdit,
+                        onExport: handleFolderCtxExport,
+                        onDuplicate: handleFolderCtxDuplicate,
+                        onCopyUrls: handleFolderCtxCopyUrls,
+                        onStopTracking: handleFolderCtxStopTracking,
+                        onShare: handleFolderCtxShare,
+                        onUnshare: handleFolderCtxUnshare,
+                        onLeave: handleFolderCtxLeave,
+                        onDelete: handleFolderCtxDelete,
+                    })}
+                />
             )}
         </div>
     );

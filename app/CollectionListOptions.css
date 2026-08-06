@@ -60,6 +60,34 @@
     pointer-events: auto;
 }
 
+/* The popup toolbar shares .fp-toolbar class names with the full page. The
+   full-page responsive rules are scoped to html.fullpage-mode, so the popup's
+   compact behavior is defined here: one row that never wraps (the fixed
+   wrapper would overlap the list) and labels hidden. The leading (clear
+   filters) slot always reserves its space — only its contents toggle
+   visibility — so the other buttons don't shift when a filter activates. */
+.collections-toolbar.fp-toolbar {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    /* Override .fp-toolbar's max-width: calc(100% - 48px); the popup toolbar
+       sizes itself via the width rule above. */
+    max-width: none;
+}
+
+.collections-toolbar .fp-toolbar-pill {
+    /* Pills are icon-only in the popup (labels hidden below); match the
+       compact fp-toolbar-btn footprint so everything fits on one row. */
+    padding: 0 10px;
+}
+
+.collections-toolbar .fp-toolbar-pill span {
+    display: none;
+}
+
+.collections-toolbar .fp-toolbar-divider {
+    margin: 0 2px;
+}
+
 .fp-toolbar-group {
     display: flex;
     align-items: center;

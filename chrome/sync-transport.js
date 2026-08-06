@@ -80,14 +80,9 @@ async function fetchServerFileTimestampState({ token, fileId, fetchImpl = fetch 
     return buildTimestampResult(SERVER_FILE_TIMESTAMP_STATE.OK, timestamp);
 }
 
-function getServerFileTimestampOrFalse(result) {
-    return result && result.status === SERVER_FILE_TIMESTAMP_STATE.OK ? result.timestamp : false;
-}
-
 const syncTransportApi = {
     SERVER_FILE_TIMESTAMP_STATE,
-    fetchServerFileTimestampState,
-    getServerFileTimestampOrFalse
+    fetchServerFileTimestampState
 };
 
 /* istanbul ignore next */

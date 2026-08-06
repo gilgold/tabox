@@ -21,6 +21,12 @@ describe('background sync alarm', () => {
         global.getAuthToken = jest.fn(async () => 'token-123');
         global.syncData = jest.fn(async () => true);
         global.logSyncOperation = jest.fn();
+        // push-client.js is loaded via importScripts (mocked as a no-op above) -
+        // stub its bare identifiers directly, mirroring the other cross-file
+        // globals above (Task 5: adaptive shared-sync alarm + push wiring).
+        global.isPushHealthy = jest.fn(async () => false);
+        global.ensurePushSubscription = jest.fn(async () => true);
+        global.teardownPushSubscription = jest.fn(async () => undefined);
     });
 
     afterEach(() => {
@@ -32,6 +38,9 @@ describe('background sync alarm', () => {
         delete global.getAuthToken;
         delete global.syncData;
         delete global.logSyncOperation;
+        delete global.isPushHealthy;
+        delete global.ensurePushSubscription;
+        delete global.teardownPushSubscription;
     });
 
     test('creates a recurring background sync alarm on startup when sync is enabled', async () => {
@@ -68,11 +77,22 @@ describe('background sync alarm', () => {
         await browser.runtime.onStartup.trigger();
 
         expect(browser.alarms.clear).toHaveBeenCalledWith('background-sync-alarm');
-        expect(browser.alarms.create).toHaveBeenLastCalledWith(
+
+        // Verify background-sync-alarm was created with correct interval
+        expect(browser.alarms.create).toHaveBeenCalledWith(
             'background-sync-alarm',
             expect.objectContaining({
                 delayInMinutes: 360,
                 periodInMinutes: 360
+            })
+        );
+
+        // Verify shared-folders-sync alarm was also created (new behavior)
+        expect(browser.alarms.create).toHaveBeenCalledWith(
+            'shared-folders-sync',
+            expect.objectContaining({
+                delayInMinutes: 1,
+                periodInMinutes: 1
             })
         );
     });

@@ -2,6 +2,11 @@ import { render, act } from '@testing-library/react';
 import Header from '../app/Header';
 import { Provider } from 'jotai';
 
+// Mock the AI client so these unrelated tests never touch the network.
+jest.mock('../app/ai/aiClient', () => ({
+    getAIAvailability: jest.fn().mockResolvedValue(undefined),
+}));
+
 describe('Header -- Sync disabled', () => {
   test('Header renders correctly - sync disabled', async () => {
     let container;

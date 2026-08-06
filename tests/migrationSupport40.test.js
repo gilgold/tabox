@@ -71,6 +71,22 @@ describe('migration support 4.0 module', () => {
         expect(assessment.migrationPath).toContain('repair_deferred_urls');
     });
 
+    test('treats an empty tabsArray with no indexed data as a supported no-op (fresh install)', () => {
+        // setInitialOptions in background.js seeds tabsArray: [] for brand-new users;
+        // that must not be mistaken for pre-4.0 legacy data.
+        expect(migrationSupport40.assessMigrationSupport40({
+            tabsArray: [],
+            localTimestamp: 0,
+            collectionsToTrack: []
+        })).toEqual({
+            currentVersion: '4.0',
+            supported: true,
+            migrationNeeded: false,
+            migrationPath: [],
+            unsupportedReason: null
+        });
+    });
+
     test('refuses automatic migration for pre-4.0 array-only runtime data', () => {
         const assessment = migrationSupport40.assessMigrationSupport40({
             tabsArray: [

@@ -1,0 +1,75 @@
+/* Animated icon for the auto-arrange AI tool card. Colors inherit from
+ * .ai-tool-card-icon (currentColor = #4361ee). Cards fly into folder rows on
+ * hover and play a single iteration — see AutoArrangeToolIcon.js. */
+
+.aa-folder-body {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linejoin: round;
+    opacity: 0.85;
+}
+
+.aa-folder-rim {
+    stroke: currentColor;
+    stroke-width: 1.3;
+    stroke-linecap: round;
+    opacity: 0.45;
+}
+
+.aa-card {
+    fill: currentColor;
+}
+
+/* Scale/rotate about each element's own centre. */
+.aa-folder,
+.aa-card {
+    transform-box: fill-box;
+    transform-origin: center;
+}
+
+/* ── Hover: cards fly into the folders, single iteration (staggered) ──────── */
+.ai-tool-card[data-tool-id="auto-arrange-folders"]:hover .aa-card {
+    will-change: transform, opacity;
+}
+
+.ai-tool-card[data-tool-id="auto-arrange-folders"]:hover .aa-card--a {
+    animation: aa-card-fly 1.25s cubic-bezier(0.4, 0, 0.2, 1) 1;
+}
+.ai-tool-card[data-tool-id="auto-arrange-folders"]:hover .aa-card--b {
+    animation: aa-card-fly 1.25s cubic-bezier(0.4, 0, 0.2, 1) 0.32s 1;
+}
+.ai-tool-card[data-tool-id="auto-arrange-folders"]:hover .aa-folder--a {
+    animation: aa-folder-bump 1.25s cubic-bezier(0.4, 0, 0.2, 1) 1;
+}
+.ai-tool-card[data-tool-id="auto-arrange-folders"]:hover .aa-folder--b {
+    animation: aa-folder-bump 1.25s cubic-bezier(0.4, 0, 0.2, 1) 0.32s 1;
+}
+
+/* Card: rest at left → fly right into the folder, shrinking + fading as it
+ * slips in → reset to the start while invisible → fade back to rest. */
+@keyframes aa-card-fly {
+    0%, 8%    { transform: translateX(0px) scale(1);    opacity: 1; }
+    42%       { transform: translateX(14px) scale(1);   opacity: 1; }
+    54%       { transform: translateX(20px) scale(0.4); opacity: 0; }
+    70%       { transform: translateX(0px) scale(0.7);  opacity: 0; }
+    86%, 100% { transform: translateX(0px) scale(1);    opacity: 1; }
+}
+
+/* Folder: a brief receive-bump as its card lands. */
+@keyframes aa-folder-bump {
+    0%, 42%, 70%, 100% { transform: scale(1); }
+    52%                { transform: scale(1.13); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ai-tool-card[data-tool-id="auto-arrange-folders"]:hover .aa-card,
+    .ai-tool-card[data-tool-id="auto-arrange-folders"]:hover .aa-folder {
+        animation: none;
+    }
+}
+
+html.performance-mode .ai-tool-card[data-tool-id="auto-arrange-folders"]:hover .aa-card,
+html.performance-mode .ai-tool-card[data-tool-id="auto-arrange-folders"]:hover .aa-folder {
+    animation: none;
+}

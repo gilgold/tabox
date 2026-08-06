@@ -6,7 +6,24 @@ try {
   importScripts('sync-merge.js');
   importScripts('sync-apply.js');
   importScripts('sync-throttle.js');
+  importScripts('pro-config.js');
   importScripts('background-utils.js');
+  importScripts('push-client.js');
+  importScripts('pro-entitlement.js');
+  importScripts('shared-folders.js');
+  importScripts('ai-client.js');
+  importScripts('ai-planners.js');
+  importScripts('ai-storage.js');
+  importScripts('ai-registry.js');
+  importScripts('ai-engine.js');
+  importScripts('ai-task-auto-rename.js');
+  importScripts('ai-task-auto-arrange.js');
+  importScripts('ai-task-smart-organize.js');
+  importScripts('duplicate-detect.js');
+  importScripts('duplicate-sweep.js');
+  importScripts('ai-task-duplicate-sweep.js');
+  importScripts('split-collection.js');
+  importScripts('ai-task-split-collection.js');
 }
 catch (e) {
   console.error(e);
@@ -31,6 +48,7 @@ catch (e) {
     : globalThis.TaboxSyncThrottle;
   const throttleSync = syncThrottleApi.createSyncThrottle();
 
+
   // Auto-update debouncing - wait 2 seconds after last event
   let autoUpdateTimeouts = new Map();
   const debounceAutoUpdate = (windowId, timeDelay = 2000, rebuildContextMenus = false) => {
@@ -52,6 +70,9 @@ const AUTO_BACKUP_ALARM = 'auto-backup-alarm';
 const BACKGROUND_SYNC_ALARM = 'background-sync-alarm';
 const BACKGROUND_SYNC_PERIOD_MINUTES = 6 * 60;
 const TOOLBAR_FULLPAGE_SETTING_KEY = 'chkToolbarIconOpensFullPage';
+const SHARED_SYNC_ALARM = 'shared-folders-sync';
+const SHARED_SYNC_PERIOD_MINUTES = 1;
+const SHARED_SYNC_FALLBACK_PERIOD_MINUTES = 60; // safety net while web push is healthy
 
 async function updateSharedSyncSessionState(overrides = {}) {
   const { googleUser, googleRefreshToken } = await browser.storage.local.get(['googleUser', 'googleRefreshToken']);
@@ -117,6 +138,108 @@ async function ensureBackgroundSyncAlarm() {
   }
 
   return true;
+}
+
+// Task 10: the shared-folders background sync alarm. Task 12 wiring: created for
+// every user signed in to Google (the shared-folders API piggybacks on the same
+// OAuth token as Drive sync) — regardless of whether they currently have any
+// locally-shared folders. doSyncSharedFolders() now always polls for pending
+// invites at the end of its cycle (chrome/shared-folders.js), so an invitee who
+// hasn't accepted anything yet still needs this alarm running to learn about
+// invites. Cleared when signed out, mirroring ensureBackgroundSyncAlarm's
+// create/clear shape above.
+async function ensureSharedSyncAlarm() {
+  // Establish/refresh the push subscription here so EVERY caller that
+  // (re)evaluates this alarm — onInstalled/onStartup, interactive login,
+  // and every shared-folders.js call site — also (re)establishes push.
+  // ensurePushSubscription() is cheap and never throws by contract
+  // (signed-out: fast false; healthy <24h: short-circuit true; failure:
+  // healthy:false), but guard for jest harnesses that don't stub the global.
+  if (typeof ensurePushSubscription === 'function') {
+    await ensurePushSubscription();
+  }
+
+  const { googleRefreshToken } = await browser.storage.local.get('googleRefreshToken');
+  const alarms = await browser.alarms.getAll();
+  const existingAlarm = alarms.find(alarm => alarm.name === SHARED_SYNC_ALARM);
+
+  if (googleRefreshToken) {
+    // Web push (chrome/push-client.js) delivers change tickles when healthy,
+    // so the poll relaxes to a slow safety net; without push this stays the
+    // 1-minute cadence that IS the sync mechanism.
+    const period = (await isPushHealthy())
+      ? SHARED_SYNC_FALLBACK_PERIOD_MINUTES
+      : SHARED_SYNC_PERIOD_MINUTES;
+    if (!existingAlarm || existingAlarm.periodInMinutes !== period) {
+      await browser.alarms.clear(SHARED_SYNC_ALARM);
+      browser.alarms.create(SHARED_SYNC_ALARM, {
+        delayInMinutes: period,
+        periodInMinutes: period
+      });
+    }
+  } else if (existingAlarm) {
+    await browser.alarms.clear(SHARED_SYNC_ALARM);
+  }
+}
+
+// MV3: push listeners must be registered synchronously at service-worker
+// startup (top level) so the browser can wake the SW for a push event even
+// after it was discarded. Content-free tickle: the payload is ignored; the
+// authenticated pull cycle (syncSharedFolders) fetches whatever actually
+// changed. Named so it's directly testable without dispatching a real
+// PushEvent (which jsdom/jest can't construct).
+function handlePushEvent(event) {
+  event.waitUntil(syncSharedFolders());
+}
+self.addEventListener('push', handlePushEvent);
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil(
+    ensurePushSubscription({ force: true }).then(() => ensureSharedSyncAlarm())
+  );
+});
+
+// Perf: event-driven push for shared folders. Every local data change already
+// flows through the 'updateRemote' message (Drive path, below) — piggyback a
+// debounced trigger of the shared-folders sync engine on the SAME signal so a
+// locally-shared-folder edit reaches the server in ~3s instead of waiting for
+// the next 1-minute alarm tick or 8s popup poll. Rapid consecutive edits
+// collapse into a single trailing run: each call resets the timer (classic
+// debounce), so a burst of edits schedules exactly one sync ~3s after the
+// LAST one. Deliberately a separate, dedicated timer — NOT the `throttleSync`
+// instance used for Drive (different cadence/semantics: that one only
+// coalesces overlapping in-flight runs, it never delays) — and deliberately
+// does not itself need re-entrancy protection against the alarm/popup poll:
+// syncSharedFolders() (chrome/shared-folders.js) already coalesces onto
+// whichever run is already in flight (`sharedSyncInFlight`).
+//
+// Guarded with `typeof syncSharedFolders === 'function'` (mirroring the
+// existing cross-file guards in shared-folders.js) so this stays a no-op
+// under tests that require background.js without the real shared-folders.js
+// loaded via importScripts.
+const SHARED_FOLDER_PUSH_DEBOUNCE_MS = 3000;
+let sharedFolderPushDebounceTimer = null;
+
+async function hasAnySharedFolderLocally() {
+  const { folders_index: foldersIndex = {} } = await browser.storage.local.get('folders_index');
+  return Object.values(foldersIndex).some((folder) => Boolean(folder?.shared?.folderId));
+}
+
+async function scheduleSharedFolderPush() {
+  const { googleRefreshToken } = await browser.storage.local.get('googleRefreshToken');
+  if (!googleRefreshToken) return; // signed out: nothing to push
+
+  // Cheap guard: the popup also sends 'updateRemote' for plain (non-shared)
+  // changes, which is the common case — bail before arming the timer so that
+  // path costs one storage.local.get and nothing else.
+  if (!(await hasAnySharedFolderLocally())) return;
+
+  if (sharedFolderPushDebounceTimer) clearTimeout(sharedFolderPushDebounceTimer);
+  sharedFolderPushDebounceTimer = setTimeout(() => {
+    sharedFolderPushDebounceTimer = null;
+    if (typeof syncSharedFolders === 'function') {
+      syncSharedFolders().catch((error) => console.error('Error in debounced shared folder push:', error));
+    }
+  }, SHARED_FOLDER_PUSH_DEBOUNCE_MS);
 }
 
 const BACKUP_GROUP_TITLES = {
@@ -258,8 +381,39 @@ async function createEmergencySelectionBackup(reason) {
 
 async function overwriteBackupSelection(payload = {}) {
   const selectedCollections = Array.isArray(payload.collections) ? payload.collections : [];
-  const selectedFolders = Array.isArray(payload.folders) ? payload.folders : [];
+  // Full-backup restores ask to mirror the backup exactly: folders that aren't part
+  // of the backup must be removed. Selective (pick-items) restores leave them alone.
+  const pruneMissingFolders = payload.pruneMissingFolders === true;
   const currentFolders = await loadAllFoldersBG();
+  const currentFoldersByUid = new Map(currentFolders.map((folder) => [folder.uid, folder]));
+  // Task 9/15 review: a folder is "live shared" when its CURRENT stored record (not
+  // the backup's) carries the Task 8 `shared` marker - mirrors shared-folders.js's
+  // isSharedFolderRecord.
+  const isLiveShared = (folder) => Boolean(folder && folder.shared && folder.shared.folderId);
+
+  // Backups are plain snapshots of local storage, so a folder that was shared (Task 8)
+  // when the backup was taken still carries its `shared` marker. Restoring that marker
+  // verbatim would resurrect stale worker-owned state (wrong folderId/role/members, or a
+  // share that no longer exists) - strip it from every restored folder before it's saved.
+  //
+  // EXCEPTION (Task 9/15 review): if the folder is CURRENTLY live-shared in local
+  // storage, a routine auto-backup taken while it was shared must not silently unshare
+  // it on restore - the next Drive sync would then upload it (the exact leak this
+  // whole guard exists to prevent). The current marker wins over the backup's
+  // absence-of-marker in that case. Folders that are NOT currently shared keep the
+  // strip: a backup must never resurrect stale shared state for a folder that has
+  // since been unshared.
+  const selectedFolders = (Array.isArray(payload.folders) ? payload.folders : []).map((folder) => {
+    if (!folder) return folder;
+    const currentFolder = currentFoldersByUid.get(folder.uid);
+    if (isLiveShared(currentFolder)) {
+      return { ...folder, shared: currentFolder.shared };
+    }
+    if (!folder.shared) return folder;
+    const rest = { ...folder };
+    delete rest.shared;
+    return rest;
+  });
   const currentCollections = await loadAllCollectionsBG(true);
 
   await createEmergencySelectionBackup('Before selective overwrite restore');
@@ -309,12 +463,38 @@ async function overwriteBackupSelection(payload = {}) {
     }
   }
 
+  let removedFolders = 0;
+  if (pruneMissingFolders) {
+    // Task 9/15 review: shared folders are owned by the worker, not the backup - never
+    // delete a folder that's currently live-shared just because the backup (which
+    // intentionally excludes shared folders/collections - see Task 9) doesn't have it.
+    const foldersToRemove = currentFolders.filter((folder) => !selectedFolderIds.has(folder.uid) && !isLiveShared(folder));
+    if (foldersToRemove.length > 0) {
+      const removeFolderIds = new Set(foldersToRemove.map((folder) => folder.uid));
+      // Re-home any collection still pointing at a folder we're about to remove so we
+      // never orphan or destroy user data — they fall back to the root (no folder).
+      const latestCollections = await loadAllCollectionsBG(true);
+      for (const collection of latestCollections) {
+        if (collection.parentId && removeFolderIds.has(collection.parentId)) {
+          await saveSingleCollectionBG({ ...collection, parentId: null }, true);
+        }
+      }
+      for (const folder of foldersToRemove) {
+        const deleted = await deleteSingleFolderBG(folder.uid);
+        if (deleted) {
+          removedFolders++;
+        }
+      }
+    }
+  }
+
   await forceLegacyStorageSync();
 
   return {
     success: true,
     overwrittenCollections,
-    overwrittenFolders
+    overwrittenFolders,
+    removedFolders
   };
 }
 
@@ -374,6 +554,7 @@ async function setInitialOptions() {
     chkEnableTabDiscard,
     currentSortValue,
     currentSortAscending,
+    chkTaboxAI,
   } = await browser.storage.local.get([
     'tabsArray',
     'chkOpenNewWindow',
@@ -383,6 +564,7 @@ async function setInitialOptions() {
     'chkEnableTabDiscard',
     'currentSortValue',
     'currentSortAscending',
+    'chkTaboxAI',
   ]);
   if (tabsArray == null) {
     // Only default tabsArray to empty if indexed storage also has no data,
@@ -415,6 +597,12 @@ async function setInitialOptions() {
   }
   if (currentSortAscending === undefined) {
     await browser.storage.local.set({ currentSortAscending: true });
+  }
+  if (chkTaboxAI == null) {
+    // Tabox AI defaults ON. Users who explicitly turned it off keep their
+    // choice (the key exists as false), and the switch still gates re-enabling
+    // behind AIEnableModal in the settings UI.
+    await browser.storage.local.set({ chkTaboxAI: true });
   }
 }
 
@@ -531,20 +719,32 @@ async function handleAutoUpdate(windowId, timeDelay = 1, rebuildContextMenus = f
     // 🔍 NEW: Only save if collection content has actually changed
     const hasChanges = collectionsHaveChanges(existingCollection, newCollection);
     if (hasChanges) {
-      // Update timestamp only when there are actual changes
-      newCollection.lastUpdated = Date.now();
-      
-      // 🚀 NEW: Save single collection instead of entire array (MASSIVE performance improvement!)
-      const saveSuccess = await saveSingleCollectionBG(newCollection, true); // Force timestamp update
-      if (!saveSuccess) {
-        console.error('Failed to save updated collection using indexed storage');
-        return;
-      }
+      // Task 10/13: a collection living in a read-only shared folder is synced
+      // top-down by the shared-folders sync engine (chrome/shared-folders.js) —
+      // the server is the source of truth there. Persisting a local tab-tracking
+      // auto-update here would either get silently discarded by the next pull
+      // or race with it, so skip the write entirely for read-role folders.
+      const parentFolder = existingCollection.parentId
+        ? await loadSingleFolderBG(existingCollection.parentId)
+        : null;
+      const parentIsReadOnlyShared = parentFolder?.shared?.role === 'read';
 
-      browser.runtime.sendMessage({
-        type: 'collectionAutoUpdated',
-        collection: newCollection
-      }).catch(() => {});
+      if (!parentIsReadOnlyShared) {
+        // Update timestamp only when there are actual changes
+        newCollection.lastUpdated = Date.now();
+
+        // 🚀 NEW: Save single collection instead of entire array (MASSIVE performance improvement!)
+        const saveSuccess = await saveSingleCollectionBG(newCollection, true); // Force timestamp update
+        if (!saveSuccess) {
+          console.error('Failed to save updated collection using indexed storage');
+          return;
+        }
+
+        browser.runtime.sendMessage({
+          type: 'collectionAutoUpdated',
+          collection: newCollection
+        }).catch(() => {});
+      }
     }
     
     // Note: Legacy storage will be updated during sync operations
@@ -1126,7 +1326,11 @@ const handleFullExportImportBG = async (exportData) => {
                     name: uniqueName,
                     lastUpdated: Date.now()
                 };
-                
+                // Shared folders (Task 8) are owned by the Cloudflare Worker for their
+                // original uid/members. An imported copy gets a brand new uid and is never
+                // automatically shared, so any carried-over marker must be dropped.
+                delete importedFolder.shared;
+
                 await saveSingleFolderBG(importedFolder);
                 importedFolders.push(importedFolder);
                 
@@ -1207,7 +1411,11 @@ const handleFolderImportBG = async (folderData) => {
             name: uniqueFolderName,
             lastUpdated: Date.now()
         };
-        
+        // Shared folders (Task 8) are owned by the Cloudflare Worker for their original
+        // uid/members. An imported copy gets a brand new uid and is never automatically
+        // shared, so any carried-over marker must be dropped.
+        delete importedFolder.shared;
+
         await saveSingleFolderBG(importedFolder);
 
         // Import collections in the folder
@@ -1406,6 +1614,34 @@ const handleSingleCollectionImportBG = async (collection) => {
 
 try {
   browser.runtime.onMessage.addListener(async (request) => {
+    if (request.type && request.type.startsWith('shared')) {
+      const handled = await handleSharedMessage(request);
+      if (handled !== null) return handled;
+    }
+
+    if (request.type === 'getProEntitlement') {
+      // Ownership-checked read (pro-entitlement.js): a record cached by a
+      // different Google account than the current one is stale and dropped.
+      if (typeof getProEntitlementForUser === 'function') {
+        return getProEntitlementForUser();
+      }
+      const { premiumEntitlement } = await browser.storage.local.get('premiumEntitlement');
+      return Promise.resolve(premiumEntitlement || null);
+    }
+
+    if (request.type === 'refreshProEntitlement') {
+      return refreshProEntitlement();
+    }
+
+    if (request.type === 'openProCheckout') {
+      return openProCheckout();
+    }
+
+    if (request.type === 'proGetSubscription' || request.type === 'proCancelSubscription' ||
+        request.type === 'proResumeSubscription' || request.type === 'proChangePlan') {
+      return handleProSubscriptionMessage(request);
+    }
+
     if (request.type === 'checkSyncStatus') {
       try {
         const {
@@ -1426,37 +1662,60 @@ try {
           return Promise.resolve(false);
         }
 
+        // The cached profile can be lost while the refresh token survives (partial
+        // sign-out, interrupted login, storage cleanup). Don't just report
+        // "reconnecting" — that state would never resolve on its own. Try to get a
+        // token: if that works, fall through to the normal flow below, which
+        // re-fetches and re-stores the profile via getGoogleUser().
         if (!googleUser && googleRefreshToken) {
-          logSyncOperation('info', 'Refresh token available but profile missing, reporting reconnecting state');
-          await updateSharedSyncSessionState({
-            status: SYNC_SESSION_STATUS.AUTH_REFRESHING,
-            hasRefreshToken: true,
-            user: null,
-            error: null
-          });
-          return Promise.resolve({
-            syncStatus: 'auth_refreshing',
-            hasRefreshToken: true
-          });
+          const recoveredToken = await getAuthToken();
+          if (recoveredToken === false) {
+            logSyncOperation('info', 'Refresh token available but profile missing and token refresh failed, reporting reconnecting state');
+            await updateSharedSyncSessionState({
+              status: SYNC_SESSION_STATUS.AUTH_REFRESHING,
+              hasRefreshToken: true,
+              user: null,
+              error: null
+            });
+            return Promise.resolve({
+              syncStatus: 'auth_refreshing',
+              hasRefreshToken: true
+            });
+          }
+          logSyncOperation('info', 'Refresh token available but profile missing, recovered a token and re-fetching profile');
         }
         
-        // Check if there's a persistent auth error that requires user action
+        // Check if there's a persistent auth error that requires user action.
+        // A stored error can go stale: a dev build with missing credentials, or a
+        // transient failure that has since recovered, would otherwise lock the user
+        // out forever because this early return runs before the token is ever
+        // re-validated (and before the clear at the bottom of this handler). So when a
+        // refresh token is still present, try to obtain a token first — if that works
+        // the stored error is stale and we clear it and continue normally.
         if (syncAuthError && syncAuthError.type) {
-          logSyncOperation('info', 'Auth error detected, user needs to re-authenticate', {
+          const recoveryToken = googleRefreshToken ? await getAuthToken() : false;
+          if (recoveryToken === false) {
+            logSyncOperation('info', 'Auth error detected, user needs to re-authenticate', {
+              errorType: syncAuthError.type,
+              age: Date.now() - syncAuthError.timestamp
+            });
+            await updateSharedSyncSessionState({
+              status: SYNC_SESSION_STATUS.AUTH_REQUIRED,
+              error: syncAuthError.message || 'Please sign out and sign back in to restore sync.'
+            });
+            return Promise.resolve({
+              ...googleUser,
+              syncStatus: 'auth_required',
+              syncError: syncAuthError.message || 'Please sign out and sign back in to restore sync.'
+            });
+          }
+          logSyncOperation('info', 'Cleared stale sync auth error after recovering a valid token', {
             errorType: syncAuthError.type,
             age: Date.now() - syncAuthError.timestamp
           });
-          await updateSharedSyncSessionState({
-            status: SYNC_SESSION_STATUS.AUTH_REQUIRED,
-            error: syncAuthError.message || 'Please sign out and sign back in to restore sync.'
-          });
-          return Promise.resolve({ 
-            ...googleUser, 
-            syncStatus: 'auth_required',
-            syncError: syncAuthError.message || 'Please sign out and sign back in to restore sync.'
-          });
+          await browser.storage.local.remove('syncAuthError');
         }
-        
+
         // Try to get auth token with improved error handling
         const token = await getAuthToken();
         if (token === false) {
@@ -1615,15 +1874,29 @@ try {
         }
         
         if (backupData && backupData.tabsArray) {
-          // Write through the indexed storage system so the restored collections are
-          // actually visible. Writing only the legacy tabsArray is inert for existing
-          // users, since loadAllCollections() reads the index and only falls back to
-          // tabsArray when the index is empty.
-          await updateAllCollectionsBG(backupData.tabsArray);
+          // Pre-sync (and other metadata-only) backups store just tabCount + sampleTabs,
+          // never the full `tabs`. Restoring one would overwrite live collections with
+          // empty tabs, wiping real data. Refuse anything that isn't a full snapshot.
+          if (!isFullCollectionSnapshot(backupData)) {
+            console.warn('[Recovery] Refusing to restore a metadata-only backup (no full tabs)');
+            return Promise.resolve(false);
+          }
+
+          // Restore the FULL backup state, not just collections. Use the same overwrite
+          // path as the recovery panel so folders are restored, collection parentIds are
+          // normalized, and folders absent from the backup are pruned (their orphaned
+          // collections fall back to root). Writing collections alone left folder layout
+          // stale, so a restore appeared to "do nothing".
+          const restoreResult = await overwriteBackupSelection({
+            type: 'full_export',
+            collections: backupData.tabsArray,
+            folders: Array.isArray(backupData.foldersArray) ? backupData.foldersArray : [],
+            pruneMissingFolders: true
+          });
           await browser.storage.local.set({
             localTimestamp: Date.now() // Mark as newly updated
           });
-          return Promise.resolve(true);
+          return Promise.resolve(Boolean(restoreResult?.success));
         }
         
         return Promise.resolve(false);
@@ -1736,7 +2009,25 @@ try {
         }
 
         await ensureBackgroundSyncAlarm();
-        
+        // ensureSharedSyncAlarm() now also (re)establishes the push
+        // subscription as its first step, so interactive login stops the
+        // session from being stuck on 1-minute polling forever.
+        if (typeof ensureSharedSyncAlarm === 'function') await ensureSharedSyncAlarm();
+
+        // Sign-out wipes the cached Pro entitlement, and the `cached &&`
+        // zero-Worker-calls guards mean nothing would ever restore it — a Pro
+        // user signing back in would look free until a manual refresh. One
+        // refresh per interactive sign-in restores the record (and flips any
+        // open UI via the popup's storage.onChanged listener). Never let a
+        // Worker hiccup fail an otherwise-successful login.
+        if (typeof refreshProEntitlement === 'function') {
+          try {
+            await refreshProEntitlement();
+          } catch (entitlementError) {
+            console.error('Entitlement refresh after login failed:', entitlementError);
+          }
+        }
+
         return Promise.resolve(user);
       } catch (error) {
         console.error('Exception during login:', error);
@@ -1776,6 +2067,10 @@ try {
 
     if (request.type === 'updateRemote') {
       console.log('🔄 [SYNC] updateRemote message received - starting sync');
+      // Perf: piggyback a debounced shared-folder push on the same
+      // local-data-changed signal that drives the Drive sync below.
+      // Fire-and-forget — must never block or fail the Drive path.
+      scheduleSharedFolderPush().catch(() => {});
       try {
         // Coalesce overlapping syncs; a request made during an in-flight sync
         // awaits a trailing run that pushes the latest local state.
@@ -1878,8 +2173,12 @@ try {
     if (request.type === 'logout') {
       const token = await getAuthToken();
       await browser.alarms.clear(BACKGROUND_SYNC_ALARM);
+      await teardownPushSubscription();
       if (token === false) {
-        await browser.storage.local.remove(['googleUser', 'googleToken', 'googleRefreshToken', 'tokenExpiryTime', 'syncAuthError']);
+        // premiumEntitlement/proCheckoutPendingUntil belong to the signed-out
+      // account — clearing them here prevents the next account from inheriting
+      // the previous user's Pro entitlement (isEntitled() is time-based only).
+      await browser.storage.local.remove(['googleUser', 'googleToken', 'googleRefreshToken', 'tokenExpiryTime', 'syncAuthError', 'premiumEntitlement', 'proCheckoutPendingUntil']);
         await updateSharedSyncSessionState({
           status: SYNC_SESSION_STATUS.DISABLED,
           isEnabled: false,
@@ -1890,7 +2189,10 @@ try {
         await browser.storage.sync.remove('syncFileId');
         return Promise.resolve(true);
       }
-      await browser.storage.local.remove(['googleUser', 'googleToken', 'googleRefreshToken', 'tokenExpiryTime', 'syncAuthError']);
+      // premiumEntitlement/proCheckoutPendingUntil belong to the signed-out
+      // account — clearing them here prevents the next account from inheriting
+      // the previous user's Pro entitlement (isEntitled() is time-based only).
+      await browser.storage.local.remove(['googleUser', 'googleToken', 'googleRefreshToken', 'tokenExpiryTime', 'syncAuthError', 'premiumEntitlement', 'proCheckoutPendingUntil']);
       await updateSharedSyncSessionState({
         status: SYNC_SESSION_STATUS.DISABLED,
         isEnabled: false,
@@ -1945,14 +2247,201 @@ try {
         return Promise.resolve(result);
       } catch (error) {
         console.error('[Import] Error in importData message handler:', error);
-        return Promise.resolve({ 
-          success: false, 
-          error: error?.message || String(error) || 'Unknown error in import message handler' 
+        return Promise.resolve({
+          success: false,
+          error: error?.message || String(error) || 'Unknown error in import message handler'
         });
       }
     }
 
+    if (request.type === 'smartOrganizeApply') {
+      const result = await applySmartOrganizePlan({
+        windowId: request.windowId,
+        plan: request.plan,
+        createdAt: request.createdAt,
+      });
+      return Promise.resolve(result);
+    }
+
+    if (request.type === 'smartOrganizeUndo') {
+      const result = await undoSmartOrganize({ windowId: request.windowId });
+      return Promise.resolve(result);
+    }
+
+    if (request.type === 'duplicateSweepApply') {
+      const result = await globalThis.TaboxDuplicateSweep.applyDuplicateSweepAction({
+        groupId: request.groupId, action: request.action, keeperUid: request.keeperUid, applyToAll: request.applyToAll,
+      });
+      await throttleSync(() => handleRemoteUpdate());
+      return Promise.resolve(result);
+    }
+
+    if (request.type === 'duplicateSweepUndo') {
+      const result = await globalThis.TaboxDuplicateSweep.undoDuplicateSweepLast();
+      await throttleSync(() => handleRemoteUpdate());
+      return Promise.resolve(result);
+    }
+
+    if (request.type === 'duplicateSweepCleanupPreview') {
+      const result = await globalThis.TaboxDuplicateSweep.previewDuplicateSweepCleanup();
+      return Promise.resolve(result);
+    }
+
+    if (request.type === 'duplicateSweepCleanup') {
+      const result = await globalThis.TaboxDuplicateSweep.applyDuplicateSweepCleanup({
+        collectionUids: request.collectionUids, folderUids: request.folderUids,
+      });
+      await throttleSync(() => handleRemoteUpdate());
+      return Promise.resolve(result);
+    }
+
+    if (request.type === 'duplicateSweepDismiss') {
+      const result = await globalThis.TaboxDuplicateSweep.dismissDuplicateSweep();
+      return Promise.resolve(result);
+    }
+
+    if (request.type === 'splitCollectionApply') {
+      const result = await globalThis.TaboxSplitCollection.applySplitCollectionPlan(request.payload || {});
+      await throttleSync(() => handleRemoteUpdate());
+      return Promise.resolve(result);
+    }
+
+    if (request.type === 'splitCollectionUndo') {
+      const result = await globalThis.TaboxSplitCollection.undoSplitCollection({ opId: request.opId });
+      await throttleSync(() => handleRemoteUpdate());
+      return Promise.resolve(result);
+    }
+
+    if (request.type === 'aiRun' || request.type === 'aiUndo' || request.type === 'aiUndoItems') {
+      // Build the engine + ctx HERE so SW-native deps are in scope (throttleSync /
+      // handleRemoteUpdate / loadAllCollectionsBG are background.js lexical bindings,
+      // not module-load globals).
+      const engine = globalThis.TaboxAIEngine.createEngine({
+        registry: globalThis.TaboxAIRegistry,
+        ctx: {
+          client: globalThis.TaboxAIClient,
+          planners: globalThis.TaboxAIPlanners,
+          storage: globalThis.TaboxAIStorage,
+          detect: globalThis.TaboxDuplicateDetect,
+          loadCollections: () => loadAllCollectionsBG(true),
+          loadLooseSummaries: () => loadLooseCollectionSummariesBG(
+            (globalThis.TaboxAIPlanners && globalThis.TaboxAIPlanners.MAX_TITLES_PER_COLLECTION) || 5
+          ),
+          readWindow: (windowId) => readWindowForAI(windowId),
+          triggerSync: () => throttleSync(() => handleRemoteUpdate()),
+        },
+      });
+      if (request.type === 'aiUndo') {
+        try {
+          await engine.undoLast();
+          return Promise.resolve({ ok: true });
+        } catch (error) {
+          console.error('Tabox AI: aiUndo failed:', error);
+          return Promise.resolve({ ok: false, error: error?.message || String(error) });
+        }
+      }
+      if (request.type === 'aiUndoItems') {
+        try {
+          await engine.undoItems({ uids: request.uids || [] });
+          return Promise.resolve({ ok: true });
+        } catch (error) {
+          console.error('Tabox AI: aiUndoItems failed:', error);
+          return Promise.resolve({ ok: false, error: error?.message || String(error) });
+        }
+      }
+      const controller = new AbortController();
+      globalThis.__aiAbort = controller; // single in-flight AI task
+      let result;
+      try {
+        result = await engine.runTask({ id: request.task, params: request.params || {}, signal: controller.signal });
+      } finally { globalThis.__aiAbort = null; }
+      return Promise.resolve(result); // engine maps throw/abort to status:error/cancelled
+    }
+    if (request.type === 'aiCancel') {
+      if (globalThis.__aiAbort) {
+        globalThis.__aiAbort.abort();
+        // A task is live in this worker — abort its fetches and flag it; the
+        // run loop observes the flag and writes the terminal 'cancelled' state.
+        // Merge the flag through the serialized write chain so the task's
+        // concurrent report() writes can't clobber it back to false.
+        await globalThis.TaboxAIEngine.requestCancel();
+      } else {
+        // No live run in THIS worker. Either the owning worker was discarded
+        // mid-run (stuck 'running' with nobody to observe the flag) or the run
+        // already ended — finalize directly so the UI can't stay stuck.
+        await globalThis.TaboxAIEngine.finalizeInterrupted({ status: 'cancelled', summary: '' });
+      }
+      return Promise.resolve({ ok: true });
+    }
+    if (request.type === 'aiAvailability') {
+      return Promise.resolve(await globalThis.TaboxAIClient.aiAvailability());
+    }
+    if (request.type === 'aiComplete') {
+      // Popup-relayed one-shot completion (suggest collection/folder name).
+      // Long-running multi-step tasks go through aiRun instead.
+      const payload = request.payload || {};
+      try {
+        const session = await globalThis.TaboxAIClient.createAISession({
+          systemPrompt: payload.systemPrompt,
+          temperature: payload.temperature,
+          topK: payload.topK,
+        });
+        const content = await session.prompt(payload.prompt, { responseConstraint: payload.responseConstraint });
+        return Promise.resolve({ ok: true, content });
+      } catch (error) {
+        return Promise.resolve({ ok: false, error: error?.message || String(error) });
+      }
+    }
+    if (request.type === 'aiWarmup') {
+      // Fire-and-forget warm-up: creating a session prefetches/refreshes the
+      // Google auth token so the first real AI task doesn't pay for it.
+      // Errors (signed out) are swallowed — there's simply nothing to warm.
+      try {
+        const warmSession = await globalThis.TaboxAIClient.createAISession({});
+        warmSession.destroy();
+      } catch (warmError) {
+        console.error('Tabox AI: warmup skipped:', warmError && warmError.message);
+      }
+      return Promise.resolve({ ok: true });
+    }
+    if (request.type === 'aiGetState') {
+      let state = (await browser.storage.local.get('aiTaskState')).aiTaskState || null;
+      // A 'running' state with no live abort controller means the worker that
+      // owned the run was discarded (MV3) — the task isn't executing. Finalize
+      // it so the popup doesn't reattach to (and auto-navigate into) a dead run
+      // on every open. __aiAbort is set synchronously before the run flips the
+      // status to 'running', so within a live worker the two never disagree.
+      if (state && state.status === 'running' && !globalThis.__aiAbort) {
+        state = await globalThis.TaboxAIEngine.finalizeInterrupted();
+      }
+      return Promise.resolve(state || null);
+    }
+
   });
+
+  // Share links: the /join/<token> page (externally_connectable origins in the
+  // manifest) hands us its token here. Everything else is ignored — reply with
+  // a closed error so the page can render a failure state instead of hanging.
+  // handleShareLinkRedeem resolves as a bare global exactly like
+  // handleSharedMessage above — shared-folders.js is loaded via importScripts
+  // before any message can fire. Optional-chained: onMessageExternal only
+  // exists when the manifest declares externally_connectable (and is absent
+  // from the Jest webextension mock) — a throw here would silently abort every
+  // listener registration below in this shared try block.
+  browser.runtime.onMessageExternal?.addListener?.(async (request) => {
+    // Install detection: answered instantly, no network/storage work. The
+    // page must never infer "not installed" from redeem latency — a real
+    // redeem (cold SW + /links fetch + auth + join + materialize) can
+    // legitimately take seconds.
+    if (request?.type === 'taboxShareLinkPing') {
+      return { ok: true, status: 'pong' };
+    }
+    if (request?.type === 'taboxShareLink') {
+      return handleShareLinkRedeem(request.token);
+    }
+    return { ok: false, status: 'error', error: 'unknown_message' };
+  });
+
   browser.commands.onCommand.addListener(async (command) => {
     try {
       const index = parseInt(command.replace('open-collection-', '')) - 1;
@@ -2009,6 +2498,32 @@ try {
       console.error('Error handling toolbar action click:', error);
     }
   });
+
+  // C1: make the Chrome invite notification (created in chrome/shared-folders.js's
+  // pollInvites, id `shared-invite-<folderId>`) actionable — clicking it opens the
+  // extension's full-page view (where the invite banner/pending-invites UI lives)
+  // and clears the notification so it doesn't linger in the tray.
+  // `notifications` is an OPTIONAL permission (requested from the popup on the
+  // first sharing interaction), so the namespace may be entirely undefined at SW
+  // boot — an unguarded addListener here would throw and kill the whole service
+  // worker. After a runtime grant the namespace only appears once the SW
+  // restarts; notifications become clickable from that lifecycle on.
+  if (browser.notifications?.onClicked) {
+    browser.notifications.onClicked.addListener(async (notificationId) => {
+      if (typeof notificationId !== 'string' || !notificationId.startsWith('shared-invite-')) return;
+      try {
+        await openExtensionFullPage();
+      } catch (error) {
+        console.error('Error opening full page from shared-invite notification:', error);
+      } finally {
+        try {
+          await browser.notifications.clear(notificationId);
+        } catch (error) {
+          console.error('Error clearing shared-invite notification:', error);
+        }
+      }
+    });
+  }
 
   browser.storage.onChanged.addListener(async (changes, areaName) => {
     if (areaName !== 'local' || !changes[TOOLBAR_FULLPAGE_SETTING_KEY]) {
@@ -2093,19 +2608,38 @@ try {
         // This ensures migrations run in the proper context with full access to utilities
         
         // Set a flag to indicate an update occurred
-        await browser.storage.local.set({ 
+        await browser.storage.local.set({
           extensionUpdated: true,
           updateTimestamp: Date.now(),
           previousVersion: previousVersion,
           currentVersion: currentVersion
         });
+
+        // Existing users crossing the 4.2 boundary see the onboarding once,
+        // unless they've already completed (or dismissed) it before.
+        const ONBOARDING_INTRO_VERSION = '4.2';
+        const versionAtLeast = (version, target) => {
+          const a = String(version || '0').split('.').map((n) => parseInt(n, 10) || 0);
+          const b = String(target).split('.').map((n) => parseInt(n, 10) || 0);
+          for (let i = 0; i < Math.max(a.length, b.length); i++) {
+            if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0);
+          }
+          return true;
+        };
+        if (!versionAtLeast(previousVersion, ONBOARDING_INTRO_VERSION) && versionAtLeast(currentVersion, ONBOARDING_INTRO_VERSION)) {
+          const { onboardingCompleted } = await browser.storage.local.get('onboardingCompleted');
+          if (onboardingCompleted !== true) {
+            await browser.storage.local.set({ onboardingEligible: true });
+          }
+        }
       }
     } else if (reason === "install") {
       // Mark as fresh install - no migration needed
       await browser.storage.local.set({ 
         extensionInstalled: true,
         installTimestamp: Date.now(),
-        installedVersion: currentVersion
+        installedVersion: currentVersion,
+        onboardingEligible: true
       });
     }
     
@@ -2115,7 +2649,10 @@ try {
   await handleBadge();
   await handleAutoBackupAlarm();
   await ensureBackgroundSyncAlarm();
-  
+  await ensurePushSubscription();
+  await ensureSharedSyncAlarm();
+  if (typeof ensureProEntitlementAlarm === 'function') await ensureProEntitlementAlarm();
+
   // Clean up large backups on startup (after 5 seconds to not block initialization)
   setTimeout(async () => {
     try {
@@ -2131,6 +2668,9 @@ try {
     await applyToolbarLaunchBehavior();
     await handleAutoBackupAlarm();
     await ensureBackgroundSyncAlarm();
+    await ensurePushSubscription();
+    await ensureSharedSyncAlarm();
+    if (typeof ensureProEntitlementAlarm === 'function') await ensureProEntitlementAlarm();
   });
 
   const handleAutoBackup = async () => {
@@ -2179,6 +2719,8 @@ try {
   }
 
   browser.alarms.onAlarm.addListener(async (alarm) => {
+    if (typeof handleProAlarm === 'function' && await handleProAlarm(alarm.name)) return;
+
     if (alarm.name === AUTO_BACKUP_ALARM) {
       await handleAutoBackup();
       return;
@@ -2186,6 +2728,11 @@ try {
 
     if (alarm.name === BACKGROUND_SYNC_ALARM) {
       await runBackgroundSync();
+      return;
+    }
+
+    if (alarm.name === SHARED_SYNC_ALARM) {
+      await syncSharedFolders();
     }
   });
 

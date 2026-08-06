@@ -1,16 +1,25 @@
 import React, { useEffect, useState, useRef, useMemo, useEffectEvent } from 'react';
 import { MdDragIndicator, MdCenterFocusWeak, MdChevronRight } from 'react-icons/md';
-import { FaPlay } from 'react-icons/fa';
+import { FaPlay, FaStar, FaRegStar } from 'react-icons/fa';
 import { BsIncognito } from 'react-icons/bs';
 import ContextMenu from './ContextMenu';
 import { createCollectionMenuItems } from './utils/contextMenuItems';
+import { countNonEmptyGroups } from './utils/groupCount';
 import TimeAgo from 'javascript-time-ago';
 import { useSetAtom, useAtomValue } from 'jotai';
 import { deletingCollectionUidsState, highlightedCollectionUidState, dragSessionState } from './atoms/animationsState';
 import { trackingStateVersion } from './atoms/globalAppSettingsState';
+import { aiProcessingUidsState, aiProcessingCurrentUidState, aiSplitTargetState, aiToolsModalOpenState, aiToolsScopeState } from './atoms/aiState';
+import { shareCollectionLinkModalState } from './atoms/sharedFoldersState';
+import { isProState } from './atoms/premiumState';
+import { useTaboxAIEnabled } from './ai/useTaboxAIEnabled';
+import { isAISupported } from './ai/aiClient';
+import './AIEffects.css';
 
 import ColorPicker from './ColorPicker';
 import { useCollectionOperations } from './useCollectionOperations';
+import { buildCollectionUrlList, copyToClipboard } from './utils/index';
+import { showSuccessToast, showErrorToast, showInfoToast } from './toastHelpers';
 import { browser } from '../static/globals';
 import DroppableCollection from './DroppableCollection';
 
@@ -20,6 +29,8 @@ function CollectionListItem(props) {
     const highlightedCollectionUid = useAtomValue(highlightedCollectionUidState);
     const setHighlightedCollectionUid = useSetAtom(highlightedCollectionUidState);
     const dragSession = useAtomValue(dragSessionState);
+    const aiProcessingUids = useAtomValue(aiProcessingUidsState);
+    const aiProcessingCurrentUid = useAtomValue(aiProcessingCurrentUidState);
     const [isAutoUpdate, setIsAutoUpdate] = useState(false);
     const [showAllMatchingTabs, setShowAllMatchingTabs] = useState(false);
     const [isInteractionActive, setIsInteractionActive] = useState(false);
@@ -34,9 +45,28 @@ function CollectionListItem(props) {
 
     // Check if this item should be highlighted (new UID-based system)
     const isHighlighted = highlightedCollectionUid === props.collection.uid;
-    
+
     // Check if this item is being deleted
     const isDeleting = deletingCollectionUids.has(props.collection.uid);
+
+    // AI processing state
+    const isAiProcessing = aiProcessingUids.includes(props.collection.uid);
+    const isAiCurrent = aiProcessingCurrentUid === props.collection.uid;
+
+    // AI Split Collection
+    const setAIToolsOpen = useSetAtom(aiToolsModalOpenState);
+    const setAIToolsScope = useSetAtom(aiToolsScopeState);
+    const setSplitTarget = useSetAtom(aiSplitTargetState);
+    const setShareCollectionLink = useSetAtom(shareCollectionLinkModalState);
+    const isPro = useAtomValue(isProState);
+    const aiEnabled = useTaboxAIEnabled() && isAISupported();
+    const tabCount = props.collection.tabs?.length ?? props.collection.tabCount ?? 0;
+
+    const _handleSplitCollection = () => {
+        setAIToolsScope({ type: 'selected', uids: [props.collection.uid] });
+        setSplitTarget({ uid: props.collection.uid });
+        setAIToolsOpen(true);
+    };
 
     // Use shared collection operations
     const {
@@ -46,7 +76,8 @@ function CollectionListItem(props) {
         _handleUpdate,
         _handleOpenTabs,
         _handleFocusWindow,
-        _handleStopTracking
+        _handleStopTracking,
+        _handleToggleFavorite
     } = useCollectionOperations({
         collection: props.collection,
         removeCollection: props.removeCollection,
@@ -56,8 +87,25 @@ function CollectionListItem(props) {
         index: props.index,
         setDeletingCollectionUids,
         addCollection: props.addCollection,
-        onDataUpdate: props.onDataUpdate
+        onDataUpdate: props.onDataUpdate,
+        folders: props.folders
     });
+
+    // Copy all collection URLs to the clipboard
+    const _handleCopyUrls = async () => {
+        const urlList = buildCollectionUrlList(props.collection);
+        if (!urlList) {
+            showInfoToast('No URLs to copy');
+            return;
+        }
+        try {
+            await copyToClipboard(urlList);
+            const count = urlList.split('\n').length;
+            showSuccessToast(`${count} URL${count === 1 ? '' : 's'} copied`);
+        } catch {
+            showErrorToast('Failed to copy URLs');
+        }
+    };
 
     // Cleanup on unmount
     useEffect(() => {
@@ -126,7 +174,7 @@ function CollectionListItem(props) {
         }
     };
 
-    const totalGroups = props.collection.chromeGroups ? props.collection.chromeGroups.length : 0;
+    const totalGroups = countNonEmptyGroups(props.collection);
     const timeAgo = new TimeAgo('en-US');
     let style = isDeleting ? {} : {};
 
@@ -341,6 +389,18 @@ function CollectionListItem(props) {
             
             <div className="column right_items">
                 <button
+                    className={`favorite-toggle ${props.collection.isFavorite ? 'is-favorite' : ''}`}
+                    aria-label={props.collection.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                    data-tooltip-id="main-tooltip"
+                    data-tooltip-content={props.collection.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                    onClick={async (e) => {
+                        e.stopPropagation();
+                        await _handleToggleFavorite();
+                    }}
+                >
+                    {props.collection.isFavorite ? <FaStar size={12} /> : <FaRegStar size={12} />}
+                </button>
+                <button
                     className={`open-tabs-icon ${isAutoUpdate ? 'focus-mode' : ''}`}
                     data-tooltip-id="main-tooltip" data-tooltip-content={isAutoUpdate ? "Focus collection window" : "Open collection tabs"}
                     onClick={async (e) => {
@@ -359,11 +419,21 @@ function CollectionListItem(props) {
                 <ContextMenu
                     menuItems={createCollectionMenuItems({
                         isAutoUpdate,
+                        onOpenTabs: _handleOpenTabs,
+                        onFocusWindow: _handleFocusWindow,
                         onExport: _exportCollectionToFile,
                         onDelete: _handleDelete,
                         onUpdate: _handleUpdate,
                         onStopTracking: _handleStopTracking,
-                        onDuplicate: _handleDuplicate
+                        onDuplicate: _handleDuplicate,
+                        onCopyUrls: _handleCopyUrls,
+                        isFavorite: props.collection.isFavorite === true,
+                        onToggleFavorite: _handleToggleFavorite,
+                        aiEnabled,
+                        isPro,
+                        tabCount,
+                        onSplitCollection: _handleSplitCollection,
+                        onShareLink: () => setShareCollectionLink(props.collection),
                     })}
                     tooltip="Collection options"
                     onOpenChange={setIsInteractionActive}
@@ -423,6 +493,9 @@ function CollectionListItem(props) {
                         </div>
                     )}
                 </div>
+            )}
+            {isAiProcessing && (
+                <div className={`ai-processing-overlay${isAiCurrent ? ' ai-processing-overlay--current' : ''}`} aria-hidden="true" />
             )}
         </div>
         </DroppableCollection>);

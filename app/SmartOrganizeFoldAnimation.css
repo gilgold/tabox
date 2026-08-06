@@ -1,0 +1,324 @@
+/* ── Smart Tab Grouping browser animation ──────────────────────────────────
+ * A miniature browser tab strip. Loose tabs start in one continuous row,
+ * slide into two color-coded Chrome-style groups, pause, then fan back out.
+ * The host is decorative and aria-hidden in SmartOrganizeFoldAnimation.js.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+.so-fold-anim {
+    display: flex;
+    justify-content: center;
+    padding: 8px 0 4px;
+}
+
+.so-browser-window {
+    width: min(304px, calc(100% - 12px));
+    height: 73px;
+    overflow: hidden;
+    border: 1px solid rgba(100, 116, 139, 0.34);
+    border-radius: 9px;
+    background: #e8edf4;
+    box-shadow:
+        0 8px 20px rgba(15, 23, 42, 0.11),
+        inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.so-browser-tab-strip {
+    position: relative;
+    height: 39px;
+    overflow: hidden;
+    background: linear-gradient(180deg, #dbe2eb 0%, #d2dae5 100%);
+    border-bottom: 1px solid rgba(100, 116, 139, 0.24);
+}
+
+.so-tab-group {
+    position: absolute;
+    top: 6px;
+    width: 142px;
+    height: 31px;
+    border-radius: 8px 8px 3px 3px;
+    transform-origin: center bottom;
+    will-change: background-color, box-shadow;
+}
+
+.so-tab-group--blue {
+    left: 5px;
+    --group-color: #2563eb;
+    --group-tint: rgba(37, 99, 235, 0.13);
+}
+
+.so-tab-group--rose {
+    left: 157px;
+    --group-color: #e11d74;
+    --group-tint: rgba(225, 29, 116, 0.12);
+}
+
+.so-tab-group::after {
+    content: '';
+    position: absolute;
+    z-index: 3;
+    right: 4px;
+    bottom: 0;
+    left: 35px;
+    height: 2px;
+    border-radius: 2px 2px 0 0;
+    background: var(--group-color);
+    opacity: 0;
+    transform: scaleX(0.25);
+    transform-origin: left;
+    will-change: transform, opacity;
+}
+
+.so-tab-group-label {
+    position: absolute;
+    z-index: 4;
+    top: 6px;
+    left: 3px;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    width: 31px;
+    height: 17px;
+    color: var(--group-color);
+    font-size: 7px;
+    font-weight: 700;
+    line-height: 1;
+    opacity: 0;
+    transform: translateX(7px) scale(0.72);
+    transform-origin: left center;
+    will-change: transform, opacity;
+}
+
+.so-tab-group-dot {
+    width: 6px;
+    height: 6px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: var(--group-color);
+    box-shadow: 0 0 0 2px var(--group-tint);
+}
+
+.so-browser-tab {
+    position: absolute;
+    z-index: 2;
+    top: 1px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: 31px;
+    height: 27px;
+    padding: 0 5px;
+    box-sizing: border-box;
+    border: 1px solid rgba(100, 116, 139, 0.27);
+    border-bottom-color: rgba(100, 116, 139, 0.15);
+    border-radius: 7px 7px 2px 2px;
+    background: linear-gradient(180deg, #ffffff, #f7f9fc);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+    transform: translateX(var(--loose-x));
+    will-change: transform, box-shadow;
+}
+
+.so-browser-tab--1,
+.so-browser-tab--4 { left: 37px; }
+.so-browser-tab--2,
+.so-browser-tab--5 { left: 70px; }
+.so-browser-tab--3,
+.so-browser-tab--6 { left: 103px; }
+
+/* Offsets put all six tabs in one evenly-spaced row before grouping. */
+.so-browser-tab--1 { --loose-x: -37px; }
+.so-browser-tab--2 { --loose-x: -21px; }
+.so-browser-tab--3 { --loose-x: -5px; }
+.so-browser-tab--4 { --loose-x: -40px; }
+.so-browser-tab--5 { --loose-x: -24px; }
+.so-browser-tab--6 { --loose-x: -8px; }
+
+.so-tab-favicon {
+    width: 8px;
+    height: 8px;
+    flex: 0 0 auto;
+    border-radius: 2px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.so-tab-favicon--docs { background: #4285f4; }
+.so-tab-favicon--mail { background: #ea4335; border-radius: 50%; }
+.so-tab-favicon--calendar { background: #34a853; }
+.so-tab-favicon--news { background: #7c3aed; border-radius: 50%; }
+.so-tab-favicon--video { background: #ef4444; }
+.so-tab-favicon--notes { background: #f59e0b; border-radius: 50%; }
+
+.so-tab-title {
+    min-width: 0;
+    height: 3px;
+    flex: 1;
+    border-radius: 2px;
+    background: #a8b3c2;
+    opacity: 0.75;
+}
+
+.so-browser-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    height: 33px;
+    padding: 0 9px;
+    box-sizing: border-box;
+    background: #ffffff;
+}
+
+.so-browser-control {
+    position: relative;
+    width: 8px;
+    height: 8px;
+    flex: 0 0 auto;
+    opacity: 0.48;
+}
+
+.so-browser-control--back::before,
+.so-browser-control--forward::before {
+    content: '';
+    position: absolute;
+    top: 2px;
+    width: 5px;
+    height: 5px;
+    border-bottom: 1.5px solid #475569;
+    border-left: 1.5px solid #475569;
+    transform: rotate(45deg);
+}
+
+.so-browser-control--forward::before {
+    transform: rotate(225deg);
+}
+
+.so-browser-control--reload {
+    border: 1.5px solid #475569;
+    border-right-color: transparent;
+    border-radius: 50%;
+    box-sizing: border-box;
+}
+
+.so-browser-address {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    height: 21px;
+    flex: 1;
+    padding: 0 9px;
+    border-radius: 11px;
+    color: #6b7280;
+    background: #f0f3f7;
+    font-size: 7px;
+    letter-spacing: 0.02em;
+}
+
+.so-browser-lock {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #16a34a;
+}
+
+@keyframes so-tab-morph {
+    0%, 18%, 100% {
+        transform: translateX(var(--loose-x));
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+    }
+    42%, 76% {
+        transform: translateX(0);
+        box-shadow: 0 2px 4px rgba(15, 23, 42, 0.12);
+    }
+}
+
+@keyframes so-group-reveal {
+    0%, 25%, 92%, 100% {
+        background-color: transparent;
+        box-shadow: none;
+    }
+    46%, 76% {
+        background-color: var(--group-tint);
+        box-shadow: inset 0 0 0 1px var(--group-tint);
+    }
+}
+
+@keyframes so-group-label-reveal {
+    0%, 27%, 92%, 100% {
+        opacity: 0;
+        transform: translateX(7px) scale(0.72);
+    }
+    45%, 78% {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+    }
+}
+
+@keyframes so-group-underline-reveal {
+    0%, 31%, 91%, 100% {
+        opacity: 0;
+        transform: scaleX(0.25);
+    }
+    48%, 78% {
+        opacity: 1;
+        transform: scaleX(1);
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .so-browser-tab {
+        animation: so-tab-morph 3.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+
+    .so-tab-group {
+        animation: so-group-reveal 3.2s ease-in-out infinite;
+    }
+
+    .so-tab-group-label {
+        animation: so-group-label-reveal 3.2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+    }
+
+    .so-tab-group::after {
+        animation: so-group-underline-reveal 3.2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+    }
+}
+
+/* Static grouped state for reduced motion and Tabox performance mode. */
+@media (prefers-reduced-motion: reduce) {
+    .so-browser-tab { transform: translateX(0); }
+    .so-tab-group { background-color: var(--group-tint); }
+    .so-tab-group-label { opacity: 1; transform: none; }
+    .so-tab-group::after { opacity: 1; transform: scaleX(1); }
+}
+
+html.performance-mode .so-browser-tab,
+html.performance-mode .so-tab-group,
+html.performance-mode .so-tab-group-label,
+html.performance-mode .so-tab-group::after {
+    animation: none !important;
+}
+
+html.performance-mode .so-browser-tab { transform: translateX(0); }
+html.performance-mode .so-tab-group { background-color: var(--group-tint); }
+html.performance-mode .so-tab-group-label { opacity: 1; transform: none; }
+html.performance-mode .so-tab-group::after { opacity: 1; transform: scaleX(1); }
+
+[data-theme="dark"] .so-browser-window {
+    border-color: rgba(148, 163, 184, 0.28);
+    background: #273244;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+}
+
+[data-theme="dark"] .so-browser-tab-strip {
+    background: linear-gradient(180deg, #263244 0%, #202a39 100%);
+    border-bottom-color: rgba(148, 163, 184, 0.2);
+}
+
+[data-theme="dark"] .so-browser-tab {
+    border-color: rgba(148, 163, 184, 0.23);
+    background: linear-gradient(180deg, #3a4658, #323d4e);
+}
+
+[data-theme="dark"] .so-tab-title { background: #94a3b8; }
+[data-theme="dark"] .so-browser-toolbar { background: #1e293b; }
+[data-theme="dark"] .so-browser-address { color: #94a3b8; background: #111827; }
+[data-theme="dark"] .so-browser-control--back::before,
+[data-theme="dark"] .so-browser-control--forward::before { border-color: #cbd5e1; }
+[data-theme="dark"] .so-browser-control--reload { border-color: #cbd5e1; border-right-color: transparent; }

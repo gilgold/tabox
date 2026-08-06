@@ -1,0 +1,67 @@
+/* Animated icon for the auto-rename AI tool card. Colors inherit from
+ * .ai-tool-card-icon (currentColor = #4361ee). Animations trigger on hover of
+ * the parent card and play a single iteration — see RenameToolIcon.js. */
+
+.rf-box {
+    stroke: currentColor;
+    stroke-width: 1.6;
+    fill: none;
+    opacity: 0.55;
+}
+
+.rf-ink {
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    /* Grow from the left so the stroke appears to follow the pencil tip. */
+    transform-box: fill-box;
+    transform-origin: left center;
+}
+
+/* ── Hover: the pencil edits the name, single iteration ──────────────────── */
+.ai-tool-card[data-tool-id="auto-rename"]:hover .rf-pencil {
+    will-change: transform;
+    animation: rf-pencil-edit 1.3s cubic-bezier(0.65, 0, 0.35, 1) 1;
+}
+
+.ai-tool-card[data-tool-id="auto-rename"]:hover .rf-ink {
+    will-change: transform;
+    animation: rf-ink-write 1.3s cubic-bezier(0.65, 0, 0.35, 1) 1;
+}
+
+/* Pencil: rest → lift → fly to the field start → sweep right (writing
+ * wobble) → settle back at rest. Translations only, so the writing tilt baked
+ * into the SVG stays constant. */
+@keyframes rf-pencil-edit {
+    0%   { transform: translate(0px, 0px); }
+    12%  { transform: translate(1px, -6px); }
+    26%  { transform: translate(-18px, -4px); }
+    33%  { transform: translate(-18px, 0px); }
+    47%  { transform: translate(-13.5px, 1.4px); }
+    61%  { transform: translate(-9px, -0.8px); }
+    75%  { transform: translate(-4.5px, 1.2px); }
+    86%  { transform: translate(0px, 0px); }
+    100% { transform: translate(0px, 0px); }
+}
+
+/* Ink: cleared while the pencil repositions, then redrawn left→right as the
+ * pencil sweeps across — ending full, matching the static state. */
+@keyframes rf-ink-write {
+    0%   { transform: scaleX(1); }
+    18%  { transform: scaleX(0); }
+    33%  { transform: scaleX(0); }
+    86%  { transform: scaleX(1); }
+    100% { transform: scaleX(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ai-tool-card[data-tool-id="auto-rename"]:hover .rf-pencil,
+    .ai-tool-card[data-tool-id="auto-rename"]:hover .rf-ink {
+        animation: none;
+    }
+}
+
+html.performance-mode .ai-tool-card[data-tool-id="auto-rename"]:hover .rf-pencil,
+html.performance-mode .ai-tool-card[data-tool-id="auto-rename"]:hover .rf-ink {
+    animation: none;
+}

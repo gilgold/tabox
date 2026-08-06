@@ -1,7 +1,6 @@
 const {
     SERVER_FILE_TIMESTAMP_STATE,
-    fetchServerFileTimestampState,
-    getServerFileTimestampOrFalse
+    fetchServerFileTimestampState
 } = require('../chrome/sync-transport.js');
 
 const createJsonResponse = (status, body) => ({
@@ -22,10 +21,6 @@ describe('sync transport module', () => {
             status: SERVER_FILE_TIMESTAMP_STATE.OK,
             timestamp: 9000
         });
-        expect(getServerFileTimestampOrFalse({
-            status: SERVER_FILE_TIMESTAMP_STATE.OK,
-            timestamp: 9000
-        })).toBe(9000);
     });
 
     test('falls back to modifiedByMeTime when the sync document omits timestamp', async () => {
@@ -46,7 +41,7 @@ describe('sync transport module', () => {
         });
     });
 
-    test('treats missing files as missing_or_invalid and unavailable responses as false timestamps', async () => {
+    test('distinguishes missing files from unavailable responses', async () => {
         const missingFetch = jest.fn(async () => createJsonResponse(404, {}));
         const unavailableFetch = jest.fn(async () => createJsonResponse(503, {}));
 
@@ -69,7 +64,6 @@ describe('sync transport module', () => {
             status: SERVER_FILE_TIMESTAMP_STATE.UNAVAILABLE,
             timestamp: null
         });
-        expect(getServerFileTimestampOrFalse(unavailableResult)).toBe(false);
     });
 
     test('treats network failures as unavailable', async () => {

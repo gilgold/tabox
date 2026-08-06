@@ -3,11 +3,17 @@ import ReactDOM from 'react-dom';
 import { useAtom, useAtomValue } from 'jotai';
 import { commandPaletteOpenState } from './atoms/commandPaletteState';
 import { themeState, viewContextState } from './atoms/globalAppSettingsState';
+import { isProState } from './atoms/premiumState';
+import { sharedPanelOpenState } from './atoms/sharedFoldersState';
+import { sidebarNavigationState } from './atoms/fullpageState';
+import { isSharedFolder } from './utils/sharedFolderUtils';
 import { getColorValue } from './utils/colorMigration';
 import { escapeRegex, highlightText } from './utils/searchUtils';
+import { copyToClipboard } from './utils/clipboardUtils';
 import { browser } from '../static/globals';
 import {
     MdSearch,
+    MdLink,
     MdOpenInBrowser,
     MdDriveFileRenameOutline,
     MdDriveFileMoveOutline,
@@ -22,16 +28,31 @@ import {
     MdArrowBack,
     MdFolder,
     MdOutlineHome,
+    MdWorkspacePremium,
+    MdFolderShared,
+    MdForum,
+    MdOutlineTour,
 } from 'react-icons/md';
 import { CiExport } from 'react-icons/ci';
+import { AI_TOOLS } from './ai/aiTasks';
+import { SHOW_ONBOARDING_EVENT } from './OnboardingGuide';
 import './CommandPalette.css';
 
-const EXTENSION_ACTIONS = [
+export const EXTENSION_ACTIONS = [
     { id: 'create-folder', label: 'Create New Folder', keywords: 'folder new create add', icon: MdCreateNewFolder },
     { id: 'import', label: 'Import Collections', keywords: 'import file upload load', icon: MdFileUpload },
     { id: 'export-all', label: 'Export All Collections & Folders', keywords: 'export download backup save', icon: MdFileDownload },
     { id: 'open-fullpage', label: 'Open in Full Page', keywords: 'fullpage full page expand tab window big', icon: MdOpenInNew },
     { id: 'restore-session', label: 'Restore Recently Closed', fullpageLabel: 'Browse Recently Closed', keywords: 'restore recently closed recover previous history browse', icon: MdHistory },
+    { id: 'manage-subscription', label: 'Manage Subscription', freeLabel: 'Upgrade to Pro', keywords: 'subscription manage billing plan cancel switch monthly annual yearly pro payment upgrade downgrade', icon: MdWorkspacePremium },
+    { id: 'share-folder', label: 'Share Folder…', keywords: 'share folder collaborate invite team', icon: MdFolderShared, proOnly: true },
+    // fullpageOnly: the Activity & comments panel is inherently view-bound to
+    // the full-page layout — the sanctioned reason for a parity divergence.
+    { id: 'open-shared-panel', label: 'Open Activity & Comments', keywords: 'activity comments shared folder discussion feed log panel', icon: MdForum, fullpageOnly: true },
+    // requiresGoogleUser: only meaningful once signed in (the id comes from the
+    // cached googleUser record) — also surfaced in Settings → Tabox Pro.
+    { id: 'copy-google-id', label: 'Copy Google Account ID', keywords: 'google id account copy identifier pro support premium grant googleid', icon: MdContentCopy, requiresGoogleUser: true },
+    { id: 'show-onboarding', label: 'Show Onboarding', keywords: 'onboarding welcome tour guide intro tutorial getting started replay help walkthrough', icon: MdOutlineTour },
 ];
 
 const SETTINGS_TOGGLES = [
@@ -49,11 +70,32 @@ const SETTINGS_TOGGLES = [
     { key: 'chkManualUpdateLinkCollection', label: 'Update Button Links Collection', keywords: 'update link active window manual' },
 ];
 
+// Extra search keywords per AI tool (the visible label comes from AI_TOOLS).
+// All include "ai" so the whole group surfaces when the user types "ai".
+const AI_ACTION_KEYWORDS = {
+    'smart-organize': 'ai smart tab grouping organize group window loose tabs',
+    'auto-rename': 'ai auto rename collections name suggest title',
+    'auto-arrange-folders': 'ai auto arrange folders sort organize loose collections',
+    'duplicate-sweep': 'ai duplicate tab sweep find dedupe remove clean',
+    'split-collection': 'ai split collection break divide themed sub oversized',
+};
+
+// AI Tools modal actions, surfaced in the command palette (popup + full-page).
+// Built from the canonical AI_TOOLS registry so labels/icons stay in sync.
+const AI_ACTIONS = AI_TOOLS.map((tool) => ({
+    id: `ai:${tool.id}`,
+    toolId: tool.id,
+    label: tool.title,
+    keywords: AI_ACTION_KEYWORDS[tool.id] || 'ai',
+    icon: tool.icon,
+}));
+
 const COLLECTION_SUB_ACTIONS = [
     { id: 'open', label: 'Open All Tabs', icon: MdOpenInBrowser },
     { id: 'rename', label: 'Rename', icon: MdDriveFileRenameOutline },
     { id: 'move', label: 'Move to Folder', icon: MdDriveFileMoveOutline },
     { id: 'duplicate', label: 'Duplicate', icon: MdContentCopy },
+    { id: 'share-link', label: 'Share via Link', icon: MdLink },
     { id: 'export', label: 'Export', icon: CiExport },
     { id: 'delete', label: 'Delete', icon: MdDelete, danger: true },
 ];
@@ -82,11 +124,25 @@ function CommandPalette({
     onOpenFullPage,
     onRestoreSession,
     onCollectionAction,
+    onOpenAiTool,
+    onUpgradeToPro,
+    onManageSubscription,
+    onShareFolder,
 }) {
     const [isOpen, setIsOpen] = useAtom(commandPaletteOpenState);
     const [, setThemeMode] = useAtom(themeState);
     const viewContext = useAtomValue(viewContextState);
+    const isPro = useAtomValue(isProState);
     const isFullPage = viewContext === 'fullpage';
+    const sidebarNavigation = useAtomValue(sidebarNavigationState);
+    const [, setSharedPanelOpen] = useAtom(sharedPanelOpenState);
+    // The Activity & comments action only applies when the full-page sidebar
+    // selection is a shared folder.
+    const selectedSharedFolder = useMemo(() => {
+        if (!isFullPage) return null;
+        const folder = (folders || []).find((f) => f.uid === sidebarNavigation) || null;
+        return folder && isSharedFolder(folder) ? folder : null;
+    }, [isFullPage, folders, sidebarNavigation]);
     const [query, setQuery] = useState('');
     const [selectedIndex, setSelectedIndex] = useState(0);
     const [activeCollection, setActiveCollection] = useState(null);
@@ -97,9 +153,13 @@ function CommandPalette({
 
     // Folder pick mode
     const [folderPickMode, setFolderPickMode] = useState(false);
+    // 'move' (from a collection's sub-actions) or 'share' (top-level Share Folder… action)
+    const [pickPurpose, setPickPurpose] = useState(null);
 
     // Settings toggle values (loaded from storage when palette opens)
     const [settingValues, setSettingValues] = useState({});
+    // Signed-in Google account (gates the copy-google-id action)
+    const [googleUser, setGoogleUser] = useState(null);
 
     const inputRef = useRef(null);
     const renameInputRef = useRef(null);
@@ -113,12 +173,14 @@ function CommandPalette({
         setRenameMode(false);
         setRenameValue('');
         setFolderPickMode(false);
+        setPickPurpose(null);
     }, []);
 
     // Load all setting values from storage when palette opens
     const loadSettingValues = useCallback(async () => {
         const keys = SETTINGS_TOGGLES.map(s => s.key === 'theme' ? 'theme' : s.key);
-        const data = await browser.storage.local.get(keys);
+        const data = await browser.storage.local.get([...keys, 'googleUser']);
+        setGoogleUser(data.googleUser || null);
         const vals = {};
         SETTINGS_TOGGLES.forEach(s => {
             if (s.key === 'theme') {
@@ -165,6 +227,7 @@ function CommandPalette({
         setRenameMode(false);
         setRenameValue('');
         setFolderPickMode(false);
+        setPickPurpose(null);
         setQuery('');
         setSelectedIndex(0);
         focusInput();
@@ -175,6 +238,7 @@ function CommandPalette({
         setRenameMode(false);
         setRenameValue('');
         setFolderPickMode(false);
+        setPickPurpose(null);
         setQuery('');
         setSelectedIndex(0);
         focusInput();
@@ -223,16 +287,35 @@ function CommandPalette({
 
         EXTENSION_ACTIONS.forEach(action => {
             if (isFullPage && action.id === 'open-fullpage') return;
+            if (action.fullpageOnly && !isFullPage) return;
+            if (action.id === 'open-shared-panel' && !selectedSharedFolder) return;
+            if (action.proOnly && !isPro) return;
+            if (action.requiresGoogleUser && !googleUser?.permissionId) return;
+            const actionLabel = !isPro && action.freeLabel ? action.freeLabel : action.label;
             if (q) {
-                const haystack = `${action.label} ${action.keywords}`.toLowerCase();
+                const haystack = `${actionLabel} ${action.label} ${action.keywords}`.toLowerCase();
                 if (!haystack.includes(q.toLowerCase())) return;
             }
             items.push({
                 type: 'action',
                 id: action.id,
-                label: (isFullPage && action.fullpageLabel) ? action.fullpageLabel : action.label,
+                label: (isFullPage && action.fullpageLabel) ? action.fullpageLabel : actionLabel,
                 icon: action.icon,
                 actionDef: action,
+            });
+        });
+
+        AI_ACTIONS.forEach(action => {
+            if (q) {
+                const haystack = `${action.label} ${action.keywords}`.toLowerCase();
+                if (!haystack.includes(q.toLowerCase())) return;
+            }
+            items.push({
+                type: 'ai-action',
+                id: action.id,
+                label: action.label,
+                icon: action.icon,
+                toolId: action.toolId,
             });
         });
 
@@ -251,7 +334,7 @@ function CommandPalette({
         }
 
         return items;
-    }, [query, collections, folderNameMap, activeCollection, isFullPage, settingValues]);
+    }, [query, collections, folderNameMap, activeCollection, isFullPage, settingValues, isPro, selectedSharedFolder, googleUser]);
 
     const subActions = useMemo(() => {
         if (!activeCollection || renameMode || folderPickMode) return [];
@@ -262,27 +345,32 @@ function CommandPalette({
         );
     }, [activeCollection, query, renameMode, folderPickMode]);
 
-    // Folder list for move-to-folder picker
+    // Folder list for the move-to-folder / share-folder pickers
     const folderOptions = useMemo(() => {
-        if (!folderPickMode || !activeCollection) return [];
+        if (!folderPickMode) return [];
+        if (pickPurpose === 'move' && !activeCollection) return [];
         const q = query.trim().toLowerCase();
         const opts = [];
 
-        // "No folder (root)" option if collection is currently in a folder
-        if (activeCollection.parentId) {
-            const rootLabel = 'No Folder (Root)';
-            if (!q || rootLabel.toLowerCase().includes(q)) {
-                opts.push({ id: '__root__', label: rootLabel, icon: MdOutlineHome, color: null });
+        if (pickPurpose === 'move') {
+            // "No folder (root)" option if collection is currently in a folder
+            if (activeCollection.parentId) {
+                const rootLabel = 'No Folder (Root)';
+                if (!q || rootLabel.toLowerCase().includes(q)) {
+                    opts.push({ id: '__root__', label: rootLabel, icon: MdOutlineHome, color: null });
+                }
             }
         }
 
         (folders || []).forEach(f => {
-            if (f.uid === activeCollection.parentId) return;
+            if (pickPurpose === 'move' && f.uid === activeCollection.parentId) return;
+            // Sharing: only own/unshared folders can be (re)shared — never a folder you're merely a member of.
+            if (pickPurpose === 'share' && f.shared && f.shared.role !== 'owner') return;
             if (q && !f.name.toLowerCase().includes(q)) return;
             opts.push({ id: f.uid, label: f.name, icon: MdFolder, color: getColorValue(f.color) });
         });
         return opts;
-    }, [folderPickMode, activeCollection, folders, query]);
+    }, [folderPickMode, pickPurpose, activeCollection, folders, query]);
 
     // What list is currently visible
     const displayItems = useMemo(() => {
@@ -304,6 +392,14 @@ function CommandPalette({
     // --- Action execution ---
 
     const executeAction = useCallback((actionId) => {
+        if (actionId === 'share-folder') {
+            setPickPurpose('share');
+            setFolderPickMode(true);
+            setQuery('');
+            setSelectedIndex(0);
+            focusInput();
+            return;
+        }
         close();
         switch (actionId) {
             case 'create-folder': onCreateFolder?.(); break;
@@ -311,8 +407,19 @@ function CommandPalette({
             case 'export-all': onExportAll?.(); break;
             case 'open-fullpage': onOpenFullPage?.(); break;
             case 'restore-session': onRestoreSession?.(); break;
+            case 'manage-subscription':
+                if (isPro) onManageSubscription?.();
+                else onUpgradeToPro?.();
+                break;
+            case 'open-shared-panel': setSharedPanelOpen(true); break;
+            case 'copy-google-id':
+                if (googleUser?.permissionId) copyToClipboard(googleUser.permissionId).catch(() => {});
+                break;
+            case 'show-onboarding':
+                window.dispatchEvent(new CustomEvent(SHOW_ONBOARDING_EVENT));
+                break;
         }
-    }, [close, onCreateFolder, onImport, onExportAll, onOpenFullPage, onRestoreSession]);
+    }, [close, onCreateFolder, onImport, onExportAll, onOpenFullPage, onRestoreSession, onUpgradeToPro, onManageSubscription, focusInput, setSharedPanelOpen, googleUser, isPro]);
 
     const toggleSetting = useCallback(async (settingKey) => {
         const newVal = !settingValues[settingKey];
@@ -353,6 +460,7 @@ function CommandPalette({
         }
 
         if (subActionId === 'move') {
+            setPickPurpose('move');
             setFolderPickMode(true);
             setQuery('');
             setSelectedIndex(0);
@@ -376,11 +484,17 @@ function CommandPalette({
     }, [renameValue, activeCollection, close, onCollectionAction, goBackToSubActions]);
 
     const handleFolderPick = useCallback((folderId) => {
+        if (pickPurpose === 'share') {
+            const folder = (folders || []).find(f => f.uid === folderId);
+            close();
+            if (folder) onShareFolder?.(folder);
+            return;
+        }
         if (!activeCollection) return;
         close();
         const targetId = folderId === '__root__' ? null : folderId;
         onCollectionAction?.(activeCollection, 'move', { targetFolderId: targetId });
-    }, [activeCollection, close, onCollectionAction]);
+    }, [pickPurpose, folders, activeCollection, close, onCollectionAction, onShareFolder]);
 
     const handleSelect = useCallback((index) => {
         if (folderPickMode) {
@@ -403,10 +517,13 @@ function CommandPalette({
             setSelectedIndex(0);
         } else if (item.type === 'action') {
             executeAction(item.id);
+        } else if (item.type === 'ai-action') {
+            close();
+            onOpenAiTool?.(item.toolId);
         } else if (item.type === 'setting') {
             toggleSetting(item.settingKey);
         }
-    }, [displayItems, folderPickMode, folderOptions, activeCollection, executeAction, handleSubAction, handleFolderPick, toggleSetting]);
+    }, [displayItems, folderPickMode, folderOptions, activeCollection, executeAction, handleSubAction, handleFolderPick, toggleSetting, close, onOpenAiTool]);
 
     // --- Keyboard ---
 
@@ -464,7 +581,9 @@ function CommandPalette({
 
     const hasCollections = results.some(r => r.type === 'collection');
     const hasActions = results.some(r => r.type === 'action');
+    const hasAiActions = results.some(r => r.type === 'ai-action');
     const actionsStart = results.findIndex(r => r.type === 'action');
+    const aiActionsStart = results.findIndex(r => r.type === 'ai-action');
     const settingsStart = results.findIndex(r => r.type === 'setting');
 
     // Determine current input placeholder and scope label
@@ -474,14 +593,14 @@ function CommandPalette({
         scopeLabel = 'Rename';
         placeholder = '';
     } else if (folderPickMode) {
-        scopeLabel = activeCollection?.name;
+        scopeLabel = pickPurpose === 'share' ? 'Share Folder' : activeCollection?.name;
         placeholder = 'Pick a folder...';
     } else if (activeCollection) {
         scopeLabel = activeCollection.name;
         placeholder = 'Choose an action...';
     }
 
-    const showBackBtn = activeCollection && !renameMode;
+    const showBackBtn = (activeCollection || folderPickMode) && !renameMode;
 
     return ReactDOM.createPortal(
         <div className="cmd-palette-overlay" onClick={handleOverlayClick} onKeyDown={handleKeyDown} tabIndex={-1}>
@@ -506,7 +625,11 @@ function CommandPalette({
                                     style={{ background: getColorValue(activeCollection.color) || 'var(--text-color)' }}
                                 />
                             )}
-                            {folderPickMode && <MdDriveFileMoveOutline size={14} style={{ flexShrink: 0 }} />}
+                            {folderPickMode && (
+                                pickPurpose === 'share'
+                                    ? <MdFolderShared size={14} style={{ flexShrink: 0 }} />
+                                    : <MdDriveFileMoveOutline size={14} style={{ flexShrink: 0 }} />
+                            )}
                             {renameMode && <MdDriveFileRenameOutline size={14} style={{ flexShrink: 0 }} />}
                             {scopeLabel}
                         </span>
@@ -607,10 +730,17 @@ function CommandPalette({
                                                 <div className="cmd-palette-section-label">Actions</div>
                                             </>
                                         );
-                                    } else if (item.type === 'setting' && i === settingsStart) {
+                                    } else if (item.type === 'ai-action' && i === aiActionsStart) {
                                         header = (
                                             <>
                                                 {(hasCollections || hasActions) && <div className="cmd-palette-separator" />}
+                                                <div className="cmd-palette-section-label">AI Tools</div>
+                                            </>
+                                        );
+                                    } else if (item.type === 'setting' && i === settingsStart) {
+                                        header = (
+                                            <>
+                                                {(hasCollections || hasActions || hasAiActions) && <div className="cmd-palette-separator" />}
                                                 <div className="cmd-palette-section-label">Settings</div>
                                             </>
                                         );

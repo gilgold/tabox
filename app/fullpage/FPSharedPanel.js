@@ -1,0 +1,795 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useAtom, useAtomValue } from 'jotai';
+import { MdClose, MdDeleteOutline, MdSend } from 'react-icons/md';
+import { isProState } from '../atoms/premiumState';
+import { selectedCollectionUidState } from '../atoms/globalAppSettingsState';
+import { sharedActivityCacheState, sharedCommentsCacheState } from '../atoms/sharedFoldersState';
+import { browser } from '../../static/globals';
+import { showErrorToast } from '../toastHelpers';
+import ProBadge from '../ProBadge';
+import useProCheckout from '../useProCheckout';
+import './FPSharedPanel.css';
+
+const POLL_INTERVAL_MS = 30000;
+const SYNC_STATE_KEY = 'shared_sync_state';
+const SEEN_KEY = 'shared_activity_seen';
+const EMPTY_ACTIVITY = { events: [] };
+const EMPTY_COMMENTS = { comments: [], counts: [] };
+const commentsCacheKey = (folderUid, threadUid) => `${folderUid || ''}\u0000${threadUid || ''}`;
+
+const LoadingStatus = ({ children }) => (
+    <div className="fp-shared-panel-status fp-shared-panel-loading" role="status" aria-live="polite">
+        <span className="fp-shared-panel-spinner" aria-hidden="true" />
+        <span>{children}</span>
+    </div>
+);
+
+/**
+ * Unread-dot state for a shared folder's activity feed.
+ * Unread = shared_sync_state[folderId].lastActivityId (written by the
+ * background delta sync) > shared_activity_seen[folderId] (written by this
+ * panel when the Activity tab is opened). Subscribes to storage.onChanged so
+ * the dot updates live while the full page stays open.
+ */
+export function useSharedActivityUnread(folderId) {
+    const [unread, setUnread] = useState(false);
+
+    useEffect(() => {
+        if (!folderId) {
+            setUnread(false);
+            return undefined;
+        }
+        let live = true;
+        const compute = async () => {
+            try {
+                const stored = await browser.storage.local.get([SYNC_STATE_KEY, SEEN_KEY]);
+                if (!live) return;
+                const lastActivityId = stored?.[SYNC_STATE_KEY]?.[folderId]?.lastActivityId || 0;
+                const lastSeenId = stored?.[SEEN_KEY]?.[folderId] || 0;
+                setUnread(lastActivityId > lastSeenId);
+            } catch {
+                if (live) setUnread(false);
+            }
+        };
+        compute();
+        const listener = (changes, areaName) => {
+            if (areaName && areaName !== 'local') return;
+            if (changes[SYNC_STATE_KEY] || changes[SEEN_KEY]) compute();
+        };
+        browser.storage.onChanged.addListener(listener);
+        return () => {
+            live = false;
+            browser.storage.onChanged.removeListener(listener);
+        };
+    }, [folderId]);
+
+    return unread;
+}
+
+/** Persist "seen up to the latest synced activity id" for a folder. */
+export async function markActivitySeen(folderId) {
+    if (!folderId) return;
+    try {
+        const stored = await browser.storage.local.get([SYNC_STATE_KEY, SEEN_KEY]);
+        const lastActivityId = stored?.[SYNC_STATE_KEY]?.[folderId]?.lastActivityId || 0;
+        const seen = { ...(stored?.[SEEN_KEY] || {}) };
+        if ((seen[folderId] || 0) >= lastActivityId) return;
+        seen[folderId] = lastActivityId;
+        await browser.storage.local.set({ [SEEN_KEY]: seen });
+    } catch {
+        // Best effort — the dot simply stays until the next successful write.
+    }
+}
+
+export function formatRelativeTime(timestamp, nowMs = Date.now()) {
+    if (!timestamp) return '';
+    const diffMinutes = Math.floor(Math.max(0, nowMs - timestamp) / 60000);
+    if (diffMinutes < 1) return 'just now';
+    if (diffMinutes < 60) return `${diffMinutes}m ago`;
+    const diffHours = Math.floor(diffMinutes / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return new Date(timestamp).toLocaleDateString();
+}
+
+const isSameDay = (a, b) => (
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+);
+
+export function formatDayLabel(timestamp, nowMs = Date.now()) {
+    const date = new Date(timestamp);
+    const today = new Date(nowMs);
+    if (isSameDay(date, today)) return 'Today';
+    const yesterday = new Date(nowMs);
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (isSameDay(date, yesterday)) return 'Yesterday';
+    const options = { month: 'short', day: 'numeric' };
+    if (date.getFullYear() !== today.getFullYear()) options.year = 'numeric';
+    return date.toLocaleDateString(undefined, options);
+}
+
+const parseDetail = (detail) => {
+    if (!detail) return {};
+    if (typeof detail === 'object') return detail;
+    try {
+        return JSON.parse(detail) || {};
+    } catch {
+        return {};
+    }
+};
+
+/**
+ * One activity event split into { actor, text }: `actor` describes who did it
+ * (so the caller can render a highlighted name chip with avatar + tooltip) and
+ * `text` is the rest of the sentence. `selfEmail` must be lowercase; the
+ * signed-in user is rendered as "You"/"you" instead of their email.
+ */
+export function describeActivityEventParts(event, selfEmail = '') {
+    const detail = parseDetail(event.detail);
+    const actorEmail = (event.actorEmail || '').toLowerCase();
+    const isSelf = Boolean(actorEmail) && actorEmail === selfEmail;
+    const actor = {
+        label: isSelf ? 'You' : (event.actorFirstName || event.actorEmail || 'Someone'),
+        email: event.actorEmail || '',
+        firstName: event.actorFirstName || '',
+        photoLink: event.actorPhotoLink || '',
+        isSelf,
+    };
+    const subjectEmail = (event.subject || '').toLowerCase();
+    const member = subjectEmail && subjectEmail === selfEmail
+        ? 'you'
+        : (detail.subjectFirstName || event.subject || 'a member');
+    const name = detail.name || event.subject || 'a collection';
+
+    switch (event.action) {
+        case 'collection_added':
+            return { actor, text: ` added “${name}”` };
+        case 'collection_updated':
+            return { actor, text: ` updated “${name}”` };
+        case 'collection_deleted':
+            return { actor, text: ` deleted “${name}”` };
+        case 'folder_renamed':
+            return {
+                actor,
+                text: detail.from && detail.to
+                    ? ` renamed the folder from “${detail.from}” to “${detail.to}”`
+                    : ' renamed the folder',
+            };
+        case 'member_joined':
+            return { actor, text: ` joined${detail.role ? ` as ${detail.role}` : ''}` };
+        case 'member_left':
+            return { actor, text: ' left the folder' };
+        case 'member_removed':
+            return { actor, text: ` removed ${member}` };
+        case 'role_changed':
+            return { actor, text: ` changed ${member === 'you' ? 'your' : `${member}'s`} role${detail.role ? ` to ${detail.role}` : ''}` };
+        default:
+            return { actor, text: ' updated the folder' };
+    }
+}
+
+/** Full activity sentence as a plain string (actor label + remainder). */
+export function describeActivityEvent(event, selfEmail = '') {
+    const { actor, text } = describeActivityEventParts(event, selfEmail);
+    return `${actor.label}${text}`;
+}
+
+/** Stable hue per email so a user's initials avatar keeps its color. */
+export function hueForEmail(email) {
+    let hue = 0;
+    const s = String(email || '');
+    for (let i = 0; i < s.length; i++) hue = (hue * 31 + s.charCodeAt(i)) % 360;
+    return hue;
+}
+
+const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (ch) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+}[ch]));
+
+/**
+ * HTML for the rich hover card (react-tooltip `data-tooltip-html`): avatar +
+ * full name + email. All interpolated values are escaped — the tooltip
+ * renders this string as raw HTML.
+ */
+export function userCardHtml({ name, email, photoLink }) {
+    const safeName = escapeHtml(name || email || 'Unknown user');
+    const safeEmail = email ? escapeHtml(email) : '';
+    const initial = escapeHtml((name || email || '?').charAt(0).toUpperCase());
+    const avatar = photoLink && /^https:\/\//.test(photoLink)
+        ? `<img class="fp-shared-user-card-avatar" src="${escapeHtml(photoLink)}" referrerpolicy="no-referrer" alt="" />`
+        : `<span class="fp-shared-user-card-avatar fp-shared-user-avatar-fallback" style="background-color: hsl(${hueForEmail(email)}, 45%, 45%)">${initial}</span>`;
+    return `<span class="fp-shared-user-card">${avatar}<span class="fp-shared-user-card-details">`
+        + `<span class="fp-shared-user-card-name">${safeName}</span>`
+        + (safeEmail ? `<span class="fp-shared-user-card-email">${safeEmail}</span>` : '')
+        + '</span></span>';
+}
+
+/**
+ * Highlighted user mention: small avatar (photo, or colored-initial fallback —
+ * also used when the photo fails to load) + bolded name, with the rich user
+ * card on hover via the shared main-tooltip.
+ */
+export function SharedUserChip({ label, name, email, photoLink }) {
+    const [imgFailed, setImgFailed] = useState(false);
+    useEffect(() => { setImgFailed(false); }, [photoLink]);
+    const showPhoto = Boolean(photoLink) && !imgFailed;
+    const initial = (label || name || email || '?').charAt(0).toUpperCase();
+    return (
+        <span
+            className="fp-shared-user-chip"
+            data-tooltip-id="main-tooltip"
+            data-tooltip-html={userCardHtml({ name, email, photoLink })}
+        >
+            {showPhoto ? (
+                <img
+                    className="fp-shared-user-avatar"
+                    src={photoLink}
+                    referrerPolicy="no-referrer"
+                    alt=""
+                    onError={() => setImgFailed(true)}
+                />
+            ) : (
+                <span
+                    className="fp-shared-user-avatar fp-shared-user-avatar-fallback"
+                    style={{ backgroundColor: `hsl(${hueForEmail(email)}, 45%, 45%)` }}
+                    aria-hidden="true"
+                >
+                    {initial}
+                </span>
+            )}
+            <span className="fp-shared-user-name">{label}</span>
+        </span>
+    );
+}
+
+const EMAIL_PATTERN = /[^\s@“”'"]+@[^\s@“”'"]+\.[^\s@“”'".,;:!?]+/g;
+
+/**
+ * Wraps every email address in `text` in a highlight span so member emails
+ * stand out in activity sentences and comment bylines.
+ */
+export function highlightEmails(text) {
+    const parts = String(text).split(EMAIL_PATTERN);
+    const emails = String(text).match(EMAIL_PATTERN) || [];
+    if (emails.length === 0) return text;
+    return parts.flatMap((part, i) => (
+        i < emails.length
+            ? [part, <span className="fp-shared-email" key={`${emails[i]}-${i}`}>{emails[i]}</span>]
+            : [part]
+    ));
+}
+
+/**
+ * Right-side "Activity & comments" panel for shared folders (full-page only).
+ * Mirrors the fp-detail-panel width-transition pattern but fixed ~380px.
+ * Renders nothing when no shared folder is provided.
+ */
+function FPSharedPanel({ folder, collections, isOpen, onClose }) {
+    const isPro = useAtomValue(isProState);
+    const startProCheckout = useProCheckout();
+    const selectedCollectionUid = useAtomValue(selectedCollectionUidState);
+    const [activityCache, setActivityCache] = useAtom(sharedActivityCacheState);
+    const [commentsCache, setCommentsCache] = useAtom(sharedCommentsCacheState);
+
+    const folderUid = folder?.uid || null;
+
+    const [tab, setTab] = useState('activity');
+    const [selfUser, setSelfUser] = useState(null);
+    const selfEmail = (selfUser?.emailAddress || '').toLowerCase();
+    const [activityRequest, setActivityRequest] = useState({ key: null, loading: false, error: false });
+    const [commentsRequest, setCommentsRequest] = useState({ key: null, loading: false, error: false });
+    // null = folder-level "Folder discussion" thread, otherwise a collection uid.
+    const [activeThread, setActiveThread] = useState(null);
+    const [body, setBody] = useState('');
+    const [posting, setPosting] = useState(false);
+    const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+
+    const activeCommentsCacheKey = commentsCacheKey(folderUid, activeThread);
+    const activityData = activityCache[folderUid] || EMPTY_ACTIVITY;
+    const commentsData = commentsCache[activeCommentsCacheKey] || EMPTY_COMMENTS;
+    const activityLoading = activityRequest.key === folderUid && activityRequest.loading;
+    const activityError = activityRequest.key === folderUid && activityRequest.error;
+    const commentsLoading = commentsRequest.key === activeCommentsCacheKey && commentsRequest.loading;
+    const commentsError = commentsRequest.key === activeCommentsCacheKey && commentsRequest.error;
+
+    // Track which comment ids have already been rendered per thread so newly
+    // arrived comments (from polling or posting) can animate in; the first
+    // render of a thread paints without animation.
+    const seenCommentIdsRef = useRef(new Map());
+    const [enteringCommentIds, setEnteringCommentIds] = useState(() => new Set());
+    useEffect(() => {
+        const ids = commentsData.comments.map((comment) => comment.id);
+        const seen = seenCommentIdsRef.current.get(activeCommentsCacheKey);
+        if (!seen) {
+            seenCommentIdsRef.current.set(activeCommentsCacheKey, new Set(ids));
+            return undefined;
+        }
+        const fresh = ids.filter((id) => !seen.has(id));
+        if (fresh.length === 0) return undefined;
+        fresh.forEach((id) => seen.add(id));
+        setEnteringCommentIds((previous) => new Set([...previous, ...fresh]));
+        const timeoutId = setTimeout(() => {
+            setEnteringCommentIds((previous) => {
+                const next = new Set(previous);
+                fresh.forEach((id) => next.delete(id));
+                return next;
+            });
+        }, 450);
+        return () => clearTimeout(timeoutId);
+    }, [commentsData.comments, activeCommentsCacheKey]);
+
+    const folderCollections = useMemo(
+        () => (collections || []).filter((collection) => collection.parentId === folderUid),
+        [collections, folderUid],
+    );
+
+    useEffect(() => {
+        let live = true;
+        browser.storage.local.get('googleUser')
+            .then((stored) => {
+                if (live) setSelfUser(stored?.googleUser || null);
+            })
+            .catch(() => {});
+        return () => { live = false; };
+    }, []);
+
+    // Reset per-folder state when the target folder changes.
+    useEffect(() => {
+        setActiveThread(null);
+        setBody('');
+        setConfirmDeleteId(null);
+    }, [folderUid]);
+
+    // silent: background refresh — no loader, and transient failures keep the
+    // current list instead of swapping it for an error state.
+    const fetchActivity = useCallback(async ({ silent = false } = {}) => {
+        if (!folderUid) return;
+        const requestKey = folderUid;
+        if (!silent) setActivityRequest({ key: requestKey, loading: true, error: false });
+        try {
+            const res = await browser.runtime.sendMessage({ type: 'sharedGetActivity', folderId: folderUid });
+            if (res?.ok) {
+                setActivityCache((previous) => ({
+                    ...previous,
+                    [requestKey]: { events: res.data?.events || [] },
+                }));
+                setActivityRequest((previous) => (
+                    previous.key === requestKey ? { key: requestKey, loading: false, error: false } : previous
+                ));
+                await markActivitySeen(folderUid);
+            } else if (!silent) {
+                setActivityRequest((previous) => (
+                    previous.key === requestKey ? { key: requestKey, loading: false, error: true } : previous
+                ));
+            }
+        } catch {
+            if (!silent) {
+                setActivityRequest((previous) => (
+                    previous.key === requestKey ? { key: requestKey, loading: false, error: true } : previous
+                ));
+            }
+        }
+    }, [folderUid, setActivityCache]);
+
+    const fetchComments = useCallback(async ({ silent = false } = {}) => {
+        if (!folderUid) return;
+        const requestKey = commentsCacheKey(folderUid, activeThread);
+        if (!silent) setCommentsRequest({ key: requestKey, loading: true, error: false });
+        try {
+            const res = await browser.runtime.sendMessage({
+                type: 'sharedGetComments',
+                folderId: folderUid,
+                ...(activeThread ? { collectionUid: activeThread } : {}),
+            });
+            if (res?.ok) {
+                setCommentsCache((previous) => ({
+                    ...previous,
+                    [requestKey]: {
+                        comments: res.data?.comments || [],
+                        counts: res.data?.counts || [],
+                    },
+                }));
+                setCommentsRequest((previous) => (
+                    previous.key === requestKey ? { key: requestKey, loading: false, error: false } : previous
+                ));
+            } else if (!silent) {
+                setCommentsRequest((previous) => (
+                    previous.key === requestKey ? { key: requestKey, loading: false, error: true } : previous
+                ));
+            }
+        } catch {
+            if (!silent) {
+                setCommentsRequest((previous) => (
+                    previous.key === requestKey ? { key: requestKey, loading: false, error: true } : previous
+                ));
+            }
+        }
+    }, [folderUid, activeThread, setCommentsCache]);
+
+    // Fetch on open / tab switch / thread switch.
+    useEffect(() => {
+        if (!isOpen || !folderUid) return;
+        if (tab === 'activity') {
+            fetchActivity();
+        } else {
+            fetchComments();
+        }
+    }, [isOpen, folderUid, tab, fetchActivity, fetchComments]);
+
+    // Opening the Activity tab marks the feed as seen (clears the unread dot)
+    // even if the network fetch fails.
+    useEffect(() => {
+        if (isOpen && folderUid && tab === 'activity') {
+            markActivitySeen(folderUid);
+        }
+    }, [isOpen, folderUid, tab]);
+
+    // Light polling while the panel is open; cleaned up on close/unmount.
+    useEffect(() => {
+        if (!isOpen || !folderUid) return undefined;
+        const intervalId = setInterval(() => {
+            if (tab === 'activity') {
+                fetchActivity({ silent: true });
+            } else {
+                fetchComments({ silent: true });
+            }
+        }, POLL_INTERVAL_MS);
+        return () => clearInterval(intervalId);
+    }, [isOpen, folderUid, tab, fetchActivity, fetchComments]);
+
+    // Selecting a collection in the content area while the panel is open
+    // scopes the Comments tab to that collection's thread.
+    useEffect(() => {
+        if (!isOpen || !selectedCollectionUid) return;
+        if (folderCollections.some((collection) => collection.uid === selectedCollectionUid)) {
+            setActiveThread(selectedCollectionUid);
+        }
+    }, [isOpen, selectedCollectionUid, folderCollections]);
+
+    const handlePost = useCallback(async () => {
+        const trimmed = body.trim();
+        if (!trimmed || posting || !folderUid) return;
+        setPosting(true);
+        try {
+            const res = await browser.runtime.sendMessage({
+                type: 'sharedPostComment',
+                folderId: folderUid,
+                ...(activeThread ? { collectionUid: activeThread } : {}),
+                body: trimmed,
+            });
+            if (res?.ok) {
+                setBody('');
+                await fetchComments({ silent: true });
+            } else if (res?.error === 'pro_required') {
+                showErrorToast('Posting comments requires Tabox Pro.');
+            } else {
+                showErrorToast('Could not post your comment. Please try again.');
+            }
+        } catch {
+            showErrorToast('Could not post your comment. Please try again.');
+        } finally {
+            setPosting(false);
+        }
+    }, [body, posting, folderUid, activeThread, fetchComments]);
+
+    const handleDelete = useCallback(async (commentId) => {
+        if (!folderUid) return;
+        setConfirmDeleteId(null);
+        try {
+            const res = await browser.runtime.sendMessage({
+                type: 'sharedDeleteComment',
+                folderId: folderUid,
+                commentId,
+            });
+            if (res?.ok) {
+                await fetchComments({ silent: true });
+            } else {
+                showErrorToast('Could not delete the comment.');
+            }
+        } catch {
+            showErrorToast('Could not delete the comment.');
+        }
+    }, [folderUid, fetchComments]);
+
+    const handleUpgrade = useCallback(async () => {
+        try {
+            await startProCheckout({ ensureLogin: true });
+        } catch {
+            showErrorToast('Could not open the upgrade page.');
+        }
+    }, [startProCheckout]);
+
+    const groupedActivity = useMemo(() => {
+        const groups = [];
+        let current = null;
+        (activityData.events || []).forEach((event) => {
+            const label = formatDayLabel(event.createdAt);
+            if (!current || current.label !== label) {
+                current = { label, events: [] };
+                groups.push(current);
+            }
+            current.events.push(event);
+        });
+        return groups;
+    }, [activityData.events]);
+
+    const countForThread = useCallback((collectionUid) => {
+        const entry = (commentsData.counts || []).find(
+            (count) => (count.collectionUid || null) === (collectionUid || null),
+        );
+        return entry?.n || 0;
+    }, [commentsData.counts]);
+
+    // email (lowercase) → { firstName, photoLink } from the folder's member
+    // list + owner, used to fill user details missing on old activity/comment
+    // rows (rows written before names/photos were recorded).
+    const memberDirectory = useMemo(() => {
+        const directory = {};
+        const shared = folder?.shared;
+        if (shared?.ownerEmail) {
+            directory[shared.ownerEmail.toLowerCase()] = {
+                firstName: shared.ownerFirstName || '',
+                photoLink: shared.ownerPhotoLink || '',
+            };
+        }
+        (shared?.members || []).forEach((member) => {
+            if (!member?.email) return;
+            directory[member.email.toLowerCase()] = {
+                firstName: member.firstName || '',
+                photoLink: member.photoLink || '',
+            };
+        });
+        return directory;
+    }, [folder?.shared]);
+
+    // Fullest available details for one user, for the hover card. Row-level
+    // fields win (they're refreshed by the server), then the member
+    // directory, then the signed-in user's own Google profile.
+    const resolveUserDetails = useCallback((email, firstName, photoLink) => {
+        const key = (email || '').toLowerCase();
+        const member = memberDirectory[key] || {};
+        const isSelf = Boolean(key) && key === selfEmail;
+        return {
+            name: (isSelf && selfUser?.displayName)
+                || firstName || member.firstName || email || 'Someone',
+            email: email || '',
+            photoLink: photoLink || member.photoLink || (isSelf ? selfUser?.photoLink || '' : ''),
+        };
+    }, [memberDirectory, selfEmail, selfUser]);
+
+    if (!folder) return null;
+
+    const canDeleteComment = (comment) => (
+        (comment.authorEmail || '').toLowerCase() === selfEmail
+    );
+
+    return (
+        <aside
+            className={`fp-shared-panel ${isOpen ? 'open' : ''}`}
+            aria-hidden={!isOpen}
+            aria-label="Activity and comments"
+        >
+            <div className="fp-shared-panel-inner">
+                <div className="fp-shared-panel-header">
+                    <div className="fp-shared-panel-heading">
+                        <h3 className="fp-shared-panel-title">Activity &amp; comments</h3>
+                        <span className="fp-shared-panel-folder-name">{folder.name}</span>
+                    </div>
+                    <button
+                        className="fp-shared-panel-close"
+                        onClick={onClose}
+                        aria-label="Close activity and comments"
+                        data-tooltip-id="main-tooltip"
+                        data-tooltip-content="Close panel"
+                    >
+                        <MdClose size={18} />
+                    </button>
+                </div>
+
+                <div className="fp-shared-panel-tabs" role="tablist" aria-label="Panel sections">
+                    <button
+                        role="tab"
+                        aria-selected={tab === 'activity'}
+                        className={`fp-shared-panel-tab ${tab === 'activity' ? 'active' : ''}`}
+                        onClick={() => setTab('activity')}
+                    >
+                        Activity
+                    </button>
+                    <button
+                        role="tab"
+                        aria-selected={tab === 'comments'}
+                        className={`fp-shared-panel-tab ${tab === 'comments' ? 'active' : ''}`}
+                        onClick={() => setTab('comments')}
+                    >
+                        Comments
+                    </button>
+                </div>
+
+                {tab === 'activity' && (
+                    <div className="fp-shared-panel-body" role="tabpanel" aria-label="Activity">
+                        {activityLoading && (
+                            <LoadingStatus>
+                                {activityData.events.length > 0 ? 'Refreshing activity…' : 'Loading activity…'}
+                            </LoadingStatus>
+                        )}
+                        {!activityLoading && activityError && (
+                            <div className="fp-shared-panel-status fp-shared-panel-error">
+                                <span>
+                                    {activityData.events.length > 0
+                                        ? 'Couldn’t refresh activity.'
+                                        : 'Couldn’t load activity.'}
+                                </span>
+                                <button className="fp-shared-panel-retry" onClick={fetchActivity}>Retry</button>
+                            </div>
+                        )}
+                        {!activityLoading && !activityError && activityData.events.length === 0 && (
+                            <div className="fp-shared-panel-status">No activity yet.</div>
+                        )}
+                        {groupedActivity.map((group) => (
+                            <div className="fp-shared-activity-group" key={group.label}>
+                                <div className="fp-shared-activity-day">{group.label}</div>
+                                <ul className="fp-shared-activity-list">
+                                    {group.events.map((event) => {
+                                        const { actor, text } = describeActivityEventParts(event, selfEmail);
+                                        const details = resolveUserDetails(actor.email, actor.firstName, actor.photoLink);
+                                        return (
+                                            <li className="fp-shared-activity-entry" key={event.id}>
+                                                <span className="fp-shared-activity-text">
+                                                    <SharedUserChip
+                                                        label={actor.label}
+                                                        name={details.name}
+                                                        email={details.email}
+                                                        photoLink={details.photoLink}
+                                                    />
+                                                    {highlightEmails(text)}
+                                                </span>
+                                                <span className="fp-shared-activity-time">
+                                                    {formatRelativeTime(event.createdAt)}
+                                                </span>
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {tab === 'comments' && (
+                    <div className="fp-shared-panel-body fp-shared-comments-body" role="tabpanel" aria-label="Comments">
+                        <select
+                            className="fp-shared-thread-select"
+                            aria-label="Comment thread"
+                            value={activeThread || ''}
+                            onChange={(e) => setActiveThread(e.target.value || null)}
+                        >
+                            <option value="">{`Folder discussion (${countForThread(null)})`}</option>
+                            {folderCollections.map((collection) => (
+                                <option key={collection.uid} value={collection.uid}>
+                                    {`${collection.name} (${countForThread(collection.uid)})`}
+                                </option>
+                            ))}
+                        </select>
+
+                        <div className="fp-shared-comments-list">
+                            {commentsLoading && (
+                                <LoadingStatus>
+                                    {commentsData.comments.length > 0 ? 'Refreshing comments…' : 'Loading comments…'}
+                                </LoadingStatus>
+                            )}
+                            {!commentsLoading && commentsError && (
+                                <div className="fp-shared-panel-status fp-shared-panel-error">
+                                    <span>
+                                        {commentsData.comments.length > 0
+                                            ? 'Couldn’t refresh comments.'
+                                            : 'Couldn’t load comments.'}
+                                    </span>
+                                    <button className="fp-shared-panel-retry" onClick={fetchComments}>Retry</button>
+                                </div>
+                            )}
+                            {!commentsLoading && !commentsError && commentsData.comments.length === 0 && (
+                                <div className="fp-shared-panel-status">
+                                    No comments yet — start the discussion.
+                                </div>
+                            )}
+                            {commentsData.comments.map((comment) => {
+                                const isOwnComment = (comment.authorEmail || '').toLowerCase() === selfEmail;
+                                const authorDetails = resolveUserDetails(
+                                    comment.authorEmail, comment.authorFirstName, comment.authorPhotoLink,
+                                );
+                                return (
+                                <div
+                    className={`fp-shared-comment${enteringCommentIds.has(comment.id) ? ' fp-shared-comment-enter' : ''}`}
+                    key={comment.id}
+                >
+                                    <div className="fp-shared-comment-meta">
+                                        <span className="fp-shared-comment-author">
+                                            <SharedUserChip
+                                                label={isOwnComment ? 'You' : (comment.authorFirstName || comment.authorEmail)}
+                                                name={authorDetails.name}
+                                                email={authorDetails.email}
+                                                photoLink={authorDetails.photoLink}
+                                            />
+                                        </span>
+                                        <span className="fp-shared-comment-time">
+                                            {formatRelativeTime(comment.createdAt)}
+                                        </span>
+                                        {canDeleteComment(comment) && confirmDeleteId !== comment.id && (
+                                            <button
+                                                className="fp-shared-comment-delete"
+                                                onClick={() => setConfirmDeleteId(comment.id)}
+                                                aria-label="Delete comment"
+                                                data-tooltip-id="main-tooltip"
+                                                data-tooltip-content="Delete comment"
+                                            >
+                                                <MdDeleteOutline size={15} />
+                                            </button>
+                                        )}
+                                        {confirmDeleteId === comment.id && (
+                                            <span className="fp-shared-comment-confirm">
+                                                <button
+                                                    className="fp-shared-comment-confirm-yes"
+                                                    onClick={() => handleDelete(comment.id)}
+                                                >
+                                                    Delete?
+                                                </button>
+                                                <button
+                                                    className="fp-shared-comment-confirm-no"
+                                                    onClick={() => setConfirmDeleteId(null)}
+                                                >
+                                                    Cancel
+                                                </button>
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="fp-shared-comment-body">{comment.body}</div>
+                                </div>
+                                );
+                            })}
+                        </div>
+
+                        <div className={`fp-shared-composer ${isPro ? '' : 'fp-shared-composer-locked'}`}>
+                            <textarea
+                                className="fp-shared-composer-input"
+                                value={body}
+                                onChange={(e) => setBody(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                        e.preventDefault();
+                                        handlePost();
+                                    }
+                                }}
+                                placeholder={isPro ? 'Write a comment…' : 'Posting comments requires Tabox Pro'}
+                                aria-label="Write a comment"
+                                disabled={!isPro || posting}
+                                rows={2}
+                            />
+                            {isPro ? (
+                                <button
+                                    className="fp-shared-composer-send"
+                                    onClick={handlePost}
+                                    disabled={!body.trim() || posting}
+                                    aria-label="Send comment"
+                                    data-tooltip-id="main-tooltip"
+                                    data-tooltip-content="Send comment (Enter)"
+                                >
+                                    <MdSend size={17} />
+                                </button>
+                            ) : (
+                                <div className="fp-shared-composer-upsell">
+                                    <ProBadge />
+                                    <button className="fp-shared-upgrade-btn" onClick={handleUpgrade}>
+                                        Upgrade to post comments
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
+        </aside>
+    );
+}
+
+export default FPSharedPanel;

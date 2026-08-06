@@ -9,6 +9,7 @@ import {
 import { useAtom, useAtomValue } from 'jotai';
 import { browser } from '../static/globals';
 import { openOrFocusFullPageInCurrentWindow } from './utils/openFullPage';
+import TabSwitcherButton from './TabSwitcherButton';
 import { showSuccessToast } from './toastHelpers';
 import { MdOpenInNew, MdLogout, MdSync } from 'react-icons/md';
 import ReactTimeAgo from 'react-time-ago';
@@ -230,6 +231,7 @@ function Header(props) {
                 <LoginSection logout={props.logout} />
             </div>
             <div className="header-right">
+                <TabSwitcherButton />
                 <button
                     className="header-action-btn"
                     onClick={handleOpenFullPage}
@@ -241,7 +243,9 @@ function Header(props) {
                 <Suspense fallback={<div className="settings-loading">&#9881;</div>}>
                     <SettingsMenu
                         updateRemoteData={props.updateRemoteData}
-                        applyDataFromServer={props.applyDataFromServer} />
+                        applyDataFromServer={props.applyDataFromServer}
+                        onDataUpdate={props.onDataUpdate}
+                        addCollection={props.addCollection} />
                 </Suspense>
             </div>
         </header>

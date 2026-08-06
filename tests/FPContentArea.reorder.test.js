@@ -1,10 +1,11 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { Provider, createStore } from 'jotai';
 import FPContentArea from '../app/fullpage/FPContentArea';
 import { sidebarNavigationState } from '../app/atoms/fullpageState';
 import { searchState } from '../app/atoms/globalAppSettingsState';
 import { persistCollectionLayoutChanges } from '../app/utils/sharedCollectionSync';
+import { loadAllCollections, batchUpdateCollections } from '../app/utils/storageUtils';
 
 let latestDragStartHandler = null;
 let latestDragOverHandler = null;
@@ -115,6 +116,7 @@ jest.mock('../app/utils/storageUtils', () => ({
     updateFolderCollectionCount: jest.fn(async () => true),
     loadAllCollections: jest.fn(async () => []),
     batchDeleteCollections: jest.fn(async () => true),
+    batchUpdateCollections: jest.fn(async () => true),
 }));
 
 jest.mock('../app/utils/folderOperations', () => ({
@@ -452,5 +454,89 @@ mockUseSortable.mockImplementation(() => ({
             ]),
             affectedParentIds: [targetParentId],
         }));
+    });
+});
+
+// Fix round 3 (task-13-report.md "## Fix round 3"): FPContentArea's global sort
+// (handleSort) cleared `order` for every collection via batchUpdateCollections,
+// including collections inside a read-only shared folder - overwriting an
+// ordering the read-only member has no permission to change. The fix excludes
+// those collections from the clearing batch entirely.
+describe('FPContentArea sort guard for read-only shared folders', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        window.matchMedia = jest.fn().mockImplementation((query) => ({
+            matches: false,
+            media: query,
+            onchange: null,
+            addListener: jest.fn(),
+            removeListener: jest.fn(),
+            addEventListener: jest.fn(),
+            removeEventListener: jest.fn(),
+            dispatchEvent: jest.fn(),
+        }));
+        window.requestAnimationFrame = jest.fn((callback) => setTimeout(() => callback(Date.now()), 0));
+        window.cancelAnimationFrame = jest.fn((id) => clearTimeout(id));
+        window.CSS = { escape: (value) => value };
+        HTMLElement.prototype.scrollIntoView = jest.fn();
+        browser.storage.local.get.mockImplementation(async (keys) => {
+            const values = {
+                currentSortValue: 'DATE',
+                currentSortAscending: true,
+                fpViewMode: 'grid',
+                chkOpenNewWindow: false,
+                sessions: [],
+            };
+
+            if (Array.isArray(keys)) {
+                return keys.reduce((acc, key) => ({ ...acc, [key]: values[key] }), {});
+            }
+
+            if (typeof keys === 'string') {
+                return { [keys]: values[keys] };
+            }
+
+            return values;
+        });
+        batchUpdateCollections.mockResolvedValue(true);
+    });
+
+    test('excludes a collection inside a read-only shared folder from the order-clearing batch', async () => {
+        const writableCollection = { uid: 'writable-1', name: 'Writable', parentId: null, order: 5, lastUpdated: 10, tabs: [], chromeGroups: [] };
+        const readOnlyCollection = { uid: 'shared-1', name: 'Shared RO', parentId: 'folder-shared', order: 3, lastUpdated: 20, tabs: [], chromeGroups: [] };
+
+        loadAllCollections
+            .mockResolvedValueOnce([writableCollection, readOnlyCollection])
+            .mockResolvedValueOnce([writableCollection, readOnlyCollection]);
+
+        const updateRemoteData = jest.fn();
+
+        await renderWithNavigation(
+            <FPContentArea
+                {...baseProps}
+                updateRemoteData={updateRemoteData}
+                folders={[{ uid: 'folder-shared', name: 'Shared Folder', shared: { folderId: 'folder-shared', role: 'read' } }]}
+                collections={[writableCollection, readOnlyCollection]}
+            />,
+            'all',
+        );
+
+        const sortDirectionButton = await screen.findByRole('button', { name: 'Ascending' });
+        await act(async () => {
+            fireEvent.click(sortDirectionButton);
+        });
+
+        expect(batchUpdateCollections).toHaveBeenCalledTimes(1);
+        const payload = batchUpdateCollections.mock.calls[0][0];
+        expect(payload.some((c) => c.uid === 'shared-1')).toBe(false);
+        expect(payload).toEqual([
+            expect.objectContaining({ uid: 'writable-1', order: null }),
+        ]);
+
+        // The read-only shared collection's `order` field must also survive
+        // untouched in the data ultimately handed to updateRemoteData.
+        expect(updateRemoteData).toHaveBeenCalledWith(expect.arrayContaining([
+            expect.objectContaining({ uid: 'shared-1', order: 3 }),
+        ]));
     });
 });

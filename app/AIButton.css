@@ -1,0 +1,153 @@
+@property --ai-fog-angle {
+    syntax: "<angle>";
+    inherits: false;
+    initial-value: 0deg;
+}
+
+.ai-button {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: none;
+    /* Fully rounded left and right edges (capsule). */
+    border-radius: 999px;
+    padding: 1px 11px;
+    cursor: pointer;
+    color: #fff;
+    /* Deep blue → blue-purple gradient fill. */
+    background: linear-gradient(135deg, #3a63db 0%, #5b4fd6 100%);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    /* Subtle always-on gradient glow: purple bleeding left, blue right. */
+    box-shadow:
+        0 1px 6px rgba(67, 97, 238, 0.28),
+        -5px 1px 16px rgba(124, 58, 237, 0.2),
+        5px 1px 16px rgba(59, 130, 246, 0.2);
+    transition: box-shadow 0.2s ease, filter 0.2s ease;
+    isolation: isolate;
+}
+
+.ai-button:hover {
+    filter: brightness(1.08);
+    box-shadow:
+        0 2px 10px rgba(67, 97, 238, 0.38),
+        -6px 2px 20px rgba(124, 58, 237, 0.3),
+        6px 2px 20px rgba(59, 130, 246, 0.3);
+}
+
+/* Gradient mist + inner shadow that fades in on hover. */
+.ai-button::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.35s ease;
+    /* Irregular purple/blue fog puffs separated by clear gaps. Rotating this
+       conic gradient (via --ai-fog-angle) drifts the puffs around the rim;
+       the blur turns the hard wedges into soft wisps; the radial mask keeps
+       the fog hugging the edges and clears the centre. */
+    background: conic-gradient(
+        from var(--ai-fog-angle),
+        rgba(124, 58, 237, 0.95) 0deg,
+        rgba(124, 58, 237, 0) 70deg,
+        rgba(59, 130, 246, 0.95) 150deg,
+        rgba(59, 130, 246, 0) 210deg,
+        rgba(139, 92, 246, 0.9) 290deg,
+        rgba(139, 92, 246, 0) 340deg,
+        rgba(124, 58, 237, 0.95) 360deg
+    );
+    filter: blur(5px);
+    -webkit-mask: radial-gradient(closest-side, transparent 38%, #000 82%);
+    mask: radial-gradient(closest-side, transparent 38%, #000 82%);
+}
+
+.ai-button:hover::after {
+    opacity: 1;
+    animation: ai-button-fog-swirl 7s linear infinite;
+}
+
+/* Fog puffs drift continuously around the edges. */
+@keyframes ai-button-fog-swirl {
+    to { --ai-fog-angle: 360deg; }
+}
+
+/* Keep the stars and label above the mist overlay. */
+.ai-button-stars,
+.ai-button-label {
+    position: relative;
+    z-index: 1;
+}
+
+.ai-button:focus-visible {
+    outline: 2px solid rgba(67, 97, 238, 0.6);
+    outline-offset: 2px;
+}
+
+.ai-button-label {
+    letter-spacing: 0.4px;
+}
+
+/* On hover the three sparkles blink once, one at a time (a left-to-right
+   twinkle wave). Each star scales/fades around its own centre via fill-box. */
+/* Drop-shadow gives the white sparkles crisp edges against the
+   blue/purple gradient so their points stay legible. */
+.ai-button-stars {
+    filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.35));
+}
+
+.ai-star {
+    transform-box: fill-box;
+    transform-origin: center;
+}
+
+.ai-button:hover .ai-star {
+    animation: ai-button-star-blink 0.4s ease both;
+}
+
+.ai-button:hover .ai-star--2 {
+    animation-delay: 0.18s;
+}
+
+.ai-button:hover .ai-star--3 {
+    animation-delay: 0.36s;
+}
+
+@keyframes ai-button-star-blink {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.15; transform: scale(0.55); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ai-button:hover .ai-star {
+        animation: none;
+    }
+    .ai-button:hover::after {
+        animation: none;
+    }
+}
+
+/* ── Toolbar integration ───────────────────────────────────────────────────
+   When the AI button lives inside an fp-toolbar row it must align with the
+   38px-tall fp-toolbar-btn siblings.
+   ─────────────────────────────────────────────────────────────────────────── */
+.fp-toolbar .ai-button {
+    height: 38px;
+    flex-shrink: 0;
+    margin-left: 4px;
+}
+
+/* Popup-only: the collections-toolbar row is tight (~400px viewport).
+   Slightly narrow the sort-type dropdown shell so the AI pill fits without
+   overflow. :has() requires Chrome 105+; Tabox targets Chrome 89+, so we
+   apply a constant 20px reduction instead. The reduction is small enough to
+   be imperceptible when AI is disabled (button renders null, space is unused).
+   This rule lives in AIButton.css because CollectionListOptions.css has
+   pre-existing uncommitted changes that must not be touched. */
+.collections-toolbar .toolbar-select-shell {
+    min-width: 122px;
+}

@@ -48,6 +48,7 @@ describe('CollectionFilter', () => {
       expect(last).toEqual({
         recentlyOpenedActual: false,
         colors: [firstColorName],
+        favoritesOnly: false,
       });
       // multi-select keeps the popover open after a pick
       expect(container.querySelector('.color-grid')).toBeInTheDocument();
@@ -99,6 +100,27 @@ describe('ColorPicker multi-select mode', () => {
     const preview = container.querySelector('.current-color-preview');
     expect(preview.getAttribute('style')).toMatch(/linear-gradient/);
   });
+});
+
+describe('favorites filter', () => {
+    it('emits favoritesOnly: true when the star is toggled on', () => {
+        const onFiltersChange = jest.fn();
+        render(<CollectionFilter onFiltersChange={onFiltersChange} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Show only favorite collections' }));
+        expect(onFiltersChange).toHaveBeenLastCalledWith(
+            expect.objectContaining({ favoritesOnly: true })
+        );
+    });
+
+    it('clear-all resets the favorites filter', () => {
+        const onFiltersChange = jest.fn();
+        render(<CollectionFilter onFiltersChange={onFiltersChange} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Show only favorite collections' }));
+        fireEvent.click(document.getElementById('filter-clear'));
+        expect(onFiltersChange).toHaveBeenLastCalledWith(
+            expect.objectContaining({ favoritesOnly: false })
+        );
+    });
 });
 
 describe('CollectionFilter multi-color', () => {

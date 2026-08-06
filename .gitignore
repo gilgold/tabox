@@ -35,3 +35,18 @@ quick-seed.js
 # Cross-project working notes (crxbox), kept locally, not committed to tabox
 crxbox-assessment.md
 crxbox-feedback.md
+
+# Local design docs / plans — not tracked
+docs/
+
+# Marketing assets / copy — not tracked
+marketing/
+
+# Pricing page: local env + generated output (token lives here; don't commit)
+site/pricing/.env
+site/pricing/pricing.html
+
+# Local env files (API tokens) — never commit
+.env.local
+.env*.local
+server/.wrangler/

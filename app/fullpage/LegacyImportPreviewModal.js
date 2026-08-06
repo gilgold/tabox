@@ -12,6 +12,7 @@ import {
 } from 'react-icons/md';
 import MultiSelectCheckbox from '../MultiSelectCheckbox';
 import { highlightText } from '../utils/searchUtils';
+import { FALLBACK_FAVICON } from '../utils/sharedConstants';
 import FPBadge from './FPBadge';
 import '../Modal.css';
 import './LegacyImportPreviewModal.css';
@@ -132,7 +133,7 @@ function LegacyImportPreviewModal({
                 {visiblePreviewTabs.map((tab, index) => (
                     <img
                         key={`${tab.url || tab.title || 'tab'}-${index}`}
-                        src={tab.favIconUrl || './images/favicon-fallback.png'}
+                        src={tab.favIconUrl || FALLBACK_FAVICON}
                         alt=""
                         title={tab.title}
                         className="legacy-import-preview-tab-favicon"
@@ -142,7 +143,7 @@ function LegacyImportPreviewModal({
                             }
 
                             event.target.dataset.fallbackApplied = 'true';
-                            event.target.src = './images/favicon-fallback.png';
+                            event.target.src = FALLBACK_FAVICON;
                         }}
                     />
                 ))}

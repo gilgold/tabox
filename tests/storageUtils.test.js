@@ -89,6 +89,26 @@ describe('sortCollectionsForDisplay', () => {
         expect(sorted.map(collection => collection.uid)).toEqual(['folder-a', 'folder-b', 'root']);
     });
 
+    test('sorts by name using natural (numeric-aware) ordering', () => {
+        const collections = [
+            { uid: 't1', name: 'Tab 1', parentId: null },
+            { uid: 't2', name: 'Tab 2', parentId: null },
+            { uid: 't', name: 'Tab', parentId: null },
+            { uid: 't10', name: 'Tab 10', parentId: null },
+            { uid: 't11', name: 'Tab 11', parentId: null },
+            { uid: 't20', name: 'Tab 20', parentId: null }
+        ];
+
+        const sorted = sortCollectionsForDisplay(collections, {
+            sortBy: 'name',
+            sortOrder: 'asc'
+        });
+
+        // Numbers ordered by value, not lexically (Tab 2 before Tab 10)
+        expect(sorted.map(collection => collection.uid))
+            .toEqual(['t', 't1', 't2', 't10', 't11', 't20']);
+    });
+
     test('ignores folder grouping in flatSort mode', () => {
         const collections = [
             { uid: 'root', name: 'Root', lastUpdated: 100, parentId: null },

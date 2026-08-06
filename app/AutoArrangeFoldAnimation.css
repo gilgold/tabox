@@ -1,0 +1,131 @@
+/* ── Auto-Arrange fly-to-folder animation ────────────────────────────────────
+ * Collection cards fly in horizontally from the left and land in different
+ * folders on the right — one collection per folder, in turn. Distinct from the
+ * Smart Organize fold animation (which drops tabs vertically into one group).
+ * Animates only transform/opacity (compositor thread). Decorative —
+ * aria-hidden on the host element.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+.aa-fly-anim {
+    display: flex;
+    justify-content: center;
+    padding: 6px 0 2px;
+}
+
+.aa-fly-stage {
+    position: relative;
+    width: 150px;
+    height: 82px;
+}
+
+/* ── Destination folders (right column) ───────────────────────────────────── */
+/* A real-folder silhouette: a raised tab + a back panel with a front pocket. */
+.aa-folder {
+    position: absolute;
+    right: 6px;
+    width: 48px;
+    height: 23px;
+    transform-origin: center;
+    will-change: transform;
+}
+
+.aa-folder--1 { top: 3px; }
+.aa-folder--2 { top: 30px; }
+.aa-folder--3 { top: 57px; }
+
+/* The protruding tab on the back panel. */
+.aa-folder-tab {
+    position: absolute;
+    top: 0;
+    left: 3px;
+    width: 20px;
+    height: 6px;
+    border-radius: 4px 4px 0 0;
+    background: #c8922f;
+}
+
+/* Back panel + front pocket (::before) = manila-folder look. */
+.aa-folder-front {
+    position: absolute;
+    top: 4px;
+    left: 0;
+    width: 48px;
+    height: 19px;
+    border-radius: 2px 5px 5px 5px;
+    background: linear-gradient(160deg, #f3c873, #e0a83f);
+    border: 1px solid rgba(150, 100, 20, 0.55);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.aa-folder-front::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 64%;
+    border-radius: 0 0 5px 5px;
+    background: linear-gradient(160deg, #f7d68f, #eaba56);
+    border-top: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+/* ── Collections in flight ────────────────────────────────────────────────── */
+/* Each card sits at its target folder's row and flies in horizontally. */
+.aa-fly-card {
+    position: absolute;
+    left: 6px;
+    width: 42px;
+    height: 13px;
+    border-radius: 4px;
+    opacity: 0;
+    transform-origin: center;
+    will-change: transform, opacity;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+
+.aa-fly-card--1 { top: 8px;  background: linear-gradient(135deg, #2563eb, #38bdf8); }
+.aa-fly-card--2 { top: 35px; background: linear-gradient(135deg, #7c3aed, #2563eb); }
+.aa-fly-card--3 { top: 62px; background: linear-gradient(135deg, #ec4899, #7c3aed); }
+
+/* Fly left → right, then shrink + fade as the card slips into the folder. */
+@keyframes aa-fly-card {
+    0%        { transform: translateX(0) scale(0.6);  opacity: 0; }
+    10%       { transform: translateX(0) scale(1);    opacity: 1; }
+    52%       { transform: translateX(74px) scale(1); opacity: 1; }
+    66%       { transform: translateX(94px) scale(0.42); opacity: 0; }
+    100%      { transform: translateX(94px) scale(0.42); opacity: 0; }
+}
+
+/* Brief "receive" bump on the folder as its card lands (~60% of the cycle). */
+@keyframes aa-folder-receive {
+    0%, 52%, 72%, 100% { transform: scale(1); }
+    60%                { transform: scale(1.12); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .aa-fly-card {
+        animation: aa-fly-card 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+    /* Staggered so one collection flies to one folder at a time, in turn. */
+    .aa-fly-card--1 { animation-delay: 0s; }
+    .aa-fly-card--2 { animation-delay: 0.8s; }
+    .aa-fly-card--3 { animation-delay: 1.6s; }
+
+    .aa-folder {
+        animation: aa-folder-receive 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+    /* Each folder pulses in sync with its incoming card. */
+    .aa-folder--1 { animation-delay: 0s; }
+    .aa-folder--2 { animation-delay: 0.8s; }
+    .aa-folder--3 { animation-delay: 1.6s; }
+}
+
+/* Static fallback: no motion. One card rests just outside each folder so the
+ * "collections → folders" concept still reads. */
+@media (prefers-reduced-motion: reduce) {
+    .aa-fly-card { animation: none; opacity: 0.95; transform: translateX(60px) scale(0.8); }
+}
+
+html.performance-mode .aa-fly-card,
+html.performance-mode .aa-folder { animation: none !important; }
+html.performance-mode .aa-fly-card { opacity: 0.95; transform: translateX(60px) scale(0.8); }

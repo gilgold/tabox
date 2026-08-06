@@ -1,0 +1,102 @@
+.split-panel { display: flex; flex-direction: column; gap: 12px; }
+/* Results view fills the modal height; the middle (.split-scroll) scrolls while
+   the status line and footer actions stay pinned — same pattern as the
+   duplicate-sweep panel. */
+.split-panel--results { flex: 1 1 auto; min-height: 0; }
+.split-panel-status { font-size: 13px; opacity: 0.85; margin: 0; }
+.split-panel-progress { font-variant-numeric: tabular-nums; opacity: 0.7; }
+
+.split-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-right: 2px;
+}
+
+.split-card-tabs { list-style: none; margin: 0; padding: 0; }
+.split-cards { display: flex; flex-direction: column; gap: 8px; }
+
+/* Picker (collection chooser) reuses the result-card chrome. */
+.split-candidate-name { flex: 1; min-width: 0; font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.split-candidate-go {
+    flex-shrink: 0;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #fff;
+    background: linear-gradient(135deg, #3a63db 0%, #5b4fd6 100%);
+    cursor: pointer;
+}
+.split-candidate-go:hover { filter: brightness(1.05); }
+
+/* Option B: tinted header band + full-width tab rows, collapsible. */
+.split-card {
+    border: 1px solid var(--border-color, #ddd);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--card-bg, transparent);
+}
+.split-card-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    cursor: pointer;
+    background: linear-gradient(135deg, rgba(58, 99, 219, 0.10), rgba(91, 79, 214, 0.10));
+}
+.split-card--open .split-card-head { border-bottom: 1px solid var(--border-color, #ddd); }
+.split-card-folder { color: #5b4fd6; flex-shrink: 0; }
+.split-card-name {
+    flex: 1;
+    min-width: 0;
+    font-weight: 600;
+    font-size: 13px;
+    border: none;
+    background: transparent;
+    color: inherit;
+    padding: 2px 0;
+}
+.split-card-name:focus { outline: none; }
+.split-card-count { opacity: 0.6; font-size: 12px; white-space: nowrap; }
+.split-card-chevron { color: var(--text-color, #888); opacity: 0.6; flex-shrink: 0; }
+
+.split-card-body { padding: 4px 0; }
+.split-card-tabs li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    padding: 6px 14px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+.split-card-tabs li img { flex-shrink: 0; border-radius: 3px; }
+.split-card-tabs li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* +N more / Show less — a plain text link, no border or background. */
+.split-card-more {
+    padding: 6px 14px;
+    border: none;
+    background: transparent;
+    color: var(--accent-color, #5b4fd6);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    align-self: flex-start;
+}
+.split-card-more:hover { text-decoration: underline; }
+
+/* Footer stays pinned below the scroll: folder controls on the left, the
+   Cancel/Confirm actions on the right. */
+.split-footer { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex: none; padding-top: 8px; border-top: 1px solid var(--divider-color, rgba(0,0,0,0.1)); }
+.split-folder { display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; min-width: 0; }
+.split-folder-toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.split-folder-row { display: flex; align-items: center; gap: 6px; }
+.split-folder-name { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--border-color, #ddd); border-radius: 6px; background: transparent; color: inherit; }
+.split-actions { display: flex; justify-content: flex-end; gap: 8px; flex: none; align-items: center; }

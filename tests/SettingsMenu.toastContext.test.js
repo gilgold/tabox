@@ -11,7 +11,13 @@ jest.mock('../app/toastHelpers', () => ({
     setToastViewContext: (...args) => mockSetToastViewContext(...args),
 }));
 
+// Mock the AI client so these unrelated tests never touch the network.
+jest.mock('../app/ai/aiClient', () => ({
+    getAIAvailability: jest.fn(),
+}));
+
 const SettingsMenu = require('../app/SettingsMenu').default;
+const { getAIAvailability } = require('../app/ai/aiClient');
 
 const seedBrowserStorage = () => {
     browser.storage.local._data = {
@@ -61,6 +67,7 @@ const renderSettingsMenu = (variant) => {
 describe('SettingsMenu toast context', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        getAIAvailability.mockResolvedValue(undefined);
     });
 
     test('sets full-page toast context when rendered in the full-page settings surface', () => {

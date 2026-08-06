@@ -7,11 +7,9 @@ import { test, expect } from 'crxbox';
 //    (`isVisible: isLoggedIn`, app/SettingsMenu.js). `isLoggedIn` is derived from the
 //    cached `syncSessionState` (app/App.js checkSyncStatus → isSyncSessionEnabled), so we
 //    seed `syncSessionState.isEnabled = true` to boot the popup "logged in".
-//  - That button opens the simple SyncDebugModal (popup variant), which lists `autoBackups`
-//    and renders a `.sync-debug-backup-btn` "Restore" per backup.
-//  - Restore → `recoverFromBackup` message → background `updateAllCollectionsBG(tabsArray)`
-//    which MERGES the backup's collections into indexed storage (`collections_index` +
-//    `collection_<uid>`), preserving each collection's `uid`.
+//  - The Recovery settings panel lists `autoBackups` and renders a Restore action per backup.
+//  - Restore → `recoverFromBackup` message → the background overwrite path restores the
+//    backup's collections and folders into indexed storage while preserving collection UIDs.
 
 const T = 1_710_000_000_000;
 

@@ -1,14 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { MdCenterFocusWeak, MdOutlineLaunch, MdOutlineRefresh } from 'react-icons/md';
-import { FaTrash } from 'react-icons/fa';
+import { FaTrash, FaStar, FaRegStar } from 'react-icons/fa';
 import { BsIncognito } from 'react-icons/bs';
-import ContextMenu from '../ContextMenu';
-import { createCollectionMenuItems } from '../utils/contextMenuItems';
 import TimeAgo from 'javascript-time-ago';
 import { useSetAtom, useAtomValue } from 'jotai';
 import { highlightedCollectionUidState, deletingCollectionUidsState } from '../atoms/animationsState';
 import { selectedCollectionUidState } from '../atoms/globalAppSettingsState';
+import { aiProcessingUidsState, aiProcessingCurrentUidState } from '../atoms/aiState';
+import '../AIEffects.css';
 import { getColorValue, normalizeColorKey } from '../utils/colorMigration';
+import { loadAllFolders } from '../utils/storageUtils';
 import ColorPicker from '../ColorPicker';
 import { useCollectionOperations } from '../useCollectionOperations';
 import DroppableCollection from '../DroppableCollection';
@@ -33,6 +34,7 @@ function FPCollectionCard({
     search,
     folderName,
     folderColor,
+    folders,
     dragAttributes,
     dragListeners,
     enableDropZone = true,
@@ -49,13 +51,40 @@ function FPCollectionCard({
     const deletingCollectionUids = useAtomValue(deletingCollectionUidsState);
     const setDeletingCollectionUids = useSetAtom(deletingCollectionUidsState);
     const selectedCollectionUid = useAtomValue(selectedCollectionUidState);
+    const aiProcessingUids = useAtomValue(aiProcessingUidsState);
+    const aiProcessingCurrentUid = useAtomValue(aiProcessingCurrentUidState);
 
     const isHighlighted = highlightedCollectionUid === collection.uid;
     const isDeleting = deletingCollectionUids.has(collection.uid);
     const isSelected = selectedCollectionUid === collection.uid;
+    const isAiProcessing = aiProcessingUids.includes(collection.uid);
+    const isAiCurrent = aiProcessingCurrentUid === collection.uid;
     const showBulkSelection = typeof onToggleBulkSelected === 'function';
     const [isLocalInteractionActive, setIsLocalInteractionActive] = useState(false);
     const shouldShowInteractionState = isInteractionActive || isLocalInteractionActive;
+
+    // The fullpage card tree above this component doesn't thread the live
+    // `folders` array down to individual cards yet, so the read-only-shared
+    // folder delete guard (see useCollectionOperations) would otherwise have
+    // nothing to check against. Self-fetch as a fallback; a caller that does
+    // pass `folders` directly is preferred and skips this fetch entirely.
+    const [selfFetchedFolders, setSelfFetchedFolders] = useState([]);
+    useEffect(() => {
+        if (folders) {
+            return undefined;
+        }
+
+        let cancelled = false;
+        loadAllFolders().then((loaded) => {
+            if (!cancelled) {
+                setSelfFetchedFolders(loaded);
+            }
+        }).catch(() => {});
+
+        return () => { cancelled = true; };
+    }, [folders, collection.parentId]);
+
+    const resolvedFolders = folders || selfFetchedFolders;
 
     const {
         _handleDelete,
@@ -65,6 +94,7 @@ function FPCollectionCard({
         _handleOpenTabs,
         _handleFocusWindow,
         _handleStopTracking,
+        _handleToggleFavorite,
     } = useCollectionOperations({
         collection,
         removeCollection,
@@ -74,6 +104,7 @@ function FPCollectionCard({
         setDeletingCollectionUids,
         addCollection,
         onDataUpdate,
+        folders: resolvedFolders,
     });
 
     useEffect(() => {
@@ -104,6 +135,7 @@ function FPCollectionCard({
                 _handleDuplicate,
                 _exportCollectionToFile,
                 _handleStopTracking,
+                _handleToggleFavorite,
             });
         }
     };
@@ -178,22 +210,6 @@ function FPCollectionCard({
         </>
     );
 
-    const actionMenu = bulkSelectionActive ? null : (
-        <ContextMenu
-            menuItems={createCollectionMenuItems({
-                isAutoUpdate,
-                onExport: _exportCollectionToFile,
-                onDelete: _handleDelete,
-                onUpdate: _handleUpdate,
-                onStopTracking: _handleStopTracking,
-                onDuplicate: _handleDuplicate,
-            })}
-            tooltip="More options"
-            tooltipPlace="right"
-            onOpenChange={setIsLocalInteractionActive}
-        />
-    );
-
     const actions = bulkSelectionActive ? null : (
         <FPCardHoverActions
             items={[
@@ -215,10 +231,18 @@ function FPCollectionCard({
                     onClick: _handleUpdate,
                 },
                 {
-                    key: 'more',
-                    className: 'fp-card-menu-option',
-                    label: 'More',
-                    render: () => actionMenu,
+                    key: 'favorite',
+                    className: `fp-card-rail-favorite${collection.isFavorite ? ' is-favorite' : ''}`,
+                    label: collection.isFavorite ? 'Unfavorite' : 'Favorite',
+                    tooltip: collection.isFavorite ? 'Remove from favorites' : 'Add to favorites',
+                    ariaLabel: collection.isFavorite ? 'Remove from favorites' : 'Add to favorites',
+                    icon: collection.isFavorite ? <FaStar size={12} /> : (
+                        <>
+                            <FaRegStar size={12} className="fp-star-outline" />
+                            <FaStar size={12} className="fp-star-filled" />
+                        </>
+                    ),
+                    onClick: _handleToggleFavorite,
                 },
                 {
                     key: 'color',
@@ -315,6 +339,9 @@ function FPCollectionCard({
                 actionsClassName={FP_CARD_HOVER_MENU_CLASS}
                 dragAttributes={dragAttributes}
                 dragListeners={dragListeners}
+                extraContent={isAiProcessing ? (
+                    <div className={`ai-processing-overlay${isAiCurrent ? ' ai-processing-overlay--current' : ''}`} aria-hidden="true" />
+                ) : null}
             />
         </DroppableCollection>
     );

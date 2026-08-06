@@ -212,83 +212,6 @@ describe('Collection Sync', () => {
         resetStorage();
     });
 
-    describe('updateAllCollectionsBG behavior', () => {
-        test('should save collections with all required fields', async () => {
-            const collection = createMockCollection({
-                uid: 'col-test-1',
-                name: 'Test Collection',
-                tabs: [{ url: 'https://test.com', title: 'Test' }],
-                order: 0,
-                parentId: null
-            });
-
-            // Simulate what updateAllCollectionsBG does
-            const collectionKey = `${STORAGE_KEYS.COLLECTION_PREFIX}${collection.uid}`;
-            await mockBrowser.storage.local.set({
-                [collectionKey]: collection,
-                [STORAGE_KEYS.COLLECTIONS_INDEX]: {
-                    [collection.uid]: {
-                        name: collection.name,
-                        type: 'collection',
-                        tabCount: collection.tabs.length,
-                        order: collection.order,
-                        parentId: collection.parentId
-                    }
-                }
-            });
-
-            const result = await mockBrowser.storage.local.get(collectionKey);
-            expect(result[collectionKey]).toBeDefined();
-            expect(result[collectionKey].uid).toBe('col-test-1');
-            expect(result[collectionKey].name).toBe('Test Collection');
-            expect(result[collectionKey].order).toBe(0);
-        });
-
-        test('should preserve parentId for collections in folders', async () => {
-            const folderId = 'folder-parent-1';
-            const collection = createMockCollection({
-                uid: 'col-in-folder',
-                name: 'Collection in Folder',
-                parentId: folderId,
-                order: 0
-            });
-
-            const collectionKey = `${STORAGE_KEYS.COLLECTION_PREFIX}${collection.uid}`;
-            await mockBrowser.storage.local.set({
-                [collectionKey]: collection
-            });
-
-            const result = await mockBrowser.storage.local.get(collectionKey);
-            expect(result[collectionKey].parentId).toBe(folderId);
-        });
-
-        test('should preserve order in collections index', async () => {
-            const collections = [
-                createMockCollection({ uid: 'col-a', name: 'A', order: 2 }),
-                createMockCollection({ uid: 'col-b', name: 'B', order: 0 }),
-                createMockCollection({ uid: 'col-c', name: 'C', order: 1 })
-            ];
-
-            const index = {};
-            collections.forEach(col => {
-                index[col.uid] = {
-                    name: col.name,
-                    type: 'collection',
-                    order: col.order
-                };
-            });
-
-            await mockBrowser.storage.local.set({
-                [STORAGE_KEYS.COLLECTIONS_INDEX]: index
-            });
-
-            const result = await mockBrowser.storage.local.get(STORAGE_KEYS.COLLECTIONS_INDEX);
-            expect(result[STORAGE_KEYS.COLLECTIONS_INDEX]['col-a'].order).toBe(2);
-            expect(result[STORAGE_KEYS.COLLECTIONS_INDEX]['col-b'].order).toBe(0);
-            expect(result[STORAGE_KEYS.COLLECTIONS_INDEX]['col-c'].order).toBe(1);
-        });
-    });
-
     describe('collection order within folders', () => {
         test('should maintain separate order for collections in different folders', async () => {
             const folder1Collections = [
@@ -339,35 +262,6 @@ describe('Collection Sync', () => {
 describe('Folder Sync', () => {
     beforeEach(() => {
         resetStorage();
-    });
-
-    describe('updateAllFoldersBG behavior', () => {
-        test('should save folders with order in index', async () => {
-            const folders = [
-                createMockFolder({ uid: 'f-1', name: 'Folder 1', order: 0 }),
-                createMockFolder({ uid: 'f-2', name: 'Folder 2', order: 1 })
-            ];
-
-            const index = {};
-            for (const folder of folders) {
-                const folderKey = `${STORAGE_KEYS.FOLDER_PREFIX}${folder.uid}`;
-                await mockBrowser.storage.local.set({
-                    [folderKey]: folder
-                });
-                index[folder.uid] = {
-                    name: folder.name,
-                    type: 'folder',
-                    order: folder.order
-                };
-            }
-            await mockBrowser.storage.local.set({
-                [STORAGE_KEYS.FOLDERS_INDEX]: index
-            });
-
-            const result = await mockBrowser.storage.local.get(STORAGE_KEYS.FOLDERS_INDEX);
-            expect(result[STORAGE_KEYS.FOLDERS_INDEX]['f-1'].order).toBe(0);
-            expect(result[STORAGE_KEYS.FOLDERS_INDEX]['f-2'].order).toBe(1);
-        });
     });
 
     describe('folder deletion sync', () => {
@@ -966,19 +860,6 @@ describe('Network Failure Handling', () => {
             expect(mockNavigator.onLine).toBe(false);
         });
 
-        test('should queue sync when offline', () => {
-            const syncQueue = [];
-            const isOnline = false;
-
-            const syncOperation = { type: 'upload', data: { collections: [] } };
-
-            if (!isOnline) {
-                syncQueue.push(syncOperation);
-            }
-
-            expect(syncQueue.length).toBe(1);
-            expect(syncQueue[0].type).toBe('upload');
-        });
     });
 });
 

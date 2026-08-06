@@ -141,7 +141,7 @@ describe('CollectionDetailPanel title editing', () => {
         const editButton = container.querySelector('.panel-edit-btn');
 
         expect(titleRow.firstElementChild).toBe(editButton);
-        expect(titleRow.children[1]).toBe(titleSlot);
+        expect(titleRow.children[2]).toBe(titleSlot);
         expect(titleSlot.querySelector('.panel-title')).toHaveTextContent('incognito');
 
         fireEvent.click(editButton);

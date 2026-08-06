@@ -51,7 +51,8 @@ jest.mock('../app/utils/collectionBulkActions', () => ({
 import FPContentArea from '../app/fullpage/FPContentArea';
 import { collectionRevealBatchState, highlightedCollectionUidState } from '../app/atoms/animationsState';
 import { sidebarNavigationState } from '../app/atoms/fullpageState';
-import { searchState } from '../app/atoms/globalAppSettingsState';
+import { detailPanelOpenState, searchState, selectedCollectionUidState } from '../app/atoms/globalAppSettingsState';
+import { noPermissionOpenState, sharedPanelOpenState } from '../app/atoms/sharedFoldersState';
 import { CURRENT_WINDOWS_ACCENT_COLOR } from '../app/fullpage/fpAccentColors';
 import {
     loadAllCollections,
@@ -60,6 +61,7 @@ import {
 } from '../app/utils/storageUtils';
 import { openCollectionsInSequence } from '../app/utils/collectionBulkActions';
 
+let mockLatestCardFoldersByUid = {};
 jest.mock('../app/fullpage/FPCollectionCard', () => function MockFPCollectionCard({
     collection,
     onSelect,
@@ -68,7 +70,9 @@ jest.mock('../app/fullpage/FPCollectionCard', () => function MockFPCollectionCar
     onToggleBulkSelected,
     onCardContextMenu,
     isInteractionActive,
+    folders,
 }) {
+    mockLatestCardFoldersByUid[collection.uid] = folders;
     return (
         <div
             className={`fp-card ${isBulkSelected ? 'fp-card-bulk-selected' : ''} ${isInteractionActive ? 'fp-card-interaction-active' : ''}`}
@@ -439,6 +443,28 @@ describe('FPContentArea grouped all collections view', () => {
 
         const sectionTitles = screen.getAllByText(/Folder One|Folder Two|Root Level/).map(node => node.textContent);
         expect(sectionTitles).toEqual(['Folder One', 'Folder Two', 'Root Level']);
+    });
+
+    test('clicking a collection opens the detail panel even while the shared panel is open', async () => {
+        const { store } = renderWithStore(
+            <FPContentArea
+                {...baseProps}
+                collections={[
+                    { uid: 'root-1', name: 'Root Collection', parentId: null, order: 0, lastUpdated: 10, tabs: [] },
+                ]}
+            />,
+        );
+        act(() => {
+            store.set(sharedPanelOpenState, true);
+        });
+
+        await waitFor(() => {
+            expect(screen.getByLabelText('open-collection-root-1')).toBeInTheDocument();
+        });
+        fireEvent.click(screen.getByLabelText('open-collection-root-1'));
+
+        expect(store.get(selectedCollectionUidState)).toBe('root-1');
+        expect(store.get(detailPanelOpenState)).toBe(true);
     });
 
     test('shows empty folders in grouped all collections view', async () => {
@@ -914,10 +940,56 @@ describe('FPContentArea grouped all collections view', () => {
         fireEvent.contextMenu(folderHeader);
 
         expect(await screen.findByText('Open All Collections')).toBeInTheDocument();
+        expect(screen.getByText('Share…').closest('button')).toContainElement(
+            screen.getByLabelText('Tabox Pro feature'),
+        );
         expect(screen.getByText('Edit Folder')).toBeInTheDocument();
         expect(screen.getByText('Export Folder')).toBeInTheDocument();
         expect(screen.getByText('Duplicate Folder')).toBeInTheDocument();
         expect(screen.getByText('Delete Folder')).toBeInTheDocument();
+    });
+
+    // Fix round 3 (task-13-report.md "## Fix round 3"): the full-page folder
+    // context menu had zero shared-folder gating - a read-only member (or the
+    // owner) could see and click plain "Delete Folder" on a shared folder. It
+    // must instead show the sharing-specific actions and never plain delete.
+    test('shows Leave Shared Folder (and not Delete Folder) for a read-only shared folder', async () => {
+        renderWithStore(
+            <FPContentArea
+                {...baseProps}
+                folders={[
+                    { uid: 'folder-1', name: 'Read Only Folder', collapsed: false, color: 'blue', shared: { folderId: 'folder-1', role: 'read' } },
+                ]}
+            />,
+        );
+
+        const folderHeader = await screen.findByRole('button', { name: /Read Only Folder 0/i });
+        fireEvent.contextMenu(folderHeader);
+
+        expect(await screen.findByText('Leave Shared Folder')).toBeInTheDocument();
+        expect(screen.queryByText('Delete Folder')).not.toBeInTheDocument();
+        expect(screen.queryByText('Share…')).not.toBeInTheDocument();
+        expect(screen.queryByText('Manage Sharing…')).not.toBeInTheDocument();
+        expect(screen.queryByText('Stop Sharing (keep my copy)')).not.toBeInTheDocument();
+    });
+
+    test('shows Manage Sharing and Stop Sharing (and not Delete Folder) for a folder the user owns and shares', async () => {
+        renderWithStore(
+            <FPContentArea
+                {...baseProps}
+                folders={[
+                    { uid: 'folder-1', name: 'Owned Shared Folder', collapsed: false, color: 'blue', shared: { folderId: 'folder-1', role: 'owner', members: [] } },
+                ]}
+            />,
+        );
+
+        const folderHeader = await screen.findByRole('button', { name: /Owned Shared Folder 0/i });
+        fireEvent.contextMenu(folderHeader);
+
+        expect(await screen.findByText('Manage Sharing…')).toBeInTheDocument();
+        expect(screen.getByText('Stop Sharing (keep my copy)')).toBeInTheDocument();
+        expect(screen.queryByText('Delete Folder')).not.toBeInTheDocument();
+        expect(screen.queryByText('Leave Shared Folder')).not.toBeInTheDocument();
     });
 
     test('keeps the right-clicked collection card active while its context menu is open', async () => {
@@ -940,6 +1012,9 @@ describe('FPContentArea grouped all collections view', () => {
         fireEvent.contextMenu(alphaCard);
 
         expect(await screen.findByText('Open Tabs')).toBeInTheDocument();
+        expect(screen.getByText('Share via Link').closest('button')).toContainElement(
+            screen.getByLabelText('Tabox Pro feature'),
+        );
         expect(alphaCard).toHaveAttribute('data-interaction-active', 'true');
         expect(betaCard).toHaveAttribute('data-interaction-active', 'false');
     });
@@ -1993,6 +2068,100 @@ describe('FPContentArea grouped all collections view', () => {
         await waitFor(() => {
             expect(screen.queryByText('1 selected')).not.toBeInTheDocument();
         });
+    });
+
+    test('blocks bulk delete when the selection includes a collection inside a read-only shared folder', async () => {
+        const updateRemoteData = jest.fn();
+
+        loadAllCollections.mockResolvedValue([
+            { uid: 'bulk-delete-shared', name: 'Shared Delete Target', parentId: 'folder-1', order: 0, lastUpdated: 10, tabs: [] },
+        ]);
+
+        const { store } = renderWithStore(
+            <FPContentArea
+                {...baseProps}
+                updateRemoteData={updateRemoteData}
+                collections={[
+                    { uid: 'bulk-delete-shared', name: 'Shared Delete Target', parentId: 'folder-1', order: 0, lastUpdated: 10, tabs: [] },
+                ]}
+                folders={[
+                    { uid: 'folder-1', name: 'Read Only Folder', collapsed: false, color: 'blue', shared: { folderId: 'folder-1', role: 'read' } },
+                ]}
+            />,
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Shared Delete Target')).toBeInTheDocument();
+        });
+
+        fireEvent.click(screen.getByRole('button', { name: 'toggle-collection-bulk-delete-shared' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Confirm Bulk Delete' }));
+
+        await waitFor(() => {
+            expect(store.get(noPermissionOpenState)).toBe(true);
+        });
+        expect(batchDeleteCollections).not.toHaveBeenCalled();
+        expect(updateRemoteData).not.toHaveBeenCalled();
+    });
+
+    // Positive-path gap (round 3): a folder that is shared but still writable
+    // (write/owner role) must NOT trip the read-only bulk-delete guard.
+    test('does not block bulk delete when the collection is inside a shared-but-writable folder', async () => {
+        const updateRemoteData = jest.fn();
+
+        loadAllCollections.mockResolvedValue([
+            { uid: 'bulk-delete-writable', name: 'Writable Shared Delete Target', parentId: 'folder-1', order: 0, lastUpdated: 10, tabs: [] },
+        ]);
+
+        const { store } = renderWithStore(
+            <FPContentArea
+                {...baseProps}
+                updateRemoteData={updateRemoteData}
+                collections={[
+                    { uid: 'bulk-delete-writable', name: 'Writable Shared Delete Target', parentId: 'folder-1', order: 0, lastUpdated: 10, tabs: [] },
+                ]}
+                folders={[
+                    { uid: 'folder-1', name: 'Writable Shared Folder', collapsed: false, color: 'blue', shared: { folderId: 'folder-1', role: 'write' } },
+                ]}
+            />,
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Writable Shared Delete Target')).toBeInTheDocument();
+        });
+
+        fireEvent.click(screen.getByRole('button', { name: 'toggle-collection-bulk-delete-writable' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Confirm Bulk Delete' }));
+
+        await waitFor(() => {
+            expect(batchDeleteCollections).toHaveBeenCalledWith(['bulk-delete-writable']);
+        });
+        expect(store.get(noPermissionOpenState)).toBe(false);
+    });
+
+    test('threads the live folders array down to each collection card instead of leaving it to the per-card self-fetch fallback', async () => {
+        mockLatestCardFoldersByUid = {};
+        const sharedFolders = [
+            { uid: 'folder-1', name: 'Folder One', collapsed: false, color: 'blue' },
+        ];
+
+        renderWithStore(
+            <FPContentArea
+                {...baseProps}
+                collections={[
+                    { uid: 'wired-card', name: 'Wired Card', parentId: 'folder-1', order: 0, lastUpdated: 10, tabs: [] },
+                ]}
+                folders={sharedFolders}
+            />,
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Wired Card')).toBeInTheDocument();
+        });
+
+        expect(mockLatestCardFoldersByUid['wired-card']).toBe(sharedFolders);
     });
 
     test('shows a bulk action bar for selected single-tab sessions and combines them for save', async () => {

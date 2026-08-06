@@ -25,6 +25,8 @@ import {
 } from './storageUtils';
 import { triggerBackgroundSync } from './sharedSync';
 import { useTrackedSync } from '../useTrackedSync';
+import { canEditFolder, isSharedFolder } from './sharedFolderUtils';
+import { browser } from '../../static/globals';
 
 // ========================================
 // FOLDER CRUD OPERATIONS
@@ -121,6 +123,11 @@ export const updateFolderDetails = async (folderId, updates = {}) => {
             throw new Error(`Folder ${folderId} not found`);
         }
 
+        // Permission guard: read-only shared folders cannot be renamed/recolored.
+        if (!canEditFolder(folder)) {
+            return false;
+        }
+
         const nextName = updates.name !== undefined ? updates.name.trim() : folder.name;
         const nextColor = updates.color !== undefined ? updates.color : folder.color;
 
@@ -139,7 +146,26 @@ export const updateFolderDetails = async (folderId, updates = {}) => {
         folder.color = nextColor;
         folder.lastUpdated = Date.now();
 
-        return await updateFolder(folder, true);
+        const success = await updateFolder(folder, true);
+
+        // I1 review fix: rename/recolor was only ever saved locally — a shared
+        // folder's edit silently reverted on the next pull (applyDeltaLocally
+        // always refreshes folder meta FROM the server, which never learned
+        // about this local edit). Push it to the server too, for any shared
+        // folder this device can edit (canEditFolder above already blocked
+        // read-only access, so reaching here means owner/write). Fire-and-forget:
+        // never block the UI on the network round-trip; a failure self-heals
+        // by reverting on the next pull (acceptable per design).
+        if (success && isSharedFolder(folder)) {
+            browser.runtime.sendMessage({
+                type: 'sharedUpdateFolderMeta',
+                folderId: folder.uid,
+                name: nextName,
+                color: nextColor,
+            }).catch(() => {});
+        }
+
+        return success;
     } catch (error) {
         console.error('Error updating folder details:', error);
         return false;
@@ -157,6 +183,17 @@ export const deleteFolder = async (folderId, force = false, deleteCollections = 
     try {
         if (!folderId) {
             throw new Error('Folder ID is required');
+        }
+
+        // Permission guard: a folder carrying a live `shared` marker can never be
+        // plain-deleted here, regardless of role - including the owner. Members
+        // must use "Leave Shared Folder" and owners must "Stop Sharing" first;
+        // the popup UI already hides plain Delete for every shared folder via
+        // buildFolderMenuItems, so this enforces the same rule at the data layer
+        // (which every caller - popup, full-page, command palette - goes through).
+        const folder = await loadSingleFolder(folderId);
+        if (isSharedFolder(folder)) {
+            return { blocked: true };
         }
 
         // Check if folder has collections
@@ -358,6 +395,14 @@ export const moveCollectionToFolder = async (collectionId, folderId) => {
         }
 
         const oldParentId = collection.parentId;
+
+        // Permission guard: block moves touching a read-only shared folder
+        // (either end) without writing anything.
+        const sourceFolder = oldParentId ? await loadSingleFolder(oldParentId) : null;
+        if (!canEditFolder(folder) || !canEditFolder(sourceFolder)) {
+            return { blocked: true };
+        }
+
         collection.parentId = folderId;
         collection.lastUpdated = Date.now();
 
@@ -410,6 +455,14 @@ export const removeCollectionFromFolder = async (collectionId) => {
         const oldParentId = collection.parentId;
         if (!oldParentId) {
             return true;
+        }
+
+        // Permission guard: removing a collection from its folder edits that
+        // folder's contents, so a read-only shared source folder blocks it too -
+        // mirrors moveCollectionToFolder's internal check.
+        const sourceFolder = await loadSingleFolder(oldParentId);
+        if (!canEditFolder(sourceFolder)) {
+            return { blocked: true };
         }
 
         collection.parentId = null;
@@ -466,6 +519,30 @@ export const getFolderCollections = async (folderId) => {
         console.error('Error getting folder collections:', error);
         return [];
     }
+};
+
+/**
+ * Stop auto-update tracking for every collection in a folder.
+ * Shared by the popup (FolderContainer) and full-page folder context menus.
+ * @param {string} folderId - Folder UID
+ * @returns {Promise<number>} Number of collections removed from tracking
+ */
+export const stopTrackingFolderCollections = async (folderId) => {
+    const folderCollections = await getFolderCollections(folderId);
+    if (folderCollections.length === 0) return 0;
+
+    const { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack');
+    if (!collectionsToTrack || collectionsToTrack.length === 0) return 0;
+
+    const folderCollectionUids = new Set(folderCollections.map((c) => c.uid));
+    const updatedCollectionsToTrack = collectionsToTrack.filter(
+        (tracked) => !folderCollectionUids.has(tracked.collectionUid)
+    );
+    const removedCount = collectionsToTrack.length - updatedCollectionsToTrack.length;
+    if (removedCount === 0) return 0;
+
+    await browser.storage.local.set({ collectionsToTrack: updatedCollectionsToTrack });
+    return removedCount;
 };
 
 // ========================================

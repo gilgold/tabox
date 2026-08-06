@@ -127,7 +127,10 @@ describe('4.0 upgrade compatibility - future sync operations', () => {
                 order: 0
             }, false);
 
-            await backgroundUtils.deleteSingleCollectionBG('collection-folder-b');
+            const collectionsIndex = await backgroundUtils.loadCollectionsIndexBG();
+            delete collectionsIndex['collection-folder-b'];
+            await browser.storage.local.remove('collection_collection-folder-b');
+            await browser.storage.local.set({ collections_index: collectionsIndex });
             await backgroundUtils.deleteSingleFolderBG('folder-empty');
 
             return backgroundUtils.prepareSyncDataForUpload();

@@ -1,0 +1,11 @@
+/* The favorites view renders its cards as direct children of .fp-content-grid,
+   so all card/grid layout comes from the shared grid styles. Only the empty
+   hint needs its own rule (spanning the full grid width). */
+.fp-favorites-empty-hint {
+    grid-column: 1 / -1;
+    padding: 8px 4px 12px;
+    font-size: 12px;
+    font-style: italic;
+    color: var(--text-color);
+    opacity: 0.55;
+}

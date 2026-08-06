@@ -12,6 +12,9 @@ import FPTopBar from './FPTopBar';
 import FPSidebar from './FPSidebar';
 import FPContentArea from './FPContentArea';
 import CollectionDetailPanel from '../CollectionDetailPanel';
+import FPSharedPanel from './FPSharedPanel';
+import { sharedPanelOpenState } from '../atoms/sharedFoldersState';
+import { isSharedFolder } from '../utils/sharedFolderUtils';
 import FPCurrentWindowPanel from './FPCurrentWindowPanel';
 import FPSessionPanel from './FPSessionPanel';
 import SaveCollectionModal from './SaveCollectionModal';
@@ -93,6 +96,31 @@ function FPLayout({
     const setCollectionRevealBatch = useSetAtom(collectionRevealBatchState);
     const [saveCurrentWindowTarget, setSaveCurrentWindowTarget] = useState(null);
     const [closeCurrentWindowTarget, setCloseCurrentWindowTarget] = useState(null);
+    const [sharedPanelOpen, setSharedPanelOpen] = useAtom(sharedPanelOpenState);
+
+    // Shared "Activity & comments" panel target: the sidebar-selected folder,
+    // only when it carries a shared marker.
+    const activeSharedFolder = useMemo(() => {
+        const folder = folders.find((f) => f.uid === sidebarNavigation) || null;
+        return folder && isSharedFolder(folder) ? folder : null;
+    }, [folders, sidebarNavigation]);
+
+    // Mutual exclusion (reverse direction): opening the collection detail
+    // panel closes the shared panel. The forward direction (opening the
+    // shared panel closes the detail panel) lives in the sharedPanelOpenState
+    // write atom itself.
+    useEffect(() => {
+        if (isPanelOpen) {
+            setSharedPanelOpen(false);
+        }
+    }, [isPanelOpen, setSharedPanelOpen]);
+
+    // Navigating away from a shared folder closes the shared panel.
+    useEffect(() => {
+        if (sharedPanelOpen && !activeSharedFolder) {
+            setSharedPanelOpen(false);
+        }
+    }, [sharedPanelOpen, activeSharedFolder, setSharedPanelOpen]);
 
     const queueRevealBatch = useCallback((collectionsToReveal) => {
         const payload = buildRevealBatchPayload(collectionsToReveal);
@@ -388,6 +416,7 @@ function FPLayout({
                 <FPSidebar
                     folders={folders}
                     collections={allCollections || collections}
+                    trackedCollectionUids={trackedCollectionUids}
                     sessionCount={browserSessionCount}
                     addCollection={addCollection}
                     addFolder={addFolder}
@@ -467,6 +496,13 @@ function FPLayout({
                         />
                     )}
                 </div>
+
+                <FPSharedPanel
+                    folder={activeSharedFolder}
+                    collections={allCollections || collections}
+                    isOpen={sharedPanelOpen && !!activeSharedFolder}
+                    onClose={() => setSharedPanelOpen(false)}
+                />
             </div>
 
             <SaveCollectionModal

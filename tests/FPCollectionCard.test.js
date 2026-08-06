@@ -1,7 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { Provider } from 'jotai';
+import { Provider, createStore } from 'jotai';
 import FPCollectionCard from '../app/fullpage/FPCollectionCard';
+import { aiProcessingUidsState, aiProcessingCurrentUidState } from '../app/atoms/aiState';
 
 class MockResizeObserver {
     observe() {}
@@ -17,16 +18,11 @@ jest.mock('javascript-time-ago', () => {
     }));
 });
 
+let mockCollectionHandlers;
+const mockUseCollectionOperations = jest.fn(() => mockCollectionHandlers);
+
 jest.mock('../app/useCollectionOperations', () => ({
-    useCollectionOperations: jest.fn(() => ({
-        _handleDelete: jest.fn(),
-        _handleDuplicate: jest.fn(),
-        _exportCollectionToFile: jest.fn(),
-        _handleUpdate: jest.fn(),
-        _handleOpenTabs: jest.fn(),
-        _handleFocusWindow: jest.fn(),
-        _handleStopTracking: jest.fn(),
-    })),
+    useCollectionOperations: (...args) => mockUseCollectionOperations(...args),
 }));
 
 jest.mock('../app/DroppableCollection', () => function MockDroppableCollection({ children, disabled = false }) {
@@ -34,15 +30,6 @@ jest.mock('../app/DroppableCollection', () => function MockDroppableCollection({
         <div data-testid="droppable-collection" data-disabled={disabled ? 'true' : 'false'}>
             {children}
         </div>
-    );
-});
-
-jest.mock('../app/ContextMenu', () => function MockContextMenu({ onOpenChange }) {
-    return (
-        <>
-            <button type="button" onClick={() => onOpenChange?.(true)}>Open Menu</button>
-            <button type="button" onClick={() => onOpenChange?.(false)}>Close Menu</button>
-        </>
     );
 });
 
@@ -72,6 +59,36 @@ describe('FPCollectionCard keyboard navigation', () => {
         lastUpdated: Date.now(),
     };
 
+    const renderCard = (overrideProps = {}) => render(
+        <Provider>
+            <FPCollectionCard
+                collection={baseCollection}
+                index={0}
+                onSelect={jest.fn()}
+                updateCollection={jest.fn()}
+                removeCollection={jest.fn()}
+                updateRemoteData={jest.fn()}
+                addCollection={jest.fn()}
+                onDataUpdate={jest.fn()}
+                {...overrideProps}
+            />
+        </Provider>,
+    );
+
+    beforeEach(() => {
+        mockCollectionHandlers = {
+            _handleDelete: jest.fn(),
+            _handleDuplicate: jest.fn(),
+            _exportCollectionToFile: jest.fn(),
+            _handleUpdate: jest.fn(),
+            _handleOpenTabs: jest.fn(),
+            _handleFocusWindow: jest.fn(),
+            _handleStopTracking: jest.fn(),
+            _handleToggleFavorite: jest.fn(),
+        };
+        mockUseCollectionOperations.mockClear();
+    });
+
     test('uses the card as the tab stop instead of nested controls', () => {
         const onSelect = jest.fn();
 
@@ -100,7 +117,6 @@ describe('FPCollectionCard keyboard navigation', () => {
         expect(screen.getByText('Delete').closest('button')).toHaveAttribute('tabindex', '-1');
         expect(screen.getByRole('link', { name: /OpenAI Docs/i })).toHaveAttribute('tabindex', '-1');
         expect(document.querySelector('.fp-card-actions')).toHaveClass('fp-card-hover-menu');
-        expect(document.querySelector('.fp-card-menu-option')).toContainElement(screen.getByText('Open Menu'));
         expect(document.querySelector('.fp-card-color-picker')).toContainElement(screen.getByText('Open Color Picker'));
         expect(screen.getByText('Open').closest('button')).toHaveClass('fp-card-rail-open');
         expect(screen.getByText('Update').closest('button')).toHaveClass('fp-card-rail-update');
@@ -239,32 +255,6 @@ describe('FPCollectionCard keyboard navigation', () => {
         expect(screen.getByRole('button', { name: 'Deselect collection Collection One' })).toBeInTheDocument();
         expect(screen.queryByText('Open')).not.toBeInTheDocument();
         expect(screen.queryByText('Delete')).not.toBeInTheDocument();
-    });
-
-    test('keeps the card active while the action menu is open', () => {
-        render(
-            <Provider>
-                <FPCollectionCard
-                    collection={baseCollection}
-                    index={0}
-                    onSelect={jest.fn()}
-                    updateCollection={jest.fn()}
-                    removeCollection={jest.fn()}
-                    updateRemoteData={jest.fn()}
-                    addCollection={jest.fn()}
-                    onDataUpdate={jest.fn()}
-                />
-            </Provider>,
-        );
-
-        const card = screen.getByRole('button', { name: 'Open collection Collection One' });
-        expect(card).not.toHaveClass('fp-card-interaction-active');
-
-        fireEvent.click(screen.getByText('Open Menu'));
-        expect(card).toHaveClass('fp-card-interaction-active');
-
-        fireEvent.click(screen.getByText('Close Menu'));
-        expect(card).not.toHaveClass('fp-card-interaction-active');
     });
 
     test('keeps the card active while the color picker is open', () => {
@@ -483,5 +473,67 @@ describe('FPCollectionCard keyboard navigation', () => {
         expect(screen.getByText('+5')).toBeInTheDocument();
 
         clientWidthSpy.mockRestore();
+    });
+
+    describe('AI processing overlay', () => {
+        const renderCardWithStore = (storeSetup) => {
+            const store = createStore();
+            storeSetup(store);
+            return render(
+                <Provider store={store}>
+                    <FPCollectionCard
+                        collection={baseCollection}
+                        index={0}
+                        onSelect={jest.fn()}
+                        updateCollection={jest.fn()}
+                        removeCollection={jest.fn()}
+                        updateRemoteData={jest.fn()}
+                        addCollection={jest.fn()}
+                        onDataUpdate={jest.fn()}
+                    />
+                </Provider>,
+            );
+        };
+
+        it('renders overlay when uid is in aiProcessingUidsState', () => {
+            const { container } = renderCardWithStore((store) => {
+                store.set(aiProcessingUidsState, ['collection-1']);
+            });
+            const overlay = container.querySelector('.ai-processing-overlay');
+            expect(overlay).toBeInTheDocument();
+            expect(overlay).not.toHaveClass('ai-processing-overlay--current');
+        });
+
+        it('renders overlay with --current modifier when uid matches aiProcessingCurrentUidState', () => {
+            const { container } = renderCardWithStore((store) => {
+                store.set(aiProcessingUidsState, ['collection-1']);
+                store.set(aiProcessingCurrentUidState, 'collection-1');
+            });
+            const overlay = container.querySelector('.ai-processing-overlay');
+            expect(overlay).toBeInTheDocument();
+            expect(overlay).toHaveClass('ai-processing-overlay--current');
+        });
+
+        it('renders no overlay when uid is not in the processing state', () => {
+            const { container } = renderCardWithStore((store) => {
+                store.set(aiProcessingUidsState, ['other-uid']);
+                store.set(aiProcessingCurrentUidState, 'other-uid');
+            });
+            expect(container.querySelector('.ai-processing-overlay')).not.toBeInTheDocument();
+        });
+    });
+
+    describe('favorite toggle', () => {
+        it('renders an outline star and calls toggle on click', () => {
+            renderCard();
+            const starButton = screen.getByRole('button', { name: 'Add to favorites' });
+            fireEvent.click(starButton);
+            expect(mockCollectionHandlers._handleToggleFavorite).toHaveBeenCalledTimes(1);
+        });
+
+        it('renders a filled star for a favorited collection', () => {
+            renderCard({ collection: { ...baseCollection, isFavorite: true } });
+            expect(screen.getByRole('button', { name: 'Remove from favorites' })).toBeInTheDocument();
+        });
     });
 });

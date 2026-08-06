@@ -4,6 +4,7 @@ import TimeAgo from 'javascript-time-ago';
 import MultiSelectCheckbox from '../MultiSelectCheckbox';
 import { highlightText } from '../utils/searchUtils';
 import { restoreBrowserSession } from '../utils/browserSessions';
+import { FALLBACK_FAVICON } from '../utils/sharedConstants';
 import FPBadge from './FPBadge';
 import './FPSingleTabSessionRow.css';
 
@@ -79,10 +80,10 @@ function FPSingleTabSessionRow({
 
             <div className="fp-single-tab-session-favicon">
                 <img
-                    src={tab?.favIconUrl || './images/favicon-fallback.png'}
+                    src={tab?.favIconUrl || FALLBACK_FAVICON}
                     alt=""
                     onError={(event) => {
-                        event.target.src = './images/favicon-fallback.png';
+                        event.target.src = FALLBACK_FAVICON;
                     }}
                 />
             </div>

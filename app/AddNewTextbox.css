@@ -4,7 +4,7 @@
   padding: 7px 10px;
   border: none;
   border-radius: 14px;
-  padding-right: 25px;
+  padding-right: 58px;
   background: linear-gradient(var(--input-bg-color), var(--input-bg-color)) padding-box,
     linear-gradient(90deg, var(--gradient-blue), var(--gradient-purple), var(--gradient-orange)) border-box;
   border: 2px solid transparent;
@@ -244,11 +244,22 @@
   color: white;
 }
 
+/* Keep the AI action at the input edge; the conditional clear action sits just
+   to its left when text is present. */
+.add-collection-group .ai-suggest-name-btn-wrap {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+}
+
 /* Modern Clear Button */
 .clear-button {
-  position: relative;
-  top: 0;
-  right: 30px;
+  position: absolute;
+  top: 50%;
+  right: 34px;
+  transform: translateY(-50%);
 
   /* Liquid Glass Effect */
   background: rgba(255, 255, 255, 0.1);
@@ -280,14 +291,14 @@
 
 .clear-button:hover {
   background: rgba(255, 255, 255, 0.2);
-  transform: scale(1.1);
+  transform: translateY(-50%) scale(1.1);
   box-shadow:
     0 2px 6px rgba(0, 0, 0, 0.15),
     inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
 .clear-button:active {
-  transform: scale(0.95);
+  transform: translateY(-50%) scale(0.95);
   box-shadow:
     0 1px 3px rgba(0, 0, 0, 0.2),
     inset 0 1px 2px rgba(0, 0, 0, 0.1);

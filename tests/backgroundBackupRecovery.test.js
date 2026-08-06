@@ -74,18 +74,14 @@ describe('background backup recovery handlers', () => {
             }
             return true;
         });
-        global.forceLegacyStorageSync = jest.fn(async () => {});
-        global.updateAllCollectionsBG = jest.fn(async (collections) => {
-            for (const collection of collections) {
-                const index = collectionsState.findIndex((entry) => entry.uid === collection.uid);
-                if (index > -1) {
-                    collectionsState[index] = { ...collectionsState[index], ...collection };
-                } else {
-                    collectionsState.push({ ...collection });
-                }
+        global.deleteSingleFolderBG = jest.fn(async (uid) => {
+            const index = foldersState.findIndex((entry) => entry.uid === uid);
+            if (index > -1) {
+                foldersState.splice(index, 1);
             }
             return true;
         });
+        global.forceLegacyStorageSync = jest.fn(async () => {});
         global.generateUid = jest.fn(() => `generated-${Math.random().toString(36).slice(2, 8)}`);
         global.applyUid = jest.fn((value) => value);
     });
@@ -101,8 +97,8 @@ describe('background backup recovery handlers', () => {
         delete global.loadSingleFolderBG;
         delete global.saveSingleCollectionBG;
         delete global.saveSingleFolderBG;
+        delete global.deleteSingleFolderBG;
         delete global.forceLegacyStorageSync;
-        delete global.updateAllCollectionsBG;
         delete global.generateUid;
         delete global.applyUid;
     });
@@ -239,6 +235,60 @@ describe('background backup recovery handlers', () => {
         ]));
     });
 
+    test('recoverFromBackup refuses metadata-only (pre-sync) backups so live tabs are never clobbered', async () => {
+        // Live data has real tabs. The pre-sync backup in the harness only carries
+        // tabCount + sampleTabs (no full `tabs`), so restoring it would zero everything out.
+        collectionsState = [
+            { uid: 'collection-2', name: 'Has Tabs', parentId: null, tabs: [{ title: 'Real', url: 'https://real.example.com' }], chromeGroups: [] },
+        ];
+
+        require('../chrome/background.js');
+
+        const result = await browser.runtime.sendMessage({
+            type: 'recoverFromBackup',
+            backupType: 'preSync',
+            backupIndex: 0,
+        });
+
+        // Recovery must be rejected, not silently applied.
+        expect(result).toBe(false);
+        // Live collection keeps its tabs untouched.
+        expect(collectionsState).toEqual([
+            expect.objectContaining({
+                uid: 'collection-2',
+                name: 'Has Tabs',
+                tabs: [{ title: 'Real', url: 'https://real.example.com' }],
+            }),
+        ]);
+    });
+
+    test('recoverFromBackup restores folders and prunes folders that are not in the backup', async () => {
+        // Live state: a collection sitting in a folder that the backup does not contain.
+        collectionsState = [
+            { uid: 'collection-1', name: 'Alpha', parentId: 'folder-stale', tabs: [{ title: 'x', url: 'https://x.example.com' }], chromeGroups: [] },
+        ];
+        foldersState = [
+            { uid: 'folder-stale', name: 'Stale', color: 'blue', collapsed: false },
+        ];
+
+        require('../chrome/background.js');
+
+        // Harness auto backup: collection-1 belongs to folder-1, foldersArray has folder-1.
+        const result = await browser.runtime.sendMessage({
+            type: 'recoverFromBackup',
+            backupType: 'auto',
+            backupIndex: 0,
+        });
+
+        expect(result).toBe(true);
+        // Folder layout mirrors the backup: folder-1 restored, the stale folder pruned.
+        expect(foldersState.map((folder) => folder.uid)).toEqual(['folder-1']);
+        // The collection is moved back under the backup's folder.
+        expect(collectionsState).toEqual(expect.arrayContaining([
+            expect.objectContaining({ uid: 'collection-1', parentId: 'folder-1' }),
+        ]));
+    });
+
     test('overwrites only the selected items, creates an emergency auto backup, and normalizes missing folder references', async () => {
         collectionsState = [
             { uid: 'collection-1', name: 'Old Alpha', parentId: 'folder-local', tabs: [{ title: 'Old', url: 'https://old.example.com' }], chromeGroups: [] },
@@ -287,5 +337,72 @@ describe('background backup recovery handlers', () => {
                 expect.objectContaining({ uid: 'folder-local' }),
             ]),
         }));
+    });
+
+    test('full restore prunes folders absent from the backup and reparents their orphaned collections to root', async () => {
+        collectionsState = [
+            // moved by the backup from the stale folder into the kept folder
+            { uid: 'collection-1', name: 'Alpha', parentId: 'folder-stale', tabs: [], chromeGroups: [] },
+            // lives in the stale folder but is NOT part of the backup -> must survive at root, not be deleted
+            { uid: 'collection-orphan', name: 'Local Only', parentId: 'folder-stale', tabs: [], chromeGroups: [] },
+        ];
+        foldersState = [
+            { uid: 'folder-keep', name: 'Keep', color: 'blue', collapsed: false },
+            { uid: 'folder-stale', name: 'Stale', color: 'red', collapsed: false },
+        ];
+
+        require('../chrome/background.js');
+
+        const result = await browser.runtime.sendMessage({
+            type: 'restoreBackupSelection',
+            backupId: 'auto:0',
+            mode: 'overwrite',
+            payload: {
+                type: 'full_export',
+                pruneMissingFolders: true,
+                folders: [{ uid: 'folder-keep', name: 'Keep', color: 'blue', collapsed: false }],
+                collections: [
+                    { uid: 'collection-1', name: 'Alpha', parentId: 'folder-keep', tabs: [], chromeGroups: [] },
+                ],
+            },
+        });
+
+        expect(result).toEqual(expect.objectContaining({ success: true, removedFolders: 1 }));
+        // The stale folder is gone.
+        expect(foldersState.map((folder) => folder.uid)).toEqual(['folder-keep']);
+        // The orphaned local collection is reparented to root, never deleted.
+        expect(collectionsState).toEqual(expect.arrayContaining([
+            expect.objectContaining({ uid: 'collection-orphan', name: 'Local Only', parentId: null }),
+            expect.objectContaining({ uid: 'collection-1', parentId: 'folder-keep' }),
+        ]));
+    });
+
+    test('selective (pick-items) restore never prunes folders that are absent from the selection', async () => {
+        collectionsState = [
+            { uid: 'collection-1', name: 'Alpha', parentId: 'folder-stale', tabs: [], chromeGroups: [] },
+        ];
+        foldersState = [
+            { uid: 'folder-stale', name: 'Stale', color: 'red', collapsed: false },
+        ];
+
+        require('../chrome/background.js');
+
+        const result = await browser.runtime.sendMessage({
+            type: 'restoreBackupSelection',
+            backupId: 'auto:0',
+            mode: 'overwrite',
+            payload: {
+                type: 'full_export',
+                // no pruneMissingFolders flag — this is a user-picked subset
+                folders: [],
+                collections: [
+                    { uid: 'collection-1', name: 'Alpha', parentId: null, tabs: [], chromeGroups: [] },
+                ],
+            },
+        });
+
+        expect(result).toEqual(expect.objectContaining({ success: true }));
+        expect(result.removedFolders || 0).toBe(0);
+        expect(foldersState.map((folder) => folder.uid)).toContain('folder-stale');
     });
 });

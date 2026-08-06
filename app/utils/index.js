@@ -69,6 +69,9 @@ export {
 // Clipboard helpers
 export { copyToClipboard } from './clipboardUtils.js';
 
+// Group counting helper
+export { countNonEmptyGroups } from './groupCount.js';
+
 /**
  * Emergency data recovery function
  * @returns {Promise<boolean>} Recovery success

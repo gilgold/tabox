@@ -7,6 +7,9 @@ import { saveCollectionSnapshot } from '../utils/saveCollectionSnapshot';
 import { browser } from '../../static/globals';
 import { triggerBackgroundSync } from '../utils/sharedSync';
 import { showSuccessToast, showErrorToast } from '../toastHelpers';
+import AiSuggestNameButton from '../AiSuggestNameButton';
+import { suggestCollectionName } from '../ai/tasks/suggestCollectionName';
+import { suggestFolderName } from '../ai/tasks/suggestFolderName';
 import './SaveCollectionModal.css';
 
 const FOLDER_COLOR_OPTIONS = [
@@ -40,6 +43,7 @@ function SaveCollectionModal({
     const [selectedFolderColor, setSelectedFolderColor] = useState('#4facfe');
     const [isSaving, setIsSaving] = useState(false);
     const [windowCount, setWindowCount] = useState(1);
+    const [aiBusy, setAiBusy] = useState(false);
     const inputRef = useRef(null);
     const sourceCollection = snapshotCollection || sessionCollection;
     const activeSaveMode = lockSaveMode ? initialSaveMode : saveMode;
@@ -148,6 +152,16 @@ function SaveCollectionModal({
     const showFolderPicker = (sourceCollection || activeSaveMode === 'current') && folders && folders.length > 0;
     const showFolderColorPicker = activeSaveMode === 'all';
 
+    const suggestName = async () => {
+        if (sourceCollection) return suggestCollectionName(sourceCollection);
+        if (activeSaveMode === 'all') {
+            const { collections } = await getAllWindowsTabsAndGroups('');
+            return suggestFolderName({ collections });
+        }
+        const collection = await getCurrentTabsAndGroups('');
+        return suggestCollectionName(collection);
+    };
+
     return (
         <Modal
             isOpen={isOpen}
@@ -176,18 +190,26 @@ function SaveCollectionModal({
                             <label htmlFor="save-collection-name" className="save-collection-label">
                                 {isSavingAllWindows ? 'Folder Name' : 'Collection Name'}
                             </label>
-                            <input
-                                ref={inputRef}
-                                id="save-collection-name"
-                                type="text"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                                onKeyDown={handleKeyDown}
-                                placeholder={isSavingAllWindows ? 'Enter a name for your folder...' : 'Enter a name for your collection...'}
-                                className="save-collection-input"
-                                maxLength={50}
-                                disabled={isSaving}
-                            />
+                            <div className={`save-collection-input-wrap${aiBusy ? ' ai-name-processing' : ''}`}>
+                                <input
+                                    ref={inputRef}
+                                    id="save-collection-name"
+                                    type="text"
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    onKeyDown={handleKeyDown}
+                                    placeholder={isSavingAllWindows ? 'Enter a name for your folder...' : 'Enter a name for your collection...'}
+                                    className="save-collection-input"
+                                    maxLength={50}
+                                    disabled={isSaving}
+                                />
+                                <AiSuggestNameButton
+                                    suggest={suggestName}
+                                    onSuggested={setName}
+                                    onBusyChange={setAiBusy}
+                                    disabled={isSaving}
+                                />
+                            </div>
                         </div>
 
                         {showModeToggle && (

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { MdOutlineMoreHoriz } from 'react-icons/md';
 import { useAtom } from 'jotai';
 import { activeContextMenuState } from './atoms/animationsState';
+import ProBadge from './ProBadge';
 
 function ContextMenu({
     menuItems = [],
@@ -207,14 +208,19 @@ function ContextMenu({
                 >
                     {visibleMenuItems.length > 0 ? (
                         visibleMenuItems.map((item, index) => (
-                            <div 
-                                key={item.id || index}
-                                className={`context-menu-item ${item.className || ''}`}
-                                onClick={() => handleMenuItemClick(item.action)}
-                            >
-                                {item.icon && <span className="menu-item-icon">{item.icon}</span>}
-                                <span className="menu-item-text">{item.text}</span>
-                            </div>
+                            <React.Fragment key={item.id || index}>
+                                {index > 0 && item.group !== visibleMenuItems[index - 1].group && (
+                                    <div className="context-menu-divider" />
+                                )}
+                                <div
+                                    className={`context-menu-item ${item.className || ''}`}
+                                    onClick={() => handleMenuItemClick(item.action)}
+                                >
+                                    {item.icon && <span className="menu-item-icon">{item.icon}</span>}
+                                    <span className="menu-item-text">{item.text}</span>
+                                    {item.proBadge && <ProBadge />}
+                                </div>
+                            </React.Fragment>
                         ))
                     ) : (
                         <div className="context-menu-item">

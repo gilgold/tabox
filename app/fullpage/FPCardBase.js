@@ -32,6 +32,7 @@ function FPCardBase({
     actionsProps = {},
     dragAttributes,
     dragListeners,
+    extraContent = null,
 }) {
     const hasSearchMatches = !!search?.trim() && matchingTabs.length > 0;
 
@@ -125,6 +126,7 @@ function FPCardBase({
                     {actions}
                 </div>
             )}
+            {extraContent}
         </div>
     );
 }

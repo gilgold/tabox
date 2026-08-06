@@ -36,6 +36,8 @@ import {
 import useCollectionItemCrossDrag from './useCollectionItemCrossDrag';
 import { persistCollectionLayoutChanges } from './utils/sharedCollectionSync';
 import { dndPointerSensorOptions } from './utils/dndShared';
+import { noPermissionOpenState } from './atoms/sharedFoldersState';
+import { guardFolderEdit } from './utils/sharedFolderUtils';
 
 const reindexCollectionSiblings = (collections, parentId) => (
     collections.map((collection, order) => ({
@@ -71,7 +73,8 @@ const areCollectionItemPropsEqual = (prev, next) => {
         prev.lightningEffect === next.lightningEffect &&
         prev.search === next.search &&
         prev.isInFolder === next.isInFolder &&
-        prev.onSelect === next.onSelect
+        prev.onSelect === next.onSelect &&
+        prev.folders === next.folders
     );
 };
 
@@ -89,7 +92,8 @@ const areCollectionTilePropsEqual = (prev, next) => {
         prev.isInFolder === next.isInFolder &&
         prev.search === next.search &&
         prev.onSelect === next.onSelect &&
-        prev.folderName === next.folderName
+        prev.folderName === next.folderName &&
+        prev.folders === next.folders
     );
 };
 
@@ -122,7 +126,8 @@ function CollectionList({
     const [isPanelOpen, setIsPanelOpen] = useState(false);
     const setDetailPanelOpen = useSetAtom(detailPanelOpenState);
     const setSelectedCollectionUid = useSetAtom(selectedCollectionUidState);
-    
+    const setNoPermissionOpen = useSetAtom(noPermissionOpenState);
+
     // Refs to always have latest collections/folders data (avoids stale closure in event handlers)
     const collectionsRef = useRef(collections);
     const foldersRef = useRef(folders);
@@ -655,7 +660,16 @@ function CollectionList({
                 setActiveFolder(null);
                 return;
             }
-            
+
+            const targetFolderForGuard = folders.find(f => f.uid === targetItem.uid);
+            const sourceFolderForGuard = draggedItem.parentId ? folders.find(f => f.uid === draggedItem.parentId) : null;
+            if (!guardFolderEdit(targetFolderForGuard, () => setNoPermissionOpen(true)) ||
+                !guardFolderEdit(sourceFolderForGuard, () => setNoPermissionOpen(true))) {
+                setActiveCollection(null);
+                setActiveFolder(null);
+                return;
+            }
+
             const success = await moveCollectionToFolder(draggedItem.uid, targetItem.uid);
             
             if (success) {
@@ -720,14 +734,21 @@ function CollectionList({
                     restoreScrollPosition(); // Maintain scroll position after reorder
                 }
             } else if (draggedItem.parentId && targetItem.parentId && draggedItem.parentId === targetItem.parentId) {
-                // Both in same folder - allow reordering within folder
+                // Both in same folder - allow reordering within folder.
+                // Reordering still edits the (possibly shared) folder's
+                // contents/order, so guard it before touching storage.
+                const sourceFolderForGuard = folders.find(f => f.uid === draggedItem.parentId);
+                if (!guardFolderEdit(sourceFolderForGuard, () => setNoPermissionOpen(true))) {
+                    setActiveCollection(null);
+                    setActiveFolder(null);
+                    return;
+                }
 
-                
                 const folderCollections = collections.filter(c => c.parentId === draggedItem.parentId);
                 const oldIndex = folderCollections.findIndex(c => c.uid === draggedItem.uid);
                 const newIndex = folderCollections.findIndex(c => c.uid === targetItem.uid);
-            
-                
+
+
                 if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
                     const reorderedFolderCollections = reindexCollectionSiblings(
                         arrayMove(folderCollections, oldIndex, newIndex),
@@ -750,6 +771,12 @@ function CollectionList({
                 }
             } else if (!draggedItem.parentId && targetItem.parentId) {
                 // Moving root collection to a folder
+                const targetFolderForGuard = folders.find(f => f.uid === targetItem.parentId);
+                if (!guardFolderEdit(targetFolderForGuard, () => setNoPermissionOpen(true))) {
+                    setActiveCollection(null);
+                    setActiveFolder(null);
+                    return;
+                }
 
                 await moveCollectionToFolder(draggedItem.uid, targetItem.parentId);
                 
@@ -762,8 +789,17 @@ function CollectionList({
                     props.triggerSync();
                 }
             } else if (draggedItem.parentId && !targetItem.parentId) {
-                // Moving folder collection to root with proper positioning
-                
+                // Moving folder collection to root with proper positioning.
+                // This removes the collection from its (possibly shared)
+                // source folder's contents, which is an edit of that folder
+                // for a read-only member — guard it before touching storage.
+                const sourceFolderForGuard = folders.find(f => f.uid === draggedItem.parentId);
+                if (!guardFolderEdit(sourceFolderForGuard, () => setNoPermissionOpen(true))) {
+                    setActiveCollection(null);
+                    setActiveFolder(null);
+                    return;
+                }
+
                 try {
                     // Step 1: Remove from folder first to update storage
                     await removeCollectionFromFolder(draggedItem.uid);
@@ -818,6 +854,14 @@ function CollectionList({
                 }
             } else if (draggedItem.parentId && targetItem.parentId && draggedItem.parentId !== targetItem.parentId) {
                 // Moving collection from one folder to another folder (dropped on collection in target folder)
+                const sourceFolderForGuard = folders.find(f => f.uid === draggedItem.parentId);
+                const targetFolderForGuard = folders.find(f => f.uid === targetItem.parentId);
+                if (!guardFolderEdit(sourceFolderForGuard, () => setNoPermissionOpen(true)) ||
+                    !guardFolderEdit(targetFolderForGuard, () => setNoPermissionOpen(true))) {
+                    setActiveCollection(null);
+                    setActiveFolder(null);
+                    return;
+                }
                 try {
                     await moveCollectionToFolder(draggedItem.uid, targetItem.parentId);
                     
@@ -883,6 +927,7 @@ function CollectionList({
             updateCollection={props.updateCollection}
             removeCollection={props.removeCollection}
             updateRemoteData={props.updateRemoteData}
+            folders={folders}
             addCollection={addCollection}
             onDataUpdate={props.onDataUpdate}
             renderInline={isFullPage}
@@ -892,6 +937,7 @@ function CollectionList({
     return (<>
         <section ref={listContainerRef} className={`collection-list-container settings_body ${props.viewMode === 'grid' ? 'grid-view' : 'list-view'} collection-list-wrapper`} key={props.key}>
             {search ? <SearchTitle searchTerm={search} /> : null}
+
             {hasAnyContent ? (
                 <DndContext
                     key={`dnd-context-${dndKey}`}
@@ -937,6 +983,7 @@ function CollectionList({
                                                     search={search}
                                                     onSelect={handleSelectCollection}
                                                     folderName={isFullPage && collection.parentId ? folderNameMap[collection.parentId] : undefined}
+                                                    folders={folders}
                                                 />
                                             ) : (
                                                 <MemoizedSortableCollectionItem
@@ -955,6 +1002,7 @@ function CollectionList({
                                                     isInFolder={false}
                                                     search={search}
                                                     onSelect={handleSelectCollection}
+                                                    folders={folders}
                                                 />
                                             )
                                         )}
@@ -1010,6 +1058,7 @@ function CollectionList({
                                                                         isInFolder={true}
                                                                         search={search}
                                                                         onSelect={handleSelectCollection}
+                                                                        folders={folders}
                                                                     />
                                                                 ) : (
                                                                     <MemoizedSortableCollectionItem
@@ -1028,6 +1077,7 @@ function CollectionList({
                                                                         isInFolder={true}
                                                                         search={search}
                                                                         onSelect={handleSelectCollection}
+                                                                        folders={folders}
                                                                     />
                                                                 )
                                                             )}
@@ -1065,6 +1115,7 @@ function CollectionList({
                                                             isInFolder={false}
                                                             search={search}
                                                             onSelect={handleSelectCollection}
+                                                            folders={folders}
                                                         />
                                                     ) : (
                                                         <MemoizedSortableCollectionItem
@@ -1083,6 +1134,7 @@ function CollectionList({
                                                             isInFolder={false}
                                                             search={search}
                                                             onSelect={handleSelectCollection}
+                                                            folders={folders}
                                                         />
                                                     )
                                                 )}
@@ -1104,6 +1156,7 @@ function CollectionList({
                                     updateCollection={props.updateCollection}
                                     removeCollection={props.removeCollection}
                                     collection={activeCollection}
+                                    folders={folders}
                                 />
                             ) : (
                                 <SortableCollectionItem
@@ -1117,6 +1170,7 @@ function CollectionList({
                                     updateCollection={props.updateCollection}
                                     removeCollection={props.removeCollection}
                                     collection={activeCollection}
+                                    folders={folders}
                                 />
                             )
                         ) : activeFolder ? (

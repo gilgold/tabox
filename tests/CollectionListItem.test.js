@@ -3,7 +3,9 @@ import { act, fireEvent, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import CollectionListItem from '../app/CollectionListItem';
 import { dragSessionState } from '../app/atoms/animationsState';
+import { aiProcessingUidsState, aiProcessingCurrentUidState } from '../app/atoms/aiState';
 import { renderWithProviders } from './helpers/renderWithProviders';
+import { createCollectionMenuItems } from '../app/utils/contextMenuItems';
 
 let mockCollectionHandlers;
 const mockUseCollectionOperations = jest.fn(() => mockCollectionHandlers);
@@ -74,6 +76,14 @@ jest.mock('javascript-time-ago', () => {
     }));
 });
 
+jest.mock('../app/ai/useTaboxAIEnabled', () => ({
+    useTaboxAIEnabled: jest.fn(() => false),
+}));
+
+jest.mock('../app/ai/aiClient', () => ({
+    isAISupported: jest.fn(() => false),
+}));
+
 describe('CollectionListItem', () => {
     const baseCollection = {
         uid: 'collection-1',
@@ -143,9 +153,11 @@ describe('CollectionListItem', () => {
             _handleOpenTabs: jest.fn(),
             _handleFocusWindow: jest.fn(),
             _handleStopTracking: jest.fn(),
+            _handleToggleFavorite: jest.fn(),
         };
 
         mockUseCollectionOperations.mockClear();
+        createCollectionMenuItems.mockClear();
         mockStorageGet.mockImplementation(async (key) => {
             if (key === 'chkEnableAutoUpdate') {
                 return { chkEnableAutoUpdate: false };
@@ -168,6 +180,9 @@ describe('CollectionListItem', () => {
         const row = container.querySelector('.collection-list-item');
         expect(row).toBeInTheDocument();
         expect(contextMenuProps.last?.triggerRef?.current).toBe(row);
+        expect(createCollectionMenuItems).toHaveBeenCalledWith(
+            expect.objectContaining({ isPro: false }),
+        );
     });
 
     test('opens the detail panel from the row while keeping action buttons separate', async () => {
@@ -265,6 +280,49 @@ describe('CollectionListItem', () => {
         expect(mockTabsCreate).toHaveBeenCalledWith({
             url: 'https://openai.com/search',
             active: true,
+        });
+    });
+
+    describe('AI processing overlay', () => {
+        it('renders overlay when uid is in aiProcessingUidsState', async () => {
+            const { container } = await renderItem({}, [
+                [aiProcessingUidsState, ['collection-1']],
+            ]);
+            const overlay = container.querySelector('.ai-processing-overlay');
+            expect(overlay).toBeInTheDocument();
+            expect(overlay).not.toHaveClass('ai-processing-overlay--current');
+        });
+
+        it('renders overlay with --current modifier when uid matches aiProcessingCurrentUidState', async () => {
+            const { container } = await renderItem({}, [
+                [aiProcessingUidsState, ['collection-1']],
+                [aiProcessingCurrentUidState, 'collection-1'],
+            ]);
+            const overlay = container.querySelector('.ai-processing-overlay');
+            expect(overlay).toBeInTheDocument();
+            expect(overlay).toHaveClass('ai-processing-overlay--current');
+        });
+
+        it('renders no overlay when uid is not in the processing state', async () => {
+            const { container } = await renderItem({}, [
+                [aiProcessingUidsState, ['other-uid']],
+                [aiProcessingCurrentUidState, 'other-uid'],
+            ]);
+            expect(container.querySelector('.ai-processing-overlay')).not.toBeInTheDocument();
+        });
+    });
+
+    describe('favorite toggle', () => {
+        it('renders an outline star and calls toggle on click', async () => {
+            await renderItem();
+            const starButton = screen.getByRole('button', { name: 'Add to favorites' });
+            fireEvent.click(starButton);
+            expect(mockCollectionHandlers._handleToggleFavorite).toHaveBeenCalledTimes(1);
+        });
+
+        it('renders a filled star for a favorited collection', async () => {
+            await renderItem({ collection: { ...baseCollection, isFavorite: true } });
+            expect(screen.getByRole('button', { name: 'Remove from favorites' })).toBeInTheDocument();
         });
     });
 });

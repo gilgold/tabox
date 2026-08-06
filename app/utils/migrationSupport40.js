@@ -13,8 +13,11 @@ const hasIndexed40Storage = (data) => (
     Object.keys(data).some((key) => key.startsWith(COLLECTION_PREFIX) || key.startsWith(FOLDER_PREFIX))
 );
 
+// An empty tabsArray is not legacy data — background setInitialOptions seeds
+// tabsArray: [] on fresh installs, and new users must not hit the pre-4.0 gate.
 const hasLegacyArrayOnlyData = (data) => (
     Array.isArray(data.tabsArray) &&
+    data.tabsArray.length > 0 &&
     !hasIndexed40Storage(data)
 );
 

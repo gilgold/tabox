@@ -30,11 +30,19 @@ module.exports = [
       "v4/**",
       // Scratch/repro scripts (e.g. Playwright repros), not shipped source.
       "output/**",
+      // Wix site code (Velo $w globals, Wix-hosted) — not extension source.
+      "site/**",
       ".yarn/**",
+      // Claude Code session data — includes git worktrees of the whole repo
+      // that would otherwise be double-linted (without this project's parser
+      // options, so they fail on JSX).
+      ".claude/**",
       "node_modules/**",
       "coverage/**",
       "stats.json",
       "**/*.min.js",
+      // Standalone server package (Cloudflare Worker) with its own ESLint.
+      "server/**",
     ],
   },
 

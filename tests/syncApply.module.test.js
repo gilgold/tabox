@@ -579,6 +579,144 @@ describe('sync apply module', () => {
         });
     });
 
+    test('carries the shared marker into the rebuilt folders_index entry on a pull', () => {
+        const payload = buildIndexedSyncPayload({
+            currentStorage: {
+                collections_index: {
+                    'collection-shared': { name: 'Shared Collection', type: 'collection', parentId: 'folder-shared', order: 0 }
+                },
+                'collection_collection-shared': {
+                    uid: 'collection-shared',
+                    name: 'Shared Collection',
+                    tabs: [],
+                    createdOn: 10,
+                    lastUpdated: 20,
+                    parentId: 'folder-shared',
+                    order: 0
+                },
+                folders_index: {
+                    'folder-shared': {
+                        name: 'Shared Folder',
+                        type: 'folder',
+                        order: 0,
+                        shared: { folderId: 'srv-folder-1' }
+                    }
+                },
+                'folder_folder-shared': {
+                    uid: 'folder-shared',
+                    name: 'Shared Folder',
+                    createdOn: 5,
+                    lastUpdated: 15,
+                    order: 0,
+                    shared: { folderId: 'srv-folder-1' }
+                }
+            },
+            syncData: {
+                tabsArray: [
+                    {
+                        uid: 'collection-next',
+                        name: 'Next Collection',
+                        tabs: [],
+                        createdOn: 10,
+                        lastUpdated: 20,
+                        parentId: null,
+                        order: 0
+                    }
+                ],
+                foldersArray: []
+            }
+        });
+
+        expect(payload.setPayload[STORAGE_KEYS.FOLDERS_INDEX]['folder-shared'])
+            .toEqual(expect.objectContaining({ shared: { folderId: 'srv-folder-1' } }));
+        // Non-shared folders must not gain a shared key (not even undefined).
+        expect(payload.removeKeys).toEqual([]);
+    });
+
+    test('does not add a shared key to folders_index entries of unshared folders', () => {
+        const payload = buildIndexedSyncPayload({
+            currentStorage: {},
+            syncData: {
+                tabsArray: [],
+                foldersArray: [
+                    {
+                        uid: 'folder-plain',
+                        name: 'Plain Folder',
+                        createdOn: 5,
+                        lastUpdated: 15,
+                        order: 0
+                    }
+                ]
+            }
+        });
+
+        expect(Object.prototype.hasOwnProperty.call(
+            payload.setPayload[STORAGE_KEYS.FOLDERS_INDEX]['folder-plain'],
+            'shared'
+        )).toBe(false);
+    });
+
+    test('shared folder and its collections survive two consecutive Drive pulls that omit them', async () => {
+        const storageArea = createStorageArea({
+            collections_index: {
+                'collection-shared': { name: 'Shared Collection', type: 'collection', parentId: 'folder-shared', order: 0 }
+            },
+            'collection_collection-shared': {
+                uid: 'collection-shared',
+                name: 'Shared Collection',
+                tabs: [{ url: 'https://example.com' }],
+                createdOn: 10,
+                lastUpdated: 20,
+                parentId: 'folder-shared',
+                order: 0
+            },
+            folders_index: {
+                'folder-shared': {
+                    name: 'Shared Folder',
+                    type: 'folder',
+                    order: 0,
+                    shared: { folderId: 'srv-folder-1' }
+                }
+            },
+            'folder_folder-shared': {
+                uid: 'folder-shared',
+                name: 'Shared Folder',
+                createdOn: 5,
+                lastUpdated: 15,
+                order: 0,
+                shared: { folderId: 'srv-folder-1' }
+            }
+        });
+
+        // Two consecutive pulls whose snapshots do not contain the shared folder.
+        const firstResult = await applySyncSnapshotAtomically({
+            storageArea,
+            syncData: createNextSyncData()
+        });
+        const secondResult = await applySyncSnapshotAtomically({
+            storageArea,
+            syncData: createNextSyncData()
+        });
+
+        expect(firstResult.success).toBe(true);
+        expect(secondResult.success).toBe(true);
+
+        const store = storageArea.dump();
+        expect(store.folders_index['folder-shared']).toEqual(expect.objectContaining({
+            shared: { folderId: 'srv-folder-1' }
+        }));
+        expect(store['folder_folder-shared']).toEqual(expect.objectContaining({
+            uid: 'folder-shared',
+            shared: { folderId: 'srv-folder-1' }
+        }));
+        expect(store.collections_index['collection-shared']).toEqual(expect.objectContaining({
+            parentId: 'folder-shared'
+        }));
+        expect(store['collection_collection-shared']).toEqual(expect.objectContaining({
+            uid: 'collection-shared'
+        }));
+    });
+
     test('builds a payload when currentStorage and syncData rely on their defaults', () => {
         const payload = buildIndexedSyncPayload({});
 

@@ -575,3 +575,28 @@
         height: var(--tile-size);
     }
 } 
+
+.tile-favorite-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    padding: 2px;
+    color: var(--text-color);
+    opacity: 0;
+    flex-shrink: 0;
+}
+
+.collection-tile:hover .tile-favorite-toggle {
+    opacity: 0.5;
+}
+
+.tile-favorite-toggle:hover {
+    opacity: 1 !important;
+}
+
+.tile-favorite-toggle.is-favorite {
+    color: var(--favorite-star-color);
+    opacity: 1 !important;
+}

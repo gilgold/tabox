@@ -1,0 +1,26 @@
+/* Animated icon for the primary Smart Tab Grouping hero card. Four
+ * gradient-filled tabs sit scattered at rest and snap into a tidy 2×2 group
+ * on hero hover (reversible). See SmartGroupingToolIcon.js. */
+
+.sg-tab {
+    transform-box: fill-box;
+    transform-origin: center;
+    transition: transform 0.55s cubic-bezier(0.34, 1.25, 0.5, 1);
+}
+
+/* Scattered at rest. */
+.sg-1 { transform: translate(-2px, -3px) rotate(-11deg); }
+.sg-2 { transform: translate(3px, -2px) rotate(9deg); }
+.sg-3 { transform: translate(-3px, 3px) rotate(8deg); }
+.sg-4 { transform: translate(3px, 3px) rotate(-10deg); }
+
+/* Snap into the grid on hover. */
+.ai-hero-card:hover .sg-tab {
+    transform: none;
+}
+
+/* No motion: rest already grouped. */
+@media (prefers-reduced-motion: reduce) {
+    .sg-tab { transform: none; transition: none; }
+}
+html.performance-mode .sg-tab { transform: none; transition: none; }
