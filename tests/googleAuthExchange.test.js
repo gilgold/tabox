@@ -24,7 +24,8 @@ describe('worker-proxied Google OAuth exchange', () => {
     });
 
     describe('getTokens', () => {
-        test('exchanges the auth code via the worker and stores tokens', async () => {
+        test('exchanges the auth code via the worker using the current dynamic redirect (Chrome/Edge chromiumapp.org path)', async () => {
+            browser.identity.getRedirectURL.mockReturnValue('https://oidjngowedjndwewewd.chromiumapp.org/');
             global.fetch.mockResolvedValue({
                 ok: true, status: 200,
                 json: async () => ({ access_token: 'at-1', refresh_token: 'rt-1' }),
@@ -41,6 +42,26 @@ describe('worker-proxied Google OAuth exchange', () => {
                 grant_type: 'authorization_code',
                 code: 'auth-code',
                 redirect_uri: browser.identity.getRedirectURL(),
+            });
+        });
+
+        test('exchanges via the Worker callback redirect on non-chromiumapp (Firefox-style) redirects', async () => {
+            // The harness default (a plain https URL, not *.chromiumapp.org)
+            // stands in for Firefox's per-profile allizom redirect here —
+            // getTokens must send the fixed Worker callback as redirect_uri,
+            // matching what createAuthEndpoint used for the auth request.
+            global.fetch.mockResolvedValue({
+                ok: true, status: 200,
+                json: async () => ({ access_token: 'at-1', refresh_token: 'rt-1' }),
+            });
+
+            await backgroundUtils.getTokens('auth-code');
+
+            const [, options] = global.fetch.mock.calls[0];
+            expect(JSON.parse(options.body)).toEqual({
+                grant_type: 'authorization_code',
+                code: 'auth-code',
+                redirect_uri: `${PRO_API_BASE}/auth/callback`,
             });
         });
 

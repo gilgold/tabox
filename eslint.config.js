@@ -26,6 +26,7 @@ module.exports = [
   {
     ignores: [
       "build/**",
+      "build-firefox/**",
       // Committed copy of a minified production bundle — not source.
       "v4/**",
       // Scratch/repro scripts (e.g. Playwright repros), not shipped source.

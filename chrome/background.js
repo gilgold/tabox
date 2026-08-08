@@ -1,32 +1,39 @@
 /* eslint-disable no-undef */
-try {
-  importScripts('browser-polyfill.min.js');
-  importScripts('sync-session-state.js');
-  importScripts('sync-transport.js');
-  importScripts('sync-merge.js');
-  importScripts('sync-apply.js');
-  importScripts('sync-throttle.js');
-  importScripts('pro-config.js');
-  importScripts('background-utils.js');
-  importScripts('push-client.js');
-  importScripts('pro-entitlement.js');
-  importScripts('shared-folders.js');
-  importScripts('ai-client.js');
-  importScripts('ai-planners.js');
-  importScripts('ai-storage.js');
-  importScripts('ai-registry.js');
-  importScripts('ai-engine.js');
-  importScripts('ai-task-auto-rename.js');
-  importScripts('ai-task-auto-arrange.js');
-  importScripts('ai-task-smart-organize.js');
-  importScripts('duplicate-detect.js');
-  importScripts('duplicate-sweep.js');
-  importScripts('ai-task-duplicate-sweep.js');
-  importScripts('split-collection.js');
-  importScripts('ai-task-split-collection.js');
-}
-catch (e) {
-  console.error(e);
+// Chrome MV3 loads background.js as a service worker and pulls in modules via
+// importScripts. Firefox MV3 runs an event page instead: the same files are
+// pre-loaded in order by manifest background.scripts (see chrome/buildManifest.js
+// BACKGROUND_SCRIPTS — parity enforced by tests/buildManifest.test.js), so
+// importScripts doesn't exist there and this block must not run.
+if (typeof importScripts === 'function') {
+  try {
+    importScripts('browser-polyfill.min.js');
+    importScripts('sync-session-state.js');
+    importScripts('sync-transport.js');
+    importScripts('sync-merge.js');
+    importScripts('sync-apply.js');
+    importScripts('sync-throttle.js');
+    importScripts('pro-config.js');
+    importScripts('background-utils.js');
+    importScripts('push-client.js');
+    importScripts('pro-entitlement.js');
+    importScripts('shared-folders.js');
+    importScripts('ai-client.js');
+    importScripts('ai-planners.js');
+    importScripts('ai-storage.js');
+    importScripts('ai-registry.js');
+    importScripts('ai-engine.js');
+    importScripts('ai-task-auto-rename.js');
+    importScripts('ai-task-auto-arrange.js');
+    importScripts('ai-task-smart-organize.js');
+    importScripts('duplicate-detect.js');
+    importScripts('duplicate-sweep.js');
+    importScripts('ai-task-duplicate-sweep.js');
+    importScripts('split-collection.js');
+    importScripts('ai-task-split-collection.js');
+  }
+  catch (e) {
+    console.error(e);
+  }
 }
   const syncSessionStateApi = typeof require === 'function'
     ? require('./sync-session-state.js')
@@ -921,7 +928,7 @@ const REALTIME_DOMAINS = new Set([
 ]);
 
 const IPV4_PATTERN = /\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b/;
-const SYSTEM_URL_PREFIXES = ['chrome-devtools://', 'chrome-extension://', 'chrome://', 'about:', 'file://'];
+const SYSTEM_URL_PREFIXES = ['chrome-devtools://', 'chrome-extension://', 'chrome://', 'about:', 'file://', 'moz-extension://'];
 
 function shouldDiscardTab(tab) {
   // Early return for basic exclusions - most performance-critical checks first
@@ -965,7 +972,14 @@ function shouldDiscardTab(tab) {
   return true;
 }
 
-const isNewWindow = window => window?.tabs?.length === 1 && (!window?.tabs[0].url || window?.tabs[0].url.indexOf('://newtab') > 0);
+// Exact-match new-tab URLs for browsers whose "://newtab" substring check
+// (Chrome's `chrome://newtab/`) doesn't apply. Firefox's fresh-window starter
+// tab is `about:home`/`about:newtab`/`about:blank`, and a fresh private
+// window is `about:privatebrowsing` — none contain "://newtab". Exact-match
+// only: substring-matching "about:" would also swallow unrelated pages like
+// `about:config`.
+const NEW_TAB_URLS = new Set(['about:home', 'about:newtab', 'about:blank', 'about:privatebrowsing']);
+const isNewWindow = window => window?.tabs?.length === 1 && (!window?.tabs[0].url || window?.tabs[0].url.indexOf('://newtab') > 0 || NEW_TAB_URLS.has(window.tabs[0].url));
 
 // Helper function to check if user has enabled incognito access
 async function isIncognitoEnabled() {
@@ -1931,14 +1945,47 @@ try {
 
     if (request.type === 'login') {
       try {
+        // CSRF nonce for this attempt only — sent inside `state` on the
+        // Firefox (viaWorker) path and verified against what the Worker
+        // callback echoes back before the code is ever exchanged. Chrome's
+        // pre-registered *.chromiumapp.org redirect doesn't use `state` at
+        // all, so the nonce is simply unused there.
+        // generateUidSafe() (not a bare crypto.randomUUID() call): Chrome
+        // 89-90 (this extension's manifest minimum_chrome_version) predates
+        // Crypto.randomUUID, and generateUidSafe already guards for that.
+        const loginNonce = generateUidSafe();
+        // Captured for the post-flow decision; getRedirectURL() is constant per
+        // profile, so the decision always matches the auth request sent below.
+        const authConfig = getAuthRedirectConfig();
         const redirectUrl = await browser.identity.launchWebAuthFlow({
-          'url': createAuthEndpoint(),
+          'url': createAuthEndpoint(loginNonce),
           'interactive': true
         });
         const url = new URL(redirectUrl);
         const urlParams = url.searchParams;
         const params = Object.fromEntries(urlParams.entries());
-        
+
+        if (authConfig.viaWorker) {
+          // The Worker echoes the original `state` string verbatim; decode
+          // it and REJECT — without exchanging the code — unless its nonce
+          // matches the one generated for this attempt. Throwing here routes
+          // through the existing catch below, so a nonce mismatch surfaces
+          // the exact same error shape as any other login failure.
+          if (!params.state) {
+            throw new Error('Missing OAuth state from Worker callback');
+          }
+          const state = base64UrlDecodeJson(params.state);
+          if (!state || state.n !== loginNonce) {
+            throw new Error('OAuth state nonce mismatch');
+          }
+          // A user declining consent (or Google erroring out) is the normal
+          // path here, not a failure worth attempting a doomed token
+          // exchange over — short-circuit before ever calling getTokens.
+          if (params.error || !params.code) {
+            throw new Error(`OAuth callback error: ${params.error || 'missing code'}`);
+          }
+        }
+
         const token = await getTokens(params.code);
         if (token === false) {
           console.error('Failed to get tokens during login');
@@ -2580,7 +2627,7 @@ try {
 
   browser.runtime.onInstalled.addListener(async (details) => {
     const previousVersion = details.previousVersion;
-    const currentVersion = chrome.runtime.getManifest().version;
+    const currentVersion = browser.runtime.getManifest().version;
     const reason = details.reason;
     
     // Handle migration for updates
@@ -2752,7 +2799,8 @@ try {
     await handleBadge();
   });
 
-  browser.windows.onBoundsChanged.addListener(async window => {
+  // Firefox doesn't implement onBoundsChanged; window move/resize won't trigger auto-update there (tab events still do)
+  browser.windows.onBoundsChanged?.addListener(async window => {
     debounceAutoUpdate(window.id, 5000); // Debounced auto-update
   });
 
@@ -2798,4 +2846,14 @@ try {
 
 } catch (e) {
   console.error(e)
+}
+
+// Test-only export: background.js is loaded as a classic script (importScripts
+// in Chrome's MV3 service worker, manifest background.scripts pre-load in
+// Firefox's event page) and has no other module.exports surface. isNewWindow
+// is a pure, module-scope function not otherwise reachable from tests
+// (unlike the helpers in background-utils.js), so expose it the same way
+// background-utils.js exposes its testables.
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { isNewWindow };
 }

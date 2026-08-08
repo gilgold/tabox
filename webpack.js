@@ -2,12 +2,14 @@ const path = require("path");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
 const CopyPlugin = require("copy-webpack-plugin");
 const baseManifest = require("./chrome/manifest.json");
+const { buildManifest } = require("./chrome/buildManifest");
 const WebpackExtensionManifestPlugin = require("webpack-extension-manifest-plugin");
 const TerserPlugin = require("terser-webpack-plugin");
 
-module.exports = (env, argv) => {
+module.exports = (env = {}, argv) => {
   const isProduction = argv.mode === "production";
   const isDevelopment = argv.mode === "development";
+  const target = env.target === "firefox" ? "firefox" : "chrome";
 
   return {
     mode: argv.mode,
@@ -24,7 +26,7 @@ module.exports = (env, argv) => {
     },
     
     output: {
-      path: path.resolve(__dirname, "./build"),
+      path: path.resolve(__dirname, target === "firefox" ? "./build-firefox" : "./build"),
       // Content-hash entry/chunk filenames in production so Chrome can't serve
       // a stale cached bundle across extension reloads (the JS carries the
       // injected CSS, so unhashed names caused reloads to keep old styles).
@@ -175,7 +177,7 @@ module.exports = (env, argv) => {
           { from: "static/images", to: "images" },
           { from: "static/globals.js", to: "[name][ext]" },
           { from: "static/deferedLoading.*", to: "[name][ext]" },
-          { from: "chrome/*.js", to: "[name][ext]" },
+          { from: "chrome/*.js", to: "[name][ext]", globOptions: { ignore: ["**/buildManifest.js"] } },
           {
             from: 'node_modules/webextension-polyfill/dist/browser-polyfill.min.*',
             to: "[name][ext]"
@@ -184,7 +186,7 @@ module.exports = (env, argv) => {
       }),
       new WebpackExtensionManifestPlugin({
         config: {
-          base: baseManifest
+          base: buildManifest(baseManifest, target)
         }
       })
     ],
@@ -219,7 +221,7 @@ module.exports = (env, argv) => {
       buildDependencies: {
         config: [__filename],
       },
-      name: isProduction ? 'production' : 'development',
+      name: `${isProduction ? 'production' : 'development'}-${target}`,
     },
     
     // Stats configuration for cleaner output

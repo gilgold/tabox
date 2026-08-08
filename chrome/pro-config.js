@@ -15,7 +15,7 @@
 const PRO_ENV = 'production';
 
 const PRO_API_BASES = {
-  production: 'https://tabox-api.gilgold13.workers.dev',
+  production: 'https://share.tbxpro.app',
   sandbox: 'https://tabox-api-sandbox.gilgold13.workers.dev',
 };
 
@@ -38,6 +38,16 @@ const PUSH_VAPID_PUBLIC_KEYS = {
 };
 const PUSH_VAPID_PUBLIC_KEY = PUSH_VAPID_PUBLIC_KEYS[PRO_ENV];
 
+// Google OAuth client config. Chrome kept these in manifest.json's oauth2 key,
+// but Firefox doesn't support that key at all — so the code reads them from
+// here in both browsers. Must stay in sync with the oauth2 block in
+// chrome/manifest.json (tests/oauthConfig.test.js enforces parity).
+const OAUTH_CLIENT_ID = '701423091804-t6v1r6mkl4jdptge49gb7sfstj4holfr.apps.googleusercontent.com';
+const OAUTH_SCOPES = [
+  'https://www.googleapis.com/auth/drive.appdata',
+  'https://www.googleapis.com/auth/drive.file',
+];
+
 if (typeof module !== 'undefined') {
-  module.exports = { PRO_ENV, PRO_API_BASE, PRO_CHECKOUT_URL, PUSH_VAPID_PUBLIC_KEY };
+  module.exports = { PRO_ENV, PRO_API_BASE, PRO_CHECKOUT_URL, PUSH_VAPID_PUBLIC_KEY, OAUTH_CLIENT_ID, OAUTH_SCOPES };
 }

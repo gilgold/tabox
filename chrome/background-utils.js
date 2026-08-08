@@ -18,7 +18,7 @@ const STORAGE_KEYS = {
 // Google OAuth token exchanges go through the Tabox Worker (which holds the
 // client secret); resolve the base URL from pro-config.js in both the
 // classic-script (importScripts) world and Jest/CommonJS.
-/* global PRO_API_BASE */
+/* global PRO_API_BASE, OAUTH_CLIENT_ID, OAUTH_SCOPES */
 const AUTH_API_BASE = typeof require === 'function'
     ? require('./pro-config').PRO_API_BASE
     : PRO_API_BASE;
@@ -1676,8 +1676,56 @@ async function updateLocalDataFromServer(token, force = false, skipLock = false)
     }
 }
 
+// Firefox's identity.getRedirectURL() returns a per-profile
+// https://<uuid>.extensions.allizom.org/ URL that cannot be pre-registered
+// with Google, unlike Chrome's stable *.chromiumapp.org redirect. So on
+// Firefox we send Google a fixed, registered redirect (the Tabox Worker's
+// /auth/callback) and pack the real per-profile redirect into `state`; the
+// Worker 302s back to it with the code (see
+// docs/superpowers/plans/2026-08-06-firefox-port-phase2-oauth.md).
+// Branches ONLY on the getRedirectURL() value (capability/value detection),
+// never on user agent.
+const CHROMIUMAPP_REDIRECT_SUFFIX = '.chromiumapp.org';
+
+function getAuthRedirectConfig() {
+    const dynamicRedirect = browser.identity.getRedirectURL();
+    let hostname = '';
+    try {
+        hostname = new URL(dynamicRedirect).hostname;
+    } catch (error) {
+        hostname = '';
+    }
+    if (hostname.endsWith(CHROMIUMAPP_REDIRECT_SUFFIX)) {
+        return { authRedirect: dynamicRedirect, exchangeRedirect: dynamicRedirect, viaWorker: false };
+    }
+    const workerCallback = `${AUTH_API_BASE}/auth/callback`;
+    return { authRedirect: workerCallback, exchangeRedirect: workerCallback, viaWorker: true, target: dynamicRedirect };
+}
+
+// base64url (no padding) encode/decode of a UTF-8 JSON payload — MUST match
+// the Worker's b64uDecode exactly (server/src/authCallback.js, read-only from
+// the client side): standard base64 with '+'/'/' swapped for '-'/'_' and '='
+// padding stripped.
+// btoa/atob only handle byte strings (char codes 0-255), so UTF-8 bytes are
+// packed into/out of a binary string via the classic encodeURIComponent/
+// escape roundtrip rather than TextEncoder/TextDecoder — the latter aren't
+// available in every environment this code runs under (e.g. this project's
+// jsdom-based Jest tests), while btoa/atob are universal (SW, browser, jsdom).
+function base64UrlEncodeJson(obj) {
+    const json = JSON.stringify(obj);
+    const binary = unescape(encodeURIComponent(json));
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function base64UrlDecodeJson(str) {
+    const padded = String(str).replace(/-/g, '+').replace(/_/g, '/');
+    const binary = atob(padded + '='.repeat((4 - (padded.length % 4)) % 4));
+    const json = decodeURIComponent(escape(binary));
+    return JSON.parse(json);
+}
+
 async function getTokens(code) {
-    const redirectURL = browser.identity.getRedirectURL();
+    const { exchangeRedirect } = getAuthRedirectConfig();
     const options = {
         method: 'POST',
         headers: {
@@ -1686,7 +1734,7 @@ async function getTokens(code) {
         body: JSON.stringify({
             grant_type: 'authorization_code',
             code: code,
-            redirect_uri: redirectURL,
+            redirect_uri: exchangeRedirect,
         })
     }
     // The code→token exchange runs on the Tabox Worker, which holds the OAuth
@@ -1712,17 +1760,34 @@ async function getTokens(code) {
     }
 }
 
-function createAuthEndpoint() {
-    const redirectURL = browser.identity.getRedirectURL();
-    const { oauth2 } = browser.runtime.getManifest();
-    const clientId = oauth2.client_id;
-    const authParams = new URLSearchParams({
-        client_id: clientId,
+function createAuthEndpoint(nonce) {
+    const { authRedirect, viaWorker, target } = getAuthRedirectConfig();
+    // OAuth client config lives in pro-config.js (loaded before this file in
+    // both the Chrome SW importScripts order and the Firefox manifest
+    // background.scripts order) — NOT in the manifest: Firefox has no oauth2 key.
+    const authParamsInit = {
+        client_id: OAUTH_CLIENT_ID,
         response_type: 'code',
         access_type: 'offline',
-        redirect_uri: redirectURL,
+        redirect_uri: authRedirect,
         prompt: 'consent',
-        scope: 'openid ' + oauth2.scopes.join(' '),
+        scope: 'openid ' + OAUTH_SCOPES.join(' '),
+    };
+    // Chrome/Edge (*.chromiumapp.org, pre-registered with Google): EXACT
+    // current behavior, byte-identical auth URL — no `state` param, same
+    // param order (tests/oauthConfig.test.js pins this).
+    if (!viaWorker) {
+        const authParams = new URLSearchParams(authParamsInit);
+        return `https://accounts.google.com/o/oauth2/v2/auth?${authParams.toString()}`;
+    }
+    // Firefox (and any other non-chromiumapp redirect): route through the
+    // Worker's fixed callback, packing the real per-profile redirect + a
+    // per-attempt CSRF nonce into `state`. The Worker treats `state` as
+    // opaque apart from extracting the target; the client verifies `n`
+    // against the nonce it generated before trusting the returned code.
+    const authParams = new URLSearchParams({
+        ...authParamsInit,
+        state: base64UrlEncodeJson({ t: target, n: nonce }),
     });
     return `https://accounts.google.com/o/oauth2/v2/auth?${authParams.toString()}`;
 }
@@ -2402,9 +2467,13 @@ const backgroundUtilsApi = {
     prepareSyncDataForUpload,
     getNewAccessToken,
     getTokens,
+    getAuthRedirectConfig,
+    base64UrlEncodeJson,
+    base64UrlDecodeJson,
     validateToken,
     getAuthToken,
     getAuthTokenForAI,
+    createAuthEndpoint,
     getGoogleUser,
     getOrCreateSyncFile,
     updateRemote,

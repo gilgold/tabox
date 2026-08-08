@@ -11,6 +11,8 @@
     "build:debug": "INLINE_RUNTIME_CHUNK=false NODE_ENV=production webpack --mode production --config webpack.js --env sourcemap=true",
     "build:release": "INLINE_RUNTIME_CHUNK=false NODE_ENV=production webpack --mode production --config webpack.js --env sourcemap=false --env drop_console=true",
     "build:analyze": "INLINE_RUNTIME_CHUNK=false NODE_ENV=production webpack --mode production --config webpack.js --profile --json > stats.json",
+    "build:firefox": "INLINE_RUNTIME_CHUNK=false NODE_ENV=production webpack --mode production --config webpack.js --env target=firefox",
+    "dev:firefox": "INLINE_RUNTIME_CHUNK=false NODE_ENV=development webpack --mode development --config webpack.js --watch --env target=firefox",
     "prod": "INLINE_RUNTIME_CHUNK=false NODE_ENV=production webpack --mode production --config webpack.js",
     "lint": "eslint './**/*.js'",
     "clean": "rm -rf build .cache",

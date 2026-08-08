@@ -1,5 +1,6 @@
 import { browser } from '../../static/globals';
 import { batchUpdateCollections } from './storageUtils';
+import { getDisplayInfo } from './displayInfo';
 
 const hasVisibleIntersection = (targetBounds, displayBounds) => {
     const intersection = {
@@ -49,7 +50,7 @@ const buildWindowCreationObject = (collection, displays = []) => {
 export const openCollectionsInSequence = async (collections = []) => {
     const openedCollections = [];
     const failedCollections = [];
-    const displays = await browser.system.display.getInfo();
+    const displays = await getDisplayInfo();
 
     for (const collection of collections) {
         try {

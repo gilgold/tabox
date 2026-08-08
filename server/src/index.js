@@ -26,6 +26,7 @@ import { JOIN_PAGE_HTML } from './joinPage.js';
 import { validateAIRequest, completeAI } from './aiProxy.js';
 import { handlePushSubscribe, handlePushUnsubscribe } from './pushRoutes.js';
 import { notifyEmails, notifyFolderMembers } from './pushNotify.js';
+import { handleAuthCallback } from './authCallback.js';
 
 // How long an unlinked subscription event stays parked awaiting its transaction.
 // Paddle retries webhooks for ~3 days; 30 days leaves ample slack.
@@ -512,6 +513,7 @@ async function handleAuthToken(request, env) {
   const result = await exchangeGoogleToken(body, {
     clientId: env.GOOGLE_CLIENT_ID,
     clientSecret: env.GOOGLE_CLIENT_SECRET,
+    selfOrigin: new URL(request.url).origin,
   });
   return json(result.body, result.status);
 }
@@ -533,6 +535,7 @@ export default {
       });
     }
     if (request.method === 'POST' && url.pathname === '/auth/token') return handleAuthToken(request, env);
+    if (request.method === 'GET' && url.pathname === '/auth/callback') return handleAuthCallback(request);
     if (request.method === 'GET' && url.pathname === '/entitlement') return handleEntitlement(request, env);
     if (request.method === 'POST' && url.pathname === '/ai/complete') return handleAIComplete(request, env);
     if (request.method === 'GET' && url.pathname === '/subscription') return handleGetSubscription(request, env);

@@ -46,14 +46,14 @@ export function firstNameFromDisplayName(displayName) {
 // { grant_type, refresh_token } and the worker attaches credentials here.
 // Google's status/body pass through verbatim so the extension's existing
 // invalid_grant / 401 handling keeps working unchanged.
-export async function exchangeGoogleToken(params, { clientId, clientSecret }, fetchImpl = fetch) {
+export async function exchangeGoogleToken(params, { clientId, clientSecret, selfOrigin }, fetchImpl = fetch) {
   const invalid = { status: 400, body: { error: 'invalid_request' } };
   if (!params || typeof params !== 'object') return invalid;
 
   const request = { client_id: clientId, client_secret: clientSecret };
   if (params.grant_type === 'authorization_code') {
     if (!params.code || typeof params.code !== 'string') return invalid;
-    if (!isExtensionRedirect(params.redirect_uri)) return invalid;
+    if (!isExtensionRedirect(params.redirect_uri, selfOrigin)) return invalid;
     request.grant_type = 'authorization_code';
     request.code = params.code;
     request.redirect_uri = params.redirect_uri;
@@ -78,12 +78,19 @@ export async function exchangeGoogleToken(params, { clientId, clientSecret }, fe
 }
 
 // browser.identity.getRedirectURL() is always https://<ext-id>.chromiumapp.org/…
-// (Chrome and Edge builds have different ids, so match the suffix, not one id).
-function isExtensionRedirect(uri) {
+// (Chrome and Edge builds have different ids, so match the suffix, not one id)
+// on Chrome/Edge. On Firefox that API returns a per-profile
+// *.extensions.allizom.org URL that can't be pre-registered with Google, so
+// the auth request instead uses this Worker's own /auth/callback as the
+// redirect_uri (see server/src/authCallback.js) — accept that exact URL too,
+// scoped to the caller's own origin (`selfOrigin`, e.g.
+// `new URL(request.url).origin`) so a foreign origin can't spoof the path.
+export function isExtensionRedirect(uri, selfOrigin) {
   if (typeof uri !== 'string') return false;
   try {
     const u = new URL(uri);
-    return u.protocol === 'https:' && u.hostname.endsWith('.chromiumapp.org');
+    if (u.protocol === 'https:' && u.hostname.endsWith('.chromiumapp.org')) return true;
+    return typeof selfOrigin === 'string' && uri === `${selfOrigin}/auth/callback`;
   } catch {
     return false;
   }

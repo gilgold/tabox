@@ -70,6 +70,7 @@
   ],
   "externally_connectable": {
     "matches": [
+      "https://share.tbxpro.app/*",
       "https://tabox-api.gilgold13.workers.dev/*"
     ]
   },
