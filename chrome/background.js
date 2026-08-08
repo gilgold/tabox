@@ -972,7 +972,14 @@ function shouldDiscardTab(tab) {
   return true;
 }
 
-const isNewWindow = window => window?.tabs?.length === 1 && (!window?.tabs[0].url || window?.tabs[0].url.indexOf('://newtab') > 0);
+// Exact-match new-tab URLs for browsers whose "://newtab" substring check
+// (Chrome's `chrome://newtab/`) doesn't apply. Firefox's fresh-window starter
+// tab is `about:home`/`about:newtab`/`about:blank`, and a fresh private
+// window is `about:privatebrowsing` — none contain "://newtab". Exact-match
+// only: substring-matching "about:" would also swallow unrelated pages like
+// `about:config`.
+const NEW_TAB_URLS = new Set(['about:home', 'about:newtab', 'about:blank', 'about:privatebrowsing']);
+const isNewWindow = window => window?.tabs?.length === 1 && (!window?.tabs[0].url || window?.tabs[0].url.indexOf('://newtab') > 0 || NEW_TAB_URLS.has(window.tabs[0].url));
 
 // Helper function to check if user has enabled incognito access
 async function isIncognitoEnabled() {
@@ -2839,4 +2846,14 @@ try {
 
 } catch (e) {
   console.error(e)
+}
+
+// Test-only export: background.js is loaded as a classic script (importScripts
+// in Chrome's MV3 service worker, manifest background.scripts pre-load in
+// Firefox's event page) and has no other module.exports surface. isNewWindow
+// is a pure, module-scope function not otherwise reachable from tests
+// (unlike the helpers in background-utils.js), so expose it the same way
+// background-utils.js exposes its testables.
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { isNewWindow };
 }
