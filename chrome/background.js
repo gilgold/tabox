@@ -1943,7 +1943,15 @@ try {
         // callback echoes back before the code is ever exchanged. Chrome's
         // pre-registered *.chromiumapp.org redirect doesn't use `state` at
         // all, so the nonce is simply unused there.
-        const loginNonce = crypto.randomUUID();
+        // generateUidSafe() (not a bare crypto.randomUUID() call): Chrome
+        // 89-90 (this extension's manifest minimum_chrome_version) predates
+        // Crypto.randomUUID, and generateUidSafe already guards for that.
+        const loginNonce = generateUidSafe();
+        // Captured once and reused for both the auth request and the
+        // post-flow decision below — getAuthRedirectConfig() reads
+        // browser.identity.getRedirectURL() live, so calling it twice could
+        // in principle observe two different answers (TOCTOU).
+        const authConfig = getAuthRedirectConfig();
         const redirectUrl = await browser.identity.launchWebAuthFlow({
           'url': createAuthEndpoint(loginNonce),
           'interactive': true
@@ -1952,8 +1960,7 @@ try {
         const urlParams = url.searchParams;
         const params = Object.fromEntries(urlParams.entries());
 
-        const { viaWorker } = getAuthRedirectConfig();
-        if (viaWorker) {
+        if (authConfig.viaWorker) {
           // The Worker echoes the original `state` string verbatim; decode
           // it and REJECT — without exchanging the code — unless its nonce
           // matches the one generated for this attempt. Throwing here routes
@@ -1965,6 +1972,12 @@ try {
           const state = base64UrlDecodeJson(params.state);
           if (!state || state.n !== loginNonce) {
             throw new Error('OAuth state nonce mismatch');
+          }
+          // A user declining consent (or Google erroring out) is the normal
+          // path here, not a failure worth attempting a doomed token
+          // exchange over — short-circuit before ever calling getTokens.
+          if (params.error || !params.code) {
+            throw new Error(`OAuth callback error: ${params.error || 'missing code'}`);
           }
         }
 

@@ -179,12 +179,12 @@ describe('OAuth config', () => {
             global.importScripts = jest.fn();
             global.getAuthToken = jest.fn(async () => 'access-token');
             global.logSyncOperation = jest.fn();
-            // jsdom's crypto polyfill doesn't implement randomUUID(); the
-            // login handler needs one per attempt for the CSRF nonce.
-            // Replacing `global.crypto` outright is silently ignored (jsdom
-            // exposes it as a getter-only accessor) — mutate the existing
-            // object instead.
-            crypto.randomUUID = jest.fn(() => 'test-login-nonce');
+            // No crypto.randomUUID stub needed: the login handler generates
+            // its nonce via generateUidSafe() (chrome/background.js), which
+            // is declared in background.js's own scope (not a global these
+            // tests need to stub) and already falls back to a Math.random-
+            // based UID when crypto.randomUUID is unavailable — exactly the
+            // case under jsdom, whose crypto polyfill doesn't implement it.
             // Real (unmocked) createAuthEndpoint/getAuthRedirectConfig/
             // base64UrlDecodeJson so the nonce round-trip under test is the
             // actual production logic, not a stand-in. OAUTH_CLIENT_ID/
@@ -206,7 +206,6 @@ describe('OAuth config', () => {
             delete global.importScripts;
             delete global.getAuthToken;
             delete global.logSyncOperation;
-            delete crypto.randomUUID;
             delete global.OAUTH_CLIENT_ID;
             delete global.OAUTH_SCOPES;
             delete global.createAuthEndpoint;
@@ -246,6 +245,26 @@ describe('OAuth config', () => {
             browser.identity = {
                 getRedirectURL: jest.fn(() => ALLIZOM_REDIRECT),
                 launchWebAuthFlow: jest.fn(async () => `${ALLIZOM_REDIRECT}?code=stolen-code`)
+            };
+
+            require('../chrome/background.js');
+            const result = await browser.runtime.sendMessage({ type: 'login' });
+
+            expect(result).toBe(false);
+            expect(global.getTokens).not.toHaveBeenCalled();
+        });
+
+        test('short-circuits (no token exchange) when the Worker callback carries error=access_denied and no code (user declined consent)', async () => {
+            global.getTokens = jest.fn(async () => 'token-123');
+            browser.identity = {
+                getRedirectURL: jest.fn(() => ALLIZOM_REDIRECT),
+                launchWebAuthFlow: jest.fn(async (opts) => {
+                    const authUrl = new URL(opts.url);
+                    const rawState = authUrl.searchParams.get('state');
+                    // Same nonce echoed back — this must fail on the
+                    // error/missing-code check, not the nonce check.
+                    return `${ALLIZOM_REDIRECT}?error=access_denied&state=${rawState}`;
+                })
             };
 
             require('../chrome/background.js');

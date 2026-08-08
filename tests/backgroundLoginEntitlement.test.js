@@ -62,11 +62,6 @@ describe('background login handler — Pro entitlement restore', () => {
         global.importScripts = jest.fn();
         global.getAuthToken = jest.fn(async () => 'access-token');
         global.logSyncOperation = jest.fn();
-        // jsdom's crypto polyfill doesn't implement randomUUID(); the login
-        // handler needs one per attempt for the OAuth CSRF nonce. Replacing
-        // `global.crypto` outright is silently ignored (jsdom exposes it as
-        // a getter-only accessor) — mutate the existing object instead.
-        crypto.randomUUID = jest.fn(() => 'test-login-nonce');
         stubLoginGlobals();
     });
 
@@ -76,7 +71,6 @@ describe('background login handler — Pro entitlement restore', () => {
         delete global.browser;
         delete global.chrome;
         delete global.importScripts;
-        delete crypto.randomUUID;
         delete global.getAuthToken;
         delete global.logSyncOperation;
     });
