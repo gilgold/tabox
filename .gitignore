@@ -1,5 +1,6 @@
 node_modules
 build
+build-firefox/
 *.log
 .yarn/*
 !.yarn/patches
