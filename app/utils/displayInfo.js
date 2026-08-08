@@ -1,3 +1,5 @@
+import { browser } from '../../static/globals';
+
 // browser.system.display is Chrome-only (not implemented in Firefox), so every
 // caller goes through this guard. The fallback pretends the primary screen is
 // the only display: window-position restore clamps to it instead of throwing
