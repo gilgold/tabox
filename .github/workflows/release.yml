@@ -22,6 +22,10 @@ jobs:
         run: yarn lint
       - name: Run tests
         run: yarn test
+      - name: Build Firefox target
+        run: yarn build:firefox
+      - name: Lint Firefox extension
+        run: npx web-ext lint --source-dir build-firefox --self-hosted
       - name: Store test results
         if: always()
         uses: actions/upload-artifact@v7
