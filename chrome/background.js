@@ -2759,7 +2759,8 @@ try {
     await handleBadge();
   });
 
-  browser.windows.onBoundsChanged.addListener(async window => {
+  // Firefox doesn't implement onBoundsChanged; window move/resize won't trigger auto-update there (tab events still do)
+  browser.windows.onBoundsChanged?.addListener(async window => {
     debounceAutoUpdate(window.id, 5000); // Debounced auto-update
   });
 
