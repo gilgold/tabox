@@ -15,7 +15,7 @@
 const PRO_ENV = 'production';
 
 const PRO_API_BASES = {
-  production: 'https://tabox-api.gilgold13.workers.dev',
+  production: 'https://share.tbxpro.app',
   sandbox: 'https://tabox-api-sandbox.gilgold13.workers.dev',
 };
 
