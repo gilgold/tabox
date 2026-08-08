@@ -1,32 +1,39 @@
 /* eslint-disable no-undef */
-try {
-  importScripts('browser-polyfill.min.js');
-  importScripts('sync-session-state.js');
-  importScripts('sync-transport.js');
-  importScripts('sync-merge.js');
-  importScripts('sync-apply.js');
-  importScripts('sync-throttle.js');
-  importScripts('pro-config.js');
-  importScripts('background-utils.js');
-  importScripts('push-client.js');
-  importScripts('pro-entitlement.js');
-  importScripts('shared-folders.js');
-  importScripts('ai-client.js');
-  importScripts('ai-planners.js');
-  importScripts('ai-storage.js');
-  importScripts('ai-registry.js');
-  importScripts('ai-engine.js');
-  importScripts('ai-task-auto-rename.js');
-  importScripts('ai-task-auto-arrange.js');
-  importScripts('ai-task-smart-organize.js');
-  importScripts('duplicate-detect.js');
-  importScripts('duplicate-sweep.js');
-  importScripts('ai-task-duplicate-sweep.js');
-  importScripts('split-collection.js');
-  importScripts('ai-task-split-collection.js');
-}
-catch (e) {
-  console.error(e);
+// Chrome MV3 loads background.js as a service worker and pulls in modules via
+// importScripts. Firefox MV3 runs an event page instead: the same files are
+// pre-loaded in order by manifest background.scripts (see chrome/buildManifest.js
+// BACKGROUND_SCRIPTS — parity enforced by tests/buildManifest.test.js), so
+// importScripts doesn't exist there and this block must not run.
+if (typeof importScripts === 'function') {
+  try {
+    importScripts('browser-polyfill.min.js');
+    importScripts('sync-session-state.js');
+    importScripts('sync-transport.js');
+    importScripts('sync-merge.js');
+    importScripts('sync-apply.js');
+    importScripts('sync-throttle.js');
+    importScripts('pro-config.js');
+    importScripts('background-utils.js');
+    importScripts('push-client.js');
+    importScripts('pro-entitlement.js');
+    importScripts('shared-folders.js');
+    importScripts('ai-client.js');
+    importScripts('ai-planners.js');
+    importScripts('ai-storage.js');
+    importScripts('ai-registry.js');
+    importScripts('ai-engine.js');
+    importScripts('ai-task-auto-rename.js');
+    importScripts('ai-task-auto-arrange.js');
+    importScripts('ai-task-smart-organize.js');
+    importScripts('duplicate-detect.js');
+    importScripts('duplicate-sweep.js');
+    importScripts('ai-task-duplicate-sweep.js');
+    importScripts('split-collection.js');
+    importScripts('ai-task-split-collection.js');
+  }
+  catch (e) {
+    console.error(e);
+  }
 }
   const syncSessionStateApi = typeof require === 'function'
     ? require('./sync-session-state.js')
@@ -2580,7 +2587,7 @@ try {
 
   browser.runtime.onInstalled.addListener(async (details) => {
     const previousVersion = details.previousVersion;
-    const currentVersion = chrome.runtime.getManifest().version;
+    const currentVersion = browser.runtime.getManifest().version;
     const reason = details.reason;
     
     // Handle migration for updates
