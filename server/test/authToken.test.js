@@ -69,4 +69,49 @@ describe('POST /auth/token', () => {
     const other = await worker.fetch(post({ grant_type: 'refresh_token', refresh_token: 'rt' }, { 'CF-Connecting-IP': '5.6.7.8' }), e);
     expect(other.status).toBe(200);
   });
+
+  it('accepts a redirect_uri equal to this worker origin + /auth/callback (Firefox flow)', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({ status: 200, json: async () => ({ access_token: 'at' }) });
+    const res = await worker.fetch(post({
+      grant_type: 'authorization_code', code: 'c0de', redirect_uri: 'https://x/auth/callback',
+    }), env());
+    expect(res.status).toBe(200);
+  });
+
+  it('rejects a redirect_uri claiming a different origin than this worker', async () => {
+    globalThis.fetch = vi.fn();
+    const res = await worker.fetch(post({
+      grant_type: 'authorization_code', code: 'c0de', redirect_uri: 'https://evil.com/auth/callback',
+    }), env());
+    expect(res.status).toBe(400);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /auth/callback', () => {
+  function b64uEncode(obj) {
+    return btoa(JSON.stringify(obj)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  it('redirects with code + original state for a valid allizom target', async () => {
+    const state = b64uEncode({ t: 'https://abc.extensions.allizom.org/', n: 'nonce' });
+    const res = await worker.fetch(
+      new Request(`https://x/auth/callback?code=c0de&state=${encodeURIComponent(state)}`),
+      env()
+    );
+    expect(res.status).toBe(302);
+    const loc = new URL(res.headers.get('Location'));
+    expect(loc.origin + loc.pathname).toBe('https://abc.extensions.allizom.org/');
+    expect(loc.searchParams.get('code')).toBe('c0de');
+    expect(loc.searchParams.get('state')).toBe(state);
+  });
+
+  it('rejects an open-redirect attempt with 400 instead of redirecting', async () => {
+    const state = b64uEncode({ t: 'https://evil.com/', n: 'nonce' });
+    const res = await worker.fetch(
+      new Request(`https://x/auth/callback?code=c0de&state=${encodeURIComponent(state)}`),
+      env()
+    );
+    expect(res.status).toBe(400);
+  });
 });

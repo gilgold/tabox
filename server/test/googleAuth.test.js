@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { verifyGoogleToken, exchangeGoogleToken, sanitizePhotoLink } from '../src/googleAuth.js';
+import { verifyGoogleToken, exchangeGoogleToken, sanitizePhotoLink, isExtensionRedirect } from '../src/googleAuth.js';
 
 const CLIENT_ID = 'test-client-id.apps.googleusercontent.com';
 const okJson = (body) => ({ ok: true, json: async () => body });
@@ -125,5 +125,54 @@ describe('exchangeGoogleToken', () => {
     expect(await exchangeGoogleToken({ grant_type: 'refresh_token', refresh_token: 'rt' }, CREDS,
       vi.fn().mockResolvedValueOnce({ status: 200, json: async () => { throw new Error('bad'); } })))
       .toEqual({ status: 502, body: { error: 'upstream_error' } });
+  });
+
+  it('accepts the worker-callback redirect_uri (selfOrigin + /auth/callback) for Firefox', async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce({ status: 200, json: async () => ({ access_token: 'at' }) });
+    const creds = { ...CREDS, selfOrigin: 'https://share.tbxpro.app' };
+    const r = await exchangeGoogleToken(
+      { grant_type: 'authorization_code', code: 'c0de', redirect_uri: 'https://share.tbxpro.app/auth/callback' },
+      creds, fetchImpl
+    );
+    expect(r).toEqual({ status: 200, body: { access_token: 'at' } });
+  });
+
+  it('still accepts chromiumapp redirects when selfOrigin is set, and rejects a foreign origin masquerading as /auth/callback', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ status: 200, json: async () => ({ access_token: 'at' }) });
+    const creds = { ...CREDS, selfOrigin: 'https://share.tbxpro.app' };
+    expect((await exchangeGoogleToken(
+      { grant_type: 'authorization_code', code: 'c', redirect_uri: 'https://abc.chromiumapp.org/' }, creds, fetchImpl
+    )).status).toBe(200);
+    expect(await exchangeGoogleToken(
+      { grant_type: 'authorization_code', code: 'c', redirect_uri: 'https://evil.com/auth/callback' }, creds, fetchImpl
+    )).toEqual({ status: 400, body: { error: 'invalid_request' } });
+  });
+});
+
+describe('isExtensionRedirect', () => {
+  it('accepts *.chromiumapp.org regardless of selfOrigin', () => {
+    expect(isExtensionRedirect('https://abc.chromiumapp.org/')).toBe(true);
+    expect(isExtensionRedirect('https://abc.chromiumapp.org/', 'https://share.tbxpro.app')).toBe(true);
+  });
+
+  it('accepts exactly selfOrigin + /auth/callback', () => {
+    expect(isExtensionRedirect('https://share.tbxpro.app/auth/callback', 'https://share.tbxpro.app')).toBe(true);
+  });
+
+  it('rejects selfOrigin + /auth/callback when selfOrigin is not provided', () => {
+    expect(isExtensionRedirect('https://share.tbxpro.app/auth/callback')).toBe(false);
+  });
+
+  it('rejects near-misses of the callback path and other origins', () => {
+    const selfOrigin = 'https://share.tbxpro.app';
+    expect(isExtensionRedirect('https://share.tbxpro.app/auth/callback/', selfOrigin)).toBe(false);
+    expect(isExtensionRedirect('https://share.tbxpro.app/auth/callback2', selfOrigin)).toBe(false);
+    expect(isExtensionRedirect('https://evil.com/auth/callback', selfOrigin)).toBe(false);
+    expect(isExtensionRedirect('http://share.tbxpro.app/auth/callback', selfOrigin)).toBe(false);
+  });
+
+  it('rejects non-string and malformed input', () => {
+    expect(isExtensionRedirect(undefined)).toBe(false);
+    expect(isExtensionRedirect('not-a-url')).toBe(false);
   });
 });
