@@ -16,14 +16,15 @@ const ALLOWED_TARGET_SUFFIX = '.extensions.allizom.org';
 function badRequest() {
   return new Response(JSON.stringify({ error: 'invalid_request' }), {
     status: 400,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
   });
 }
 
 function b64uDecode(str) {
   const s = String(str).replace(/-/g, '+').replace(/_/g, '/');
   const bin = atob(s + '='.repeat((4 - (s.length % 4)) % 4));
-  return bin;
+  const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
 }
 
 // state is base64url JSON `{ t: <target url>, n: <nonce> }`. The Worker only
@@ -67,14 +68,19 @@ export async function handleAuthCallback(request) {
   const rawState = url.searchParams.get('state');
 
   if (!code && !error) return badRequest();
-  if (code !== null && (typeof code !== 'string' || code.length > MAX_CODE_LENGTH)) return badRequest();
-  if (error !== null && (typeof error !== 'string' || error.length > MAX_ERROR_LENGTH)) return badRequest();
+  if (code !== null && code.length > MAX_CODE_LENGTH) return badRequest();
+  if (error !== null && error.length > MAX_ERROR_LENGTH) return badRequest();
 
   const state = parseState(rawState);
   if (!state) return badRequest();
   if (!isValidTarget(state.t)) return badRequest();
 
   const dest = new URL(state.t);
+  // The target came from client-controlled state; strip any embedded
+  // userinfo (`user:pass@host`) before redirecting so it can never be used
+  // to smuggle credentials or confuse a downstream URL parser.
+  dest.username = '';
+  dest.password = '';
   if (error) {
     dest.searchParams.set('error', error);
   } else {
@@ -85,5 +91,8 @@ export async function handleAuthCallback(request) {
   // never rendered into an HTML body.
   dest.searchParams.set('state', rawState);
 
-  return new Response(null, { status: 302, headers: { Location: dest.toString() } });
+  return new Response(null, {
+    status: 302,
+    headers: { Location: dest.toString(), 'Cache-Control': 'no-store' },
+  });
 }

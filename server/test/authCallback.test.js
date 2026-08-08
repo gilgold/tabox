@@ -28,6 +28,29 @@ describe('handleAuthCallback', () => {
     expect(loc.searchParams.get('state')).toBe(state);
   });
 
+  it('sends Cache-Control: no-store on the success redirect', async () => {
+    const state = b64uEncode({ t: TARGET, n: 'nonce-1' });
+    const res = await handleAuthCallback(req({ code: 'auth-code-1', state }));
+    expect(res.status).toBe(302);
+    expect(res.headers.get('Cache-Control')).toBe('no-store');
+  });
+
+  it('sends Cache-Control: no-store on 400 responses', async () => {
+    const res = await handleAuthCallback(req({}));
+    expect(res.status).toBe(400);
+    expect(res.headers.get('Cache-Control')).toBe('no-store');
+  });
+
+  it('strips embedded userinfo from the target before redirecting', async () => {
+    const state = b64uEncode({ t: 'https://evil.com:443@x.extensions.allizom.org/', n: 'n' });
+    const res = await handleAuthCallback(req({ code: 'c', state }));
+    expect(res.status).toBe(302);
+    const location = res.headers.get('Location');
+    expect(location).not.toContain('@');
+    const loc = new URL(location);
+    expect(loc.hostname).toBe('x.extensions.allizom.org');
+  });
+
   it('passes Google error through to the target instead of a code', async () => {
     const state = b64uEncode({ t: TARGET, n: 'nonce-2' });
     const res = await handleAuthCallback(req({ error: 'access_denied', state }));
@@ -98,6 +121,24 @@ describe('handleAuthCallback', () => {
 
   it('rejects the bare allowed domain with no subdomain label', async () => {
     const state = b64uEncode({ t: 'https://extensions.allizom.org/', n: 'n' });
+    const res = await handleAuthCallback(req({ code: 'c', state }));
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects the bare allowed domain used as a prefix (extensions.allizom.org.evil.com)', async () => {
+    const state = b64uEncode({ t: 'https://extensions.allizom.org.evil.com/', n: 'n' });
+    const res = await handleAuthCallback(req({ code: 'c', state }));
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects a hyphen-boundary lookalike host (evil-extensions.allizom.org)', async () => {
+    const state = b64uEncode({ t: 'https://evil-extensions.allizom.org/', n: 'n' });
+    const res = await handleAuthCallback(req({ code: 'c', state }));
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects the backslash form of a foreign host (https:/\\evil.com)', async () => {
+    const state = b64uEncode({ t: 'https:/\\evil.com', n: 'n' });
     const res = await handleAuthCallback(req({ code: 'c', state }));
     expect(res.status).toBe(400);
   });
