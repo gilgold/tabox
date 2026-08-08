@@ -213,6 +213,13 @@ describe('shared sync adaptive alarm + push wiring', () => {
             // Stub the background-utils.js globals the login handler needs
             // (importScripts is mocked as a no-op above).
             global.createAuthEndpoint = jest.fn(() => 'https://accounts.google.com/o/oauth2/auth');
+            global.getAuthRedirectConfig = jest.fn(() => ({ viaWorker: false }));
+            // jsdom's crypto polyfill doesn't implement randomUUID(); the
+            // login handler needs one per attempt for the OAuth CSRF nonce.
+            // Replacing `global.crypto` outright is silently ignored (jsdom
+            // exposes it as a getter-only accessor) — mutate the existing
+            // object instead.
+            crypto.randomUUID = jest.fn(() => 'test-login-nonce');
             global.getTokens = jest.fn(async () => 'token-123');
             global.getOrCreateSyncFile = jest.fn(async () => 'file-123');
             global.getGoogleUser = jest.fn(async () => ({ displayName: 'Test User', email: 'a@x.com' }));
@@ -236,6 +243,8 @@ describe('shared sync adaptive alarm + push wiring', () => {
             );
 
             delete global.createAuthEndpoint;
+            delete global.getAuthRedirectConfig;
+            delete crypto.randomUUID;
             delete global.getTokens;
             delete global.getOrCreateSyncFile;
             delete global.getGoogleUser;

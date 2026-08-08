@@ -1938,14 +1938,36 @@ try {
 
     if (request.type === 'login') {
       try {
+        // CSRF nonce for this attempt only — sent inside `state` on the
+        // Firefox (viaWorker) path and verified against what the Worker
+        // callback echoes back before the code is ever exchanged. Chrome's
+        // pre-registered *.chromiumapp.org redirect doesn't use `state` at
+        // all, so the nonce is simply unused there.
+        const loginNonce = crypto.randomUUID();
         const redirectUrl = await browser.identity.launchWebAuthFlow({
-          'url': createAuthEndpoint(),
+          'url': createAuthEndpoint(loginNonce),
           'interactive': true
         });
         const url = new URL(redirectUrl);
         const urlParams = url.searchParams;
         const params = Object.fromEntries(urlParams.entries());
-        
+
+        const { viaWorker } = getAuthRedirectConfig();
+        if (viaWorker) {
+          // The Worker echoes the original `state` string verbatim; decode
+          // it and REJECT — without exchanging the code — unless its nonce
+          // matches the one generated for this attempt. Throwing here routes
+          // through the existing catch below, so a nonce mismatch surfaces
+          // the exact same error shape as any other login failure.
+          if (!params.state) {
+            throw new Error('Missing OAuth state from Worker callback');
+          }
+          const state = base64UrlDecodeJson(params.state);
+          if (!state || state.n !== loginNonce) {
+            throw new Error('OAuth state nonce mismatch');
+          }
+        }
+
         const token = await getTokens(params.code);
         if (token === false) {
           console.error('Failed to get tokens during login');

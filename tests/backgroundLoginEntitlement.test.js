@@ -12,6 +12,7 @@ describe('background login handler — Pro entitlement restore', () => {
 
     const stubLoginGlobals = () => {
         global.createAuthEndpoint = jest.fn(() => 'https://accounts.google.com/o/oauth2/auth');
+        global.getAuthRedirectConfig = jest.fn(() => ({ viaWorker: false }));
         global.getTokens = jest.fn(async () => 'token-123');
         global.getOrCreateSyncFile = jest.fn(async () => 'file-123');
         global.getGoogleUser = jest.fn(async () => ({ displayName: 'Test User', email: 'a@x.com' }));
@@ -34,6 +35,7 @@ describe('background login handler — Pro entitlement restore', () => {
 
     const clearLoginGlobals = () => {
         delete global.createAuthEndpoint;
+        delete global.getAuthRedirectConfig;
         delete global.getTokens;
         delete global.getOrCreateSyncFile;
         delete global.getGoogleUser;
@@ -60,6 +62,11 @@ describe('background login handler — Pro entitlement restore', () => {
         global.importScripts = jest.fn();
         global.getAuthToken = jest.fn(async () => 'access-token');
         global.logSyncOperation = jest.fn();
+        // jsdom's crypto polyfill doesn't implement randomUUID(); the login
+        // handler needs one per attempt for the OAuth CSRF nonce. Replacing
+        // `global.crypto` outright is silently ignored (jsdom exposes it as
+        // a getter-only accessor) — mutate the existing object instead.
+        crypto.randomUUID = jest.fn(() => 'test-login-nonce');
         stubLoginGlobals();
     });
 
@@ -69,6 +76,7 @@ describe('background login handler — Pro entitlement restore', () => {
         delete global.browser;
         delete global.chrome;
         delete global.importScripts;
+        delete crypto.randomUUID;
         delete global.getAuthToken;
         delete global.logSyncOperation;
     });
