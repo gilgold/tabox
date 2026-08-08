@@ -22,6 +22,7 @@ import { createFolderMenuItems } from '../utils/contextMenuItems';
 import FPCtxMenu from './FPCtxMenu';
 import { isSharedFolder } from '../utils/sharedFolderUtils';
 import { respondToSharedInvite } from '../utils/sharedFolderActions';
+import { getDisplayInfo } from '../utils/displayInfo';
 import {
     duplicateFolder,
     deleteFolder,
@@ -348,7 +349,7 @@ function FPSidebar({
             const openedCollections = [];
             const failedCollections = [];
 
-            const displays = await browser.system.display.getInfo();
+            const displays = await getDisplayInfo();
 
             for (const collection of collectionsToOpen) {
                 try {

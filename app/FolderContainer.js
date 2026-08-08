@@ -18,6 +18,7 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useAtomValue, useSetAtom } from 'jotai';
 import { trackingStateVersion } from './atoms/globalAppSettingsState';
 import { shareFolderModalState, sharedActionConfirmState } from './atoms/sharedFoldersState';
+import { getDisplayInfo } from './utils/displayInfo';
 import { isProState } from './atoms/premiumState';
 import './FolderContainer.css';
 
@@ -602,7 +603,7 @@ function FolderContainer({
             const openedCollections = [];
             const failedCollections = [];
 
-            const displays = await browser.system.display.getInfo();
+            const displays = await getDisplayInfo();
 
             for (const collection of collectionsToOpen) {
                 try {

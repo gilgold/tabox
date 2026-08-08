@@ -10,6 +10,7 @@ import { loadAllCollections, deleteSingleCollection, updateFolderCollectionCount
 import { getNextFavoriteOrder } from './utils/favoritesUtils';
 import { noPermissionOpenState } from './atoms/sharedFoldersState';
 import { canEditFolder, guardFolderEdit } from './utils/sharedFolderUtils';
+import { getDisplayInfo } from './utils/displayInfo';
 
 export const openCollectionTabs = async ({
     collectionToOpen,
@@ -45,7 +46,7 @@ export const openCollectionTabs = async ({
         if (collectionToOpen.window && !windowCreationObject.incognito) {
             // Window position only applies to normal windows
             try {
-                const displays = await browser.system.display.getInfo();
+                const displays = await getDisplayInfo();
 
                 let targetBounds = {
                     top: Math.round(collectionToOpen.window.top),
