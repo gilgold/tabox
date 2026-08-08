@@ -18,7 +18,7 @@ const STORAGE_KEYS = {
 // Google OAuth token exchanges go through the Tabox Worker (which holds the
 // client secret); resolve the base URL from pro-config.js in both the
 // classic-script (importScripts) world and Jest/CommonJS.
-/* global PRO_API_BASE */
+/* global PRO_API_BASE, OAUTH_CLIENT_ID, OAUTH_SCOPES */
 const AUTH_API_BASE = typeof require === 'function'
     ? require('./pro-config').PRO_API_BASE
     : PRO_API_BASE;
@@ -1714,15 +1714,16 @@ async function getTokens(code) {
 
 function createAuthEndpoint() {
     const redirectURL = browser.identity.getRedirectURL();
-    const { oauth2 } = browser.runtime.getManifest();
-    const clientId = oauth2.client_id;
+    // OAuth client config lives in pro-config.js (loaded before this file in
+    // both the Chrome SW importScripts order and the Firefox manifest
+    // background.scripts order) — NOT in the manifest: Firefox has no oauth2 key.
     const authParams = new URLSearchParams({
-        client_id: clientId,
+        client_id: OAUTH_CLIENT_ID,
         response_type: 'code',
         access_type: 'offline',
         redirect_uri: redirectURL,
         prompt: 'consent',
-        scope: 'openid ' + oauth2.scopes.join(' '),
+        scope: 'openid ' + OAUTH_SCOPES.join(' '),
     });
     return `https://accounts.google.com/o/oauth2/v2/auth?${authParams.toString()}`;
 }
@@ -2405,6 +2406,7 @@ const backgroundUtilsApi = {
     validateToken,
     getAuthToken,
     getAuthTokenForAI,
+    createAuthEndpoint,
     getGoogleUser,
     getOrCreateSyncFile,
     updateRemote,
