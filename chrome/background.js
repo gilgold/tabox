@@ -1947,10 +1947,8 @@ try {
         // 89-90 (this extension's manifest minimum_chrome_version) predates
         // Crypto.randomUUID, and generateUidSafe already guards for that.
         const loginNonce = generateUidSafe();
-        // Captured once and reused for both the auth request and the
-        // post-flow decision below — getAuthRedirectConfig() reads
-        // browser.identity.getRedirectURL() live, so calling it twice could
-        // in principle observe two different answers (TOCTOU).
+        // Captured for the post-flow decision; getRedirectURL() is constant per
+        // profile, so the decision always matches the auth request sent below.
         const authConfig = getAuthRedirectConfig();
         const redirectUrl = await browser.identity.launchWebAuthFlow({
           'url': createAuthEndpoint(loginNonce),

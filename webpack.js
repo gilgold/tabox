@@ -177,7 +177,7 @@ module.exports = (env = {}, argv) => {
           { from: "static/images", to: "images" },
           { from: "static/globals.js", to: "[name][ext]" },
           { from: "static/deferedLoading.*", to: "[name][ext]" },
-          { from: "chrome/*.js", to: "[name][ext]" },
+          { from: "chrome/*.js", to: "[name][ext]", globOptions: { ignore: ["**/buildManifest.js"] } },
           {
             from: 'node_modules/webextension-polyfill/dist/browser-polyfill.min.*',
             to: "[name][ext]"
