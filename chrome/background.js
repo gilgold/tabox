@@ -928,7 +928,7 @@ const REALTIME_DOMAINS = new Set([
 ]);
 
 const IPV4_PATTERN = /\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b/;
-const SYSTEM_URL_PREFIXES = ['chrome-devtools://', 'chrome-extension://', 'chrome://', 'about:', 'file://'];
+const SYSTEM_URL_PREFIXES = ['chrome-devtools://', 'chrome-extension://', 'chrome://', 'about:', 'file://', 'moz-extension://'];
 
 function shouldDiscardTab(tab) {
   // Early return for basic exclusions - most performance-critical checks first
