@@ -34,7 +34,17 @@ trap cleanup EXIT
 echo "Installing selenium-webdriver + geckodriver into a throwaway prefix (not added to package.json/yarn.lock)..."
 npm install --prefix "$DEPS_DIR" --no-save --silent selenium-webdriver geckodriver
 
+STATUS=0
+
 echo "Running Firefox smoke test..."
 NODE_PATH="$DEPS_DIR/node_modules" \
 MOZ_REMOTE_ALLOW_SYSTEM_ACCESS=1 \
-  node "$SCRIPT_DIR/smoke.cjs"
+  node "$SCRIPT_DIR/smoke.cjs" || STATUS=1
+
+echo
+echo "Running Firefox save/restore journey test..."
+NODE_PATH="$DEPS_DIR/node_modules" \
+MOZ_REMOTE_ALLOW_SYSTEM_ACCESS=1 \
+  node "$SCRIPT_DIR/journey.cjs" || STATUS=1
+
+exit "$STATUS"

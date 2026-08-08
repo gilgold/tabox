@@ -84,7 +84,28 @@ live — not just that the popup rendered.
 
 ## Files
 
-- `smoke.cjs` — the test script (CommonJS so it can `require()` the
-  throwaway-installed deps via `NODE_PATH`; Node's ESM resolver does not
-  honor `NODE_PATH`).
-- `run.sh` — build-if-needed + dependency staging + invocation.
+- `smoke.cjs` — boot smoke test: popup renders, full page renders,
+  background event page answers a message.
+- `journey.cjs` — functional save/restore journey: creates a window with a
+  real Firefox tab group, saves it as a collection through the extension's
+  real storage path, then restores that collection into a fresh window and
+  verifies the tab group and tabs come back. See the comment at the top of
+  the file for exactly which message types/functions this drives and why.
+- `run.sh` — build-if-needed + dependency staging + runs both scripts,
+  aggregating their exit codes (non-zero if either fails).
+
+Both scripts are CommonJS (`.cjs`) so they can `require()` the
+throwaway-installed deps via `NODE_PATH` — Node's ESM resolver does not
+honor `NODE_PATH`.
+
+## Known gap surfaced by `journey.cjs`
+
+`journey.cjs` currently reports one failing check: restoring a saved
+collection into a new window leaves one extra blank tab behind on Firefox
+(4 tabs instead of the expected 3). Root cause: `chrome/background.js:975`'s
+`isNewWindow()` only recognizes Chrome's new-tab URL shape
+(`url.indexOf('://newtab') > 0`); Firefox's default new-window tab
+(`about:home` / `about:blank`) never matches that substring, so the
+first-tab-reuse optimization never fires on Firefox. This is a real
+Firefox-port bug, not a harness issue — flagged here rather than fixed, per
+the project's task boundaries for this harness.
