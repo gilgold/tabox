@@ -1,23 +1,13 @@
 import { applyUid } from '../utils';
 import { unwrapDeferredUrl } from './urlUtils';
-import { browser } from '../../static/globals';
 
 export function buildCollectionFromSnapshot({ snapshot, name, parentId = '' } = {}) {
-    const extensionOrigin = browser.runtime.getURL('');
     const nextSnapshot = {
         ...snapshot,
         name,
         // Resolve any deferred-loading wrapper URLs so we never persist the placeholder
         // page (chrome-extension://.../deferedLoading.html) as a saved tab URL.
-        // Also filter out any extension URLs (they cannot be opened from the popup context).
-        tabs: (snapshot.tabs || []).map((tab) => {
-            const unwrapped = unwrapDeferredUrl(tab.url);
-            // Filter out extension URLs (e.g., chrome-extension:// or moz-extension://)
-            if (unwrapped?.startsWith(extensionOrigin)) {
-                return null;
-            }
-            return { ...tab, url: unwrapped };
-        }).filter(Boolean),
+        tabs: (snapshot.tabs || []).map((tab) => ({ ...tab, url: unwrapDeferredUrl(tab.url) })),
         chromeGroups: (snapshot.chromeGroups || []).map((group) => ({ ...group })),
         createdOn: Date.now(),
         lastUpdated: Date.now(),
