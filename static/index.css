@@ -146,6 +146,17 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
+/* Text fields never show the UA focus outline — every field has its own
+   styled border/focus state and the outline covers it (Blink + Gecko). */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):focus,
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):focus-visible,
+textarea:focus,
+textarea:focus-visible,
+[contenteditable="true"]:focus,
+[contenteditable="true"]:focus-visible {
+    outline: none;
+}
+
 /* Ambient affordance: valid, non-current container targets during a collection drag */
 .dnd-drop-ambient {
     outline: 1.5px dashed var(--dnd-accent-border-soft);

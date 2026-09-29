@@ -7,8 +7,10 @@
  *                                    place as last child of a position:relative
  *                                    card root to avoid pseudo-element conflicts
  *   .ai-processing-overlay--current — same but faster / brighter
- *   .ai-name-processing            — title-slot variant (applied directly; the
- *                                    slot has no competing pseudo-elements)
+ *   .ai-name-processing            — text-field variant (applied directly on
+ *                                    the field wrapper). Lightning sweep only:
+ *                                    no ring, so the field's own styled border
+ *                                    is never covered by an outline.
  *
  * Performance fallback: html.performance-mode strips all animation and keeps
  * only a static purple ring.
@@ -47,7 +49,6 @@
 
 /* ── Gradient ring via mask-composite ─────────────────────────────────────── */
 
-.ai-name-processing::before,
 .ai-processing-overlay::before {
     content: '';
     position: absolute;
@@ -105,8 +106,7 @@
 
 /* ── Performance-mode static fallback ────────────────────────────────────── */
 
-html.performance-mode .ai-processing-overlay::before,
-html.performance-mode .ai-name-processing::before {
+html.performance-mode .ai-processing-overlay::before {
     animation: none !important;
     background: #7c3aed;
 }
