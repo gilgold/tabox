@@ -5,6 +5,7 @@ import {
   isCancelEvent, sentKey, surveyLink, notifyCancelSurvey, handleCancelSurveySubmit, SURVEY_PURPOSE,
 } from '../src/cancelSurvey.js';
 import { cancelSurveyEmail } from '../src/cancelSurveyEmail.js';
+import worker from '../src/index.js';
 
 const NOW = Date.parse('2026-09-29T12:00:00Z');
 const makeKV = (store = {}) => ({
@@ -144,5 +145,40 @@ describe('handleCancelSurveySubmit', () => {
     expect((await handleCancelSurveySubmit(submit({ t: token, reason: 'other' }), env, NOW)).body).toEqual({ error: 'invalid_reason' });
     expect((await handleCancelSurveySubmit(submit({ t: token, reason: 'bugs', comment: 'x'.repeat(2001) }), env, NOW)).body).toEqual({ error: 'comment_too_long' });
     expect((await handleCancelSurveySubmit(submit({ t: token, reason: 'bugs' }), { ...ENV_BASE }, NOW)).status).toBe(503);
+  });
+});
+
+describe('Worker wiring', () => {
+  async function signWebhook(body, secret, ts) {
+    const enc = new TextEncoder();
+    const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const sig = await crypto.subtle.sign('HMAC', key, enc.encode(`${ts}:${body}`));
+    return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  }
+  const WH_ENV = { ...ENV_BASE, PRICE_MONTHLY: 'pri_m', PRICE_ANNUAL: 'pri_a', PADDLE_WEBHOOK_SECRET: 'whsec_test' };
+
+  it('schedules the survey email for a scheduled cancel webhook', async () => {
+    mockFetch();
+    const body = JSON.stringify({ event_id: 'evt_c', occurred_at: '2026-09-29T12:00:00Z', ...scheduledCancel });
+    const ts = Math.floor(Date.now() / 1000);
+    const h1 = await signWebhook(body, 'whsec_test', ts);
+    const pending = [];
+    const r = await worker.fetch(
+      new Request('https://api.test/webhooks/paddle', { method: 'POST', body, headers: { 'Paddle-Signature': `ts=${ts};h1=${h1}` } }),
+      { ...WH_ENV, ENTITLEMENTS: makeKV(), SHARED_DB: makeDB() },
+      { waitUntil: (p) => pending.push(p) }
+    );
+    expect(r.status).toBe(200);
+    await Promise.all(pending);
+    expect(resendCalls()).toHaveLength(1);
+  });
+
+  it('routes POST /survey/cancel with CORS', async () => {
+    const db = makeDB();
+    const t = await signPurposeToken(SURVEY_PURPOSE, { sid: 'sub_9' }, 'jwt_secret', 3600);
+    const r = await worker.fetch(submit({ t, reason: 'missing_feature', comment: 'sync to Safari' }), { ...WH_ENV, SHARED_DB: db, ENTITLEMENTS: makeKV() }, { waitUntil() {} });
+    expect(r.status).toBe(200);
+    expect(r.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    expect(row(db, 'sub_9')).toMatchObject({ reason: 'missing_feature', comment: 'sync to Safari' });
   });
 });

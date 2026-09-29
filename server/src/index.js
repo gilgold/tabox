@@ -31,6 +31,7 @@ import { notifyEmails, notifyFolderMembers } from './pushNotify.js';
 import { handleAuthCallback } from './authCallback.js';
 import { handleAuthStart } from './authStart.js';
 import { notifyPaymentFailed, handlePaymentMethodRedirect } from './paymentFailedNotify.js';
+import { isCancelEvent, notifyCancelSurvey, handleCancelSurveySubmit } from './cancelSurvey.js';
 
 // How long an unlinked subscription event stays parked awaiting its transaction.
 // Paddle retries webhooks for ~3 days; 30 days leaves ample slack.
@@ -132,6 +133,9 @@ async function handlePaddleWebhook(request, env, ctx) {
     // fails the webhook (which would make Paddle redeliver it).
     if (eventType === 'subscription.past_due' && ctx) {
       ctx.waitUntil(notifyPaymentFailed(env, event, new URL(request.url).origin, priceMap(env)));
+    }
+    if (ctx && isCancelEvent(event)) {
+      ctx.waitUntil(notifyCancelSurvey(env, event, priceMap(env)));
     }
   }
   return json({ ok: true });
@@ -672,6 +676,10 @@ export default {
     }
     if (request.method === 'POST' && url.pathname === '/webhooks/paddle') return handlePaddleWebhook(request, env, ctx);
     if (request.method === 'GET' && url.pathname === '/billing/payment-method') return handlePaymentMethodRedirect(env, url);
+    if (request.method === 'POST' && url.pathname === '/survey/cancel') {
+      const out = await handleCancelSurveySubmit(request, env);
+      return json(out.body, out.status);
+    }
     return json({ error: 'not_found' }, 404);
   },
 };
