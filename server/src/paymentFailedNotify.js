@@ -9,6 +9,7 @@
 import { paddleFetch, getSubscription, planFromPriceId } from './subscriptionManagement.js';
 import { signPurposeToken, verifyPurposeToken } from './jwt.js';
 import { paymentFailedEmail } from './paymentFailedEmail.js';
+import { FROM, REPLY_TO, sendResend } from './resend.js';
 
 const LINK_PURPOSE = 'update-pm';
 // Paddle cancels a past_due subscription after ~4 days, but the link stays
@@ -17,8 +18,6 @@ const LINK_PURPOSE = 'update-pm';
 const LINK_TTL_S = 45 * 24 * 60 * 60;
 // One email per failed billing period. Outlives the retry window.
 const SENT_TTL_S = 60 * 24 * 60 * 60;
-const FROM = 'Tabox <info@tabox.co>';
-const REPLY_TO = 'info@tabox.co';
 const FALLBACK_URL = 'https://www.tabox.co/contact';
 
 // Only automatically-collected subscriptions have a card to update; manual
@@ -35,15 +34,6 @@ export function isPaymentFailedEvent(event) {
 export function sentKey(sub) {
   const period = (sub.current_billing_period && sub.current_billing_period.starts_at) || 'unknown';
   return `pmfail:${sub.id}:${period}`;
-}
-
-async function sendResend(env, payload) {
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error(`resend_${res.status}: ${await res.text().catch(() => '')}`);
 }
 
 // Never throws — runs under ctx.waitUntil after the webhook has been acked.
