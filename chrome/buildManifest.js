@@ -40,6 +40,9 @@ function buildManifest(base, target) {
     // Chrome-only keys Firefox rejects or ignores noisily.
     const {
         oauth2,                    // eslint-disable-line no-unused-vars
+        // Only there so Chromium shows the "Allow access to file URLs" switch;
+        // Firefox never lets extensions open file:// tabs, so it's dead weight.
+        optional_host_permissions, // eslint-disable-line no-unused-vars
         key,                       // eslint-disable-line no-unused-vars
         minimum_chrome_version,    // eslint-disable-line no-unused-vars
         externally_connectable,    // eslint-disable-line no-unused-vars

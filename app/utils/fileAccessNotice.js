@@ -19,7 +19,7 @@ export const getFileAccessNoticeMessage = (skippedCount) => {
         return `${tabsLabel} skipped — Firefox doesn't let extensions open file:// links. Open them manually from the collection.`;
     }
     const extensionsPage = isEdge() ? 'edge://extensions' : 'chrome://extensions';
-    return `${tabsLabel} skipped — the browser blocks file:// links until you enable "Allow access to file URLs" for Tabox (${extensionsPage} → Tabox → Details).`;
+    return `${tabsLabel} skipped. To open them, turn on "Allow access to file URLs" for Tabox in ${extensionsPage}.`;
 };
 
 // Opens the extension's own details page, where the "Allow access to file URLs"

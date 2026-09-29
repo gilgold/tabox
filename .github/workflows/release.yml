@@ -132,6 +132,16 @@ jobs:
           echo "Upload response: ${UPLOAD_RESPONSE}"
           UPLOAD_STATE=$(echo "${UPLOAD_RESPONSE}" | jq -r '.uploadState // "FAILURE"')
           if [ "${UPLOAD_STATE}" != "SUCCESS" ]; then
+            # This version already landed on a previous run and the item is now
+            # in pending review / ready to publish (typical when re-running a
+            # partially failed job to retry another store) — the Chrome publish
+            # is effectively already done, so don't fail the run. The same error
+            # code also covers a deleted item; the full upload response is
+            # logged above so that case is visible in the logs.
+            if echo "${UPLOAD_RESPONSE}" | jq -e '[.itemError[]?.error_code] | index("ITEM_NOT_UPDATABLE")' > /dev/null 2>&1; then
+              echo "Version already uploaded and awaiting review; skipping."
+              exit 0
+            fi
             echo "Upload failed (uploadState=${UPLOAD_STATE})"; exit 1
           fi
 

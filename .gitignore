@@ -54,3 +54,6 @@ videos/
 
 # Playwright CLI scratch output (page snapshots / console logs)
 .playwright-cli/
+
+# Doc drafts (blog posts, policy drafts) — keep them in docs/, never commit
+*-draft.md

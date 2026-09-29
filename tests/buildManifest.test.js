@@ -14,6 +14,15 @@ describe('buildManifest', () => {
         expect(ff.key).toBeUndefined();
         expect(ff.minimum_chrome_version).toBeUndefined();
         expect(ff.externally_connectable).toBeUndefined();
+        expect(ff.optional_host_permissions).toBeUndefined();
+    });
+
+    // Chromium only shows the "Allow access to file URLs" switch for extensions
+    // that declare a file:// host pattern — without it, skipped file:// tabs
+    // can never be opened and the file-access notice points at a missing switch.
+    test('chrome manifest declares file:// so the file-access switch is shown', () => {
+        expect(baseManifest.optional_host_permissions).toContain('file:///*');
+        expect(baseManifest.host_permissions).not.toContain('file:///*');
     });
 
     test('firefox target swaps service worker for event-page scripts', () => {

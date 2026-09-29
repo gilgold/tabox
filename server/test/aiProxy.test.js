@@ -112,6 +112,18 @@ describe('POST /ai/complete', () => {
     expect(JSON.parse(calls.openrouter[0].opts.body).model).toBe('google/gemini-3.5-flash-lite');
   });
 
+  // OpenRouter's Gemini endpoints don't advertise top_k, so with
+  // require_parameters a forwarded top_k routes to zero endpoints (404 →
+  // 502 upstream_error). Older extension builds still send it: accept and drop.
+  it('accepts top_k but never forwards it upstream', async () => {
+    const calls = mockFetch();
+    const res = await worker.fetch(req('t-user', { ...VALID_BODY, temperature: 0.7, top_k: 3 }), env(PRO_KV()));
+    expect(res.status).toBe(200);
+    const sent = JSON.parse(calls.openrouter[0].opts.body);
+    expect(sent).not.toHaveProperty('top_k');
+    expect(sent.temperature).toBe(0.7);
+  });
+
   it('rejects malformed bodies without calling upstream', async () => {
     const calls = mockFetch();
     for (const bad of [

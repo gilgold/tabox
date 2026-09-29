@@ -1952,6 +1952,10 @@ function FPContentArea({
         const sortFieldMap = { 'DATE': 'lastUpdated', 'NAME': 'name', 'COLOR': 'color' };
         const sortByField = sortFieldMap[sortBy] || 'lastUpdated';
         const sortOrder = ascending ? 'asc' : 'desc';
+        // Persist the preference first: the collection writes below trigger App's
+        // storage-driven reload, which re-reads the sort preference from storage.
+        // Writing it last let that reload re-sort with the OLD preference (revert bug).
+        await browser.storage.local.set({ currentSortValue: sortBy, currentSortAscending: ascending });
         const readOnlyFolderUids = new Set(folders.filter(isReadOnlySharedFolder).map((folder) => folder.uid));
         const isReadOnlyShared = (collection) => Boolean(collection.parentId) && readOnlyFolderUids.has(collection.parentId);
         const allCols = await loadAllCollections({ metadataOnly: false, sortBy: sortByField, sortOrder, flatSort: true });
@@ -1967,7 +1971,6 @@ function FPContentArea({
             return copy;
         });
         await updateRemoteData(cleaned);
-        await browser.storage.local.set({ currentSortValue: sortBy, currentSortAscending: ascending });
     };
 
     const handleSortTypeChange = async (newType) => {

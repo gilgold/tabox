@@ -68,6 +68,21 @@
   width: 310px;
 }
 
+/* AI name suggestion in flight: animate the input's own gradient border
+   instead of overlaying a ring on top of it (see AIEffects.css). */
+.add-collection-group.ai-name-processing {
+  border-radius: 14px;
+}
+
+.add-collection-group.ai-name-processing input[type="text"] {
+  background-size: 100% 100%, 300% 100%;
+  animation: ai-gradient-shift 2.2s linear infinite;
+}
+
+html.performance-mode .add-collection-group.ai-name-processing input[type="text"] {
+  animation: none;
+}
+
 .add-collection-group label.textbox_label {
   color: var(--text-color);
   font-size: .85em;

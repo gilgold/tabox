@@ -63,7 +63,9 @@ export function validateAIRequest(body) {
 
   const request = { messages: messages.map((m) => ({ role: m.role, content: m.content })) };
   if (temperature !== undefined) request.temperature = temperature;
-  if (topK !== undefined) request.top_k = topK;
+  // top_k is validated but never forwarded: the pinned Gemini endpoints don't
+  // advertise it, so under require_parameters it routes to zero endpoints
+  // (OpenRouter 404). Older extension builds still send it.
   if (schema) request.response_format = { type: 'json_schema', json_schema: { name: 'response', strict: true, schema } };
   // The tier rides OUTSIDE request: completeAI resolves it to pinned
   // model/max_tokens/reasoning; the raw field is never forwarded upstream.

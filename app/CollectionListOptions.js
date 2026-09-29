@@ -133,6 +133,13 @@ export function CollectionListOptions(props) {
         const sortByField = sortFieldMap[sortBy] || 'lastUpdated';
         const sortOrder = ascending ? 'asc' : 'desc';
 
+        // Persist the sort preference BEFORE touching any collection. The
+        // collection writes below fire storage.onChanged, and App's debounced
+        // reload re-reads currentSortValue/currentSortAscending from storage to
+        // re-sort the list - if the preference were still the old one at that
+        // point the list would flip to the new order and then snap back.
+        await browser.storage.local.set({ currentSortValue: sortBy, currentSortAscending: ascending });
+
         // Read-only shared folders are never touched by a global sort - their
         // manual order was set by the folder owner, not this user. Collections
         // that live inside one are excluded from the clearing batch entirely so
@@ -185,9 +192,6 @@ export function CollectionListOptions(props) {
             return rest;
         });
         await props.updateRemoteData(cleanedData);
-
-        // Save both sort type AND direction
-        await browser.storage.local.set({ currentSortValue: sortBy, currentSortAscending: ascending });
     };
 
     const handleSortTypeChange = async (selectedOption) => {
