@@ -56,4 +56,31 @@ describe('FPToast', () => {
         });
         expect(toast.dismiss).toHaveBeenCalledWith('toast-2');
     });
+
+    test('renders custom actions under the message and dismisses after running them', async () => {
+        const onClick = jest.fn(async () => {});
+
+        const { container } = render(
+            <FPToast
+                t={{ id: 'toast-3' }}
+                variant="info"
+                title="Local file tabs skipped"
+                message="2 local file tabs skipped."
+                actions={[{ label: 'Open settings', onClick }, { label: "Don't show again" }]}
+                visible={true}
+            />,
+        );
+
+        expect(container.querySelector('.fp-toast')).toHaveClass('fp-toast--has-actions');
+        const inline = container.querySelector('.fp-toast-content .fp-toast-inline-actions');
+        expect(inline).not.toBeNull();
+        expect(inline.querySelectorAll('button')).toHaveLength(2);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Open settings' }));
+
+        await waitFor(() => {
+            expect(onClick).toHaveBeenCalledTimes(1);
+        });
+        expect(toast.dismiss).toHaveBeenCalledWith('toast-3');
+    });
 });

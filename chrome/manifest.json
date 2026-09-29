@@ -68,6 +68,9 @@
     "https://www.googleapis.com/",
     "https://oauth2.googleapis.com/"
   ],
+  "optional_host_permissions": [
+    "file:///*"
+  ],
   "externally_connectable": {
     "matches": [
       "https://share.tbxpro.app/*",

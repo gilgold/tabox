@@ -57,10 +57,11 @@ export const FPToast = ({
     const dismiss = () => toast.dismiss(t.id);
 
     const displayIcon = icon ?? config.icon;
+    const hasActions = Array.isArray(actions) && actions.length > 0;
 
     return (
         <div
-            className={`fp-toast fp-toast--${variant}`}
+            className={`fp-toast fp-toast--${variant}${hasActions ? ' fp-toast--has-actions' : ''}`}
             style={{
                 opacity: visible ? 1 : 0,
                 transform: visible ? 'translateX(0)' : 'translateX(20px)',
@@ -78,22 +79,28 @@ export const FPToast = ({
                 <div className="fp-toast-content">
                     {title && <div className="fp-toast-title">{title}</div>}
                     {message && <div className="fp-toast-message">{message}</div>}
+                    {/* Custom actions sit under the text, not beside it — beside
+                        it, two pill buttons squeeze the message into a sliver. */}
+                    {hasActions && (
+                        <div className="fp-toast-inline-actions">
+                            {actions.map((action) => (
+                                <button
+                                    key={action.label}
+                                    className="fp-toast-undo-btn"
+                                    onClick={async () => {
+                                        if (action.onClick) {
+                                            await action.onClick();
+                                        }
+                                        dismiss();
+                                    }}
+                                >
+                                    <span>{action.label}</span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
                 <div className="fp-toast-actions">
-                    {Array.isArray(actions) && actions.map((action) => (
-                        <button
-                            key={action.label}
-                            className="fp-toast-undo-btn"
-                            onClick={async () => {
-                                if (action.onClick) {
-                                    await action.onClick();
-                                }
-                                dismiss();
-                            }}
-                        >
-                            <span>{action.label}</span>
-                        </button>
-                    ))}
                     {variant === 'undo' && undoAction && (
                         <FPUndoButton
                             undoAction={undoAction}

@@ -125,6 +125,18 @@
     flex-shrink: 0;
 }
 
+/* ---------- Custom actions (under the message) ---------- */
+.fp-toast--has-actions .fp-toast-body {
+    align-items: flex-start;
+}
+
+.fp-toast-inline-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
 /* ---------- Undo button (pill) ---------- */
 .fp-toast-undo-btn {
     display: flex;
