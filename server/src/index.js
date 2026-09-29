@@ -30,6 +30,7 @@ import { handlePushSubscribe, handlePushUnsubscribe } from './pushRoutes.js';
 import { notifyEmails, notifyFolderMembers } from './pushNotify.js';
 import { handleAuthCallback } from './authCallback.js';
 import { handleAuthStart } from './authStart.js';
+import { notifyPaymentFailed, handlePaymentMethodRedirect } from './paymentFailedNotify.js';
 
 // How long an unlinked subscription event stays parked awaiting its transaction.
 // Paddle retries webhooks for ~3 days; 30 days leaves ample slack.
@@ -69,7 +70,7 @@ async function handleEntitlement(request, env) {
   return json({ ...decision, token, checkedAt: new Date().toISOString() });
 }
 
-async function handlePaddleWebhook(request, env) {
+async function handlePaddleWebhook(request, env, ctx) {
   const rawBody = await request.text();
   const signature = request.headers.get('Paddle-Signature');
   const valid = await verifyPaddleSignature(rawBody, signature, env.PADDLE_WEBHOOK_SECRET);
@@ -126,6 +127,11 @@ async function handlePaddleWebhook(request, env) {
         const linked = await env.ENTITLEMENTS.get(`map:${built.subscription_id}`);
         if (linked) await flushPendingSubscription(env, built.subscription_id, JSON.parse(linked).googleId);
       }
+    }
+    // Email the customer after acking, so a Paddle or Resend hiccup never
+    // fails the webhook (which would make Paddle redeliver it).
+    if (eventType === 'subscription.past_due' && ctx) {
+      ctx.waitUntil(notifyPaymentFailed(env, event, new URL(request.url).origin, priceMap(env)));
     }
   }
   return json({ ok: true });
@@ -664,7 +670,8 @@ export default {
     if (url.pathname === '/push/subscribe' && (request.method === 'POST' || request.method === 'DELETE')) {
       return handlePush(request, env);
     }
-    if (request.method === 'POST' && url.pathname === '/webhooks/paddle') return handlePaddleWebhook(request, env);
+    if (request.method === 'POST' && url.pathname === '/webhooks/paddle') return handlePaddleWebhook(request, env, ctx);
+    if (request.method === 'GET' && url.pathname === '/billing/payment-method') return handlePaymentMethodRedirect(env, url);
     return json({ error: 'not_found' }, 404);
   },
 };

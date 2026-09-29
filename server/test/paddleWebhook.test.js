@@ -47,7 +47,7 @@ const subEvent = (overrides = {}) => ({
     customer_id: 'ctm_1',
     // NOTE: Paddle subscription webhooks do NOT carry the checkout's custom_data —
     // googleId is learned separately from transaction events (extractTransactionLink).
-    current_billing_period: { ends_at: '2026-08-16T10:00:00Z' },
+    current_billing_period: { starts_at: '2026-07-16T10:00:00Z', ends_at: '2026-08-16T10:00:00Z' },
     items: [{ price: { id: 'pri_m' } }],
     ...overrides,
   },
@@ -59,6 +59,7 @@ describe('buildSubscriptionRecord', () => {
       subscription_id: 'sub_1',
       record: {
         status: 'active', plan: 'monthly',
+        current_period_start: '2026-07-16T10:00:00Z',
         current_period_end: '2026-08-16T10:00:00Z',
         scheduled_cancel_at: null,
         subscription_id: 'sub_1', customer_id: 'ctm_1',

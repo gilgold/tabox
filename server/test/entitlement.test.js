@@ -25,16 +25,32 @@ describe('decideEntitlement', () => {
     expect(r.cancelAt).toBe('2026-08-01T00:00:00Z');
   });
 
-  it('entitles past_due within 3 days of period end', () => {
-    const periodEnd = new Date(NOW - 2 * DAY).toISOString();
-    const r = decideEntitlement({ status: 'past_due', plan: 'annual', current_period_end: periodEnd }, NOW);
+  it('entitles past_due within the grace window counted from the failed renewal', () => {
+    const periodStart = new Date(NOW - 2 * DAY).toISOString();
+    const r = decideEntitlement(
+      { status: 'past_due', plan: 'monthly', current_period_start: periodStart, current_period_end: '2026-08-14T12:00:00Z' },
+      NOW,
+    );
     expect(r.entitled).toBe(true);
-    expect(Date.parse(r.expiresAt)).toBe(Date.parse(periodEnd) + PAST_DUE_GRACE_MS);
+    expect(Date.parse(r.expiresAt)).toBe(Date.parse(periodStart) + PAST_DUE_GRACE_MS);
   });
 
-  it('rejects past_due beyond the grace window', () => {
-    const periodEnd = new Date(NOW - 4 * DAY).toISOString();
-    expect(decideEntitlement({ status: 'past_due', plan: 'annual', current_period_end: periodEnd }, NOW).entitled).toBe(false);
+  it('does not extend annual past_due access to the unpaid period end', () => {
+    // Paddle advances the period on renewal, so a failed annual renewal has
+    // current_period_end a year out. Grace must still end a week after the start.
+    const periodStart = new Date(NOW - 8 * DAY).toISOString();
+    const r = decideEntitlement(
+      { status: 'past_due', plan: 'annual', current_period_start: periodStart, current_period_end: '2027-07-08T12:00:00Z' },
+      NOW,
+    );
+    expect(r.entitled).toBe(false);
+  });
+
+  it('falls back to occurred_at for records stored without current_period_start', () => {
+    const base = { status: 'past_due', plan: 'annual', current_period_end: '2027-07-14T12:00:00Z' };
+    expect(decideEntitlement({ ...base, occurred_at: new Date(NOW - 1 * DAY).toISOString() }, NOW).entitled).toBe(true);
+    expect(decideEntitlement({ ...base, occurred_at: new Date(NOW - 8 * DAY).toISOString() }, NOW).entitled).toBe(false);
+    expect(decideEntitlement(base, NOW).entitled).toBe(false);
   });
 
   it('rejects canceled and paused', () => {
