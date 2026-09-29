@@ -5,6 +5,7 @@ import {
   isCancelEvent, sentKey, surveyLink, notifyCancelSurvey, handleCancelSurveySubmit, SURVEY_PURPOSE,
 } from '../src/cancelSurvey.js';
 import { cancelSurveyEmail } from '../src/cancelSurveyEmail.js';
+import { paymentFailedSubKey } from '../src/paymentFailedNotify.js';
 import worker from '../src/index.js';
 
 const NOW = Date.parse('2026-09-29T12:00:00Z');
@@ -108,6 +109,44 @@ describe('notifyCancelSurvey', () => {
     expect(await notifyCancelSurvey({ ...ENV_BASE, ENTITLEMENTS: makeKV() }, scheduledCancel, PRICE_MAP, NOW)).toEqual({ sent: true });
   });
 
+  it('keeps the dedupe key for an annual plan past its scheduled cancel date', async () => {
+    const kv = makeKV();
+    const annual = { ...scheduledCancel, data: { ...scheduledCancel.data, scheduled_change: { action: 'cancel', effective_at: new Date(NOW + 300 * 86400e3).toISOString() } } };
+    await notifyCancelSurvey({ ...ENV_BASE, ENTITLEMENTS: kv, SHARED_DB: makeDB() }, annual, PRICE_MAP, NOW);
+    const call = kv.put.mock.calls.find(([k]) => k === sentKey('sub_1'));
+    expect(call[2].expirationTtl).toBeGreaterThanOrEqual(330 * 86400);
+    const short = makeKV();
+    await notifyCancelSurvey({ ...ENV_BASE, ENTITLEMENTS: short, SHARED_DB: makeDB() }, scheduledCancel, PRICE_MAP, NOW);
+    expect(short.put.mock.calls[0][2].expirationTtl).toBe(90 * 86400);
+  });
+
+  // Dunning: past_due email already sent, so the eventual subscription.canceled is involuntary.
+  it('skips subscription.canceled after a payment-failed email, but not a scheduled cancel', async () => {
+    const kv = makeKV({ [paymentFailedSubKey('sub_1')]: { sent_at: 'x' } });
+    const env = { ...ENV_BASE, ENTITLEMENTS: kv, SHARED_DB: makeDB() };
+    expect(await notifyCancelSurvey(env, immediateCancel, PRICE_MAP, NOW)).toEqual({ sent: false, reason: 'involuntary' });
+    expect(resendCalls()).toHaveLength(0);
+    expect(await notifyCancelSurvey(env, scheduledCancel, PRICE_MAP, NOW)).toEqual({ sent: true });
+    expect(resendCalls()).toHaveLength(1);
+  });
+
+  it('a re-send resets the previous answer', async () => {
+    const db = makeDB();
+    db._raw.prepare('INSERT INTO cancel_surveys (subscription_id, email, plan, reason, comment, emailed_at, responded_at) VALUES (?,?,?,?,?,?,?)')
+      .run('sub_1', 'dana@example.com', 'monthly', 'bugs', 'old', NOW - 9000, NOW - 5000);
+    await notifyCancelSurvey({ ...ENV_BASE, ENTITLEMENTS: makeKV(), SHARED_DB: db }, scheduledCancel, PRICE_MAP, NOW);
+    expect(row(db)).toMatchObject({ reason: null, comment: null, responded_at: null, emailed_at: NOW });
+  });
+
+  it('still records the D1 row and reports sent when the dedupe KV put fails', async () => {
+    const kv = makeKV();
+    kv.put.mockRejectedValue(new Error('kv down'));
+    const db = makeDB();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(await notifyCancelSurvey({ ...ENV_BASE, ENTITLEMENTS: kv, SHARED_DB: db }, scheduledCancel, PRICE_MAP, NOW)).toEqual({ sent: true });
+    expect(row(db)).toMatchObject({ email: 'dana@example.com', emailed_at: NOW });
+  });
+
   it('skips non-cancel events, missing Resend key and missing email', async () => {
     const env = { ...ENV_BASE, ENTITLEMENTS: makeKV(), SHARED_DB: makeDB() };
     expect((await notifyCancelSurvey(env, { event_type: 'subscription.updated', data: { id: 's', customer_id: 'c' } }, PRICE_MAP)).reason).toBe('not_applicable');
@@ -137,6 +176,13 @@ describe('handleCancelSurveySubmit', () => {
   it('inserts a row when the send-time row is missing', async () => {
     await handleCancelSurveySubmit(submit({ t: token, reason: 'not_using' }), env, NOW);
     expect(row(db)).toMatchObject({ email: null, reason: 'not_using', emailed_at: NOW, responded_at: NOW });
+  });
+
+  it('returns 503 when the D1 write throws', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const badDb = { prepare: () => ({ bind: () => ({ run: async () => { throw new Error('d1 down'); } }) }) };
+    expect(await handleCancelSurveySubmit(submit({ t: token, reason: 'bugs' }), { ...ENV_BASE, SHARED_DB: badDb }, NOW))
+      .toEqual({ status: 503, body: { error: 'unavailable' } });
   });
 
   it('rejects bad input', async () => {

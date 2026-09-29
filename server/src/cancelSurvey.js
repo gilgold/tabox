@@ -7,12 +7,14 @@ import { paddleFetch, planFromPriceId } from './subscriptionManagement.js';
 import { signPurposeToken, verifyPurposeToken } from './jwt.js';
 import { FROM, REPLY_TO, sendResend } from './resend.js';
 import { cancelSurveyEmail } from './cancelSurveyEmail.js';
+import { paymentFailedSubKey } from './paymentFailedNotify.js';
 
 export const SURVEY_PURPOSE = 'cancel-survey';
 export const SURVEY_REASONS = ['too_expensive', 'not_using', 'missing_feature', 'bugs'];
 const LINK_TTL_S = 60 * 24 * 60 * 60;
 // A scheduled cancel later also fires subscription.canceled; one email covers both.
 const SENT_TTL_S = 90 * 24 * 60 * 60;
+const AFTER_EFFECTIVE_S = 30 * 24 * 60 * 60;
 const MAX_COMMENT = 2000;
 const DEFAULT_SURVEY_URL = 'https://www.tabox.co/cancel-survey';
 
@@ -51,6 +53,11 @@ export async function notifyCancelSurvey(env, event, priceMap, nowMs = Date.now(
     const sub = event.data;
     if (await env.ENTITLEMENTS.get(sentKey(sub.id))) return { sent: false, reason: 'already_sent' };
 
+    // A subscription.canceled after a payment-failed email is dunning (involuntary): no survey.
+    if (event.event_type === 'subscription.canceled' && await env.ENTITLEMENTS.get(paymentFailedSubKey(sub.id))) {
+      return { sent: false, reason: 'involuntary' };
+    }
+
     const customer = await paddleFetch(env, `/customers/${sub.customer_id}`);
     const email = customer.ok && customer.data && customer.data.email;
     if (!email) {
@@ -65,14 +72,23 @@ export async function notifyCancelSurvey(env, event, priceMap, nowMs = Date.now(
       surveyUrl: surveyLink(env, token),
     });
     await sendResend(env, { from: FROM, to: [email], reply_to: REPLY_TO, ...mail });
-    await env.ENTITLEMENTS.put(sentKey(sub.id), JSON.stringify({ sent_at: new Date(nowMs).toISOString() }), { expirationTtl: SENT_TTL_S });
+    // The email is out; a dedupe-write failure must not skip the D1 record or report an error.
+    // TTL outlives the scheduled cancel date so the final subscription.canceled still dedupes (annual plans).
+    try {
+      const effectiveMs = Date.parse((sub.scheduled_change && sub.scheduled_change.effective_at) || '');
+      const untilFinalS = Number.isFinite(effectiveMs) ? Math.ceil((effectiveMs - nowMs) / 1000) + AFTER_EFFECTIVE_S : 0;
+      await env.ENTITLEMENTS.put(sentKey(sub.id), JSON.stringify({ sent_at: new Date(nowMs).toISOString() }), { expirationTtl: Math.max(SENT_TTL_S, untilFinalS) });
+    } catch (err) {
+      console.warn('cancel survey: dedupe key write failed', { message: err && err.message });
+    }
 
     if (hasDB(env)) {
       const priceId = (sub.items && sub.items[0] && sub.items[0].price && sub.items[0].price.id) || null;
       try {
         await env.SHARED_DB
           .prepare(`INSERT INTO cancel_surveys (subscription_id, email, plan, emailed_at) VALUES (?1, ?2, ?3, ?4)
-                    ON CONFLICT(subscription_id) DO UPDATE SET email = excluded.email, plan = excluded.plan, emailed_at = excluded.emailed_at`)
+                    ON CONFLICT(subscription_id) DO UPDATE SET email = excluded.email, plan = excluded.plan, emailed_at = excluded.emailed_at,
+                      reason = NULL, comment = NULL, responded_at = NULL`)
           .bind(sub.id, email, planFromPriceId(priceId, priceMap), nowMs)
           .run();
       } catch (err) {
@@ -105,10 +121,15 @@ export async function handleCancelSurveySubmit(request, env, nowMs = Date.now())
   if (comment && comment.length > MAX_COMMENT) return { status: 400, body: { error: 'comment_too_long' } };
   if (!hasDB(env)) return { status: 503, body: { error: 'unavailable' } };
 
-  await env.SHARED_DB
-    .prepare(`INSERT INTO cancel_surveys (subscription_id, reason, comment, emailed_at, responded_at) VALUES (?1, ?2, ?3, ?4, ?4)
-              ON CONFLICT(subscription_id) DO UPDATE SET reason = excluded.reason, comment = excluded.comment, responded_at = excluded.responded_at`)
-    .bind(payload.sid, input.reason, comment, nowMs)
-    .run();
+  try {
+    await env.SHARED_DB
+      .prepare(`INSERT INTO cancel_surveys (subscription_id, reason, comment, emailed_at, responded_at) VALUES (?1, ?2, ?3, ?4, ?4)
+                ON CONFLICT(subscription_id) DO UPDATE SET reason = excluded.reason, comment = excluded.comment, responded_at = excluded.responded_at`)
+      .bind(payload.sid, input.reason, comment, nowMs)
+      .run();
+  } catch (err) {
+    console.warn('cancel survey: D1 write failed', { message: err && err.message });
+    return { status: 503, body: { error: 'unavailable' } };
+  }
   return { status: 200, body: { ok: true } };
 }

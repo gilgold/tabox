@@ -94,6 +94,8 @@ describe('notifyPaymentFailed', () => {
     const t = decodeURIComponent(new URL(link).searchParams.get('t'));
     expect((await verifyPurposeToken('update-pm', t, 'jwt_secret')).sid).toBe('sub_1');
     expect(kv._store['pmfail:sub_1:2026-09-28T13:09:45Z']).toBeTruthy();
+    expect(kv._store['pmfail-sub:sub_1']).toBeTruthy();
+    expect(kv.put.mock.calls.find(([k]) => k === 'pmfail-sub:sub_1')[2].expirationTtl).toBe(60 * 86400);
   });
 
   it('does not send twice for the same failed period', async () => {

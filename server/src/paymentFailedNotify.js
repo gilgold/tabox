@@ -31,6 +31,10 @@ export function isPaymentFailedEvent(event) {
 // Dedupe key: the unpaid period's start identifies one failed renewal, so
 // Paddle redeliveries and repeat past_due transitions within the same period
 // don't send a second email, while next year's failure still does.
+// Marks "this subscription got a payment-failed email". The cancel survey uses it
+// to tell a dunning cancel (involuntary) from a voluntary one.
+export const paymentFailedSubKey = (sid) => `pmfail-sub:${sid}`;
+
 export function sentKey(sub) {
   const period = (sub.current_billing_period && sub.current_billing_period.starts_at) || 'unknown';
   return `pmfail:${sub.id}:${period}`;
@@ -65,6 +69,7 @@ export async function notifyPaymentFailed(env, event, origin, priceMap) {
     });
     await sendResend(env, { from: FROM, to: [email], reply_to: REPLY_TO, ...mail });
     await env.ENTITLEMENTS.put(key, JSON.stringify({ sent_at: new Date().toISOString() }), { expirationTtl: SENT_TTL_S });
+    await env.ENTITLEMENTS.put(paymentFailedSubKey(sub.id), JSON.stringify({ sent_at: new Date().toISOString() }), { expirationTtl: SENT_TTL_S });
     return { sent: true };
   } catch (err) {
     console.error('payment-failed email: send failed', err);
