@@ -120,6 +120,7 @@ import { CURRENT_WINDOWS_ACCENT_COLOR } from './fpAccentColors';
 import { getFavoriteCollections } from '../utils/favoritesUtils';
 
 import AIButton from '../AIButton';
+import { isSingleWindowBrowser } from '../utils/platform';
 
 const SessionsModal = lazy(() => import('../SessionsModal').then(m => ({ default: m.SessionsModal })));
 const SaveCollectionModal = lazy(() => import('./SaveCollectionModal'));
@@ -2686,15 +2687,17 @@ function FPContentArea({
             <div className="fp-toolbar-divider" />
 
             <div className="fp-toolbar-group">
-                <button
-                    className={`fp-toolbar-btn ${openInNewWindow ? 'active' : ''}`}
-                    onClick={toggleNewWindow}
-                    aria-label={openInNewWindow ? 'Open in new window' : 'Open in current window'}
-                    data-tooltip-id="main-tooltip"
-                    data-tooltip-content={openInNewWindow ? 'Open in new window' : 'Open in current window'}
-                >
-                    <MdOpenInNew size={20} />
-                </button>
+                {!isSingleWindowBrowser() && (
+                    <button
+                        className={`fp-toolbar-btn ${openInNewWindow ? 'active' : ''}`}
+                        onClick={toggleNewWindow}
+                        aria-label={openInNewWindow ? 'Open in new window' : 'Open in current window'}
+                        data-tooltip-id="main-tooltip"
+                        data-tooltip-content={openInNewWindow ? 'Open in new window' : 'Open in current window'}
+                    >
+                        <MdOpenInNew size={20} />
+                    </button>
+                )}
                 <button
                     className="fp-toolbar-btn"
                     onClick={toggleViewMode}

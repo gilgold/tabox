@@ -21,6 +21,26 @@
 
 import { badRequest, parseState, isValidTarget } from './authCallback.js';
 
+// GET /auth/done — landing page for the tab-based flow (Firefox for Android).
+// The extension reads the code from the fragment via tabs.onUpdated and closes
+// the tab; this body only shows if that somehow doesn't happen.
+export function handleAuthDone() {
+  return new Response(
+    '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+      + '<title>Tabox sign-in</title><body style="font-family:system-ui,sans-serif;text-align:center;padding:48px 16px">'
+      + '<h1 style="font-size:20px">Signed in to Tabox</h1><p>You can close this tab.</p></body>',
+    {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'Referrer-Policy': 'no-referrer',
+        'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'",
+      },
+    },
+  );
+}
+
 // Must stay in sync with OAUTH_SCOPES in chrome/pro-config.js (plus the
 // leading `openid`, which the extension prepends in createAuthEndpoint).
 const OAUTH_SCOPE = 'openid https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file';
@@ -31,7 +51,7 @@ export function handleAuthStart(request, env) {
 
   const state = parseState(rawState);
   if (!state) return badRequest();
-  if (!isValidTarget(state.t)) return badRequest();
+  if (!isValidTarget(state.t, url.origin)) return badRequest();
 
   // The redirect_uri param exists only to satisfy Firefox's client-side
   // validator; it must be the same allizom target the state carries, so a

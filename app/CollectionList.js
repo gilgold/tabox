@@ -11,9 +11,6 @@ import {
     DndContext,
     closestCorners,
     pointerWithin,
-    PointerSensor,
-    useSensor,
-    useSensors,
     DragOverlay,
     MeasuringStrategy,
 } from '@dnd-kit/core';
@@ -35,7 +32,7 @@ import {
 } from './utils/folderOperations';
 import useCollectionItemCrossDrag from './useCollectionItemCrossDrag';
 import { persistCollectionLayoutChanges } from './utils/sharedCollectionSync';
-import { dndPointerSensorOptions } from './utils/dndShared';
+import { useDndSensors } from './utils/dndShared';
 import { noPermissionOpenState } from './atoms/sharedFoldersState';
 import { guardFolderEdit } from './utils/sharedFolderUtils';
 
@@ -319,9 +316,7 @@ function CollectionList({
         return items;
     }, [effectiveCollections, effectiveFolders]);
 
-    const sensors = useSensors(
-        useSensor(PointerSensor, dndPointerSensorOptions),
-    );
+    const sensors = useDndSensors();
 
     // Custom collision detection for better drop indicators between mixed item types
     const customCollisionDetection = (args) => {

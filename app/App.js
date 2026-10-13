@@ -57,6 +57,7 @@ import { applyFolderCollapsedState, getFolderCollapseStorageKey } from './utils/
 import { openOrFocusFullPageInCurrentWindow } from './utils/openFullPage';
 import { openCollectionTabs } from './useCollectionOperations';
 import { initFileAccessNoticeWatcher } from './utils/fileAccessNotice';
+import { initShareLinkNoticeWatcher } from './utils/shareLinkNotice';
 
 // Folder operations
 import { createFolder } from './utils/folderOperations';
@@ -77,6 +78,7 @@ import ShareFolderModal from './ShareFolderModal';
 import ShareCollectionLinkModal from './ShareCollectionLinkModal';
 import SharedInviteToastController from './SharedInviteToastController';
 import OnboardingGuide from './OnboardingGuide';
+import { isSingleWindowBrowser } from './utils/platform';
 
 // Migration system imports - wrapped in try/catch for compatibility
 const PERF_NAMESPACE = 'tabox:popup';
@@ -532,7 +534,7 @@ function App({ mode = 'popup' }) {
   const removeInactiveWindowsFromAutoUpdate = async () => {
     let { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack');
     const { chkEnableAutoUpdate } = await browser.storage.local.get('chkEnableAutoUpdate');
-    if (!collectionsToTrack || collectionsToTrack.length === 0 || !chkEnableAutoUpdate) { return; }
+    if (!collectionsToTrack || collectionsToTrack.length === 0 || !chkEnableAutoUpdate || isSingleWindowBrowser()) { return; }
     const activeWindowIds = (await browser.windows.getAll({ populate: false })).map(c => c.id);
     collectionsToTrack = collectionsToTrack.filter(c => activeWindowIds.includes(c.windowId));
     await browser.storage.local.set({ collectionsToTrack: collectionsToTrack });
@@ -1855,6 +1857,8 @@ function App({ mode = 'popup' }) {
   // shows it on mount (reopened popup, context-menu/keyboard opens) and live
   // via storage.onChanged (persistent full-page view). Returns its own cleanup.
   useEffect(() => initFileAccessNoticeWatcher({ isFullPage }), [isFullPage]);
+  // Firefox share-link redemptions (see chrome/background.js handleShareLinkTab).
+  useEffect(() => initShareLinkNoticeWatcher(), []);
 
   // Shared folders: keep pendingInvitesState (the invite banner) in sync with
   // storage — load it once on mount, then follow storage.onChanged so an
@@ -2057,7 +2061,7 @@ function App({ mode = 'popup' }) {
         setTabSwitcherOpen(false);
         setCommandPaletteOpen(prev => !prev);
       }
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 's') {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 's' && !isSingleWindowBrowser()) {
         e.preventDefault();
         setCommandPaletteOpen(false);
         setTabSwitcherOpen(prev => !prev);

@@ -25,16 +25,17 @@ describe('useProCheckout', () => {
         await waitFor(() => expect(checkoutCalls()).toHaveLength(1));
     });
 
-    test('retries checkout after login when ensureLogin is set', async () => {
+    test('signs in with thenCheckout when ensureLogin is set (the background opens checkout after sign-in)', async () => {
         browser.runtime.sendMessage = jest.fn().mockImplementation((msg) => {
-            if (msg.type === 'openProCheckout') return Promise.resolve(checkoutCalls().length > 1);
-            if (msg.type === 'login') return Promise.resolve(true);
+            if (msg.type === 'openProCheckout') return Promise.resolve(false);
             return Promise.resolve(true);
         });
         render(<Harness ensureLogin />);
         fireEvent.click(screen.getByText('Upgrade'));
-        await waitFor(() => expect(checkoutCalls()).toHaveLength(2));
-        expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'login' });
+        await waitFor(() => expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'login', thenCheckout: true }));
+        // Checkout is opened by the background once sign-in lands — the popup
+        // never retries itself (it may be gone by then on Firefox for Android).
+        expect(checkoutCalls()).toHaveLength(1);
     });
 
     test('does not retry when ensureLogin is not set', async () => {

@@ -1,9 +1,14 @@
 import { describe, it, expect } from 'vitest';
+import { Script } from 'node:vm';
 import worker from '../src/index.js';
 import { JOIN_PAGE_HTML } from '../src/joinPage.js';
 import { makeDB } from './helpers/d1Mock.js';
 
 describe('GET /join/:token', () => {
+  it('emits executable JavaScript for the join page', () => {
+    const script = JOIN_PAGE_HTML.match(/<script>([\s\S]*?)<\/script>/)[1];
+    expect(() => new Script(script)).not.toThrow();
+  });
   it('serves the static join page as HTML without auth', async () => {
     const res = await worker.fetch(
       new Request('https://api/join/sometoken'),

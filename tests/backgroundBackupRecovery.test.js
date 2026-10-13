@@ -339,6 +339,33 @@ describe('background backup recovery handlers', () => {
         }));
     });
 
+    test('reports a failed write instead of claiming the backup was restored', async () => {
+        global.saveSingleCollectionBG.mockResolvedValue(false);
+        require('../chrome/background.js');
+        const result = await browser.runtime.sendMessage({
+            type: 'restoreBackupSelection', mode: 'overwrite',
+            payload: { collections: [{ uid: 'failed', name: 'Failed', tabs: [] }], folders: [] }
+        });
+        expect(result.success).toBe(false);
+        expect(result.error).toMatch(/save restored collection/);
+        expect(global.forceLegacyStorageSync).not.toHaveBeenCalled();
+    });
+
+    test('folder count refresh preserves the freshly restored timestamp', async () => {
+        global.saveSingleFolderBG.mockImplementation(async (folder, force) => {
+            const saved = { ...folder, lastUpdated: force ? 100000 : folder.lastUpdated };
+            foldersState = [...foldersState.filter(f => f.uid !== folder.uid), saved];
+            return true;
+        });
+        require('../chrome/background.js');
+        const result = await browser.runtime.sendMessage({
+            type: 'restoreBackupSelection', mode: 'overwrite',
+            payload: { collections: [], folders: [{ uid: 'restored-folder', name: 'Folder', lastUpdated: 10 }] }
+        });
+        expect(result.success).toBe(true);
+        expect(foldersState[0].lastUpdated).toBe(100000);
+    });
+
     test('full restore prunes folders absent from the backup and reparents their orphaned collections to root', async () => {
         collectionsState = [
             // moved by the backup from the stale folder into the kept folder

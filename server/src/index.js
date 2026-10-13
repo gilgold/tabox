@@ -29,7 +29,7 @@ import { validateUrlsRequest, checkUrls } from './urlValidator.js';
 import { handlePushSubscribe, handlePushUnsubscribe } from './pushRoutes.js';
 import { notifyEmails, notifyFolderMembers } from './pushNotify.js';
 import { handleAuthCallback } from './authCallback.js';
-import { handleAuthStart } from './authStart.js';
+import { handleAuthStart, handleAuthDone } from './authStart.js';
 import { notifyPaymentFailed, handlePaymentMethodRedirect } from './paymentFailedNotify.js';
 import { isCancelEvent, notifyCancelSurvey, handleCancelSurveySubmit } from './cancelSurvey.js';
 
@@ -658,6 +658,7 @@ export default {
     if (request.method === 'POST' && url.pathname === '/auth/token') return handleAuthToken(request, env);
     if (request.method === 'GET' && url.pathname === '/auth/callback') return handleAuthCallback(request);
     if (request.method === 'GET' && url.pathname === '/auth/start') return handleAuthStart(request, env);
+    if (request.method === 'GET' && url.pathname === '/auth/done') return handleAuthDone();
     if (request.method === 'GET' && url.pathname === '/entitlement') return handleEntitlement(request, env);
     if (request.method === 'GET' && url.pathname === '/checkout/eligibility') return handleCheckoutEligibility(request, env, url);
     if (request.method === 'POST' && url.pathname === '/ai/complete') return handleAIComplete(request, env, ctx);

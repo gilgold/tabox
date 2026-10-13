@@ -162,4 +162,39 @@ describe('handleAuthCallback', () => {
     const body = await res.json();
     expect(body).toHaveProperty('error');
   });
+
+  describe('tab flow (Firefox for Android)', () => {
+    const DONE = 'https://share.tbxpro.app/auth/done';
+
+    it('redirects to /auth/done with code and state in the fragment, not the query', async () => {
+      const state = b64uEncode({ t: DONE, n: 'nonce-2' });
+      const res = await handleAuthCallback(req({ code: 'auth-code-2', state }));
+      expect(res.status).toBe(302);
+      const loc = new URL(res.headers.get('Location'));
+      expect(loc.origin + loc.pathname).toBe(DONE);
+      expect(loc.search).toBe('');
+      const frag = new URLSearchParams(loc.hash.slice(1));
+      expect(frag.get('code')).toBe('auth-code-2');
+      expect(frag.get('state')).toBe(state);
+    });
+
+    it('forwards an error in the fragment', async () => {
+      const state = b64uEncode({ t: DONE, n: 'n' });
+      const res = await handleAuthCallback(req({ error: 'access_denied', state }));
+      const frag = new URLSearchParams(new URL(res.headers.get('Location')).hash.slice(1));
+      expect(frag.get('error')).toBe('access_denied');
+    });
+
+    it("rejects another origin's /auth/done", async () => {
+      const state = b64uEncode({ t: 'https://evil.example/auth/done', n: 'n' });
+      const res = await handleAuthCallback(req({ code: 'c', state }));
+      expect(res.status).toBe(400);
+    });
+
+    it('rejects other same-origin paths', async () => {
+      const state = b64uEncode({ t: 'https://share.tbxpro.app/entitlement', n: 'n' });
+      const res = await handleAuthCallback(req({ code: 'c', state }));
+      expect(res.status).toBe(400);
+    });
+  });
 });

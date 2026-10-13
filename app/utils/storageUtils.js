@@ -557,12 +557,12 @@ export const saveSingleCollection = async (collection, forceUpdateTimestamp = fa
                 tabs: collectionToSave.tabs,
                 color: collectionToSave.color,
                 createdOn: collectionToSave.createdOn || now,
-                lastUpdated: lastUpdated,
                 lastOpened: collectionToSave.lastOpened !== null && collectionToSave.lastOpened !== undefined ? collectionToSave.lastOpened : null,
                 chromeGroups: collectionToSave.chromeGroups,
                 // Store any other collection properties
                 ...collectionToSave,
-                order: resolvedOrder
+                order: resolvedOrder,
+                lastUpdated
             }
         });
         
@@ -1284,10 +1284,10 @@ export const saveSingleFolder = async (folder, forceUpdateTimestamp = false) => 
                 color: folder.color,
                 collapsed: folder.collapsed !== undefined ? folder.collapsed : false,
                 createdOn: folder.createdOn || now,
-                lastUpdated: lastUpdated,
                 collectionCount: collectionCount,
                 // Store any other folder properties
                 ...folder,
+                lastUpdated,
                 ...(recordSharedMarker ? { shared: recordSharedMarker } : {})
             }
         });

@@ -60,6 +60,43 @@ const createStorageArea = (initialData = {}) => {
 };
 
 describe('sync apply module', () => {
+    test('refuses to apply a stale plan when local data changed after reconciliation', async () => {
+        const expectedStorage = { collections_index: { edited: {} }, collection_edited: { uid: 'edited', tabs: [] } };
+        const storageArea = createStorageArea({ ...expectedStorage, collection_edited: { uid: 'edited', name: 'New edit', tabs: [] } });
+        const result = await applySyncSnapshotAtomically({ storageArea, syncData: createNextSyncData(), expectedStorage });
+        expect(result.success).toBe(false);
+        expect(storageArea.set).not.toHaveBeenCalled();
+        expect(storageArea.dump().collection_edited.name).toBe('New edit');
+    });
+
+    test('an empty remote removes only explicitly deleted items, preserves newer edits and ignores invalid tombstones', () => {
+        const currentStorage = {
+            collections_index: { deleted: {}, edited: {}, untimed: {}, shared: { parentId: 'shared-folder' } },
+            collection_deleted: { uid: 'deleted', tabs: [], createdOn: 10 },
+            collection_edited: { uid: 'edited', tabs: [], lastUpdated: 200 },
+            collection_untimed: { uid: 'untimed', tabs: [] },
+            collection_shared: { uid: 'shared', tabs: [], parentId: 'shared-folder' },
+            folders_index: { 'shared-folder': { shared: { folderId: 'shared-folder' } } },
+            'folder_shared-folder': { uid: 'shared-folder', shared: { folderId: 'shared-folder' } }
+        };
+        const payload = buildIndexedSyncPayload({ currentStorage, syncData: {
+            tabsArray: [], foldersArray: [],
+            deletedCollections: [null, { uid: 'edited', lastUpdated: 'invalid' }, { uid: 'untimed', lastUpdated: 0 },
+                { uid: 'deleted', lastUpdated: 100 }, { uid: 'edited', lastUpdated: 100 }, { uid: 'shared', lastUpdated: 100 }]
+        } });
+        expect(payload.collections.map(c => c.uid)).toEqual(['edited', 'untimed', 'shared']);
+        expect(payload.removeKeys).toContain('collection_deleted');
+        expect(payload.folders.map(f => f.uid)).toContain('shared-folder');
+    });
+
+    test('a positive tombstone deletes a legacy record with no creation or update timestamp', () => {
+        const payload = buildIndexedSyncPayload({
+            currentStorage: { collections_index: { legacy: {} }, collection_legacy: { uid: 'legacy', tabs: [] } },
+            syncData: { tabsArray: [], foldersArray: [], deletedCollections: [{ uid: 'legacy', lastUpdated: 100 }] }
+        });
+        expect(payload.collections).toEqual([]);
+        expect(payload.removeKeys).toContain('collection_legacy');
+    });
     test('builds a full indexed payload and removal list from a sync snapshot', () => {
         const payload = buildIndexedSyncPayload({
             currentStorage: {

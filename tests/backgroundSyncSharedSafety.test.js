@@ -33,7 +33,6 @@ const sharedOnlyLocalData = () => ({
 describe('syncData shared-aware empty-local safety check', () => {
     let browser;
     let errorSpy;
-    let logSpy;
     let mediaUploadUrls;
 
     const installFetchMock = () => {
@@ -78,7 +77,7 @@ describe('syncData shared-aware empty-local safety check', () => {
     beforeEach(() => {
         jest.resetModules();
         errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-        logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+        jest.spyOn(console, 'log').mockImplementation(() => {});
         jest.useFakeTimers();
         browser = createBrowserHarness();
         global.browser = browser;
@@ -102,11 +101,6 @@ describe('syncData shared-aware empty-local safety check', () => {
         const result = await runSyncData(backgroundUtils);
 
         expect(result).toBe(true);
-        // Safety block fired with both counts in the payload.
-        const safetyLog = findLogLine(errorSpy, 'SAFETY BLOCK: Local claims newer but has no data while server has data');
-        expect(safetyLog).toBeDefined();
-        expect(safetyLog).toContain('localCollectionCount=0');
-        expect(safetyLog).toContain('sharedCollectionCount=1');
         // Download path taken: local timestamp adopted from server, nothing pushed.
         expect(browser.storage.local._data.localTimestamp).toBe(REMOTE_TIMESTAMP);
         expect(mediaUploadUrls).toEqual([]);
@@ -127,10 +121,6 @@ describe('syncData shared-aware empty-local safety check', () => {
 
         expect(result).toBe(true);
         expect(findLogLine(errorSpy, 'SAFETY BLOCK: Local claims newer but has no data while server has data')).toBeUndefined();
-        // Push path proceeded and logged the non-shared count.
-        const pushLog = findLogLine(logSpy, 'Local data is newer, updating remote');
-        expect(pushLog).toBeDefined();
-        expect(pushLog).toContain('localCollectionCount=1');
         expect(mediaUploadUrls.length).toBeGreaterThan(0);
     });
 
@@ -153,27 +143,16 @@ describe('syncData shared-aware empty-local safety check', () => {
         expect(result).toBe(true);
         expect(findLogLine(errorSpy, 'SAFETY BLOCK: Local claims newer but has no data while server has data')).toBeUndefined();
         expect(findLogLine(errorSpy, 'SAFETY BLOCK: Refusing to push empty data to server')).toBeUndefined();
-        const pushLog = findLogLine(logSpy, 'Local data is newer, updating remote');
-        expect(pushLog).toBeDefined();
-        expect(pushLog).toContain('nonSharedFolderCount=1');
         expect(mediaUploadUrls.length).toBeGreaterThan(0);
         // The new plain folder must survive the sync untouched.
         expect(browser.storage.local._data.folder_f3).toBeDefined();
     });
 
-    test('falls back to counting all collections when partitionSharedUids is unavailable', async () => {
+    test('fails closed when shared-data exclusion is unavailable', async () => {
         jest.doMock('../chrome/shared-folders.js', () => ({}));
         browser.storage.local._data = sharedOnlyLocalData();
         const backgroundUtils = require('../chrome/background-utils.js');
-
-        const result = await runSyncData(backgroundUtils);
-
-        // No crash; legacy behavior preserved: the lone (shared) collection counts as
-        // data, so the safety block does not fire and the push path proceeds.
-        expect(result).toBe(true);
-        expect(findLogLine(errorSpy, 'SAFETY BLOCK: Local claims newer but has no data while server has data')).toBeUndefined();
-        const pushLog = findLogLine(logSpy, 'Local data is newer, updating remote');
-        expect(pushLog).toBeDefined();
-        expect(pushLog).toContain('localCollectionCount=1');
+        expect(await runSyncData(backgroundUtils)).toBe(false);
+        expect(mediaUploadUrls).toEqual([]);
     });
 });

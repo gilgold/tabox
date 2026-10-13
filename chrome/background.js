@@ -62,6 +62,10 @@ if (typeof importScripts === 'function') {
   // Auto-update debouncing - wait 2 seconds after last event
   let autoUpdateTimeouts = new Map();
   const debounceAutoUpdate = (windowId, timeDelay = 2000, rebuildContextMenus = false) => {
+    // Firefox for Android: tabs.query only sees loaded tabs and every tab has
+    // its own windowId, so an auto-update would rewrite a collection from a
+    // partial tab list — destroying saved tabs. Never auto-update there.
+    if (!browser.windows) return;
     // Clear existing timeout for this window
     if (autoUpdateTimeouts.has(windowId)) {
       clearTimeout(autoUpdateTimeouts.get(windowId));
@@ -96,10 +100,10 @@ async function updateSharedSyncSessionState(overrides = {}) {
 
 async function openExtensionFullPage() {
   const fullPageUrl = browser.runtime.getURL('fullpage.html');
-  const existingTabs = await browser.tabs.query({
-    currentWindow: true,
-    url: fullPageUrl
-  });
+  // Firefox for Android: one tab strip, and each tab is its own "window".
+  const existingTabs = await browser.tabs.query(browser.windows
+    ? { currentWindow: true, url: fullPageUrl }
+    : { url: fullPageUrl });
   const existingTab = existingTabs[0];
 
   if (existingTab && existingTab.id != null) {
@@ -110,11 +114,18 @@ async function openExtensionFullPage() {
   return browser.tabs.create({ url: fullPageUrl });
 }
 
+// Firefox for Android shows the popup as a full-screen sheet the fixed-size
+// popup layout wasn't built for, so there the toolbar entry always opens the
+// full page (and the setting is hidden in the UI).
+const toolbarAlwaysOpensFullPage = () => !browser.windows;
+
 async function applyToolbarLaunchBehavior() {
   const { [TOOLBAR_FULLPAGE_SETTING_KEY]: openInFullPage } = await browser.storage.local.get(TOOLBAR_FULLPAGE_SETTING_KEY);
-  const popup = openInFullPage ? '' : 'index.html';
+  const popup = openInFullPage || toolbarAlwaysOpensFullPage() ? '' : 'index.html';
   await browser.action.setPopup({ popup });
 }
+// setPopup is per-session state: re-apply whenever the event page starts.
+if (toolbarAlwaysOpensFullPage()) applyToolbarLaunchBehavior().catch(() => {});
 
 async function shouldRunBackgroundSync() {
   const {
@@ -453,10 +464,11 @@ async function overwriteBackupSelection(payload = {}) {
       ? collection.parentId
       : null;
 
-    await saveSingleCollectionBG({
+    const saved = await saveSingleCollectionBG({
       ...collection,
       parentId: normalizedParentId
     }, true);
+    if (!saved) throw new Error('Could not save restored collection');
 
     if (normalizedParentId) {
       impactedFolderIds.add(normalizedParentId);
@@ -466,17 +478,18 @@ async function overwriteBackupSelection(payload = {}) {
   }
 
   for (const folder of selectedFolders) {
-    await saveSingleFolderBG(folder, true);
+    if (!await saveSingleFolderBG(folder, true)) throw new Error('Could not save restored folder');
     overwrittenFolders++;
   }
 
   for (const folderId of impactedFolderIds) {
     if (!folderId) continue;
-    const folder = selectedFolders.find((entry) => entry.uid === folderId)
+    const folder = await loadSingleFolderBG(folderId)
+      || selectedFolders.find((entry) => entry.uid === folderId)
       || currentFolders.find((entry) => entry.uid === folderId)
       || await loadSingleFolderBG(folderId);
     if (folder) {
-      await saveSingleFolderBG(folder);
+      if (!await saveSingleFolderBG(folder)) throw new Error('Could not refresh restored folder');
     }
   }
 
@@ -493,19 +506,23 @@ async function overwriteBackupSelection(payload = {}) {
       const latestCollections = await loadAllCollectionsBG(true);
       for (const collection of latestCollections) {
         if (collection.parentId && removeFolderIds.has(collection.parentId)) {
-          await saveSingleCollectionBG({ ...collection, parentId: null }, true);
+          if (!await saveSingleCollectionBG({ ...collection, parentId: null }, true)) {
+            throw new Error('Could not move restored collection out of removed folder');
+          }
         }
       }
       for (const folder of foldersToRemove) {
         const deleted = await deleteSingleFolderBG(folder.uid);
         if (deleted) {
           removedFolders++;
+        } else {
+          throw new Error('Could not remove folder during restore');
         }
       }
     }
   }
 
-  await forceLegacyStorageSync();
+  if (await forceLegacyStorageSync() === false) throw new Error('Could not finalize backup restore');
 
   return {
     success: true,
@@ -905,6 +922,7 @@ async function handleRemoteUpdate(retryCount = 0, maxRetries = 2) {
 }
 
 async function addCollectionToTrack(collectionUid, windowId) {
+  if (!browser.windows) return; // no auto-update on Firefox for Android (see debounceAutoUpdate)
   setTimeout(async () => {
     let { collectionsToTrack } = (await browser.storage.local.get('collectionsToTrack')) || [];
     const index = collectionsToTrack.findIndex(c => c.collectionUid === collectionUid);
@@ -1059,6 +1077,15 @@ async function createOpenTabsWindow(createWindowSpec) {
 // Now with incognito-aware restoration
 async function openTabs(collection, window, newWindow = null, trackOpenedWindow = true) {
   const totalTabs = collection.tabs.length;
+  // Firefox for Android: no windows (so nothing to create, focus or track),
+  // tabs.create rejects `pinned`, and tabs.update can't set `muted`. Treat the
+  // whole tab strip as the one window; never track it for auto-update.
+  const singleWindow = !browser.windows;
+  if (singleWindow) {
+    window = { id: undefined, incognito: false, tabs: await browser.tabs.query({}) };
+    newWindow = false;
+    trackOpenedWindow = false;
+  }
   
   // Early return for empty collections
   if (totalTabs === 0) {
@@ -1169,13 +1196,15 @@ async function openTabs(collection, window, newWindow = null, trackOpenedWindow 
 
     tabsToCreate.push({
       originalTab: tabInGrp,
-      properties: {
-        pinned: tabInGrp.pinned,
-        active: tabInGrp.active,
-        url: finalUrl,
-        windowId: window.id
-      },
-      updateProperties: {
+      properties: singleWindow
+        ? { active: tabsToCreate.length === 0, url: finalUrl } // jump to the restored tabs, like a new window would
+        : {
+          pinned: tabInGrp.pinned,
+          active: tabInGrp.active,
+          url: finalUrl,
+          windowId: window.id
+        },
+      updateProperties: singleWindow ? {} : {
         muted: tabInGrp.muted
       },
       isFirstTab: index === 0 && firstTabUpdate,
@@ -1736,6 +1765,195 @@ const handleSingleCollectionImportBG = async (collection) => {
     }
 };
 
+// Everything after the OAuth code is in hand: token exchange, sync file,
+// user info, initial sync, alarms and the Pro entitlement refresh. Shared by
+// the launchWebAuthFlow path and the Firefox for Android tab flow. Resolves
+// with the Google user, or false on failure.
+async function completeLogin(code) {
+  const token = await getTokens(code);
+  if (token === false) {
+    console.error('Failed to get tokens during login');
+    return Promise.resolve(false);
+  }
+  
+  // Clear any previous auth errors since we got new tokens
+  await browser.storage.local.remove('syncAuthError');
+  
+  const syncFileResult = await getOrCreateSyncFile(token);
+  if (syncFileResult === false) {
+    console.error('Failed to create/find sync file during login');
+    return Promise.resolve(false);
+  }
+  
+  const user = await getGoogleUser(token);
+  if (!user) {
+    console.error('Failed to get user info during login');
+    await updateSharedSyncSessionState({
+      status: SYNC_SESSION_STATUS.USER_INFO_ERROR,
+      hasRefreshToken: true
+    });
+    return Promise.resolve(false);
+  }
+
+  await updateSharedSyncSessionState({
+    status: SYNC_SESSION_STATUS.SYNCING,
+    user,
+    hasRefreshToken: true,
+    error: null
+  });
+  
+  // 🛡️ SAFETY: Check local data state before initial sync
+  // For new devices (empty local data), we should prioritize downloading from server
+  const localCollections = await loadAllCollectionsBG(true);
+  const localCollectionCount = localCollections ? localCollections.length : 0;
+  
+  logSyncOperation('info', 'Login successful - starting initial sync', {
+    localCollectionCount,
+    isNewDevice: localCollectionCount === 0
+  });
+  
+  const syncResult = await syncData(token);
+  if (syncResult === false) {
+    console.error('Initial sync failed during login');
+    // Still return user as login was successful, sync can be retried
+    logSyncOperation('error', 'Initial sync failed during login - user can retry manually');
+    await updateSharedSyncSessionState({
+      status: SYNC_SESSION_STATUS.ERROR,
+      user,
+      hasRefreshToken: true
+    });
+  } else if (syncResult === 'already_in_progress') {
+    logSyncOperation('info', 'Sync already in progress during login, will complete separately');
+    await updateSharedSyncSessionState({
+      status: SYNC_SESSION_STATUS.SYNCING,
+      user,
+      hasRefreshToken: true
+    });
+  } else {
+    logSyncOperation('success', 'Initial sync completed successfully during login');
+    await updateSharedSyncSessionState({
+      status: SYNC_SESSION_STATUS.ACTIVE,
+      user,
+      hasRefreshToken: true,
+      error: null
+    });
+  }
+
+  await ensureBackgroundSyncAlarm();
+  // ensureSharedSyncAlarm() now also (re)establishes the push
+  // subscription as its first step, so interactive login stops the
+  // session from being stuck on 1-minute polling forever.
+  if (typeof ensureSharedSyncAlarm === 'function') await ensureSharedSyncAlarm();
+  // Fresh sign-in (incl. a second device): drop the idle-poll stamp so
+  // the first cycle fetches this account's shared folders/invites now
+  // rather than up to an hour later.
+  await browser.storage.local.remove('shared_idle_poll');
+
+  // Sign-out wipes the cached Pro entitlement, and the `cached &&`
+  // zero-Worker-calls guards mean nothing would ever restore it — a Pro
+  // user signing back in would look free until a manual refresh. One
+  // refresh per interactive sign-in restores the record (and flips any
+  // open UI via the popup's storage.onChanged listener). Never let a
+  // Worker hiccup fail an otherwise-successful login.
+  if (typeof refreshProEntitlement === 'function') {
+    try {
+      await refreshProEntitlement();
+    } catch (entitlementError) {
+      console.error('Entitlement refresh after login failed:', entitlementError);
+    }
+  }
+
+  return Promise.resolve(user);
+}
+
+// Firefox for Android sign-in (no identity API): the flow runs in a normal
+// tab. The event page may be suspended while the user is on Google's pages,
+// so the result is handled by top-level tabs listeners (registered below,
+// they wake the page) — the message handler only waits opportunistically.
+const tabAuthWaiters = new Map(); // nonce -> resolve(user | false)
+const tabAuthHandled = new Set();
+
+async function startTabLogin(nonce, { thenCheckout = false } = {}) {
+  const outcome = new Promise(resolve => tabAuthWaiters.set(nonce, resolve));
+  await startTabAuthFlow(createAuthEndpoint(nonce), nonce, { thenCheckout });
+  return outcome;
+}
+
+function settleTabLogin(nonce, user) {
+  tabAuthWaiters.get(nonce)?.(user);
+  tabAuthWaiters.delete(nonce);
+}
+
+async function handleTabAuthUpdated(tabId, changeInfo, tab) {
+  if (hasIdentityFlow()) return;
+  const url = changeInfo.url || tab?.url || '';
+  if (!url.startsWith(`${AUTH_API_BASE}/auth/done`)) return;
+  const { [TAB_AUTH_PENDING_KEY]: pending } = await browser.storage.local.get(TAB_AUTH_PENDING_KEY);
+  if (!pending || (pending.tabId !== null && pending.tabId !== tabId) || tabAuthHandled.has(pending.nonce)) return;
+  tabAuthHandled.add(pending.nonce);
+  await browser.storage.local.remove(TAB_AUTH_PENDING_KEY);
+  browser.tabs.remove(tabId).catch(() => {});
+  if (pending.returnTabId !== null) browser.tabs.update(pending.returnTabId, { active: true }).catch(() => {});
+  let user = false;
+  try {
+    user = await completeLogin(readTabAuthCode(url, pending));
+    if (user && pending.thenCheckout) await openProCheckout();
+  } catch (error) {
+    console.error('Exception during tab sign-in:', error);
+  }
+  settleTabLogin(pending.nonce, user);
+}
+
+// Firefox (desktop and Android) has no externally_connectable, so the join
+// page can't message the extension. Instead, when a tab opens a Tabox join
+// link, redeem it here — exactly what the page would ask for on Chromium —
+// then swap that tab to the full page, which shows the result.
+const SHARE_JOIN_ORIGINS = ['https://share.tbxpro.app', 'https://tabox-api.gilgold13.workers.dev', 'https://tabox-api-sandbox.gilgold13.workers.dev'];
+const shareLinksInFlight = new Set();
+
+function parseShareJoinToken(url) {
+  try {
+    const u = new URL(url);
+    if (!SHARE_JOIN_ORIGINS.includes(u.origin)) return null;
+    const match = u.pathname.match(/^\/join\/([^/]+)$/);
+    return match ? decodeURIComponent(match[1]) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function handleShareLinkTab(tabId, changeInfo) {
+  if (!browser.runtime.getURL('').startsWith('moz-extension://')) return; // Chromium: the page messages us
+  const token = changeInfo.url ? parseShareJoinToken(changeInfo.url) : null;
+  if (!token || shareLinksInFlight.has(token)) return;
+  shareLinksInFlight.add(token);
+  try {
+    let result;
+    try {
+      result = await handleShareLinkRedeem(token);
+    } catch (error) {
+      console.error('Share link redeem failed:', error);
+      result = { ok: false, status: 'error' };
+    }
+    await browser.storage.local.set({ shareLinkNotice: { ...result, ts: Date.now() } });
+    try {
+      await browser.tabs.update(tabId, { url: browser.runtime.getURL('fullpage.html') });
+    } catch {
+      await openExtensionFullPage().catch(() => {});
+    }
+  } finally {
+    shareLinksInFlight.delete(token);
+  }
+}
+
+async function handleTabAuthRemoved(tabId) {
+  if (hasIdentityFlow()) return;
+  const { [TAB_AUTH_PENDING_KEY]: pending } = await browser.storage.local.get(TAB_AUTH_PENDING_KEY);
+  if (!pending || pending.tabId !== tabId || tabAuthHandled.has(pending.nonce)) return;
+  await browser.storage.local.remove(TAB_AUTH_PENDING_KEY);
+  settleTabLogin(pending.nonce, false);
+}
+
 try {
   browser.runtime.onMessage.addListener(async (request) => {
     if (request.type && request.type.startsWith('shared')) {
@@ -2067,6 +2285,7 @@ try {
         // Captured for the post-flow decision; getRedirectURL() is constant per
         // profile, so the decision always matches the auth request sent below.
         const authConfig = getAuthRedirectConfig();
+        if (authConfig.tabFlow) return await startTabLogin(loginNonce, { thenCheckout: request.thenCheckout === true });
         const redirectUrl = await browser.identity.launchWebAuthFlow({
           'url': createAuthEndpoint(loginNonce),
           'interactive': true
@@ -2096,100 +2315,9 @@ try {
           }
         }
 
-        const token = await getTokens(params.code);
-        if (token === false) {
-          console.error('Failed to get tokens during login');
-          return Promise.resolve(false);
-        }
-        
-        // Clear any previous auth errors since we got new tokens
-        await browser.storage.local.remove('syncAuthError');
-        
-        const syncFileResult = await getOrCreateSyncFile(token);
-        if (syncFileResult === false) {
-          console.error('Failed to create/find sync file during login');
-          return Promise.resolve(false);
-        }
-        
-        const user = await getGoogleUser(token);
-        if (!user) {
-          console.error('Failed to get user info during login');
-          await updateSharedSyncSessionState({
-            status: SYNC_SESSION_STATUS.USER_INFO_ERROR,
-            hasRefreshToken: true
-          });
-          return Promise.resolve(false);
-        }
-
-        await updateSharedSyncSessionState({
-          status: SYNC_SESSION_STATUS.SYNCING,
-          user,
-          hasRefreshToken: true,
-          error: null
-        });
-        
-        // 🛡️ SAFETY: Check local data state before initial sync
-        // For new devices (empty local data), we should prioritize downloading from server
-        const localCollections = await loadAllCollectionsBG(true);
-        const localCollectionCount = localCollections ? localCollections.length : 0;
-        
-        logSyncOperation('info', 'Login successful - starting initial sync', {
-          localCollectionCount,
-          isNewDevice: localCollectionCount === 0
-        });
-        
-        const syncResult = await syncData(token);
-        if (syncResult === false) {
-          console.error('Initial sync failed during login');
-          // Still return user as login was successful, sync can be retried
-          logSyncOperation('error', 'Initial sync failed during login - user can retry manually');
-          await updateSharedSyncSessionState({
-            status: SYNC_SESSION_STATUS.ERROR,
-            user,
-            hasRefreshToken: true
-          });
-        } else if (syncResult === 'already_in_progress') {
-          logSyncOperation('info', 'Sync already in progress during login, will complete separately');
-          await updateSharedSyncSessionState({
-            status: SYNC_SESSION_STATUS.SYNCING,
-            user,
-            hasRefreshToken: true
-          });
-        } else {
-          logSyncOperation('success', 'Initial sync completed successfully during login');
-          await updateSharedSyncSessionState({
-            status: SYNC_SESSION_STATUS.ACTIVE,
-            user,
-            hasRefreshToken: true,
-            error: null
-          });
-        }
-
-        await ensureBackgroundSyncAlarm();
-        // ensureSharedSyncAlarm() now also (re)establishes the push
-        // subscription as its first step, so interactive login stops the
-        // session from being stuck on 1-minute polling forever.
-        if (typeof ensureSharedSyncAlarm === 'function') await ensureSharedSyncAlarm();
-        // Fresh sign-in (incl. a second device): drop the idle-poll stamp so
-        // the first cycle fetches this account's shared folders/invites now
-        // rather than up to an hour later.
-        await browser.storage.local.remove('shared_idle_poll');
-
-        // Sign-out wipes the cached Pro entitlement, and the `cached &&`
-        // zero-Worker-calls guards mean nothing would ever restore it — a Pro
-        // user signing back in would look free until a manual refresh. One
-        // refresh per interactive sign-in restores the record (and flips any
-        // open UI via the popup's storage.onChanged listener). Never let a
-        // Worker hiccup fail an otherwise-successful login.
-        if (typeof refreshProEntitlement === 'function') {
-          try {
-            await refreshProEntitlement();
-          } catch (entitlementError) {
-            console.error('Entitlement refresh after login failed:', entitlementError);
-          }
-        }
-
-        return Promise.resolve(user);
+        const user = await completeLogin(params.code);
+        if (user && request.thenCheckout === true) await openProCheckout();
+        return user;
       } catch (error) {
         console.error('Exception during login:', error);
         return Promise.resolve(false);
@@ -2199,7 +2327,9 @@ try {
       // New-window path: the popup sends `createWindowSpec` instead of a
       // pre-created `window` so the create+open sequence happens atomically
       // here, in the background, before the popup can be torn down.
-      const targetWindow = request.createWindowSpec
+      // Firefox for Android has no windows API: ignore any window spec (multi-
+      // open paths always send one) and open into the single tab strip.
+      const targetWindow = request.createWindowSpec && browser.windows
         ? await createOpenTabsWindow(request.createWindowSpec)
         : request.window;
       const result = await openTabs(
@@ -2682,7 +2812,9 @@ try {
     return { ok: false, status: 'error', error: 'unknown_message' };
   });
 
-  browser.commands.onCommand.addListener(async (command) => {
+  // Chromium/desktop-only: Firefox for Android has no commands API. Optional
+  // chaining keeps an absent API from aborting every listener registered below.
+  browser.commands?.onCommand.addListener(async (command) => {
     try {
       const index = parseInt(command.replace('open-collection-', '')) - 1;
       // 🚀 NEW: Load from indexed storage
@@ -2736,7 +2868,7 @@ try {
   browser.action.onClicked.addListener(async () => {
     try {
       const { [TOOLBAR_FULLPAGE_SETTING_KEY]: openInFullPage } = await browser.storage.local.get(TOOLBAR_FULLPAGE_SETTING_KEY);
-      if (openInFullPage) {
+      if (openInFullPage || toolbarAlwaysOpensFullPage()) {
         await openExtensionFullPage();
       }
     } catch (error) {
@@ -2797,7 +2929,7 @@ try {
     await handleRemoteUpdate();
   }
 
-  browser.contextMenus.onClicked.addListener(handleMenuClick);
+  browser.contextMenus?.onClicked.addListener(handleMenuClick); // absent on Firefox for Android
 
   // Single choke point keeping the context menu in lockstep with storage:
   // every mutation path (popup CRUD, folder ops, imports, Drive sync,
@@ -2910,6 +3042,16 @@ try {
   // marker so a late default (e.g. setInitialOptions' chkOpenNewWindow) can't land
   // on top of a test's seeded values (see e2e/support/fixtures.mjs seedStorage).
   globalThis.__taboxInstallSettled = true;
+
+  // Firefox for Android hides the extension behind the browser menu, so a
+  // fresh install opens the full page — where onboarding then starts.
+  if (reason === 'install' && !browser.windows) {
+    try {
+      await openExtensionFullPage();
+    } catch (error) {
+      console.error('Could not open Tabox after install:', error);
+    }
+  }
   })
 
   browser.runtime.onStartup.addListener(async () => {
@@ -2995,7 +3137,8 @@ try {
     collectionsToTrack = collectionsToTrack.filter(c => c.windowId !== windowId);
     await browser.storage.local.set({ collectionsToTrack: collectionsToTrack });
   };
-  try {
+  // Firefox for Android has no windows API at all — skip window events there.
+  if (browser.windows) try {
     browser.windows.onRemoved.addListener(handleWindowRemoved, { windowTypes: ['normal'] });
   } catch {
     // Firefox's WebExtensions argument validator rejects the { windowTypes }
@@ -3017,18 +3160,24 @@ try {
     browser.windows.onRemoved.addListener(handleWindowRemoved);
   }
 
-  browser.windows.onCreated.addListener(async () => {
+  browser.windows?.onCreated.addListener(async () => {
     await handleBadge();
   });
 
-  browser.windows.onFocusChanged.addListener(async () => {
+  browser.windows?.onFocusChanged.addListener(async () => {
     await handleBadge();
   });
 
   // Firefox doesn't implement onBoundsChanged; window move/resize won't trigger auto-update there (tab events still do)
-  browser.windows.onBoundsChanged?.addListener(async window => {
+  browser.windows?.onBoundsChanged?.addListener(async window => {
     debounceAutoUpdate(window.id, 5000); // Debounced auto-update
   });
+
+  // Firefox for Android sign-in tab (see handleTabAuthUpdated).
+  browser.tabs.onUpdated.addListener(handleTabAuthUpdated);
+  // Firefox share-link joins (see handleShareLinkTab).
+  browser.tabs.onUpdated.addListener(handleShareLinkTab);
+  browser.tabs.onRemoved.addListener(handleTabAuthRemoved);
 
   // tab events
   browser.tabs.onCreated.addListener(async tab => {
@@ -3050,7 +3199,7 @@ try {
     debounceAutoUpdate(attachInfo.newWindowId, 2000); // Debounced auto-update
     await handleBadge();
   });
-  browser.tabs.onMoved.addListener(async (_tabId, moveInfo) => {
+  browser.tabs.onMoved?.addListener(async (_tabId, moveInfo) => {
     debounceAutoUpdate(moveInfo.windowId, 2000); // Debounced auto-update
   });
   browser.tabs.onRemoved.addListener(async (_tabId, removeInfo) => {
@@ -3060,13 +3209,13 @@ try {
   });
 
   // tabGroup events
-  browser.tabGroups.onCreated.addListener(async (tabGroup) => {
+  browser.tabGroups?.onCreated.addListener(async (tabGroup) => {
     debounceAutoUpdate(tabGroup.windowId, 2000, true); // Debounced auto-update with context menu rebuild
   });
-  browser.tabGroups.onRemoved.addListener(async (tabGroup) => {
+  browser.tabGroups?.onRemoved.addListener(async (tabGroup) => {
     debounceAutoUpdate(tabGroup.windowId, 2000, true); // Debounced auto-update with context menu rebuild
   });
-  browser.tabGroups.onUpdated.addListener(async (tabGroup) => {
+  browser.tabGroups?.onUpdated.addListener(async (tabGroup) => {
     debounceAutoUpdate(tabGroup.windowId, 2000, true); // Debounced auto-update with context menu rebuild
   });
 

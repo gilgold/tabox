@@ -18,6 +18,7 @@ import {
 import { browser } from '../static/globals';
 import useProCheckout from './useProCheckout';
 import './OnboardingGuide.css';
+import { isSingleWindowBrowser } from './utils/platform';
 
 const ONBOARDING_ELIGIBLE_KEY = 'onboardingEligible';
 const ONBOARDING_COMPLETED_KEY = 'onboardingCompleted';
@@ -231,7 +232,9 @@ export default function OnboardingGuide({ mode = 'popup' }) {
     }, []);
 
     useEffect(() => {
-        if (mode !== 'popup') return undefined;
+        // Firefox for Android users live in the full page (there is no
+        // popup-first workflow there), so it auto-opens in both views.
+        if (mode !== 'popup' && !isSingleWindowBrowser()) return undefined;
         if (FORCE_ONBOARDING_FOR_POPUP_TESTING) return undefined;
 
         let cancelled = false;

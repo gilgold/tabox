@@ -671,6 +671,7 @@
 	z-index: 99999;
 	min-width: 180px;
 	max-height: calc(100vh - 20px);
+	max-height: calc(100dvh - 20px);
 	overflow-y: auto;
 	overflow-x: hidden;
 	

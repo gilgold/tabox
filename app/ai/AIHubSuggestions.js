@@ -1,6 +1,7 @@
 import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { MdRefresh } from 'react-icons/md';
 import hubCore from '../../chrome/ai-hub-core';
+import { hasTabGroups } from '../utils/platform';
 
 // Suggestions follow the conversation's topic. Planning: only refinements of
 // the current plan (AI follow-ups from the last turn, with generic fallbacks).
@@ -22,7 +23,8 @@ export function buildHubSuggestions({ collections = [], scope, activeTool, follo
         return (followUps || []).filter(Boolean).map(label => ({ id: `follow:${label}`, label, reason: 'Continue the conversation.' }));
     }
     const grounded = hubCore.buildSuggestions(collections, scope);
-    const maintenance = [...grounded, { id: 'group', tool: 'smart-organize', label: 'Group open tabs', reason: 'Choose a browser window to organize.' }]
+    const groupTabs = hasTabGroups() ? [{ id: 'group', tool: 'smart-organize', label: 'Group open tabs', reason: 'Choose a browser window to organize.' }] : [];
+    const maintenance = [...grounded, ...groupTabs]
         .filter(s => s.tool !== activeTool);
     return maintenance.length ? maintenance : [{ id: 'plan', tool: 'task-planner', label: 'Plan something new', reason: 'Gather websites for a task.' }];
 }

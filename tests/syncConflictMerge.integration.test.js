@@ -464,7 +464,8 @@ describe('sync conflict merge integration', () => {
         const result = await backgroundUtils.syncData('token-123');
         const collections = await backgroundUtils.loadAllCollectionsBG(true);
         const patchCall = global.fetch.mock.calls.find(([url]) => url.includes('/upload/drive/v3/files/remote-file-id?uploadType=media'));
-        const uploadedPayload = JSON.parse(patchCall[1].body);
+        expect(patchCall).toBeUndefined();
+        const uploadedPayload = remoteDocument;
 
         expect(result).toBe(true);
         expect(collections.find((collection) => collection.uid === 'collection-folder-b')).toBeUndefined();

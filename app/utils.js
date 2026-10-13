@@ -1,6 +1,7 @@
 import TaboxCollection from './model/TaboxCollection';
 import { browser } from '../static/globals';
 import { generateUid } from './utils/sharedConstants';
+import { isSingleWindowBrowser, withFaviconFallback } from './utils/platform';
 
 export function downloadTextFile(text, filename, extension = 'txt') {
   // Downloads a text file
@@ -64,7 +65,23 @@ export function applyUid(item) {
   return newCollection;
 }
 
+// Firefox for Android: one tab strip, no windows/groups/highlighting. Save
+// every open web tab (extension pages and about: pages excluded).
+async function getSingleWindowTabs(title) {
+  const { chkIgnorePinned } = await browser.storage.local.get('chkIgnorePinned');
+  const extensionOrigin = browser.runtime.getURL('');
+  let tabs = (await browser.tabs.query({}))
+    .filter(t => t.url && !t.url.startsWith(extensionOrigin) && !t.url.startsWith('about:'))
+    .filter(t => !(chkIgnorePinned && t.pinned))
+    .map(t => withFaviconFallback({ ...t, wasIncognito: t.incognito === true }));
+  const newItem = new TaboxCollection(title, tabs, [], null, null, null, null);
+  newItem.savedFromIncognito = false;
+  newItem.incognitoTabCount = tabs.filter(t => t.wasIncognito).length;
+  return applyUid(newItem);
+}
+
 export async function getCurrentTabsAndGroups(title, forceOnlyHighlighted = false) {
+  if (isSingleWindowBrowser()) return getSingleWindowTabs(title);
   let tabQueryProperties = { currentWindow: true };
   const totalHighlighted = await browser.tabs.query({ highlighted: true, windowId: browser.windows.WINDOW_ID_CURRENT });
   const onlyHighlighted = forceOnlyHighlighted || totalHighlighted.length > 1;

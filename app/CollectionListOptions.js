@@ -22,6 +22,7 @@ import { TbFileImport } from 'react-icons/tb';
 import { CollectionFilter } from './CollectionFilter';
 import { showSuccessToast, showErrorToast } from './toastHelpers';
 import { Tooltip } from 'react-tooltip';
+import { isSingleWindowBrowser } from './utils/platform';
 // Lazy load rarely-used modals for better performance
 const CreateFolderModal = lazy(() => import('./CreateFolderModal'));
 const ImportFullPageModal = lazy(() => import('./ImportFullPageModal'));
@@ -420,14 +421,16 @@ export function CollectionListOptions(props) {
                     <div className="fp-toolbar-divider" />
 
                     <div className="fp-toolbar-group">
-                        <button
-                            type="button"
-                            id="toolbar-open-new-window"
-                            className={`fp-toolbar-btn ${openInNewWindow ? 'active' : ''}`}
-                            onClick={toggleNewWindow}
-                        >
-                            <MdOpenInNew size={ICON_SIZE} />
-                        </button>
+                        {!isSingleWindowBrowser() && (
+                            <button
+                                type="button"
+                                id="toolbar-open-new-window"
+                                className={`fp-toolbar-btn ${openInNewWindow ? 'active' : ''}`}
+                                onClick={toggleNewWindow}
+                            >
+                                <MdOpenInNew size={ICON_SIZE} />
+                            </button>
+                        )}
                         <button
                             type="button"
                             id="toolbar-create-folder"

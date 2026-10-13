@@ -104,12 +104,20 @@ function buildIndexedSyncPayload({ currentStorage = {}, syncData = {}, now = Dat
     let rawFolders;
 
     if (incomingIsEmpty && localHasData) {
+        // An empty snapshot without evidence of deletion is unsafe; explicit
+        // tombstones, however, must also work when the final item was deleted.
+        const survives = (entity, tombstones, sharedUids) => sharedUids.has(entity.uid)
+            || !Array.isArray(tombstones)
+            || !tombstones.some(t => t?.uid === entity.uid && Number.isFinite(t.lastUpdated)
+                && t.lastUpdated > 0 && t.lastUpdated >= (entity.lastUpdated ?? entity.createdOn ?? 0));
         rawCollections = Object.keys(localCollectionIndex)
             .map((uid) => currentStorage[`${STORAGE_KEYS.COLLECTION_PREFIX}${uid}`])
-            .filter(Boolean);
+            .filter(Boolean)
+            .filter(entity => survives(entity, syncData.deletedCollections, localSharedCollectionUids));
         rawFolders = Object.keys(localFolderIndex)
             .map((uid) => currentStorage[`${STORAGE_KEYS.FOLDER_PREFIX}${uid}`])
-            .filter(Boolean);
+            .filter(Boolean)
+            .filter(entity => survives(entity, syncData.deletedFolders, localSharedFolderUids));
     } else {
         // Shared folders/collections were excluded from the incoming set above - reinstate
         // the local records verbatim so a pull can never delete or overwrite them.
@@ -277,8 +285,14 @@ async function rollbackSyncManagedKeys(storageArea, snapshot, payload) {
     }
 }
 
-async function applySyncSnapshotAtomically({ storageArea, syncData, now = Date.now() }) {
+async function applySyncSnapshotAtomically({ storageArea, syncData, now = Date.now(), expectedStorage }) {
     const currentStorage = await storageArea.get(null);
+    if (expectedStorage) {
+        const keys = new Set([...Object.keys(currentStorage), ...Object.keys(expectedStorage)].filter(isSyncManagedKey));
+        if ([...keys].some(key => !valuesMatch(currentStorage[key], expectedStorage[key]))) {
+            return { success: false, error: 'Local data changed before sync apply', rollbackSucceeded: true };
+        }
+    }
     const payload = buildIndexedSyncPayload({
         currentStorage,
         syncData,

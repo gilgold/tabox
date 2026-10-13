@@ -38,6 +38,9 @@ export const AI_TOOLS = [
         heroIcon: SmartGroupingToolIcon,
         featured: true,
         premium: true,
+        // Builds real tab groups — hidden where the tabGroups API doesn't
+        // exist (Firefox for Android); see isSupported in utils/platform.
+        requires: 'tabGroups',
     },
     {
         id: 'auto-rename',

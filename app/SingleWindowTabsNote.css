@@ -1,0 +1,10 @@
+.single-window-tabs-note {
+    margin: 4px 0 12px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--text-color, #2c3e50);
+    opacity: 0.85;
+    background: var(--dnd-accent-bg-soft, rgba(79, 70, 229, 0.06));
+}

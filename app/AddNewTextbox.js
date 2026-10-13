@@ -10,6 +10,8 @@ import { showErrorToast } from './toastHelpers';
 import { IoClose } from 'react-icons/io5';
 import { HiOutlineDesktopComputer, HiCollection } from 'react-icons/hi';
 import AiSuggestNameButton from './AiSuggestNameButton';
+import { isSingleWindowBrowser } from './utils/platform';
+import SingleWindowTabsNote from './SingleWindowTabsNote';
 import { suggestCollectionName } from './ai/tasks/suggestCollectionName';
 import { suggestFolderName } from './ai/tasks/suggestFolderName';
 
@@ -18,6 +20,7 @@ function SaveHighlightedOnlyLabel({ saveMode, windowCount }) {
 
     useEffect(() => {
         const fetchHighlightedCount = async () => {
+            if (isSingleWindowBrowser()) return; // no multi-select on Firefox for Android
             const windowId = await browser.windows.WINDOW_ID_CURRENT;
             const total = (await browser.tabs.query({ highlighted: true, windowId: windowId })).length;
             setTotalHighlighted(total);
@@ -353,14 +356,17 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
                 </button>
             </div>
             
-            <div className="window-toggle-container">
-                <WindowChoiceToggle 
-                    saveMode={saveMode} 
-                    setSaveMode={setSaveMode} 
-                    windowCount={windowCount}
-                />
-                <SaveHighlightedOnlyLabel saveMode={saveMode} windowCount={windowCount} />
-            </div>
+            <SingleWindowTabsNote />
+            {!isSingleWindowBrowser() && (
+                <div className="window-toggle-container">
+                    <WindowChoiceToggle 
+                        saveMode={saveMode} 
+                        setSaveMode={setSaveMode} 
+                        windowCount={windowCount}
+                    />
+                    <SaveHighlightedOnlyLabel saveMode={saveMode} windowCount={windowCount} />
+                </div>
+            )}
         </div>
     </section>;
 }
