@@ -3,12 +3,9 @@ import { useSetAtom } from 'jotai';
 import {
     pointerWithin,
     closestCorners,
-    PointerSensor,
-    useSensor,
-    useSensors,
     MeasuringStrategy,
 } from '@dnd-kit/core';
-import { dndPointerSensorOptions } from '../utils/dndShared';
+import { useDndSensors } from '../utils/dndShared';
 import { findSidebarDropTarget } from './sidebarDropTargets';
 import {
     applyCollectionDropOperation,
@@ -129,9 +126,7 @@ export function useFPCollectionDnd({
     };
 
     // DnD
-    const sensors = useSensors(
-        useSensor(PointerSensor, dndPointerSensorOptions)
-    );
+    const sensors = useDndSensors();
 
     const customCollisionDetection = useCallback((args) => {
         if (dragSession) {

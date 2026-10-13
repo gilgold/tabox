@@ -22,6 +22,7 @@ import { showSuccessToast } from '../toastHelpers';
 import { browser } from '../../static/globals';
 import './TaskPlannerPanel.css';
 import AIHubSuggestions from './AIHubSuggestions';
+import { hasTabGroups } from '../utils/platform';
 
 // chrome.storage.local key owned by the service worker's task-planner module.
 // The panel renders EXCLUSIVELY from this session state: the initial
@@ -1026,7 +1027,7 @@ function TaskPlannerPanel({ updateRemoteData, onDataUpdate, hub }) {
                             <p>A little help with your tabs and collections.</p>
                             <div className="ai-hub-start-prompts">
                                 <button type="button" className="tp-pill" onClick={() => sendText('Plan something', { tool: 'task-planner', uids: [] })}>Plan something</button>
-                                <button type="button" className="tp-pill" onClick={() => sendText('Organize my tabs', { tool: 'smart-organize', uids: [] })}>Organize my tabs</button>
+                                {hasTabGroups() && <button type="button" className="tp-pill" onClick={() => sendText('Organize my tabs', { tool: 'smart-organize', uids: [] })}>Organize my tabs</button>}
                                 <button type="button" className="tp-pill" onClick={() => sendText('Tidy my collections')}>Tidy my collections</button>
                                 <button type="button" className="tp-pill" onClick={() => sendText('Find a saved tab', { tool: 'find-tab', uids: [] })}>Find a saved tab</button>
                             </div>

@@ -98,6 +98,11 @@ function normalizeRoute(value, collections = [], scope = { type: 'all' }) {
     const allowed = new Set(inScope(collections, scope).map(c => c.uid));
     if (uids.some(uid => !allowed.has(uid))) throw new Error('That collection is no longer in this context. Choose it again.');
     if (value.tool === 'split-collection' && uids.length > 1) throw new Error('Choose one collection to split.');
+    // Firefox for Android has no tab groups API: never route there.
+    const ext = typeof browser !== 'undefined' ? browser : (typeof chrome !== 'undefined' ? chrome : null);
+    if (value.tool === 'smart-organize' && ext?.tabs && !ext.tabGroups) {
+        return { tool: 'clarify', uids: [], reply: 'Grouping open tabs isn’t available in this browser. I can help with your saved collections instead.', followUps: [] };
+    }
     if (scope.type === 'selected' && value.tool === 'auto-arrange-folders') {
         return { tool: 'clarify', uids: [], reply: 'This action works on your whole library. Change the context to All collections to continue.', followUps: [] };
     }

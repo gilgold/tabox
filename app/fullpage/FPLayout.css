@@ -64,6 +64,10 @@
     display: grid;
     grid-template-rows: var(--fp-topbar-height) 1fr;
     height: 100vh;
+    height: 100dvh;
+    /* dynamic viewport: on mobile 100vh is the toolbar-hidden height, so
+       anything sized to it runs under Firefox for Android's toolbar */
+    height: 100dvh;
     width: 100vw;
     overflow: hidden;
     color: var(--text-color);
@@ -336,6 +340,7 @@
         top: 0;
         right: 0;
         height: 100vh;
+        height: 100dvh;
         z-index: 500;
         border-left: 1px solid var(--fp-border);
         box-shadow: var(--fp-shadow-xl);

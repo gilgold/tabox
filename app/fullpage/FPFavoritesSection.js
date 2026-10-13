@@ -1,9 +1,6 @@
 import React, { useMemo } from 'react';
 import {
     DndContext,
-    PointerSensor,
-    useSensor,
-    useSensors,
 } from '@dnd-kit/core';
 import {
     arrayMove,
@@ -15,7 +12,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import FPCollectionCard from './FPCollectionCard';
 import { getFavoriteCollections, buildFavoritesReorderUpdate } from '../utils/favoritesUtils';
-import { dndPointerSensorOptions } from '../utils/dndShared';
+import { useDndSensors } from '../utils/dndShared';
 import './FPFavoritesSection.css';
 
 export const FP_FAVORITE_SORTABLE_PREFIX = 'fav:';
@@ -66,7 +63,7 @@ function FPFavoritesSection({
     folders,
 }) {
     const favorites = useMemo(() => getFavoriteCollections(collections), [collections]);
-    const sensors = useSensors(useSensor(PointerSensor, dndPointerSensorOptions));
+    const sensors = useDndSensors();
     const sortableIds = useMemo(
         () => favorites.map((collection) => `${FP_FAVORITE_SORTABLE_PREFIX}${collection.uid}`),
         [favorites],

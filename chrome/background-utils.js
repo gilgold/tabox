@@ -76,10 +76,12 @@ const {
 } = syncTransportApi;
 const {
     normalizeSyncSnapshot,
-    mergeSyncSnapshots
+    mergeSyncSnapshots,
+    syncSnapshotsMatch
 } = syncMergeApi;
 const {
-    applySyncSnapshotAtomically
+    applySyncSnapshotAtomically,
+    buildIndexedSyncPayload
 } = syncApplyApi;
 
 const normalizeCollectionRecordBG = (collection = {}) => ({
@@ -118,6 +120,15 @@ const loadDeletedFolderTombstonesBG = async () => {
     } catch (error) {
         console.error('Background: Failed to load deleted folder tombstones:', error);
         return {};
+    }
+};
+
+const clearDeletedTombstoneBG = async (key, uid) => {
+    const { [key]: stored = {} } = await browser.storage.local.get(key);
+    if (Object.prototype.hasOwnProperty.call(stored, uid)) {
+        const tombstones = { ...stored };
+        delete tombstones[uid];
+        await browser.storage.local.set({ [key]: tombstones });
     }
 };
 
@@ -196,13 +207,13 @@ const saveSingleCollectionBG = async (collection, forceUpdateTimestamp = false) 
                 tabs: collectionToSave.tabs || [],
                 color: collectionToSave.color,
                 createdOn: collectionToSave.createdOn || now,
-                lastUpdated: lastUpdated,
                 lastOpened: collectionToSave.lastOpened !== null && collectionToSave.lastOpened !== undefined ? collectionToSave.lastOpened : null,
                 chromeGroups: collectionToSave.chromeGroups || [],
                 // Preserve parentId from existing collection if incoming doesn't have it
                 parentId: preservedParentId,
                 // Store any other collection properties
-                ...collectionToSave
+                ...collectionToSave,
+                lastUpdated
             }
         });
         
@@ -225,6 +236,7 @@ const saveSingleCollectionBG = async (collection, forceUpdateTimestamp = false) 
         await browser.storage.local.set({
             [STORAGE_KEYS.COLLECTIONS_INDEX]: index
         });
+        await clearDeletedTombstoneBG(STORAGE_KEYS.DELETED_COLLECTION_TOMBSTONES, collectionToSave.uid);
         
         return true;
         
@@ -444,10 +456,10 @@ const saveSingleFolderBG = async (folder, forceUpdateTimestamp = false) => {
                 color: folder.color,
                 collapsed: folder.collapsed !== undefined ? folder.collapsed : false,
                 createdOn: folder.createdOn || now,
-                lastUpdated: lastUpdated,
                 collectionCount: collectionCount,
                 // Store any other folder properties
                 ...folder,
+                lastUpdated,
                 ...(sharedMarker ? { shared: sharedMarker } : {})
             }
         });
@@ -475,6 +487,7 @@ const saveSingleFolderBG = async (folder, forceUpdateTimestamp = false) => {
         await browser.storage.local.set({
             [STORAGE_KEYS.FOLDERS_INDEX]: foldersIndex
         });
+        await clearDeletedTombstoneBG(STORAGE_KEYS.DELETED_FOLDER_TOMBSTONES, folder.uid);
         
         return true;
         
@@ -569,13 +582,14 @@ let syncLockOperation = null; // Track what operation holds the lock
 let syncLockTime = 0; // Track when lock was acquired
 
 // Enhanced error handling with retry logic (OPTIMIZED: reduced retries from 5 to 3)
-async function handleRequest(url, options = null, maxRetries = 3, delay = 1000) {
+async function handleRequest(url, options = null, maxRetries = 3, delay = 1000, onResponse = null) {
     let lastError;
     
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
             const response = await fetch(url, options);
             if (response.ok) {
+                if (onResponse) onResponse(response);
                 const data = await response.json();
                 if (attempt > 0) {
                     logSyncOperation('success', `Request successful after ${attempt + 1} attempts: ${url}`);
@@ -702,57 +716,29 @@ function validateCollectionData(data) {
 }
 
 // Create backup before risky operations with storage optimization
-async function createPreSyncBackup(label = 'pre-sync') {
+async function createPreSyncBackup(label = 'pre-sync', snapshot = null) {
     try {
-        // 🚀 NEW: Load from indexed storage
-        const tabsArray = await loadAllCollectionsBG(true);
-        const { localTimestamp } = await browser.storage.local.get('localTimestamp');
-        
+        const data = snapshot || await prepareSyncDataForUpload(null, false, true);
         let { preSyncBackups = [] } = await browser.storage.local.get('preSyncBackups');
-        
-        // Create optimized backup data
+        const latest = preSyncBackups[0];
+        if (latest && Array.isArray(latest.foldersArray) && syncSnapshotsMatch(latest, data)) {
+            return true;
+        }
         const backup = {
+            ...data,
             timestamp: Date.now(),
-            localTimestamp: localTimestamp || 0,
-            collectionCount: tabsArray?.length || 0,
-            label,
-            // Only store essential data to reduce size
-            tabsArray: (tabsArray || []).map(collection => ({
-                uid: collection.uid,
-                name: collection.name,
-                createdOn: collection.createdOn,
-                lastUpdated: collection.lastUpdated,
-                color: collection.color,
-                tabCount: collection.tabs?.length || 0,
-                // Only store first 3 tabs for debugging (not full data)
-                sampleTabs: collection.tabs?.slice(0, 3)?.map(tab => ({
-                    title: tab.title,
-                    url: tab.url
-                })) || []
-            }))
+            localTimestamp: data.timestamp,
+            collectionCount: data.tabsArray.length,
+            folderCount: data.foldersArray.length,
+            label
         };
-        
-        preSyncBackups.unshift(backup);
-        
-        // Aggressive storage limits: Keep max 2 backups and enforce size limits for memory optimization
-        const MAX_BACKUPS = 2; // Reduced from 3 for memory optimization
-        const MAX_TOTAL_SIZE = 2 * 1024 * 1024; // 2MB total limit
-        
-        // Remove excess backups
-        if (preSyncBackups.length > MAX_BACKUPS) {
-            preSyncBackups = preSyncBackups.slice(0, MAX_BACKUPS);
+        preSyncBackups = [backup, ...preSyncBackups].slice(0, 2);
+        // Keep at least one complete snapshot. Never truncate tabs to fit a quota.
+        // If storage rejects the write, the caller must abort the incoming apply.
+        while (JSON.stringify(preSyncBackups).length > 2 * 1024 * 1024 && preSyncBackups.length > 1) {
+            preSyncBackups.pop();
         }
-        
-        // Check total size and remove oldest if needed
-        let totalSize = preSyncBackups.reduce((sum, backup) => sum + JSON.stringify(backup).length, 0);
-        while (totalSize > MAX_TOTAL_SIZE && preSyncBackups.length > 1) {
-            preSyncBackups.pop(); // Remove oldest
-            totalSize = preSyncBackups.reduce((sum, backup) => sum + JSON.stringify(backup).length, 0);
-        }
-        
         await browser.storage.local.set({ preSyncBackups });
-        
-        
         return true;
     } catch (error) {
         logSyncOperation('error', 'Failed to create pre-sync backup', { error: error.message });
@@ -965,6 +951,7 @@ let contextMenuTimeout = null;
 let lastContextMenuFingerprint = null;
 
 const rebuildContextMenuNow = async () => {
+    if (!browser.contextMenus) return; // Firefox for Android has no context menus
     const [tabsArray, foldersArray] = await Promise.all([
         loadAllCollectionsBG(true),
         loadAllFoldersBG(),
@@ -1498,7 +1485,7 @@ async function markSuccessfulSyncCompletion() {
     });
 }
 
-async function uploadPreparedSyncData(token, dataToSync) {
+async function uploadPreparedSyncData(token, dataToSync, syncContext = null) {
     await getOrCreateSyncFile(token);
     const { syncFileId } = await browser.storage.sync.get('syncFileId');
 
@@ -1506,6 +1493,7 @@ async function uploadPreparedSyncData(token, dataToSync) {
         logSyncOperation('error', 'No sync file ID available for remote update');
         return false;
     }
+    if (syncContext && syncContext.fileId !== syncFileId) return false;
 
     const init = {
         method: 'PATCH',
@@ -1517,6 +1505,9 @@ async function uploadPreparedSyncData(token, dataToSync) {
         'contentType': 'json',
         body: JSON.stringify(dataToSync)
     };
+    if (syncContext?.etag && !syncContext.etag.startsWith('W/')) {
+        init.headers['If-Match'] = syncContext.etag;
+    }
 
     logSyncOperation('info', 'Syncing data to cloud', {
         collections: dataToSync.tabsArray.length,
@@ -1524,10 +1515,20 @@ async function uploadPreparedSyncData(token, dataToSync) {
         version: dataToSync.syncVersion || SYNC_VERSION
     });
 
-    const url = `https://www.googleapis.com/upload/drive/v3/files/${syncFileId}?uploadType=media&access_token=${token}`;
-    const response = await handleRequest(url, init);
+    const url = `https://www.googleapis.com/upload/drive/v3/files/${syncFileId}?uploadType=media`;
+    // A failed conditional/upload request must re-read and merge before retrying;
+    // replaying the same PATCH could overwrite changes made by another device.
+    const response = await handleRequest(url, init, syncContext ? 0 : 3);
 
     if (response !== false) {
+        if (syncContext) {
+            const latest = await prepareSyncDataForUpload(null, false, true);
+            const currentFile = await browser.storage.sync.get('syncFileId');
+            if (currentFile.syncFileId !== syncFileId || !syncSnapshotsMatch(latest, dataToSync)) {
+                logSyncOperation('info', 'Local data changed during upload; a fresh sync is required');
+                return false;
+            }
+        }
         await browser.storage.local.set({
             localTimestamp: dataToSync.timestamp,
             lastSyncTimestamp: dataToSync.timestamp
@@ -1633,7 +1634,10 @@ async function _readRemoteSyncDocument(token, fileId) {
         };
         
         logSyncOperation('info', 'Loading sync file from server', { fileId });
-        const data = await handleRequest(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, init);
+        let etag;
+        const data = await handleRequest(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, init, 3, 1000, response => {
+            etag = response.headers?.get?.('etag');
+        });
         
         logSyncOperation('info', 'Raw server response received', { 
             dataType: typeof data,
@@ -1677,7 +1681,9 @@ async function _readRemoteSyncDocument(token, fileId) {
             syncVersion: normalizedData.syncVersion || 'missing'
         });
 
-        return normalizeSyncSnapshot(normalizedData);
+        const snapshot = normalizeSyncSnapshot(normalizedData, normalizedData.timestamp || 0);
+        Object.defineProperty(snapshot, 'etag', { value: etag });
+        return snapshot;
         
     } catch (error) {
         logSyncOperation('error', 'Exception in _loadSettingsFile', { error: error.message });
@@ -1770,7 +1776,6 @@ async function updateLocalDataFromServer(token, force = false, skipLock = false)
     }
     
     try {
-        await createPreSyncBackup('before-server-update');
         
         const { syncFileId } = await browser.storage.sync.get('syncFileId');
         const timestampResult = await _getServerFileTimestampState(token, syncFileId);
@@ -1798,6 +1803,11 @@ async function updateLocalDataFromServer(token, force = false, skipLock = false)
                 force 
             });
             
+            if (!force) {
+                const synced = await reconcileRemoteSyncData(token, syncFileId);
+                return synced ? await loadAllCollectionsBG(true) : false;
+            }
+            if (!await createPreSyncBackup('before-forced-server-update')) return false;
             const tabsArray = await _loadSettingsFile(token, syncFileId);
             if (tabsArray !== false) {
                 await browser.storage.local.set({
@@ -1838,7 +1848,21 @@ async function updateLocalDataFromServer(token, force = false, skipLock = false)
 // never on user agent.
 const CHROMIUMAPP_REDIRECT_SUFFIX = '.chromiumapp.org';
 
+// Firefox for Android has no identity API at all, so there is no
+// launchWebAuthFlow to intercept the redirect. There the flow runs in an
+// ordinary tab (startTabAuthFlow + background.js handleTabAuthUpdated) and targets the Worker's own /auth/done page,
+// which /auth/callback 302s to with the result in the URL fragment.
+const AUTH_TAB_FLOW_TIMEOUT_MS = 10 * 60 * 1000;
+
+function hasIdentityFlow() {
+    return typeof browser.identity?.getRedirectURL === 'function';
+}
+
 function getAuthRedirectConfig() {
+    if (!hasIdentityFlow()) {
+        const workerCallback = `${AUTH_API_BASE}/auth/callback`;
+        return { authRedirect: workerCallback, exchangeRedirect: workerCallback, viaWorker: true, tabFlow: true, target: `${AUTH_API_BASE}/auth/done` };
+    }
     const dynamicRedirect = browser.identity.getRedirectURL();
     let hostname = '';
     try {
@@ -1851,6 +1875,43 @@ function getAuthRedirectConfig() {
     }
     const workerCallback = `${AUTH_API_BASE}/auth/callback`;
     return { authRedirect: workerCallback, exchangeRedirect: workerCallback, viaWorker: true, target: dynamicRedirect };
+}
+
+// Tab-based sign-in (Firefox for Android). The event page can be suspended
+// while the user is on Google's pages, so nothing here waits in memory: the
+// attempt is persisted under TAB_AUTH_PENDING_KEY and background.js's
+// top-level tabs.onUpdated listener (which wakes the page) finishes it when
+// the tab reaches the Worker's /auth/done.
+const TAB_AUTH_PENDING_KEY = 'tabAuthPending';
+
+async function startTabAuthFlow(authUrl, nonce, { thenCheckout = false } = {}) {
+    let returnTabId = null;
+    try {
+        const [active] = await browser.tabs.query({ active: true });
+        returnTabId = active?.id ?? null;
+    } catch {
+        // No tab to return to — fine.
+    }
+    const pending = { nonce, tabId: null, returnTabId, thenCheckout, startedAt: Date.now() };
+    await browser.storage.local.set({ [TAB_AUTH_PENDING_KEY]: pending });
+    const tab = await browser.tabs.create({ url: authUrl, active: true });
+    await browser.storage.local.set({ [TAB_AUTH_PENDING_KEY]: { ...pending, tabId: tab.id } });
+    return tab.id;
+}
+
+// Validates the /auth/done fragment against the pending attempt and returns
+// the auth code; throws (without exchanging anything) on a stale attempt,
+// nonce mismatch, or a declined consent.
+function readTabAuthCode(url, pending) {
+    if (!pending || Date.now() - pending.startedAt > AUTH_TAB_FLOW_TIMEOUT_MS) {
+        throw new Error('Sign-in attempt expired');
+    }
+    const params = Object.fromEntries(new URLSearchParams(new URL(url).hash.slice(1)).entries());
+    if (!params.state) throw new Error('Missing OAuth state from Worker callback');
+    const state = base64UrlDecodeJson(params.state);
+    if (!state || state.n !== pending.nonce) throw new Error('OAuth state nonce mismatch');
+    if (params.error || !params.code) throw new Error(`OAuth callback error: ${params.error || 'missing code'}`);
+    return params.code;
 }
 
 // base64url (no padding) encode/decode of a UTF-8 JSON payload — MUST match
@@ -2053,6 +2114,76 @@ async function updateCollection(collection, windowId) {
     }
 }
 
+// The snapshot timestamp decides neither ownership nor deletion. Offline edits
+// can coexist with remote edits regardless of how long a device was disconnected.
+async function reconcileRemoteSyncData(token, fileId) {
+    const remote = await _readRemoteSyncDocument(token, fileId);
+    if (remote === false) return false;
+    const local = await prepareSyncDataForUpload(null, false, true);
+    // Reuse the apply layer's shared-UID protection before deciding what to upload.
+    // A legacy Drive copy must not overwrite or re-export live shared data.
+    const projectedRemote = buildIndexedSyncPayload({ currentStorage: local.localStorageSnapshot, syncData: remote });
+    const remoteForMerge = {
+        ...remote,
+        ...await excludeSharedFromSyncData({
+            tabsArray: projectedRemote.collections,
+            foldersArray: projectedRemote.folders,
+            deletedCollections: Object.entries(projectedRemote.setPayload[STORAGE_KEYS.DELETED_COLLECTION_TOMBSTONES])
+                .map(([uid, lastUpdated]) => ({ uid, lastUpdated })),
+            deletedFolders: Object.entries(projectedRemote.setPayload[STORAGE_KEYS.DELETED_FOLDER_TOMBSTONES])
+                .map(([uid, lastUpdated]) => ({ uid, lastUpdated }))
+        }, true)
+    };
+    const merged = mergeSyncSnapshots({
+        localSnapshot: local,
+        remoteSnapshot: remoteForMerge,
+        disableImplicitLocalDeletions: true
+    });
+    // Apply the shared-folder exclusion to the final payload too, including data
+    // originating from a legacy remote. Shared data never belongs on Drive.
+    Object.assign(merged, await excludeSharedFromSyncData(merged, true));
+    const needsApply = local.hasTimestampRepairs || !syncSnapshotsMatch(local, merged);
+    const needsUpload = !syncSnapshotsMatch(remote, merged);
+    logSyncOperation('info', 'Reconciled sync snapshots', {
+        localCollections: local.tabsArray.length,
+        remoteCollections: remote.tabsArray.length,
+        mergedCollections: merged.tabsArray.length,
+        needsApply,
+        needsUpload
+    });
+
+    if ((needsApply || needsUpload) && !await createPreSyncBackup('before-reconciliation', local)) return false;
+
+    let etag = remote.etag;
+    if (needsUpload) {
+        const latestRemote = await _readRemoteSyncDocument(token, fileId);
+        if (latestRemote === false || !syncSnapshotsMatch(remote, latestRemote)) {
+            logSyncOperation('info', 'Remote changed during reconciliation; retry with a fresh snapshot');
+            return false;
+        }
+        etag = latestRemote.etag;
+    }
+    const latestLocal = await prepareSyncDataForUpload(null, false, true);
+    if (!syncSnapshotsMatch(local, latestLocal)) {
+        logSyncOperation('info', 'Local changed during reconciliation; retry with a fresh snapshot');
+        return false;
+    }
+    if (needsApply && await migrateIncomingSyncData(merged, latestLocal.localStorageSnapshot) === false) return false;
+
+    if (needsUpload) {
+        merged.timestamp = Math.max(Date.now(), local.timestamp, remote.timestamp) + 1;
+        return await uploadPreparedSyncData(token, merged, { fileId, etag }) !== false;
+    }
+    // Download-only and no-op syncs adopt the remote timestamp rather than
+    // publishing a new one. This makes repeated two-device syncs converge.
+    const finalLocal = await prepareSyncDataForUpload(null, false, true);
+    const currentFile = await browser.storage.sync.get('syncFileId');
+    if (currentFile.syncFileId !== fileId || !syncSnapshotsMatch(finalLocal, merged)) return false;
+    await browser.storage.local.set({ localTimestamp: remote.timestamp, lastSyncTimestamp: remote.timestamp });
+    await markSuccessfulSyncCompletion();
+    return true;
+}
+
 // Enhanced syncData with conflict resolution and atomic operations
 async function syncData(token) {
     const operation = 'syncData';
@@ -2069,9 +2200,6 @@ async function syncData(token) {
     }
     
     try {
-        // Create backup before any sync operations
-        await createPreSyncBackup('before-sync');
-        
         const { syncFileId } = await browser.storage.sync.get('syncFileId');
         let { localTimestamp } = await browser.storage.local.get('localTimestamp');
         if (!localTimestamp) localTimestamp = 0;
@@ -2096,196 +2224,10 @@ async function syncData(token) {
             return result !== false;
         }
 
-        const serverTimestamp = timestampResult.timestamp;
-        
-        if (serverTimestamp === localTimestamp) {
-            await markSuccessfulSyncCompletion();
-            logSyncOperation('info', 'Local and remote data are in sync');
-            return true;
-        }
-        
-        // Check for potential conflicts
-        const timeDifference = Math.abs(serverTimestamp - localTimestamp);
-        const isConflict = timeDifference < 60000; // Within 1 minute might be conflict
+        // Equal envelope timestamps are not proof of equal contents: offline edits
+        // and earlier restores can have stale timestamps. Compare entities below.
+        return await reconcileRemoteSyncData(token, syncFileId);
 
-        // Issue #67: a device that has never completed a sync against this Drive file
-        // must not resolve sync by raw timestamp comparison. localTimestamp is stamped
-        // on every save even while logged out, so a fresh device with a few offline
-        // collections looks "newer" than the whole account and — outside the 60s
-        // conflict window — used to wholesale-overwrite the Drive file (wiping every
-        // other device on their next pull), or, in the other direction, plain-download
-        // and drop its local-only collections as stale keys. First sync always merges.
-        const { lastSuccessfulSyncTime } = await browser.storage.local.get('lastSuccessfulSyncTime');
-        const isFirstSyncOnThisDevice = !lastSuccessfulSyncTime;
-
-        if (serverTimestamp > localTimestamp) {
-            logSyncOperation('info', 'Remote data is newer, updating local', {
-                serverTimestamp,
-                localTimestamp,
-                isConflict,
-                isFirstSyncOnThisDevice
-            });
-
-            // First sync with local data present: merge instead of a plain download,
-            // which would remove local-only collections as stale keys (issue #67).
-            let forceFirstSyncMerge = false;
-            if (!isConflict && isFirstSyncOnThisDevice) {
-                const localCollections = (await loadAllCollectionsBG(true)) || [];
-                const localFolders = (await loadAllFoldersBG()) || [];
-                forceFirstSyncMerge = (localCollections.length + localFolders.length) > 0;
-            }
-
-            if (isConflict || forceFirstSyncMerge) {
-                // Potential conflict - create additional backup
-                await createPreSyncBackup('conflict-before-remote-update');
-
-                const remoteSyncData = await _readRemoteSyncDocument(token, syncFileId);
-                if (remoteSyncData === false) {
-                    logSyncOperation('error', 'Failed to load remote data for conflict merge');
-                    return false;
-                }
-
-                const localSyncData = await prepareSyncDataForUpload();
-                // Use the real last-local-change time (not Date.now()) so the merge's
-                // single-sided-deletion heuristic does not mistake brand-new remote
-                // entities (e.g. a folder duplicated on another device) for local
-                // deletions and drop them.
-                localSyncData.timestamp = localTimestamp;
-                const mergedSyncData = mergeSyncSnapshots({
-                    localSnapshot: localSyncData,
-                    remoteSnapshot: remoteSyncData,
-                    // A first sync can't have implicitly deleted remote entities it
-                    // has never seen — keep every remote-only entity (issue #67).
-                    disableImplicitLocalDeletions: isFirstSyncOnThisDevice
-                });
-                mergedSyncData.timestamp = Date.now();
-
-                const mergedCollections = await migrateIncomingSyncData(mergedSyncData);
-                if (mergedCollections === false) {
-                    logSyncOperation('error', 'Failed to apply merged conflict snapshot locally');
-                    return false;
-                }
-
-                const uploadResult = await uploadPreparedSyncData(token, mergedSyncData);
-                return uploadResult !== false;
-            }
-
-            const tabsArray = await _loadSettingsFile(token, syncFileId);
-            if (tabsArray !== false) {
-                await browser.storage.local.set({
-                    localTimestamp: serverTimestamp
-                });
-                await markSuccessfulSyncCompletion();
-                logSyncOperation('success', 'Successfully updated local data from server with cross-version compatibility');
-                return true;
-            } else {
-                logSyncOperation('error', 'Failed to load data from server');
-                return false;
-            }
-        } else {
-            // Local data claims to be newer - but verify we actually have data before pushing.
-            // Count only NON-shared collections: shared folders/collections never enter the
-            // Drive payload (excludeSharedFromSyncData), so they must not count as "data"
-            // here either - otherwise a device whose only content is shared folders would
-            // pass this check and push an empty payload.
-            const localCollections = await loadAllCollectionsBG(true);
-            const allLocalCollections = localCollections || [];
-            const allLocalFolders = (await loadAllFoldersBG()) || [];
-            let nonSharedCollectionCount = allLocalCollections.length;
-            let nonSharedFolderCount = allLocalFolders.length;
-            let sharedCollectionCount = 0;
-            /* istanbul ignore next */
-            const sharedFoldersHelpers = typeof require === 'function'
-                ? require('./shared-folders.js')
-                : globalThis.TaboxSharedFolders;
-            const partitionSharedUids = sharedFoldersHelpers && sharedFoldersHelpers.partitionSharedUids;
-            if (typeof partitionSharedUids === 'function') {
-                const { sharedFolderUids, sharedCollectionUids } = partitionSharedUids(allLocalFolders, allLocalCollections);
-                sharedCollectionCount = allLocalCollections.filter((collection) => sharedCollectionUids.has(collection.uid)).length;
-                nonSharedCollectionCount = allLocalCollections.length - sharedCollectionCount;
-                nonSharedFolderCount = allLocalFolders.filter((folder) => !sharedFolderUids.has(folder.uid)).length;
-            }
-
-            // 🛡️ SAFETY CHECK: If local is "newer" but EMPTY (from Drive's point of view),
-            // and server has data, this is likely a new device with wrong timestamp - download instead.
-            // Folders count as data too: they ride in the Drive payload's foldersArray, so a
-            // device whose only collections are shared but which just added a plain folder is
-            // NOT empty - forcing a download here would clobber that new folder as a stale key.
-            if (nonSharedCollectionCount === 0 && nonSharedFolderCount === 0 && serverTimestamp > 0) {
-                logSyncOperation('error', 'SAFETY BLOCK: Local claims newer but has no data while server has data - downloading instead', {
-                    localTimestamp,
-                    serverTimestamp,
-                    localCollectionCount: 0,
-                    sharedCollectionCount,
-                    action: 'Downloading from server to prevent data loss'
-                });
-                
-                // Force download from server to prevent data loss
-                const tabsArray = await _loadSettingsFile(token, syncFileId);
-                if (tabsArray !== false && tabsArray.length > 0) {
-                    await browser.storage.local.set({
-                        localTimestamp: serverTimestamp
-                    });
-                    await markSuccessfulSyncCompletion();
-                    logSyncOperation('success', 'Safety download completed - recovered data from server');
-                    return true;
-                }
-                return false;
-            }
-            
-            logSyncOperation('info', 'Local data is newer, updating remote', {
-                serverTimestamp,
-                localTimestamp,
-                localCollectionCount: nonSharedCollectionCount,
-                nonSharedFolderCount,
-                sharedCollectionCount,
-                isConflict,
-                isFirstSyncOnThisDevice
-            });
-
-            // First sync on this device: never wholesale-overwrite the account's Drive
-            // file based on the local timestamp alone — merge with the remote snapshot
-            // so other devices' collections survive (issue #67).
-            if (isConflict || isFirstSyncOnThisDevice) {
-                // Potential conflict - create additional backup
-                await createPreSyncBackup('conflict-before-local-update');
-
-                const remoteSyncData = await _readRemoteSyncDocument(token, syncFileId);
-                if (remoteSyncData === false) {
-                    logSyncOperation('error', 'Failed to load remote data for conflict merge');
-                    return false;
-                }
-
-                const localSyncData = await prepareSyncDataForUpload();
-                // Use the real last-local-change time (not Date.now()) so the merge's
-                // single-sided-deletion heuristic does not mistake brand-new remote
-                // entities (e.g. a folder duplicated on another device) for local
-                // deletions and drop them.
-                localSyncData.timestamp = localTimestamp;
-                const mergedSyncData = mergeSyncSnapshots({
-                    localSnapshot: localSyncData,
-                    remoteSnapshot: remoteSyncData,
-                    // A first sync can't have implicitly deleted remote entities it
-                    // has never seen — keep every remote-only entity (issue #67).
-                    disableImplicitLocalDeletions: isFirstSyncOnThisDevice
-                });
-                mergedSyncData.timestamp = Date.now();
-
-                const mergedCollections = await migrateIncomingSyncData(mergedSyncData);
-                if (mergedCollections === false) {
-                    logSyncOperation('error', 'Failed to apply merged conflict snapshot locally');
-                    return false;
-                }
-
-                const uploadResult = await uploadPreparedSyncData(token, mergedSyncData);
-                return uploadResult !== false;
-            }
-
-            // Pass skipLock=true since syncData already holds the lock
-            const result = await updateRemote(token, null, true);
-            return result !== false;
-        }
-        
     } catch (error) {
         logSyncOperation('error', 'Exception in syncData', { error: error.message });
         return false;
@@ -2305,36 +2247,9 @@ const cleanupLargeBackups = async () => {
         const totalBackupSize = preSyncSize + autoBackupSize;
         
         
-        // Clean up oversized preSyncBackups (convert old full backups to metadata)
-        if (preSyncSize > 500 * 1024) { // > 500KB
-            const cleanedPreSync = preSyncBackups.map(backup => {
-                if (backup.tabsArray && backup.tabsArray[0] && backup.tabsArray[0].tabs) {
-                    // This is an old full backup, convert to metadata
-                    return {
-                        timestamp: backup.timestamp,
-                        localTimestamp: backup.localTimestamp,
-                        collectionCount: backup.tabsArray.length,
-                        label: backup.label,
-                        tabsArray: backup.tabsArray.map(collection => ({
-                            uid: collection.uid,
-                            name: collection.name,
-                            createdOn: collection.createdOn,
-                            lastUpdated: collection.lastUpdated,
-                            color: collection.color,
-                            tabCount: collection.tabs?.length || 0,
-                            sampleTabs: collection.tabs?.slice(0, 2)?.map(tab => ({
-                                title: tab.title,
-                                url: tab.url
-                            })) || []
-                        }))
-                    };
-                }
-                return backup; // Already optimized
-            }).slice(0, 3); // Keep only 3 most recent
-            
-            await browser.storage.local.set({ preSyncBackups: cleanedPreSync });
-        }
-        
+        // Full recovery copies must remain restorable regardless of their size.
+        // Retention/size trimming happens when a new complete backup is saved.
+
         // Clean up oversized autoBackups
         if (autoBackupSize > 1.5 * 1024 * 1024) { // > 1.5MB
             const cleanedAutoBackups = autoBackups.slice(0, 2); // Keep only 2 most recent
@@ -2390,7 +2305,7 @@ const detectSyncDataVersion = (data) => {
     return { version: data.syncVersion || 'unknown', valid: false };
 };
 
-const migrateIncomingSyncData = async (data) => {
+const migrateIncomingSyncData = async (data, expectedStorage) => {
     try {
         const detection = detectSyncDataVersion(data);
 
@@ -2413,7 +2328,8 @@ const migrateIncomingSyncData = async (data) => {
 
         const applyResult = await applySyncSnapshotAtomically({
             storageArea: browser.storage.local,
-            syncData: normalizedSyncData
+            syncData: normalizedSyncData,
+            expectedStorage
         });
 
         if (!applyResult.success) {
@@ -2464,13 +2380,14 @@ const loadCollectionsByUids = async (uids) => {
 // required (not at module top-level) because chrome/shared-folders.js requires this very
 // module back (for getAuthToken) - a top-level require here would create a load-order
 // cycle both in the classic-script (importScripts) world and in Jest/CommonJS.
-const excludeSharedFromSyncData = async ({ tabsArray = [], foldersArray = [], deletedCollections = [], deletedFolders = [] }) => {
+const excludeSharedFromSyncData = async ({ tabsArray = [], foldersArray = [], deletedCollections = [], deletedFolders = [] }, strict = false) => {
     /* istanbul ignore next */
     const sharedFoldersHelpers = typeof require === 'function'
         ? require('./shared-folders.js')
         : globalThis.TaboxSharedFolders;
     const partitionSharedUids = sharedFoldersHelpers && sharedFoldersHelpers.partitionSharedUids;
     if (typeof partitionSharedUids !== 'function') {
+        if (strict) throw new Error('Shared-data exclusion unavailable; sync aborted');
         return { tabsArray, foldersArray, deletedCollections, deletedFolders };
     }
 
@@ -2491,12 +2408,41 @@ const excludeSharedFromSyncData = async ({ tabsArray = [], foldersArray = [], de
 // Enhanced data preparation for upload with version info.
 // Sync still emits full 4.0 snapshots by default; incremental sync remains off until the
 // wire contract is upgraded end-to-end for partial updates.
-const prepareSyncDataForUpload = async (collections, useIncrementalSync = false) => {
+const prepareSyncDataForUpload = async (collections, useIncrementalSync = false, strict = false) => {
     try {
         let tabsArray;
         let foldersArray;
-        
-        if (collections) {
+        let storageSnapshot;
+
+        if (strict) {
+            storageSnapshot = await browser.storage.local.get(null);
+            const readIndexed = (indexKey, prefix, legacy = []) => {
+                const index = storageSnapshot[indexKey];
+                if (index === undefined) return legacy;
+                if (!index || typeof index !== 'object' || Array.isArray(index)) {
+                    throw new Error(`Invalid ${indexKey}; sync aborted`);
+                }
+                return Object.keys(index).map(uid => {
+                    const item = storageSnapshot[`${prefix}${uid}`];
+                    if (!item || item.uid !== uid || (prefix === STORAGE_KEYS.COLLECTION_PREFIX && !Array.isArray(item.tabs))) {
+                        throw new Error(`Incomplete ${indexKey}; sync aborted`);
+                    }
+                    // Older saves stamped the index but then overwrote the record's
+                    // timestamp with the incoming stale value. The index retains
+                    // evidence of that real local edit; never replace it with now.
+                    const indexedTimestamp = index[uid]?.lastUpdated;
+                    const needsTimestampRepair = Number.isFinite(indexedTimestamp)
+                        && indexedTimestamp > (item.lastUpdated ?? item.createdOn ?? 0);
+                    return {
+                        ...item,
+                        order: item.order ?? index[uid]?.order,
+                        ...(needsTimestampRepair ? { lastUpdated: indexedTimestamp } : {})
+                    };
+                });
+            };
+            tabsArray = readIndexed(STORAGE_KEYS.COLLECTIONS_INDEX, STORAGE_KEYS.COLLECTION_PREFIX, storageSnapshot.tabsArray || []);
+            foldersArray = readIndexed(STORAGE_KEYS.FOLDERS_INDEX, STORAGE_KEYS.FOLDER_PREFIX);
+        } else if (collections) {
             // Collections explicitly provided
             tabsArray = collections;
             foldersArray = await loadAllFoldersBG();
@@ -2570,12 +2516,12 @@ const prepareSyncDataForUpload = async (collections, useIncrementalSync = false)
         }
 
         const normalizedTabsArray = (tabsArray || []).map((collection) => normalizeCollectionRecordBG(collection));
-        const deletedCollectionTombstones = await loadDeletedCollectionTombstonesBG();
+        const deletedCollectionTombstones = strict ? (storageSnapshot[STORAGE_KEYS.DELETED_COLLECTION_TOMBSTONES] || {}) : await loadDeletedCollectionTombstonesBG();
         const deletedCollections = Object.entries(deletedCollectionTombstones).map(([uid, lastUpdated]) => ({
             uid,
             lastUpdated
         }));
-        const deletedFolderTombstones = await loadDeletedFolderTombstonesBG();
+        const deletedFolderTombstones = strict ? (storageSnapshot[STORAGE_KEYS.DELETED_FOLDER_TOMBSTONES] || {}) : await loadDeletedFolderTombstonesBG();
         const deletedFolders = Object.entries(deletedFolderTombstones).map(([uid, lastUpdated]) => ({
             uid,
             lastUpdated
@@ -2586,11 +2532,11 @@ const prepareSyncDataForUpload = async (collections, useIncrementalSync = false)
             foldersArray,
             deletedCollections,
             deletedFolders
-        });
+        }, strict);
 
         // v4.0 enhanced sync format with version detection and folders support
         const syncData = {
-            timestamp: Date.now(),
+            timestamp: strict ? (storageSnapshot.localTimestamp || 0) : Date.now(),
             tabsArray: filteredFullSync.tabsArray,
             foldersArray: filteredFullSync.foldersArray,
             deletedCollections: filteredFullSync.deletedCollections,
@@ -2606,9 +2552,24 @@ const prepareSyncDataForUpload = async (collections, useIncrementalSync = false)
         console.log('📤 prepareSyncDataForUpload: Folder order:', filteredFullSync.foldersArray.map(f => ({ name: f.name, order: f.order })));
         console.log('📤 prepareSyncDataForUpload: Collection order:', filteredFullSync.tabsArray.map(c => ({ name: c.name, order: c.order, parentId: c.parentId })));
 
+        if (strict) {
+            Object.defineProperty(syncData, 'localStorageSnapshot', { value: storageSnapshot });
+            // Persist repairs through the existing guarded apply. Excluded shared
+            // records are deliberately ignored, so they cannot trigger repeat applies.
+            const needsRepair = (item, prefix) => {
+                const stored = storageSnapshot[`${prefix}${item.uid}`];
+                return stored && Number.isFinite(item.lastUpdated)
+                    && item.lastUpdated > (stored.lastUpdated ?? stored.createdOn ?? 0);
+            };
+            Object.defineProperty(syncData, 'hasTimestampRepairs', { value:
+                filteredFullSync.tabsArray.some(item => needsRepair(item, STORAGE_KEYS.COLLECTION_PREFIX))
+                || filteredFullSync.foldersArray.some(item => needsRepair(item, STORAGE_KEYS.FOLDER_PREFIX))
+            });
+        }
         return syncData;
 
     } catch (error) {
+        if (strict) throw error;
         console.error('❌ Error preparing sync data:', error);
         // Fallback to legacy format for compatibility. Still keep shared collections out
         // of this last-resort payload; if the filter itself throws, fall through with the
@@ -2662,6 +2623,10 @@ const backgroundUtilsApi = {
     getAuthToken,
     getAuthTokenForAI,
     createAuthEndpoint,
+    hasIdentityFlow,
+    startTabAuthFlow,
+    readTabAuthCode,
+    TAB_AUTH_PENDING_KEY,
     getGoogleUser,
     getOrCreateSyncFile,
     updateRemote,

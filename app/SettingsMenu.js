@@ -22,6 +22,7 @@ import { MdOutlineSyncAlt, MdSettingsBackupRestore, MdClose, MdBugReport, MdFile
 import { SHOW_ONBOARDING_EVENT } from './OnboardingGuide';
 import { IoMoon, IoSunny } from 'react-icons/io5';
 import { BsStars } from 'react-icons/bs';
+import { isSupported } from './utils/platform';
 
 const AIEnableModal = lazy(() => import('./AIEnableModal'));
 const SessionsModal = lazy(() => import('./SessionsModal').then(module => ({ default: module.SessionsModal })));
@@ -408,6 +409,7 @@ export default function SettingsMenu(props) {
                 {
                     type: 'switch',
                     key: 'chkShowBadge',
+                    requires: 'windows', // counts the current window's tabs
                     title: 'Tab counter badge',
                     description: 'Show the total number of saved tabs on the toolbar icon.',
                     switchProps: {
@@ -436,6 +438,7 @@ export default function SettingsMenu(props) {
                 {
                     type: 'switch',
                     key: 'chkToolbarIconOpensFullPage',
+                    requires: 'popup',
                     title: 'Toolbar launch mode',
                     description: 'Choose whether clicking the Tabox toolbar icon opens the popup or the full page.',
                     switchProps: {
@@ -572,6 +575,8 @@ export default function SettingsMenu(props) {
         {
             key: 'autoUpdate',
             title: 'Auto update collections',
+            // Tracks a collection's browser window — no windows on Firefox for Android.
+            requires: 'windows',
             icon: MdOutlineSyncAlt,
             items: [
                 {
@@ -676,7 +681,10 @@ export default function SettingsMenu(props) {
         },
     ];
 
-    const settingsSections = fullPageSettingsSections;
+    // Hide sections/items whose browser APIs this browser lacks (Firefox for Android).
+    const settingsSections = fullPageSettingsSections
+        .filter((section) => isSupported(section.requires))
+        .map((section) => ({ ...section, items: section.items.filter((item) => isSupported(item.requires)) }));
 
     const visibleItemsForSection = (section) => section.items.filter((item) => item.isVisible !== false);
     const activeSection = settingsSections.find((section) => section.key === activeCategory) || settingsSections[0];

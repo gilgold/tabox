@@ -93,7 +93,9 @@
 
 .settings-drawer-content {
     height: 100vh;
+    height: 100dvh;
     max-height: 100vh;
+    max-height: 100dvh;
     display: flex;
     flex-direction: column;
     background: var(--settings-bg-color);
@@ -109,6 +111,7 @@
     left: 0;
     width: 100vw;
     height: 100vh;
+    height: 100dvh;
     background: rgba(0, 0, 0, 0.3);
     z-index: 999999;
     opacity: 0;
@@ -128,6 +131,7 @@
     right: 0;
     width: 350px;
     height: 100vh;
+    height: 100dvh;
     background: var(--bg-color);
     z-index: 999999;
     transform: translateX(100%);
@@ -146,6 +150,7 @@ html.fullpage-mode .custom-drawer {
 /* Drawer Content Container */
 .settings-drawer-content {
     height: 100vh;
+    height: 100dvh;
     display: flex;
     flex-direction: column;
     background: var(--settings-bg-color);
@@ -585,6 +590,7 @@ html.fullpage-mode .switch-label {
 .fp-settings-modal {
     width: min(1120px, calc(100vw - 48px));
     height: min(760px, calc(100vh - 48px));
+    height: min(760px, calc(100dvh - 48px));
     outline: none;
 }
 
@@ -848,6 +854,7 @@ html.fullpage-mode .switch-label {
     .fp-settings-modal {
         width: calc(100vw - 24px);
         height: calc(100vh - 24px);
+        height: calc(100dvh - 24px);
     }
 
     .fp-settings-modal-overlay {
@@ -924,6 +931,7 @@ html.fullpage-mode .switch-label {
 .fp-settings-modal--popup {
     width: calc(100vw - 12px);
     height: calc(100vh - 12px);
+    height: calc(100dvh - 12px);
 }
 
 .fp-settings-modal-shell--popup {

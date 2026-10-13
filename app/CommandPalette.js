@@ -35,6 +35,7 @@ import {
 } from 'react-icons/md';
 import { CiExport } from 'react-icons/ci';
 import { AI_TOOLS } from './ai/aiTasks';
+import { isSupported } from './utils/platform';
 import { SHOW_ONBOARDING_EVENT } from './OnboardingGuide';
 import './CommandPalette.css';
 
@@ -43,7 +44,7 @@ export const EXTENSION_ACTIONS = [
     { id: 'import', label: 'Import Collections', keywords: 'import file upload load', icon: MdFileUpload },
     { id: 'export-all', label: 'Export All Collections & Folders', keywords: 'export download backup save', icon: MdFileDownload },
     { id: 'open-fullpage', label: 'Open in Full Page', keywords: 'fullpage full page expand tab window big', icon: MdOpenInNew },
-    { id: 'restore-session', label: 'Restore Recently Closed', fullpageLabel: 'Browse Recently Closed', keywords: 'restore recently closed recover previous history browse', icon: MdHistory },
+    { id: 'restore-session', label: 'Restore Recently Closed', fullpageLabel: 'Browse Recently Closed', keywords: 'restore recently closed recover previous history browse', icon: MdHistory, requires: 'recentlyClosed' },
     { id: 'manage-subscription', label: 'Manage Subscription', freeLabel: 'Upgrade to Pro', keywords: 'subscription manage billing plan cancel switch monthly annual yearly pro payment upgrade downgrade', icon: MdWorkspacePremium },
     { id: 'share-folder', label: 'Share Folder…', keywords: 'share folder collaborate invite team', icon: MdFolderShared, proOnly: true },
     // fullpageOnly: the Activity & comments panel is inherently view-bound to
@@ -57,17 +58,17 @@ export const EXTENSION_ACTIONS = [
 
 const SETTINGS_TOGGLES = [
     { key: 'theme', label: 'Dark Mode', keywords: 'dark light mode theme appearance color', sideEffect: 'theme' },
-    { key: 'chkShowBadge', label: 'Tab Counter Badge', keywords: 'badge icon count number tabs' },
+    { key: 'chkShowBadge', label: 'Tab Counter Badge', keywords: 'badge icon count number tabs', requires: 'windows' },
     { key: 'chkPerformanceMode', label: 'Performance Mode', keywords: 'performance fast speed animation reduce battery cpu', sideEffect: 'performance' },
-    { key: 'chkToolbarIconOpensFullPage', label: 'When Opening Tabox Launch In', keywords: 'toolbar extension icon action click launch open popup page tab new tab' },
+    { key: 'chkToolbarIconOpensFullPage', label: 'When Opening Tabox Launch In', keywords: 'toolbar extension icon action click launch open popup page tab new tab', requires: 'popup' },
     { key: 'chkIgnorePinned', label: 'Ignore Pinned Tabs When Adding', keywords: 'pinned tabs ignore exclude add save' },
     { key: 'chkIgnoreDuplicates', label: 'Skip Duplicate Tabs When Opening', keywords: 'duplicate tabs open skip ignore' },
     { key: 'chkEnableTabDiscard', label: 'Smart Tab Loading', keywords: 'smart tab loading discard lazy defer performance' },
     { key: 'chkColEditIgnoreDuplicateTabs', label: 'Skip Duplicate Tabs When Editing', keywords: 'duplicate tabs edit skip ignore' },
     { key: 'chkColEditIgnoreDuplicateGroups', label: 'Merge Duplicate Groups When Editing', keywords: 'duplicate groups merge edit append' },
-    { key: 'chkEnableAutoUpdate', label: 'Auto Update Collections', keywords: 'auto update track collections sync' },
-    { key: 'chkAutoUpdateOnNewCollection', label: 'Auto Update New Collections', keywords: 'auto update new collections track' },
-    { key: 'chkManualUpdateLinkCollection', label: 'Update Button Links Collection', keywords: 'update link active window manual' },
+    { key: 'chkEnableAutoUpdate', label: 'Auto Update Collections', keywords: 'auto update track collections sync', requires: 'windows' },
+    { key: 'chkAutoUpdateOnNewCollection', label: 'Auto Update New Collections', keywords: 'auto update new collections track', requires: 'windows' },
+    { key: 'chkManualUpdateLinkCollection', label: 'Update Button Links Collection', keywords: 'update link active window manual', requires: 'windows' },
 ];
 
 // Extra search keywords per AI tool (the visible label comes from AI_TOOLS).
@@ -83,7 +84,7 @@ const AI_ACTION_KEYWORDS = {
 
 // AI Tools modal actions, surfaced in the command palette (popup + full-page).
 // Built from the canonical AI_TOOLS registry so labels/icons stay in sync.
-const AI_ACTIONS = AI_TOOLS.map((tool) => ({
+const AI_ACTIONS = AI_TOOLS.filter((tool) => isSupported(tool.requires)).map((tool) => ({
     id: `ai:${tool.id}`,
     toolId: tool.id,
     label: tool.title,
@@ -292,6 +293,7 @@ function CommandPalette({
             if (action.id === 'open-shared-panel' && !selectedSharedFolder) return;
             if (action.proOnly && !isPro) return;
             if (action.requiresGoogleUser && !googleUser?.permissionId) return;
+            if (!isSupported(action.requires)) return;
             const actionLabel = !isPro && action.freeLabel ? action.freeLabel : action.label;
             if (q) {
                 const haystack = `${actionLabel} ${action.label} ${action.keywords}`.toLowerCase();
@@ -322,6 +324,7 @@ function CommandPalette({
 
         if (q) {
             SETTINGS_TOGGLES.forEach(setting => {
+                if (!isSupported(setting.requires)) return;
                 const haystack = `${setting.label} ${setting.keywords}`.toLowerCase();
                 if (!haystack.includes(q.toLowerCase())) return;
                 items.push({

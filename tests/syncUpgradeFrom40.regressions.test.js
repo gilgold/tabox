@@ -109,7 +109,7 @@ describe('4.0 upgrade compatibility - regressions', () => {
         ]);
     });
 
-    test('first sync after upgrade merges and uploads the remote snapshot when timestamps conflict', async () => {
+    test('first sync after upgrade applies remote-only edits without uploading the same snapshot', async () => {
         const snapshot = createVersion40LocalSnapshot();
         snapshot.localTimestamp = 8500;
         browser.storage.local._data = snapshot;
@@ -138,7 +138,8 @@ describe('4.0 upgrade compatibility - regressions', () => {
         const result = await backgroundUtils.syncData('token-123');
         const collections = await backgroundUtils.loadAllCollectionsBG(true);
         const patchCall = global.fetch.mock.calls.find(([url]) => url.includes('/upload/drive/v3/files/remote-file-id?uploadType=media'));
-        const uploadedPayload = JSON.parse(patchCall[1].body);
+        expect(patchCall).toBeUndefined();
+        const uploadedPayload = remoteDocument;
 
         expect(result).toBe(true);
         expect(collections.find((collection) => collection.uid === 'collection-root-a')).toEqual(
@@ -172,6 +173,8 @@ describe('4.0 upgrade compatibility - regressions', () => {
     test('first sync after upgrade uploads a merged full snapshot when local data is newer', async () => {
         const snapshot = createVersion40LocalSnapshot();
         snapshot.localTimestamp = 9100;
+        snapshot['collection_collection-root-a'].name = 'Edited offline';
+        snapshot['collection_collection-root-a'].lastUpdated = 9100;
         browser.storage.local._data = snapshot;
         browser.storage.sync._data = {
             syncFileId: 'remote-file-id'
@@ -274,7 +277,7 @@ describe('4.0 upgrade compatibility - regressions', () => {
             if (url.includes('alt=media')) {
                 return {
                     ok: true,
-                    json: async () => ({ timestamp: 9000 })
+                    json: async () => createVersion40RemoteDocument()
                 };
             }
 

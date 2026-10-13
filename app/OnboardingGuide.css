@@ -25,6 +25,7 @@
   position: relative;
   width: min(560px, calc(100vw - 16px));
   height: min(570px, calc(100vh - 8px));
+  height: min(570px, calc(100dvh - 8px));
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -466,7 +467,7 @@ html.performance-mode .onboarding-dialog::before { animation: none !important; }
 }
 
 @media (max-height: 550px) {
-  .onboarding-dialog { height: calc(100vh - 6px); }
+  .onboarding-dialog { height: calc(100vh - 6px); height: calc(100dvh - 6px); }
   .onboarding-viewport { padding-top:34px; }
   .onboarding-scene-frame { height:225px; flex-basis:225px; }
   .onboarding-copy { padding-top: 10px; }

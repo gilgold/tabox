@@ -10,6 +10,7 @@ import { viewContextState } from './atoms/globalAppSettingsState';
 import { isProState, premiumEntitlementState } from './atoms/premiumState';
 import TaboxProUpsell from './TaboxProUpsell';
 import { AI_NAME_SUGGESTION_TOOL, AI_TOOLS } from './ai/aiTasks';
+import { isSupported } from './utils/platform';
 import { getAIAvailability } from './ai/aiClient';
 import useProCheckout from './useProCheckout';
 import { readWindowStructure } from './ai/readWindowStructure';
@@ -975,7 +976,7 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
     const toolMenu = <>
                 {((!isPro && !activeToolId) || showActions) && (
                     <div className="ai-tools-list">
-                        {AI_TOOLS.filter((t) => t.featured).map((tool) => {
+                        {AI_TOOLS.filter((t) => t.featured && isSupported(t.requires)).map((tool) => {
                             const ToolIcon = tool.icon;
                             const HeroIcon = tool.heroIcon;
                             return (
@@ -992,7 +993,7 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
                             );
                         })}
                         <div className="ai-tools-grid">
-                            {AI_TOOLS.filter((t) => !t.featured).map((tool) => {
+                            {AI_TOOLS.filter((t) => !t.featured && isSupported(t.requires)).map((tool) => {
                                 const ToolIcon = tool.icon;
                                 const disabled = tool.id === 'auto-arrange-folders' && (rootCollections.length === 0 || scope.type === 'selected');
                                 const tooltipHtml = disabled

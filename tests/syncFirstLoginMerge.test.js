@@ -67,14 +67,9 @@ describe('first-login sync merges instead of overwriting (issue #67)', () => {
         const result = await backgroundUtils.syncData('token-123');
         expect(result).toBe(true);
 
-        // The Drive file was not wholesale-overwritten: the upload still contains
-        // the collection that only existed remotely.
-        const uploadCall = fetchMock.mock.calls.find(([url]) => url.includes('uploadType=media'));
-        expect(uploadCall).toBeDefined();
-        const uploadedPayload = JSON.parse(uploadCall[1].body);
-        expect(uploadedPayload.tabsArray.map((c) => c.uid)).toEqual(
-            expect.arrayContaining(['collection-remote-only', 'collection-root-a'])
-        );
+        // The merged content already equals Drive: download without rewriting it.
+        expect(fetchMock.mock.calls.some(([url]) => url.includes('uploadType=media'))).toBe(false);
+        expect(remoteDocument.tabsArray.map(c => c.uid)).toContain('collection-remote-only');
 
         // And the remote-only collection landed locally too.
         const collections = await backgroundUtils.loadAllCollectionsBG(true);
@@ -113,7 +108,7 @@ describe('first-login sync merges instead of overwriting (issue #67)', () => {
         expect(collections.map((c) => c.uid)).toEqual(expect.arrayContaining(['collection-local-only']));
     });
 
-    test('devices that have synced before keep the plain fast paths', async () => {
+    test('previously synced devices also preserve remote-only content without redundant uploads', async () => {
         const snapshot = createVersion40LocalSnapshot();
         snapshot.localTimestamp = 500000;
         snapshot.lastSuccessfulSyncTime = 400000; // synced before
@@ -128,12 +123,8 @@ describe('first-login sync merges instead of overwriting (issue #67)', () => {
         const result = await backgroundUtils.syncData('token-123');
         expect(result).toBe(true);
 
-        // Plain last-writer-wins push: the upload reflects local data only — the
-        // stale remote-only collection is NOT merged in (existing behavior for
-        // devices that have synced before).
-        const uploadCall = fetchMock.mock.calls.find(([url]) => url.includes('uploadType=media'));
-        expect(uploadCall).toBeDefined();
-        const uploadedPayload = JSON.parse(uploadCall[1].body);
-        expect(uploadedPayload.tabsArray.map((c) => c.uid)).not.toContain('collection-remote-only');
+        expect(fetchMock.mock.calls.some(([url]) => url.includes('uploadType=media'))).toBe(false);
+        const collections = await backgroundUtils.loadAllCollectionsBG(true);
+        expect(collections.map(c => c.uid)).toContain('collection-remote-only');
     });
 });

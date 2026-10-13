@@ -52,13 +52,23 @@ export function parseState(rawState) {
 // host (`evil-extensions.allizom.org.evil.com`) — both fail this check
 // because URL parsing resolves the true hostname first, and endsWith()
 // requires the literal leading dot to be part of the host.
-export function isValidTarget(rawTarget) {
+//
+// Firefox for Android has no identity API, so the extension runs the flow in
+// an ordinary tab and watches (tabs.onUpdated) for this Worker's own
+// /auth/done page instead. That exact same-origin URL is the only other
+// allowed target.
+export function isValidTarget(rawTarget, selfOrigin) {
   try {
     const u = new URL(rawTarget);
-    return u.protocol === 'https:' && u.hostname.endsWith(ALLOWED_TARGET_SUFFIX);
+    if (u.protocol === 'https:' && u.hostname.endsWith(ALLOWED_TARGET_SUFFIX)) return true;
+    return isTabFlowTarget(rawTarget, selfOrigin);
   } catch {
     return false;
   }
+}
+
+export function isTabFlowTarget(rawTarget, selfOrigin) {
+  return typeof selfOrigin === 'string' && rawTarget === `${selfOrigin}/auth/done`;
 }
 
 export async function handleAuthCallback(request) {
@@ -73,7 +83,7 @@ export async function handleAuthCallback(request) {
 
   const state = parseState(rawState);
   if (!state) return badRequest();
-  if (!isValidTarget(state.t)) return badRequest();
+  if (!isValidTarget(state.t, url.origin)) return badRequest();
 
   const dest = new URL(state.t);
   // The target came from client-controlled state; strip any embedded
@@ -81,15 +91,18 @@ export async function handleAuthCallback(request) {
   // to smuggle credentials or confuse a downstream URL parser.
   dest.username = '';
   dest.password = '';
-  if (error) {
-    dest.searchParams.set('error', error);
-  } else {
-    dest.searchParams.set('code', code);
-  }
   // Echo the ORIGINAL state string verbatim (never re-serialized) so the
   // extension can verify its nonce; this is a 302 header value only — it is
   // never rendered into an HTML body.
-  dest.searchParams.set('state', rawState);
+  const params = new URLSearchParams(error ? { error } : { code });
+  params.set('state', rawState);
+  if (isTabFlowTarget(state.t, url.origin)) {
+    // Tab flow: carry the result in the fragment so the code is never sent
+    // to the Worker (or its logs) a second time when /auth/done loads.
+    dest.hash = params.toString();
+  } else {
+    params.forEach((v, k) => dest.searchParams.set(k, v));
+  }
 
   return new Response(null, {
     status: 302,

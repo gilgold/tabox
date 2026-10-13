@@ -11,6 +11,7 @@ import { getNextFavoriteOrder } from './utils/favoritesUtils';
 import { noPermissionOpenState } from './atoms/sharedFoldersState';
 import { canEditFolder, guardFolderEdit } from './utils/sharedFolderUtils';
 import { getDisplayInfo } from './utils/displayInfo';
+import { isSingleWindowBrowser } from './utils/platform';
 
 export const openCollectionTabs = async ({
     collectionToOpen,
@@ -42,7 +43,11 @@ export const openCollectionTabs = async ({
     // chrome/background.js's `createOpenTabsWindow`) and opens the tabs atomically
     // in response to a single message sent before any window exists.
     let msg;
-    if (chkOpenNewWindow) {
+    if (isSingleWindowBrowser()) {
+        // Firefox for Android: no windows — open into the single tab strip,
+        // and never track (auto-update needs per-window tab lists).
+        msg = { type: 'openTabs', collection: collectionToOpen, window: null, newWindow: false, trackOpenedWindow: false };
+    } else if (chkOpenNewWindow) {
         let windowCreationObject = { focused: true };
 
         // Try to open in incognito if the collection was from incognito and we have permission

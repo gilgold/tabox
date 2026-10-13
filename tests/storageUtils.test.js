@@ -39,6 +39,31 @@ const resolveStorageGet = async (keys, storage) => {
     return {};
 };
 
+describe('forced edit timestamps', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    test('offline collection and folder edits persist the same fresh timestamp in the record and index', async () => {
+        const data = { collections_index: {}, folders_index: {} };
+        browser.storage.local.get.mockImplementation(keys => resolveStorageGet(keys, data));
+        browser.storage.local.set.mockImplementation(async values => Object.assign(data, values));
+        const now = jest.spyOn(Date, 'now').mockReturnValue(100000);
+        try {
+            await saveSingleCollection({ uid: 'edited', name: 'Offline edit', tabs: [], lastUpdated: 10, order: 0 }, true);
+            await saveSingleFolder({ uid: 'folder', name: 'Offline folder', lastUpdated: 10 }, true);
+            expect(data.collection_edited.lastUpdated).toBe(100000);
+            expect(data.collections_index.edited.lastUpdated).toBe(100000);
+            expect(data.folder_folder.lastUpdated).toBe(100000);
+            expect(data.folders_index.folder.lastUpdated).toBe(100000);
+            await saveSingleCollection({ ...data.collection_edited, lastOpened: 100001 }, false);
+            expect(data.collection_edited.lastUpdated).toBe(100000);
+        } finally {
+            now.mockRestore();
+        }
+    });
+});
+
 describe('sortCollectionsForDisplay', () => {
     beforeEach(() => {
         jest.clearAllMocks();

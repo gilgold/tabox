@@ -1,5 +1,5 @@
 /** @jest-environment jsdom */
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import fs from 'fs';
 import path from 'path';
@@ -304,7 +304,7 @@ describe('SettingsMenu — Tabox Pro section', () => {
         expect(switchButton.closest('.manage-sub-plan-actions')).toContainElement(cancelButton);
     });
 
-    test('signed-out free user: Upgrade click signs in then retries checkout', async () => {
+    test('signed-out free user: Upgrade click signs in, asking the background to open checkout after', async () => {
         browser.runtime.sendMessage.mockImplementation((msg) => {
             if (msg.type === 'openProCheckout') {
                 return browser.runtime.sendMessage.mock.calls.filter((c) => c[0].type === 'openProCheckout').length === 1
@@ -323,10 +323,7 @@ describe('SettingsMenu — Tabox Pro section', () => {
 
         await screen.findByRole('heading', { name: 'Tabox Pro', level: 3 });
         expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'openProCheckout' });
-        expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'login' });
-        expect(
-            browser.runtime.sendMessage.mock.calls.filter((c) => c[0].type === 'openProCheckout').length,
-        ).toBeGreaterThanOrEqual(2);
+        await waitFor(() => expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'login', thenCheckout: true }));
     });
 
     test('opening settings refreshes a cached entitlement so external changes show up', async () => {

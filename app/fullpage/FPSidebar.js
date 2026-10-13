@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback, lazy, Suspense } from 'react';
 import { useAtom, useSetAtom, useAtomValue } from 'jotai';
-import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
+import { DndContext, closestCenter } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { sidebarNavigationState, sidebarCollapsedState } from '../atoms/fullpageState';
@@ -17,7 +17,7 @@ import { showSuccessToast, showErrorToast, showInfoToast } from '../toastHelpers
 import { useTrackedSync } from '../useTrackedSync';
 import { buildFolderUrlList, getCollectionUrls, copyToClipboard } from '../utils/index';
 import { reorderSidebarFolders } from './sidebarFolderReorder';
-import { dndPointerSensorOptions } from '../utils/dndShared';
+import { useDndSensors } from '../utils/dndShared';
 import { createFolderMenuItems } from '../utils/contextMenuItems';
 import FPCtxMenu from './FPCtxMenu';
 import { isSharedFolder } from '../utils/sharedFolderUtils';
@@ -44,6 +44,7 @@ import {
 } from 'react-icons/md';
 import { HiCollection } from 'react-icons/hi';
 import FPBadge from './FPBadge';
+import { isSingleWindowBrowser, hasRecentlyClosed } from '../utils/platform';
 import './FPSidebar.css';
 
 const CreateFolderModal = lazy(() => import('../CreateFolderModal'));
@@ -212,9 +213,7 @@ function FPSidebar({
     const pendingInvites = useAtomValue(pendingInvitesState);
 
     const sortableFolderIds = useMemo(() => regularFolders.map((folder) => folder.uid), [regularFolders]);
-    const folderSortSensors = useSensors(
-        useSensor(PointerSensor, dndPointerSensorOptions),
-    );
+    const folderSortSensors = useDndSensors();
 
     const handleFolderCreate = async (name, color) => {
         if (addFolder) await addFolder(name, color);
@@ -575,9 +574,10 @@ function FPSidebar({
     const navItems = [
         { key: 'all', label: 'All Collections', count: allCount, icon: HiCollection },
         { key: 'favorites', label: 'Favorites', count: favoritesCount, icon: MdStar },
-        { key: 'current-windows', label: 'Current Windows', count: currentWindowCount, icon: MdOpenInBrowser },
-        { key: 'sessions', label: 'Recently Closed', count: sessionCount, icon: MdHistory },
-    ];
+        // Needs the windows / sessions APIs — absent on Firefox for Android.
+        !isSingleWindowBrowser() && { key: 'current-windows', label: 'Current Windows', count: currentWindowCount, icon: MdOpenInBrowser },
+        hasRecentlyClosed() && { key: 'sessions', label: 'Recently Closed', count: sessionCount, icon: MdHistory },
+    ].filter(Boolean);
 
     const draggedParentId = draggingCollection?.collection?.parentId || null;
     const draggedIsAtRoot = !draggedParentId || !folders.some((folder) => folder.uid === draggedParentId);

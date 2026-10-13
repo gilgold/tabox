@@ -7,9 +7,9 @@ import { browser } from '../static/globals';
 export default function useProCheckout() {
     return useCallback(async ({ ensureLogin = false } = {}) => {
         const ok = await browser.runtime.sendMessage({ type: 'openProCheckout' });
-        if (!ok && ensureLogin) {
-            const loggedIn = await browser.runtime.sendMessage({ type: 'login' });
-            if (loggedIn) await browser.runtime.sendMessage({ type: 'openProCheckout' });
-        }
+        // thenCheckout: the background opens checkout itself once sign-in
+        // lands — on Firefox for Android the sign-in tab can outlive this
+        // message (the event page may be suspended meanwhile).
+        if (!ok && ensureLogin) await browser.runtime.sendMessage({ type: 'login', thenCheckout: true });
     }, []);
 }

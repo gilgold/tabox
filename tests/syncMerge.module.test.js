@@ -1,9 +1,31 @@
 const {
     normalizeSyncSnapshot,
-    mergeSyncSnapshots
+    mergeSyncSnapshots,
+    syncSnapshotsMatch
 } = require('../chrome/sync-merge.js');
 
 describe('sync merge module', () => {
+    test('content equality ignores envelope metadata, derived folder counts and object key order, but preserves tab order', () => {
+        const original = {
+            timestamp: 100,
+            tabsArray: [{ uid: 'a', tabs: [{ url: 'a', title: 'A' }, { url: 'b' }], order: 0 }, { uid: 'b', tabs: [], order: 1 }],
+            foldersArray: [{ uid: 'f1', collectionCount: 0, order: 0 }, { uid: 'f2', order: 1 }],
+            deletedCollections: [{ uid: 'd1', lastUpdated: 1 }, { uid: 'd2', lastUpdated: 2 }],
+            deletedFolders: [{ uid: 'df1', lastUpdated: 1 }, { uid: 'df2', lastUpdated: 2 }]
+        };
+        const copy = JSON.parse(JSON.stringify(original));
+        copy.timestamp = 900;
+        copy.extensionVersion = '4.2.4';
+        copy.tabsArray.reverse();
+        copy.foldersArray.reverse();
+        copy.foldersArray[0].collectionCount = 9;
+        copy.deletedCollections.reverse();
+        copy.deletedFolders.reverse();
+        copy.tabsArray[1].tabs[0] = { title: 'A', url: 'a' };
+        expect(syncSnapshotsMatch(original, copy)).toBe(true);
+        copy.tabsArray[1].tabs.reverse();
+        expect(syncSnapshotsMatch(original, copy)).toBe(false);
+    });
     test('normalizes missing arrays and sync metadata', () => {
         expect(normalizeSyncSnapshot({})).toEqual({
             timestamp: 0,

@@ -1957,3 +1957,50 @@ html.fullpage-mode .fp-content .fp-toolbar .toolbar-select__control--is-focused 
     outline: 0 !important;
     box-shadow: none !important;
 }
+
+/* Phone widths (e.g. Firefox for Android): one full-width column instead of
+   fixed-width cards that leave the right side of the screen empty. */
+@media (max-width: 600px) {
+    .fp-content-grid,
+    .fp-grouped-section-items,
+    .fp-session-group-cards,
+    .fp-session-group-cards:not(.fp-content-list-mode):not(.fp-content-search-mode) {
+        grid-template-columns: 1fr;
+    }
+
+    /* One scrollable row instead of a three-row stack of controls. */
+    html.fullpage-mode .fp-toolbar,
+    .fp-toolbar .fp-toolbar-group {
+        flex-wrap: nowrap;
+    }
+
+    html.fullpage-mode .fp-toolbar > * {
+        flex: 0 0 auto;
+    }
+
+    /* single-row toolbar: desktop-size bulk-action slot and float offset
+       instead of the taller wrapped <=900px stack */
+    .fp-content {
+        --fp-bulk-toolbar-slot-height: 42px;
+        --fp-toolbar-float-offset: 100px;
+    }
+
+    /* undo the <=900px full-width selection row inside the scrolling row */
+    html.fullpage-mode .fp-toolbar > .fp-toolbar-group-selection {
+        width: auto;
+    }
+
+    html.fullpage-mode .fp-toolbar {
+        max-width: calc(100% - 16px);
+        overflow-x: auto;
+        scrollbar-width: none;
+        /* centered overflow would push leading controls out of scroll reach */
+        justify-content: flex-start;
+    }
+
+    /* Keep Tabox AI visible at the start of the scrolling row. */
+    html.fullpage-mode .fp-toolbar > .ai-button {
+        order: -1;
+        flex-shrink: 0;
+    }
+}

@@ -4,6 +4,7 @@
 // token to the extension via externally_connectable messaging.
 export const TABOX_EXTENSION_ID = 'bdbliblipiempfdkkkjohnecmeknnpoa';
 const STORE_URL = `https://chromewebstore.google.com/detail/${TABOX_EXTENSION_ID}`;
+const AMO_URL = 'https://addons.mozilla.org/firefox/addon/tabox-tab-manager/';
 // The origin share links used before the share.tbxpro.app custom domain.
 // Extensions up to 4.2 list ONLY this origin in externally_connectable, so a
 // share.tbxpro.app join page can never handshake with them (Chrome doesn't
@@ -94,7 +95,23 @@ export const JOIN_PAGE_HTML = `<!doctype html>
   var PING_TIMEOUT_MS = 2000;
   var REDEEM_TIMEOUT_MS = 30000;
 
+  // Firefox (desktop and Android) has no externally_connectable: an
+  // installed Tabox spots this tab's URL itself, redeems the link and swaps
+  // the tab to Tabox. Just wait, then explain how to get it if nothing happens.
+  function waitForFirefoxTabox(info) {
+    setStatus('Opening in Tabox…', '');
+    show('spinner');
+    setTimeout(function () {
+      setStatus('Install Tabox for Firefox, then reload this page to ' + (info.kind === 'folder' ? 'join the folder.' : 'add the collection.'), '');
+      var a = el('install');
+      a.href = '${AMO_URL}';
+      a.textContent = 'Get Tabox for Firefox';
+      show('install');
+    }, 8000);
+  }
+
   function redeem(info) {
+    if (navigator.userAgent.includes('Firefox/')) return waitForFirefoxTabox(info);
     if (!window.chrome || !chrome.runtime || !chrome.runtime.sendMessage) return notInstalled(info);
     sendTo({ type: 'taboxShareLinkPing' }, PING_TIMEOUT_MS, function (pong) {
       if (!pong) return notInstalled(info);

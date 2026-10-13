@@ -13,6 +13,7 @@ Tabox is a browser extension (Manifest v3) for Chromium browsers (Chrome/Edge) *
 - **CSS**: verify rendering in both engines (Blink and Gecko). Avoid Chromium-only features without fallbacks (`-webkit-` prefixed rules need unprefixed/`-moz-` equivalents; check scrollbar styling, `zoom`, popup sizing behavior, and form-control styling which differ in Gecko).
 - **Manifest**: keep Firefox-specific keys (`browser_specific_settings`, background scripts vs service_worker) in mind when touching `manifest.json`.
 - **Verification**: when testing or reasoning about a change, consider both variants; don't declare work complete if it's only been validated against Chromium.
+- **Firefox for Android** (listed via `gecko_android`): no `windows`, `tabGroups`, `sessions`, `commands`, `contextMenus` or `identity` APIs; every tab has its own `windowId`, `favIconUrl` is never set, and `tabs.query` only returns tabs loaded since startup (Mozilla bug 1583281). Gate UI with `app/utils/platform.js` (`isSingleWindowBrowser`, `isSupported(requires)` on registry entries) and background code with `browser.<ns>?.`. Never register a top-level listener on a possibly-missing namespace unguarded — one throw aborts every listener after it. Auto-update is disabled there (partial tab lists would destroy collections); sign-in uses the tab flow (`startTabAuthFlow` → Worker `/auth/done` → top-level `tabs.onUpdated`, since the event page is suspended mid-flow); the toolbar entry always opens the full page.
 
 ## Tech Stack
 

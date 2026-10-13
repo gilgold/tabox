@@ -865,10 +865,12 @@
     .sync-recovery-picker-modal {
         width: calc(100vw - 24px);
         max-height: calc(100vh - 24px);
+        max-height: calc(100dvh - 24px);
     }
 
     .sync-recovery-picker-shell {
         max-height: calc(100vh - 24px);
+        max-height: calc(100dvh - 24px);
     }
 }
 

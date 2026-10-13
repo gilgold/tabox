@@ -5,13 +5,10 @@ import {
     DndContext,
     DragOverlay,
     MeasuringStrategy,
-    PointerSensor,
     closestCenter,
     pointerWithin,
     rectIntersection,
     useDroppable,
-    useSensor,
-    useSensors,
 } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { AiOutlineFolderAdd } from 'react-icons/ai';
@@ -26,8 +23,9 @@ import GroupContainer from './GroupContainer';
 import SortableGroupContainer from './SortableGroupContainer';
 import SortableTabRow from './SortableTabRow';
 import TabRow from './TabRow';
+import { isSingleWindowBrowser } from './utils/platform';
 import { getCurrentTabsAndGroups } from './utils';
-import { dndPointerSensorOptions } from './utils/dndShared';
+import { useDndSensors } from './utils/dndShared';
 import {
     applyCollectionDropIntent,
     buildCollectionDragModel,
@@ -98,9 +96,7 @@ function ExpandedCollectionData(props) {
         dragPointerRef.current = null;
     }, [props.collection]);
 
-    const sensors = useSensors(
-        useSensor(PointerSensor, dndPointerSensorOptions),
-    );
+    const sensors = useDndSensors();
 
     const measuring = {
         droppable: {
@@ -112,6 +108,7 @@ function ExpandedCollectionData(props) {
     };
 
     const checkHighlighted = useEffectEvent(async () => {
+        if (isSingleWindowBrowser()) return; // no multi-tab selection on Firefox for Android
         const highlightedTabs = await browser.tabs.query({ highlighted: true, currentWindow: true });
         setIsHighlighted(highlightedTabs.length > 1);
     });

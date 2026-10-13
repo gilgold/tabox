@@ -556,6 +556,7 @@
         top: 0;
         right: 0;
         height: 100vh;
+        height: 100dvh;
         z-index: 500;
         border-left: 1px solid var(--fp-border);
         box-shadow: var(--fp-shadow-xl);

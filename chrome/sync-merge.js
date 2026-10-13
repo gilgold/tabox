@@ -246,9 +246,34 @@ function mergeSyncSnapshots({ localSnapshot, remoteSnapshot, now = Date.now(), d
     };
 }
 
+// Compare content, not the transport timestamp/version. Top-level entity order is
+// represented by `order`; tab/group arrays remain order-sensitive. Folder counts
+// are derived locally and must not cause two devices to keep uploading forever.
+function syncSnapshotsMatch(left, right) {
+    const content = (snapshot) => {
+        const normalized = normalizeSyncSnapshot(snapshot, 0);
+        return {
+            tabsArray: normalized.tabsArray.map(collection => ({ ...collection, color: collection.color || 'default' }))
+                .sort((a, b) => String(a.uid).localeCompare(String(b.uid))),
+            foldersArray: normalized.foldersArray.map(folder => {
+                const result = { ...folder };
+                delete result.collectionCount;
+                return result;
+            }).sort((a, b) => String(a.uid).localeCompare(String(b.uid))),
+            deletedCollections: normalized.deletedCollections.sort((a, b) => String(a.uid).localeCompare(String(b.uid))),
+            deletedFolders: normalized.deletedFolders.sort((a, b) => String(a.uid).localeCompare(String(b.uid)))
+        };
+    };
+    const stableKeys = (_key, value) => value && typeof value === 'object' && !Array.isArray(value)
+        ? Object.fromEntries(Object.keys(value).sort().map(key => [key, value[key]]))
+        : value;
+    return JSON.stringify(content(left), stableKeys) === JSON.stringify(content(right), stableKeys);
+}
+
 const syncMergeApi = {
     normalizeSyncSnapshot,
-    mergeSyncSnapshots
+    mergeSyncSnapshots,
+    syncSnapshotsMatch
 };
 
 /* istanbul ignore next */

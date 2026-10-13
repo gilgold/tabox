@@ -6,8 +6,10 @@ import { getColorValue } from '../utils/colorMigration';
 import { saveCollectionSnapshot } from '../utils/saveCollectionSnapshot';
 import { browser } from '../../static/globals';
 import { triggerBackgroundSync } from '../utils/sharedSync';
+import { isSharedFolder } from '../utils/sharedFolderUtils';
 import { showSuccessToast, showErrorToast } from '../toastHelpers';
 import AiSuggestNameButton from '../AiSuggestNameButton';
+import SingleWindowTabsNote from '../SingleWindowTabsNote';
 import { suggestCollectionName } from '../ai/tasks/suggestCollectionName';
 import { suggestFolderName } from '../ai/tasks/suggestFolderName';
 import './SaveCollectionModal.css';
@@ -119,6 +121,11 @@ function SaveCollectionModal({
                     newItem.parentId = selectedFolder;
                 }
                 await addCollection(newItem, false, true);
+                // addCollection skips its own sync when skipStateUpdate is set,
+                // so push to Drive here (shared folders sync on their own).
+                if (!isSharedFolder(folders?.find(f => f.uid === selectedFolder))) {
+                    await triggerBackgroundSync({ updateLocalTimestamp: false });
+                }
                 if (onDataUpdate) await onDataUpdate();
                 if (onSaved) onSaved(newItem);
                 const folderLabel = selectedFolder
@@ -211,6 +218,8 @@ function SaveCollectionModal({
                                 />
                             </div>
                         </div>
+
+                        {!sourceCollection && <SingleWindowTabsNote />}
 
                         {showModeToggle && (
                             <div className="save-collection-form-group">

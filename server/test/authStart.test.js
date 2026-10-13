@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { handleAuthStart } from '../src/authStart.js';
+import { handleAuthStart, handleAuthDone } from '../src/authStart.js';
 
 function b64uEncode(obj) {
   const json = JSON.stringify(obj);
@@ -72,5 +72,28 @@ describe('handleAuthStart', () => {
     const state = b64uEncode({ t: target, n: 'n' });
     const res = handleAuthStart(req({ state, redirect_uri: target }), ENV);
     expect(res.status).toBe(400);
+  });
+
+  it('accepts its own /auth/done as the tab-flow target', () => {
+    const done = 'https://share.tbxpro.app/auth/done';
+    const state = b64uEncode({ t: done, n: 'n' });
+    const res = handleAuthStart(req({ state, redirect_uri: done }), ENV);
+    expect(res.status).toBe(302);
+    expect(new URL(res.headers.get('Location')).searchParams.get('redirect_uri')).toBe('https://share.tbxpro.app/auth/callback');
+  });
+
+  it("rejects a foreign origin's /auth/done", () => {
+    const state = b64uEncode({ t: 'https://evil.example/auth/done', n: 'n' });
+    expect(handleAuthStart(req({ state }), ENV).status).toBe(400);
+  });
+});
+
+describe('handleAuthDone', () => {
+  it('serves a no-store, no-referrer static page', async () => {
+    const res = handleAuthDone();
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Cache-Control')).toBe('no-store');
+    expect(res.headers.get('Referrer-Policy')).toBe('no-referrer');
+    expect(await res.text()).toContain('close this tab');
   });
 });

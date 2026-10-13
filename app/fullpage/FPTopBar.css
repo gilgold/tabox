@@ -471,3 +471,27 @@ input.fp-search-input[type="text"]:focus {
         transition: none !important;
     }
 }
+
+/* Phone widths (e.g. Firefox for Android): let the search field shrink so the
+   bar never overflows the viewport. */
+@media (max-width: 480px) {
+    .fp-topbar {
+        grid-template-columns: max-content minmax(0, 1fr) max-content;
+        padding: 0 8px;
+        column-gap: 6px;
+    }
+
+    .fp-topbar-logo {
+        font-size: 1.4em;
+    }
+
+    .fp-search-bar {
+        overflow: hidden;
+    }
+
+    /* The avatar menu still shows sync state; drop the inline indicator. */
+    .fp-control-strip .sync-status,
+    .fp-control-strip .header-separator {
+        display: none;
+    }
+}

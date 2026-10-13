@@ -12,6 +12,7 @@ import { copyToClipboard, unwrapDeferredUrl } from './utils/index';
 import { showSuccessToast, showErrorToast } from './toastHelpers';
 import MoveToCollectionModal from './MoveToCollectionModal';
 import ClickableTabUrl from './fullpage/ClickableTabUrl';
+import { isSingleWindowBrowser } from './utils/platform';
 
 const TabRow = memo(({
     tab,
@@ -230,7 +231,7 @@ const TabRow = memo(({
 
     const handleOpenTab = useCallback(async (tabToOpen) => {
         const { chkOpenNewWindow } = await browser.storage.local.get('chkOpenNewWindow');
-        if (chkOpenNewWindow) {
+        if (chkOpenNewWindow && !isSingleWindowBrowser()) {
             await browser.windows.create({ focused: true, url: tabToOpen.url });
         } else {
             await browser.tabs.create({ url: tabToOpen.url, active: true });

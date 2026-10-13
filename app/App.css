@@ -44,7 +44,9 @@ p {
    ======================================== */
 .App.fullpage {
 	height: 100vh;
+	height: 100dvh;
 	max-height: 100vh;
+	max-height: 100dvh;
 }
 
 .App.fullpage .main-content-wrapper {
