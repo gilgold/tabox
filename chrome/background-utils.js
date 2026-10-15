@@ -1404,11 +1404,11 @@ async function getGoogleUser(token) {
     return false;
 }
 
-async function getOrCreateSyncFile(token) {
+async function getOrCreateSyncFile(token, { rediscover = false } = {}) {
     const { syncFileId } = await browser.storage.sync.get('syncFileId');
     console.log('🔑 getOrCreateSyncFile: Current syncFileId from storage.sync:', syncFileId || 'NOT FOUND');
     
-    if (syncFileId) {
+    if (syncFileId && !rediscover) {
         console.log('🔑 getOrCreateSyncFile: Using existing syncFileId from storage.sync');
         return;
     }
@@ -1417,8 +1417,7 @@ async function getOrCreateSyncFile(token) {
     const url = "https://www.googleapis.com/drive/v3/files/?corpora=user&spaces=appDataFolder&fields=files(id)&q=name='appSettings.json'&pageSize=1&orderBy=modifiedByMeTime desc";
     const response = await handleRequest(url, {
         mode: 'cors',
-        withCredentials: true,
-        credentials: 'include',
+        credentials: 'omit',
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
@@ -1427,7 +1426,7 @@ async function getOrCreateSyncFile(token) {
     if (response) {
         if (response.files.length === 0) {
             console.log('🔑 getOrCreateSyncFile: No existing file found, creating new sync file');
-            await _createNewSyncFile(token);
+            return Boolean(await _createNewSyncFile(token));
         } else {
             console.log('🔑 getOrCreateSyncFile: Found existing file in Google Drive:', response.files[0].id);
             await browser.storage.sync.set({ syncFileId: response.files[0].id });
