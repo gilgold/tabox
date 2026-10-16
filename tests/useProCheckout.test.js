@@ -4,6 +4,8 @@ import '@testing-library/jest-dom';
 
 import { browser } from '../static/globals';
 import useProCheckout from '../app/useProCheckout';
+import { showErrorToast } from '../app/toastHelpers';
+jest.mock('../app/toastHelpers', () => ({ showErrorToast: jest.fn() }));
 
 function Harness({ ensureLogin }) {
     const startProCheckout = useProCheckout();
@@ -17,6 +19,18 @@ describe('useProCheckout', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         browser.runtime.sendMessage = jest.fn().mockResolvedValue(true);
+    });
+
+    test('requests host access before checkout and stops when denied', async () => {
+        const previousPermissions = browser.permissions;
+        browser.permissions = { request: jest.fn().mockResolvedValue(false) };
+        try {
+            render(<Harness ensureLogin />);
+            fireEvent.click(screen.getByText('Upgrade'));
+            expect(browser.permissions.request).toHaveBeenCalledTimes(1);
+            await waitFor(() => expect(showErrorToast).toHaveBeenCalledWith(expect.stringContaining('Google site access')));
+            expect(browser.runtime.sendMessage).not.toHaveBeenCalled();
+        } finally { browser.permissions = previousPermissions; }
     });
 
     test('goes straight to checkout', async () => {

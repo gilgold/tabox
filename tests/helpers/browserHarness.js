@@ -209,8 +209,8 @@ const createBrowserHarness = (options = {}) => {
             onChanged: storageChanged
         },
         permissions: {
-            contains: jest.fn(async () => false),
-            request: jest.fn(async () => false),
+            contains: jest.fn(async (permission) => Boolean(permission?.origins?.length) && permission.origins.every(origin => ['https://www.googleapis.com/*', 'https://oauth2.googleapis.com/*'].includes(origin))),
+            request: jest.fn(async (permission) => Boolean(permission?.origins?.length) && permission.origins.every(origin => ['https://www.googleapis.com/*', 'https://oauth2.googleapis.com/*'].includes(origin))),
             onAdded: createEventMock(),
             onRemoved: createEventMock()
         },

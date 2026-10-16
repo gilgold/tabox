@@ -1,3 +1,4 @@
+import { requestSyncAccess } from './utils/syncPermissions';
 import { useCallback } from 'react';
 import { browser } from '../static/globals';
 
@@ -6,6 +7,8 @@ import { browser } from '../static/globals';
 // menu has always used.
 export default function useProCheckout() {
     return useCallback(async ({ ensureLogin = false } = {}) => {
+        // Ask while the upgrade click still has user activation, before checkout.
+        if (ensureLogin && !await requestSyncAccess()) return;
         const ok = await browser.runtime.sendMessage({ type: 'openProCheckout' });
         // thenCheckout: the background opens checkout itself once sign-in
         // lands — on Firefox for Android the sign-in tab can outlive this

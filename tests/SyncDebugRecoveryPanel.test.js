@@ -5,7 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import SyncDebugRecoveryPanel from '../app/SyncDebugRecoveryPanel';
 import { browser } from '../static/globals';
-import { showSuccessToast } from '../app/toastHelpers';
+import { showErrorToast, showSuccessToast } from '../app/toastHelpers';
 
 const recoveryCss = fs.readFileSync(path.join(__dirname, '../app/SyncDebugRecoveryPanel.css'), 'utf8');
 
@@ -332,5 +332,28 @@ describe('SyncDebugRecoveryPanel', () => {
         expect(await screen.findByText('Sync diagnostics are unavailable until you sign in to Google Drive.')).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /Force Download from Server/i })).not.toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /Reset Sync State/i })).not.toBeInTheDocument();
+    });
+});
+
+
+describe('issue 116 recovery feedback', () => {
+    beforeEach(() => { jest.clearAllMocks(); mockRecoveryMessages({ groups: [] }); });
+    test.each([false, undefined])('does not show download success for %s', async (result) => {
+        render(<SyncDebugRecoveryPanel isActive isSyncEnabled mode="diagnostics" applyDataFromServer={async () => result} />);
+        fireEvent.click(await screen.findByRole('button', { name: /Force Download from Server/i }));
+        await waitFor(() => expect(showErrorToast).toHaveBeenCalled());
+        expect(showSuccessToast).not.toHaveBeenCalled();
+    });
+    test('waits for completion before reporting download success', async () => {
+        let resolve;
+        const pending = new Promise(r => { resolve = r; });
+        render(<SyncDebugRecoveryPanel isActive isSyncEnabled mode="diagnostics" applyDataFromServer={() => pending} />);
+        const button = await screen.findByRole('button', { name: /Force Download from Server/i });
+        fireEvent.click(button);
+        expect(button).toBeDisabled();
+        expect(showSuccessToast).not.toHaveBeenCalled();
+        resolve(true);
+        await waitFor(() => expect(showSuccessToast).toHaveBeenCalledWith('Sync download completed', 3000, expect.any(Object)));
+        expect(button).not.toBeDisabled();
     });
 });

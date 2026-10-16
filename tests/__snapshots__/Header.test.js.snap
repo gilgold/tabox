@@ -10,7 +10,8 @@ exports[`Header -- Sync disabled Header renders correctly - sync disabled 1`] = 
     >
       <div
         class="login-section"
-        title="Click here to enable Google Drive sync"
+        data-tooltip-content="Click here to enable Google Drive sync"
+        data-tooltip-id="main-tooltip"
       >
         <div
           class="avatar-wrapper"

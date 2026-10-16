@@ -46,6 +46,18 @@ if (typeof importScripts === 'function') {
     SYNC_SESSION_STATUS,
     writeSyncSessionState
   } = syncSessionStateApi;
+  const syncPermissionsApi = typeof require === 'function'
+    ? require('./sync-transport.js')
+    : globalThis.TaboxSyncTransport;
+  async function checkSyncPermissions() {
+    if (await syncPermissionsApi.hasSyncPermissions(browser)) return true;
+    await updateSharedSyncSessionState({
+      status: SYNC_SESSION_STATUS.ERROR,
+      error: syncPermissionsApi.SYNC_PERMISSION_ERROR
+    });
+    logSyncOperation('error', syncPermissionsApi.SYNC_PERMISSION_ERROR);
+    return false;
+  }
   let updateInProgress = false;
 
   // Sync coalescing to prevent overlapping sync operations.
@@ -550,6 +562,7 @@ async function runBackgroundSync() {
     error: null
   });
 
+  if (!await checkSyncPermissions()) return false;
   const token = await getAuthToken();
   if (token === false) {
     logSyncOperation('error', 'Background sync skipped - failed to get auth token');
@@ -810,6 +823,7 @@ async function handleAutoUpdate(windowId, timeDelay = 1, rebuildContextMenus = f
 // Enhanced handleRemoteUpdate with better error handling and retry logic
 async function handleRemoteUpdate(retryCount = 0, maxRetries = 2) {
   try {
+    if (!await checkSyncPermissions()) return false;
     const { googleUser } = await browser.storage.local.get('googleUser');
     if (!googleUser) { 
       return false; 
@@ -1310,11 +1324,13 @@ async function openTabs(collection, window, newWindow = null, trackOpenedWindow 
     }
   }
   
+  let groupResult = { groupsRestored: 0, groupsFailed: 0 };
   // Apply chrome groups and tracking
   // Note: Tab groups are not supported in incognito windows
   try {
     if (!isIncognitoWindow) {
-      const postOpenTasks = [applyChromeGroupSettings(window.id, collection)];
+      groupResult = await applyChromeGroupSettings(window.id, collection);
+      const postOpenTasks = [];
       if (trackOpenedWindow) {
         postOpenTasks.push(addCollectionToTrack(collection.uid, window.id));
       }
@@ -1331,6 +1347,20 @@ async function openTabs(collection, window, newWindow = null, trackOpenedWindow 
     console.error('Error applying chrome groups or tracking:', groupError);
   }
   
+  // Opening tabs can tear down the initiating popup. Persist only counts so
+  // both views can show partial success, including on the next popup open.
+  if (successCount > 0 && groupResult.groupsFailed > 0) {
+    try {
+      await browser.storage.local.set({
+        groupRestoreNoticePending: {
+          tabsOpened: successCount, groupsFailed: groupResult.groupsFailed, ts: Date.now()
+        }
+      });
+    } catch (noticeError) {
+      console.warn('Could not persist group-restore notice:', noticeError);
+    }
+  }
+
   // Authoritatively record the "recently opened" timestamp here in the background —
   // openTabs() is the single funnel for every open path (popup, fullpage, context menu,
   // keyboard command). Persisting it here (instead of in the UI) means it survives the
@@ -1343,6 +1373,7 @@ async function openTabs(collection, window, newWindow = null, trackOpenedWindow 
     success: successCount > 0,
     tabsOpened: successCount,
     tabsFailed: errorCount,
+    ...groupResult,
     skippedForIncognito: skippedIncognitoTabs.length,
     skippedForFileAccess: skippedFileAccessTabs.length,
     skippedFileAccessReason: skippedFileAccessTabs.length > 0 ? 'file-access-disabled' : null,
@@ -2004,6 +2035,10 @@ try {
           return Promise.resolve(false);
         }
 
+        if (!await checkSyncPermissions()) {
+          return { ...googleUser, syncStatus: 'error', syncError: syncPermissionsApi.SYNC_PERMISSION_ERROR };
+        }
+
         // The cached profile can be lost while the refresh token survives (partial
         // sign-out, interrupted login, storage cleanup). Don't just report
         // "reconnecting" — that state would never resolve on its own. Try to get a
@@ -2250,21 +2285,22 @@ try {
     
     if (request.type === 'forceSyncReset') {
       try {
-        // Clear sync state and force re-sync
-        await browser.storage.sync.remove('syncFileId');
-        await browser.storage.local.remove(['googleToken', 'localTimestamp']);
-        
-        const { googleUser } = await browser.storage.local.get('googleUser');
-        if (googleUser) {
-          // Re-establish sync
-          const token = await getAuthToken();
-          if (token !== false) {
-            await getOrCreateSyncFile(token);
-            await syncData(token);
-          }
-        }
-        
-        return Promise.resolve(true);
+        if (!await checkSyncPermissions()) return false;
+        const { googleRefreshToken } = await browser.storage.local.get('googleRefreshToken');
+        if (!googleRefreshToken) return false;
+        const token = await getAuthToken();
+        if (!token) return false;
+        // Rediscover without deleting the cached ID: failed lookup must leave the
+        // existing sync target intact.
+        if (await getOrCreateSyncFile(token, { rediscover: true }) === false) return false;
+        // Preserve the local edit timestamp: resetting it can discard offline edits.
+        const result = await throttleSync(() => syncData(token));
+        const completed = result === true || result === 'no_update_needed';
+        await updateSharedSyncSessionState({
+          status: completed ? SYNC_SESSION_STATUS.ACTIVE : SYNC_SESSION_STATUS.ERROR,
+          error: completed ? null : 'Sync reset did not complete. Please try again.'
+        });
+        return completed;
       } catch (error) {
         console.error('Error during sync reset:', error);
         return Promise.resolve(false);
@@ -2273,6 +2309,7 @@ try {
 
     if (request.type === 'login') {
       try {
+        if (!await checkSyncPermissions()) return false;
         // CSRF nonce for this attempt only — sent inside `state` on the
         // Firefox (viaWorker) path and verified against what the Worker
         // callback echoes back before the code is ever exchanged. Chrome's
@@ -2389,6 +2426,7 @@ try {
     }
 
     if (request.type === 'loadFromServer') {
+      if (!await checkSyncPermissions()) return false;
       console.log('🔄 [SYNC] loadFromServer message received');
       try {
         const { googleRefreshToken } = await browser.storage.local.get('googleRefreshToken');

@@ -1,3 +1,4 @@
+import { requestSyncPermissions } from '../chrome/sync-transport';
 import './App.css';
 import 'react-tooltip/dist/react-tooltip.css';
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
@@ -57,6 +58,7 @@ import { applyFolderCollapsedState, getFolderCollapseStorageKey } from './utils/
 import { openOrFocusFullPageInCurrentWindow } from './utils/openFullPage';
 import { openCollectionTabs } from './useCollectionOperations';
 import { initFileAccessNoticeWatcher } from './utils/fileAccessNotice';
+import { initGroupRestoreNoticeWatcher } from './utils/groupRestoreNotice';
 import { initShareLinkNoticeWatcher } from './utils/shareLinkNotice';
 
 // Folder operations
@@ -597,73 +599,33 @@ function App({ mode = 'popup' }) {
 
   const applyDataFromServer = async (force = false) => {
     setSyncInProgress(true);
-    console.log('🚀 applyDataFromServer: Starting, force=', force);
-    browser.runtime.sendMessage({ type: 'loadFromServer', force: force }).then(async (response) => {
-      console.log('🚀 applyDataFromServer: Got response from background:', response);
-      if (response !== false) {
-        // Use new storage system for server data
-        
-        const { sortBy, sortOrder } = await getCurrentCollectionSortOptions();
-        
-        console.log('📥 applyDataFromServer: Response type:', typeof response, 'Is array:', Array.isArray(response), 'Length:', response?.length);
-        
-        if (response && Array.isArray(response) && response.length > 0) {
-          console.log('📥 applyDataFromServer: Saving', response.length, 'collections from server');
-          const success = await batchUpdateCollections(response);
-          if (success) {
-            // Add a small delay to ensure storage writes are committed
-            await new Promise(resolve => setTimeout(resolve, 100));
-            
-            // Reload both collections and folders from storage after sync
-            const [updatedCollections, updatedFolders] = await Promise.all([
-              loadAllCollections({ metadataOnly: false, sortBy, sortOrder }),
-              loadAllFolders({ metadataOnly: false })
-            ]);
-            
-            console.log('📥 applyDataFromServer: Loaded', updatedCollections.length, 'collections and', updatedFolders.length, 'folders from storage');
-            console.log('📥 applyDataFromServer: Setting state with folders:', updatedFolders.map(f => f.name));
-            
-            setSettingsData(updatedCollections);
-            setFoldersData(updatedFolders);
-            await refreshLastSyncTimeFromStorage({ fallbackToNow: true });
-          } else {
-            console.error('❌ Failed to save server data');
-          }
-        } else if (response === 'no_update_needed') {
-          // Sync says nothing changed - but still reload folders in case they were updated by background
-          console.log('📥 applyDataFromServer: No update needed, but reloading folders anyway');
-          const folders = await loadAllFolders({ metadataOnly: false });
-          console.log('📥 applyDataFromServer: Loaded', folders.length, 'folders');
-          setFoldersData(folders);
-          await refreshLastSyncTimeFromStorage({ fallbackToNow: true });
-        } else {
-          // Server returned empty collections - still load folders from storage
-          // (folders are saved by migrateIncomingSyncData in the background)
-          console.log('📥 applyDataFromServer: Empty response, loading from storage');
-          await new Promise(resolve => setTimeout(resolve, 100));
-          
-          const [updatedCollections, updatedFolders] = await Promise.all([
-            loadAllCollections({ metadataOnly: false, sortBy, sortOrder }),
-            loadAllFolders({ metadataOnly: false })
-          ]);
-          
-          console.log('📥 applyDataFromServer: Loaded', updatedCollections.length, 'collections and', updatedFolders.length, 'folders from storage');
-          
-          setSettingsData(updatedCollections);
-          setFoldersData(updatedFolders);
-          await refreshLastSyncTimeFromStorage({ fallbackToNow: true });
-        }
+    try {
+      await requestSyncPermissions(browser);
+      const response = await browser.runtime.sendMessage({ type: 'loadFromServer', force });
+      if (!Array.isArray(response) && response !== 'no_update_needed') {
+        throw new Error(response === 'already_in_progress'
+          ? 'Sync is already running. Wait for it to finish, then try again.'
+          : 'Download failed. Check sync status and try again.');
       }
-    }).catch(async (err) => {
-      await _handleSyncError(err)
-    }).finally(() => {
+      // The background already applies the snapshot atomically. Reload it; writing
+      // response collections again can overwrite edits made while sync finishes.
+      const { sortBy, sortOrder } = await getCurrentCollectionSortOptions();
+      const [collections, folders] = await Promise.all([
+        loadAllCollections({ metadataOnly: false, sortBy, sortOrder }),
+        loadAllFolders({ metadataOnly: false })
+      ]);
+      setSettingsData(collections);
+      setFoldersData(folders);
+      await refreshLastSyncTimeFromStorage({ fallbackToNow: true });
+      return true;
+    } finally {
       setSyncInProgress(false);
-    });
-  }
+    }
+  };
 
   const _update = async () => {
     setSyncInProgress(true);
-    browser.runtime.sendMessage({ type: 'updateRemote' }).then(async (response) => {
+    return browser.runtime.sendMessage({ type: 'updateRemote' }).then(async (response) => {
       if (response !== false) {
         await reloadCollectionsAndFoldersFromStorage({ updateSyncTime: true });
         return;
@@ -738,7 +700,7 @@ function App({ mode = 'popup' }) {
   // Sync trigger for folder operations (without requiring full collections array)
   const triggerSync = async () => {
     if (!isLoggedIn) return;
-    _update();
+    return _update();
   }
 
   // Updated to use new storage system
@@ -1857,6 +1819,7 @@ function App({ mode = 'popup' }) {
   // shows it on mount (reopened popup, context-menu/keyboard opens) and live
   // via storage.onChanged (persistent full-page view). Returns its own cleanup.
   useEffect(() => initFileAccessNoticeWatcher({ isFullPage }), [isFullPage]);
+  useEffect(() => initGroupRestoreNoticeWatcher({ isFullPage }), [isFullPage]);
   // Firefox share-link redemptions (see chrome/background.js handleShareLinkTab).
   useEffect(() => initShareLinkNoticeWatcher(), []);
 
