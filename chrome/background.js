@@ -1324,11 +1324,13 @@ async function openTabs(collection, window, newWindow = null, trackOpenedWindow 
     }
   }
   
+  let groupResult = { groupsRestored: 0, groupsFailed: 0 };
   // Apply chrome groups and tracking
   // Note: Tab groups are not supported in incognito windows
   try {
     if (!isIncognitoWindow) {
-      const postOpenTasks = [applyChromeGroupSettings(window.id, collection)];
+      groupResult = await applyChromeGroupSettings(window.id, collection);
+      const postOpenTasks = [];
       if (trackOpenedWindow) {
         postOpenTasks.push(addCollectionToTrack(collection.uid, window.id));
       }
@@ -1345,6 +1347,20 @@ async function openTabs(collection, window, newWindow = null, trackOpenedWindow 
     console.error('Error applying chrome groups or tracking:', groupError);
   }
   
+  // Opening tabs can tear down the initiating popup. Persist only counts so
+  // both views can show partial success, including on the next popup open.
+  if (successCount > 0 && groupResult.groupsFailed > 0) {
+    try {
+      await browser.storage.local.set({
+        groupRestoreNoticePending: {
+          tabsOpened: successCount, groupsFailed: groupResult.groupsFailed, ts: Date.now()
+        }
+      });
+    } catch (noticeError) {
+      console.warn('Could not persist group-restore notice:', noticeError);
+    }
+  }
+
   // Authoritatively record the "recently opened" timestamp here in the background —
   // openTabs() is the single funnel for every open path (popup, fullpage, context menu,
   // keyboard command). Persisting it here (instead of in the UI) means it survives the
@@ -1357,6 +1373,7 @@ async function openTabs(collection, window, newWindow = null, trackOpenedWindow 
     success: successCount > 0,
     tabsOpened: successCount,
     tabsFailed: errorCount,
+    ...groupResult,
     skippedForIncognito: skippedIncognitoTabs.length,
     skippedForFileAccess: skippedFileAccessTabs.length,
     skippedFileAccessReason: skippedFileAccessTabs.length > 0 ? 'file-access-disabled' : null,

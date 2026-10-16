@@ -58,6 +58,7 @@ import { applyFolderCollapsedState, getFolderCollapseStorageKey } from './utils/
 import { openOrFocusFullPageInCurrentWindow } from './utils/openFullPage';
 import { openCollectionTabs } from './useCollectionOperations';
 import { initFileAccessNoticeWatcher } from './utils/fileAccessNotice';
+import { initGroupRestoreNoticeWatcher } from './utils/groupRestoreNotice';
 import { initShareLinkNoticeWatcher } from './utils/shareLinkNotice';
 
 // Folder operations
@@ -1818,6 +1819,7 @@ function App({ mode = 'popup' }) {
   // shows it on mount (reopened popup, context-menu/keyboard opens) and live
   // via storage.onChanged (persistent full-page view). Returns its own cleanup.
   useEffect(() => initFileAccessNoticeWatcher({ isFullPage }), [isFullPage]);
+  useEffect(() => initGroupRestoreNoticeWatcher({ isFullPage }), [isFullPage]);
   // Firefox share-link redemptions (see chrome/background.js handleShareLinkTab).
   useEffect(() => initShareLinkNoticeWatcher(), []);
 

@@ -203,7 +203,7 @@ function ExpandedCollectionData(props) {
         });
     };
 
-    const groupsAreSimilar = (group1, group2) => group1 && group2 && group1.name === group2.name && group1.color === group2.color;
+    const groupsAreSimilar = (group1, group2) => group1 && group2 && group1.title === group2.title && group1.color === group2.color;
 
     const groupExistsInCollection = (group) => (group ? props.collection.chromeGroups.findIndex((item) => groupsAreSimilar(item, group)) > -1 : false);
 
@@ -225,21 +225,22 @@ function ExpandedCollectionData(props) {
         let totalTabsAdded = updatedTabs.length;
 
         if (chkColEditIgnoreDuplicateGroups) {
-            for (let index = 0; index < newCollectionTabs.length; index += 1) {
-                const tab = { ...newCollectionTabs[index] };
+            const groupForTab = (tab, groups) => groups.find((group) =>
+                (tab.groupUid && group.uid) ? tab.groupUid === group.uid : tab.groupId === group.id);
+            newCollectionTabs = newCollectionTabs.filter((incomingTab) => {
+                const group = groupForTab(incomingTab, newCollectionGroups);
+                const targetGroup = group && currentCollection.chromeGroups.find((item) => groupsAreSimilar(item, group));
+                if (!targetGroup) return true;
 
-                if ('groupUid' in tab) {
-                    const group = groupFromId(tab.groupUid, newCollectionGroups);
-                    if (group && groupExistsInCollection(group)) {
-                        tab.groupUid = currentCollection.chromeGroups.find((item) => groupsAreSimilar(item, group)).uid;
-                        const insertIndex = updatedTabs.findIndex((item) => ('groupUid' in item) && groupsAreSimilar(groupFromId(item.groupUid), group));
-                        const count = updatedTabs.filter((item) => ('groupUid' in item) && groupsAreSimilar(groupFromId(item.groupUid), group)).length;
-                        updatedTabs.splice(insertIndex + count, 0, tab);
-                    }
-                }
-            }
+                // Keep both stable and legacy membership tied to the retained group.
+                const tab = { ...incomingTab, groupUid: targetGroup.uid, groupId: targetGroup.id };
+                const belongsToTarget = (item) => groupForTab(item, currentCollection.chromeGroups) === targetGroup;
+                const insertIndex = updatedTabs.findIndex(belongsToTarget);
+                const count = updatedTabs.filter(belongsToTarget).length;
+                updatedTabs.splice(insertIndex === -1 ? updatedTabs.length : insertIndex + count, 0, tab);
+                return false;
+            });
 
-            newCollectionTabs = newCollectionTabs.filter((tab) => !('groupUid' in tab) || !groupExistsInCollection(groupFromId(tab.groupUid, newCollectionGroups)));
             newCollectionGroups = newCollectionGroups.filter((group) => !groupExistsInCollection(group));
         }
 

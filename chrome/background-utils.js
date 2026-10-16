@@ -1001,8 +1001,9 @@ const handleMenuStorageChanged = (changes, areaName) => {
 };
 
 async function applyChromeGroupSettings(windowId, collection) {
+    const result = { groupsRestored: 0, groupsFailed: 0 };
     if (!collection.chromeGroups || !browser.tabs.group || !browser.tabGroups) {
-        return;
+        return result;
     }
     // Reuse groups already in the target window instead of minting an identical
     // one on every open (issue #94 — Chrome additionally saves each created group
@@ -1046,10 +1047,13 @@ async function applyChromeGroupSettings(windowId, collection) {
                 await browser.tabGroups.update(groupId, updateProperties);
                 existingGroups.push({ id: groupId, ...updateProperties });
             }
+            result.groupsRestored++;
         } catch (e) {
+            result.groupsFailed++;
             console.error('Failed to apply group settings for group', chromeGroup.title, e);
         }
     }
+    return result;
 }
 
 // ─── Smart Organize: apply + undo ────────────────────────────────────────────
