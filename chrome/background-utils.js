@@ -624,9 +624,32 @@ async function handleRequest(url, options = null, maxRetries = 3, delay = 1000, 
     return false;
 }
 
+// One append at a time: fire-and-forget callers must not overwrite each other.
+let syncLogQueue = Promise.resolve();
+const redactCredentialUrls = value => {
+    if (typeof value === 'string') return value.replace(/https?:\/\/[^\s"'<>]+/g, match => {
+        try {
+            const url = new URL(match);
+            url.username = '';
+            url.password = '';
+            for (const key of [...url.searchParams.keys()]) {
+                if (/token|code|secret|key|authorization/i.test(key)) url.searchParams.set(key, '[redacted]');
+            }
+            return url.toString();
+        } catch { return '[invalid-url]'; }
+    });
+    if (Array.isArray(value)) return value.map(redactCredentialUrls);
+    if (value && typeof value === 'object') return Object.fromEntries(
+        Object.entries(value).map(([key, item]) => [key, redactCredentialUrls(item)])
+    );
+    return value;
+};
+
 // Enhanced logging for debugging sync issues
 function logSyncOperation(level, message, data = {}) {
     const timestamp = new Date().toISOString();
+    message = redactCredentialUrls(message);
+    data = redactCredentialUrls(data);
     
     // Format data for better console readability - convert objects to readable strings
     const formatDataForLog = (obj) => {
@@ -658,15 +681,16 @@ function logSyncOperation(level, message, data = {}) {
         console[level === 'error' ? 'error' : 'log'](`[SYNC ${level.toUpperCase()}] ${message}${formattedData}`);
     }
     
-    // Store recent logs for debugging
-    browser.storage.local.get('syncLogs').then(({ syncLogs = [] }) => {
-        syncLogs.unshift(logEntry);
-        // Keep only last 20 log entries (reduced from 50 for memory optimization)
-        if (syncLogs.length > 20) {
-            syncLogs = syncLogs.slice(0, 20);
-        }
-        browser.storage.local.set({ syncLogs });
-    });
+    // Return a caught promise so lifecycle-owning callers can drain the queue.
+    // A failed append may be lost; subsequent entries must still be writable.
+    syncLogQueue = syncLogQueue.then(async () => {
+        const { syncLogs } = await browser.storage.local.get('syncLogs');
+        await browser.storage.local.set({
+            ...(level === 'error' && data.stage === 'remote-validation' ? { lastSyncValidationFailure: { timestamp, stage: data.stage, reason: data.reason } } : {}),
+            syncLogs: [logEntry, ...(Array.isArray(syncLogs) ? syncLogs : [])].slice(0, 20)
+        });
+    }).catch(() => { /* Best-effort diagnostics must not reject a caller or poison the queue. */ });
+    return syncLogQueue;
 }
 
 // Validate collection data structure (optimized to avoid unnecessary JSON.stringify)
@@ -679,19 +703,27 @@ function validateCollectionData(data) {
         return { valid: false, error: 'tabsArray is not an array' };
     }
     
-    if (typeof data.timestamp !== 'number') {
+    if (!Number.isFinite(data.timestamp)) {
         return { valid: false, error: 'timestamp is not a number' };
     }
     
+    const collectionUids = new Set();
     // Validate each collection (lightweight validation, no JSON.stringify)
     for (let i = 0; i < data.tabsArray.length; i++) {
         const collection = data.tabsArray[i];
-        if (!collection.uid || !collection.name || !Array.isArray(collection.tabs)) {
+        if (!collection || typeof collection.uid !== 'string' || !collection.uid ||
+            typeof collection.name !== 'string' || !collection.name || !Array.isArray(collection.tabs) ||
+            collection.tabs.some(tab => !tab || typeof tab !== 'object' || Array.isArray(tab)) ||
+            collectionUids.has(collection.uid) ||
+            (collection.chromeGroups !== undefined && !Array.isArray(collection.chromeGroups)) ||
+            (collection.createdOn !== undefined && !Number.isFinite(collection.createdOn)) ||
+            (collection.lastUpdated !== undefined && !Number.isFinite(collection.lastUpdated))) {
             return { 
                 valid: false, 
                 error: `Collection at index ${i} is missing required fields (uid, name, tabs)` 
             };
         }
+        collectionUids.add(collection.uid);
     }
     
     // Validate folders if present (optional, since older versions don't have folders)
@@ -703,7 +735,7 @@ function validateCollectionData(data) {
         // Validate each folder (lightweight validation)
         for (let i = 0; i < data.foldersArray.length; i++) {
             const folder = data.foldersArray[i];
-            if (!folder.uid || !folder.name) {
+            if (!folder || typeof folder.uid !== 'string' || !folder.uid || typeof folder.name !== 'string' || !folder.name) {
                 return { 
                     valid: false, 
                     error: `Folder at index ${i} is missing required fields (uid, name)` 
@@ -788,7 +820,7 @@ function releaseSyncLock(operation = 'unknown') {
     syncLock = false;
     syncLockOperation = null;
     syncLockTime = 0;
-    logSyncOperation('info', `Released sync lock for: ${operation}`, { duration: lockDuration });
+    return logSyncOperation('info', `Released sync lock for: ${operation}`, { duration: lockDuration });
 }
 
 // Update collection UIDs to ensure uniqueness
@@ -1618,7 +1650,7 @@ async function updateRemote(token, collections = null, skipLock = false) {
         return false;
     } finally {
         if (!skipLock) {
-            releaseSyncLock(operation);
+            await releaseSyncLock(operation);
         }
     }
 }
@@ -1636,42 +1668,40 @@ async function _readRemoteSyncDocument(token, fileId) {
             'contentType': 'json'
         };
         
-        logSyncOperation('info', 'Loading sync file from server', { fileId });
+        logSyncOperation('info', 'Loading sync file from server', { stage: 'remote-read' });
         let etag;
         const data = await handleRequest(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, init, 3, 1000, response => {
             etag = response.headers?.get?.('etag');
         });
         
-        logSyncOperation('info', 'Raw server response received', { 
-            dataType: typeof data,
-            isObject: data && typeof data === 'object',
-            hasTabsArray: data && !!data.tabsArray,
-            hasFoldersArray: data && !!data.foldersArray,
-            foldersCount: data && data.foldersArray ? data.foldersArray.length : 'N/A'
+        const typeOf = value => value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value;
+        const isEnvelope = data !== null && typeof data === 'object' && !Array.isArray(data);
+        logSyncOperation('info', 'Raw server response received', {
+            stage: 'remote-read',
+            topLevelType: typeOf(data),
+            topLevelKeyCount: isEnvelope ? Object.keys(data).length : 0,
+            tabsArrayPresent: isEnvelope && Object.prototype.hasOwnProperty.call(data, 'tabsArray'),
+            tabsArrayType: typeOf(data?.tabsArray),
+            tabsArrayIsArray: Array.isArray(data?.tabsArray),
+            collectionsCount: Array.isArray(data?.tabsArray) ? data.tabsArray.length : null,
+            foldersArrayPresent: isEnvelope && Object.prototype.hasOwnProperty.call(data, 'foldersArray'),
+            foldersArrayType: typeOf(data?.foldersArray),
+            foldersArrayIsArray: Array.isArray(data?.foldersArray),
+            foldersCount: Array.isArray(data?.foldersArray) ? data.foldersArray.length : null,
+            syncVersionPresent: isEnvelope && Object.prototype.hasOwnProperty.call(data, 'syncVersion'),
+            syncVersionType: typeOf(data?.syncVersion)
         });
-        
-        if (data === false) {
-            logSyncOperation('error', 'Failed to load sync file from server');
-            return false;
-        }
-        
-        // Validate loaded data
-        const validation = validateCollectionData(data);
-        if (!validation.valid) {
-            logSyncOperation('error', 'Loaded data failed validation', { error: validation.error });
-            return false;
-        }
 
-        const normalizedData = {
-            ...data,
-            foldersArray: Array.isArray(data.foldersArray)
-                ? data.foldersArray
-                : await loadAllFoldersBG()
-        };
-        const detection = detectSyncDataVersion(normalizedData);
-        if (!detection.valid) {
-            logSyncOperation('error', 'Loaded data uses an unsupported sync version', {
-                version: normalizedData.syncVersion || 'missing'
+        if (data === false) {
+            await logSyncOperation('error', 'Failed to load sync file from server', { stage: 'remote-read', reason: 'transport-failed' });
+            return false;
+        }
+        
+        const normalizedData = await decodeIncomingSyncData(data);
+        if (normalizedData === false) {
+            await logSyncOperation('error', 'Loaded data failed validation', {
+                stage: 'remote-validation',
+                reason: validateCollectionData(data).valid ? 'unsupported-version' : 'invalid-structure'
             });
             return false;
         }
@@ -1684,12 +1714,12 @@ async function _readRemoteSyncDocument(token, fileId) {
             syncVersion: normalizedData.syncVersion || 'missing'
         });
 
-        const snapshot = normalizeSyncSnapshot(normalizedData, normalizedData.timestamp || 0);
+        const snapshot = normalizedData;
         Object.defineProperty(snapshot, 'etag', { value: etag });
         return snapshot;
         
     } catch (error) {
-        logSyncOperation('error', 'Exception in _loadSettingsFile', { error: error.message });
+        await logSyncOperation('error', 'Exception in _loadSettingsFile', { stage: 'remote-read', reason: 'read-failed' });
         return false;
     }
 }
@@ -1707,7 +1737,9 @@ async function _loadSettingsFile(token, fileId) {
         return false;
     }
 
-    return updateCollectionsUids(migratedCollections);
+    return remoteSyncData[LEGACY_SYNC_ENVELOPE]
+        ? migratedCollections
+        : updateCollectionsUids(migratedCollections);
 }
 
 // Recovery function for data corruption scenarios
@@ -1834,7 +1866,7 @@ async function updateLocalDataFromServer(token, force = false, skipLock = false)
         return false;
     } finally {
         if (!skipLock) {
-            releaseSyncLock(operation);
+            await releaseSyncLock(operation);
         }
     }
 }
@@ -2235,7 +2267,7 @@ async function syncData(token) {
         logSyncOperation('error', 'Exception in syncData', { error: error.message });
         return false;
     } finally {
-        releaseSyncLock(operation);
+        await releaseSyncLock(operation);
     }
 }
 
@@ -2296,33 +2328,60 @@ const detectSyncDataVersion = (data) => {
         return { version: 'unknown', valid: false };
     }
 
-    const parsedVersion = Number.parseFloat(data.syncVersion);
-    if (Number.isFinite(parsedVersion) && parsedVersion >= 4.0 && Array.isArray(data.tabsArray)) {
-        return {
-            version: data.syncVersion,
-            storageVersion: data.storageVersion || 3,
-            valid: true
-        };
+    // Only the emitted 4.0 contract is supported, never parseFloat prefixes or
+    // speculative future versions. 3.6 wrote exactly {timestamp, tabsArray}.
+    const legacy = !Object.prototype.hasOwnProperty.call(data, 'syncVersion') &&
+        Object.keys(data).every(key => key === 'timestamp' || key === 'tabsArray');
+    const current = data.syncVersion === '4.0' || data.syncVersion === 4;
+    if ((legacy || current) && validateCollectionData(data).valid) {
+        return { version: legacy ? '3.6-envelope' : data.syncVersion, legacy, valid: true };
     }
+    return { version: 'unknown', valid: false };
+};
 
-    return { version: data.syncVersion || 'unknown', valid: false };
+// Internal provenance survives the reader -> direct-load path without accepting
+// a customer-supplied marker. Reconciliation already merges all snapshots.
+const LEGACY_SYNC_ENVELOPE = Symbol('legacy-sync-envelope');
+const decodeIncomingSyncData = async (data) => {
+    const detection = detectSyncDataVersion(data);
+    if (!detection.valid) return false;
+    const snapshot = normalizeSyncSnapshot({
+        ...data,
+        syncVersion: SYNC_VERSION,
+        // Historical collections have no modification clock. A later envelope
+        // save does not prove each collection changed. Keep the known creation
+        // baseline (or 0 = unknown) so unrelated saves cannot defeat known local
+        // edits/tombstones. Never promote every entity to the envelope/now time.
+        tabsArray: detection.legacy ? data.tabsArray.map(collection => ({
+            ...collection,
+            lastUpdated: Number.isFinite(collection.lastUpdated)
+                ? collection.lastUpdated
+                : Number.isFinite(collection.createdOn) ? collection.createdOn : 0
+        })) : data.tabsArray,
+        foldersArray: data.foldersArray === undefined ? await loadAllFoldersBG() : data.foldersArray
+    }, data.timestamp);
+    if (detection.legacy || data[LEGACY_SYNC_ENVELOPE]) {
+        Object.defineProperty(snapshot, LEGACY_SYNC_ENVELOPE, { value: true });
+    }
+    return snapshot;
 };
 
 const migrateIncomingSyncData = async (data, expectedStorage) => {
     try {
-        const detection = detectSyncDataVersion(data);
-
-        if (!detection.valid) {
-            console.error('❌ Invalid sync data format detected');
-            return false;
+        let normalizedSyncData = await decodeIncomingSyncData(data);
+        if (normalizedSyncData === false) return false;
+        if (normalizedSyncData[LEGACY_SYNC_ENVELOPE]) {
+            // A historical document cannot describe deletions or folders. Even a
+            // direct/forced load must preserve independent local edits and sets.
+            const local = await prepareSyncDataForUpload(null, false, true);
+            normalizedSyncData = mergeSyncSnapshots({
+                localSnapshot: local,
+                remoteSnapshot: normalizedSyncData,
+                disableImplicitLocalDeletions: true
+            });
+            if (!await createPreSyncBackup('before-legacy-migration', local)) return false;
+            expectedStorage = expectedStorage || local.localStorageSnapshot;
         }
-
-        const normalizedSyncData = normalizeSyncSnapshot({
-            ...data,
-            foldersArray: Array.isArray(data.foldersArray)
-                ? data.foldersArray
-                : await loadAllFoldersBG()
-        });
 
         logSyncOperation('info', 'Applying normalized 4.0 sync data', {
             collections: normalizedSyncData.tabsArray.length,
