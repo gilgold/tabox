@@ -1587,6 +1587,23 @@ html.fullpage-mode .save-collection-folder-select {
 }
 
 /* Keep room for the folder color dot (absolute at left: 12px) when one is shown */
+/* Native option surfaces can be OS-owned. Pair both colors explicitly so
+   light popup surfaces cannot inherit an unreadable dark-theme foreground. */
+html.fullpage-mode .save-collection-folder-select option,
+html.fullpage-mode .current-window-close-form-group select option,
+html.fullpage-mode .bulk-collection-select option {
+    background-color: var(--color-surface);
+    color: var(--color-text);
+}
+
+/* The surface shorthand above replaces the custom background-image arrow.
+   Restore the native indicator, including in focused and disabled states. */
+html.fullpage-mode .save-collection-folder-select {
+    appearance: auto;
+    -webkit-appearance: auto;
+    padding-right: 34px;
+}
+
 html.fullpage-mode .save-collection-folder-select-wrapper:has(.save-collection-folder-dot) .save-collection-folder-select {
     padding-left: 34px;
 }

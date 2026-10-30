@@ -48,6 +48,8 @@ import {
     batchUpdateCollections,
     loadCollectionsIndex,
     loadAllFolders,
+    loadSingleFolder,
+    updateFolderCollectionCount,
     updateFoldersOrder,
     repairOrphanCollections,
     sortCollectionsForDisplay,
@@ -840,14 +842,22 @@ function App({ mode = 'popup' }) {
 
   // Updated to use new storage system
   const addCollection = async (newCollection, skipContextMenuUpdate = false, skipStateUpdate = false) => {
-    const parentFolder = foldersData.find(f => f.uid === newCollection?.parentId);
-    if (!guardFolderEdit(parentFolder, () => setNoPermissionOpen(true))) return;
-
     try {
+      // An open form can outlive its destination or its permissions. Read the
+      // persisted folder immediately before saving, rather than trusting UI state.
+      const parentFolder = newCollection?.parentId ? await loadSingleFolder(newCollection.parentId) : null;
+      if (newCollection?.parentId && !parentFolder) {
+        throw new Error('The destination folder is no longer available. Choose another destination.');
+      }
+      if (!guardFolderEdit(parentFolder, () => setNoPermissionOpen(true))) return false;
       // Use new single collection save for better performance
-      const success = await saveSingleCollection(newCollection, true); // Force timestamp update for new collections
+      const success = await saveSingleCollection(newCollection, true, { requireWritableParent: true }); // Force timestamp update for new collections
       
       if (success) {
+        // Storage preparation can outlive the initial permission read. Route this
+        // new save using its persisted destination, including newly shared folders.
+        const savedParentFolder = newCollection?.parentId ? await loadSingleFolder(newCollection.parentId) : null;
+        if (savedParentFolder) await updateFolderCollectionCount(savedParentFolder.uid);
         // Update local state (skip for batch operations to prevent race conditions)
         if (!skipStateUpdate) {
           const newList = settingsData ? [newCollection, ...settingsData] : [newCollection];
@@ -858,7 +868,7 @@ function App({ mode = 'popup' }) {
         // Continue with sync and auto-update logic. Adding into a shared
         // folder is a shared-only mutation — skip the Drive watermark and
         // Drive sync, and nudge the shared engine instead.
-        const isSharedOnlyAdd = isSharedFolder(parentFolder);
+        const isSharedOnlyAdd = isSharedFolder(savedParentFolder);
         if (isSharedOnlyAdd) {
           nudgeSharedSync();
         } else {
@@ -888,6 +898,9 @@ function App({ mode = 'popup' }) {
         return true;
       } else {
         console.error(`❌ Failed to add collection ${newCollection.uid}`);
+        // A destination failure must never bypass the folder guard via legacy
+        // whole-library persistence (which can also overwrite newer data).
+        if (newCollection.parentId) return false;
         // Fallback to legacy system - always attempt fallback even if skipStateUpdate is true
         // We just won't update React state, but we should still try to save the data
         try {
@@ -905,6 +918,10 @@ function App({ mode = 'popup' }) {
       
     } catch (error) {
       console.error('Error adding collection:', error);
+      if (newCollection?.parentId) {
+        showErrorToast(error.message);
+        return false;
+      }
       // Fallback to legacy system
       try {
         const newList = settingsData ? [newCollection, ...settingsData] : [newCollection];
@@ -2299,7 +2316,7 @@ function App({ mode = 'popup' }) {
         logout={logout} />
       <div className={`main-content-wrapper${isFullPage && isPanelOpen ? ' panel-open' : ''}`}>
                 <SharedInviteToastController onAccepted={refreshDataAfterFolderOperation} />
-                <AddNewTextbox addCollection={addCollection} addFolder={addFolder} updateRemoteData={updateRemoteData} onDataUpdate={refreshDataAfterFolderOperation} />
+                <AddNewTextbox folders={foldersData} addCollection={addCollection} addFolder={addFolder} updateRemoteData={updateRemoteData} onDataUpdate={refreshDataAfterFolderOperation} />
         <CollectionListOptions
           key={`${sortValue}-select`}
           updateRemoteData={updateRemoteData}
