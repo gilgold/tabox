@@ -24,7 +24,7 @@ const AUTH_API_BASE = typeof require === 'function'
     : PRO_API_BASE;
 
 // Deferred-loading URL helpers.
-// SYNCHRONIZED WITH app/utils/urlUtils.js (unwrapDeferredUrl / isDeferredLoadingUrl).
+// SYNCHRONIZED WITH app/utils/urlUtils.js (deferred URL and tab metadata helpers).
 // The service worker loads its scripts via importScripts and cannot import the app ES
 // module, so this is an intentional duplicate. Keep both copies in sync.
 const DEFERRED_PAGE_MARKER = 'deferedLoading.html';
@@ -58,6 +58,61 @@ const unwrapDeferredUrl = (url) => {
     }
 
     return url;
+};
+
+// Only actual extension pages carry deferred metadata. A website whose
+// path happens to contain the page name must retain its own URL and title.
+const readDeferredMetadata = (url) => {
+    try {
+        const parsed = new URL(url);
+        if (!['chrome-extension:', 'moz-extension:'].includes(parsed.protocol) ||
+            parsed.pathname !== '/deferedLoading.html') return null;
+        let payload;
+        try {
+            payload = JSON.parse(decodeURIComponent(parsed.hash.slice(1)));
+        } catch {
+            // Legacy query format (also used if a hash is malformed).
+        }
+        if (!payload || typeof payload.url !== 'string' || !payload.url) {
+            payload = Object.fromEntries(parsed.searchParams.entries());
+        }
+        return typeof payload.url === 'string' && payload.url ? payload : null;
+    } catch {
+        return null;
+    }
+};
+
+const hasDeferredTitle = (title) => typeof title === 'string' && title.trim().length > 0;
+
+// Normalize before throwing away the wrapper: its title is independent of the
+// browser's transient title (which may still be the extension page's default).
+const normalizeDeferredTab = (tab, savedTabs = []) => {
+    let url = tab.pendingUrl && readDeferredMetadata(tab.pendingUrl) ? tab.pendingUrl : tab.url;
+    let title;
+    let wrapped = false;
+    for (let depth = 0; depth < 10; depth++) {
+        const payload = readDeferredMetadata(url);
+        if (!payload || payload.url === url) break;
+        wrapped = true;
+        if (!hasDeferredTitle(title) && hasDeferredTitle(payload.title)) title = payload.title;
+        url = payload.url;
+    }
+    if (!wrapped) return { ...tab };
+
+    let hostname;
+    try { hostname = new URL(url).hostname; } catch { /* Keep malformed destinations unchanged. */ }
+    const isPlaceholder = value => !hasDeferredTitle(value) ||
+        value === `${hostname} (click to load)` || value === hostname ||
+        value === 'Click to load content' || value === 'Tabox - Loading Content';
+    if (!hasDeferredTitle(title) && !isPlaceholder(tab.title)) title = tab.title;
+    if (!hasDeferredTitle(title)) {
+        const matches = savedTabs.filter(saved => unwrapDeferredUrl(saved.url) === url && !isPlaceholder(saved.title));
+        const sameTab = matches.find(saved => tab.id != null && saved.id === tab.id);
+        // Same-URL duplicates can have different titles: do not guess between them.
+        const saved = sameTab || (new Set(matches.map(saved => saved.title)).size === 1 ? matches[0] : null);
+        title = saved?.title;
+    }
+    return { ...tab, url, title: hasDeferredTitle(title) ? title : (hostname || tab.title) };
 };
 
 const syncTransportApi = typeof require === 'function'
@@ -2116,11 +2171,10 @@ async function updateCollection(collection, windowId) {
         
         tabs = [...tabs].map(t => {
             // Never persist the deferred-loading wrapper as the saved tab URL.
-            const resolvedUrl = unwrapDeferredUrl(t.url);
+            const normalizedTab = normalizeDeferredTab(t, collection.tabs);
             // Store incognito status per tab for reference
             return {
-                ...t,
-                url: resolvedUrl,
+                ...normalizedTab,
                 wasIncognito: t.incognito === true
             };
         })
@@ -2658,6 +2712,7 @@ const backgroundUtilsApi = {
     STORAGE_KEYS,
     SYNC_VERSION,
     unwrapDeferredUrl,
+    normalizeDeferredTab,
     isDeferredLoadingUrl,
     loadCollectionsIndexBG,
     loadSingleCollectionBG,

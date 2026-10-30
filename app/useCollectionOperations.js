@@ -339,7 +339,7 @@ export function useCollectionOperations({
             }
         }
         
-        let newItem = await getCurrentTabsAndGroups(collection.name);
+        let newItem = await getCurrentTabsAndGroups(collection.name, false, collection.tabs);
         newItem.color = collection.color;
         newItem.uid = collection.uid;
         newItem.createdOn = collection.createdOn; // Preserve original creation time

@@ -136,7 +136,7 @@ describe('ExpandedCollectionData — merge saved groups by title and color', () 
             const update = jest.fn();
             await renderExpanded(collection, update);
             await act(async () => fireEvent.click(screen.getByText(action)));
-            expect(getCurrentTabsAndGroups).toHaveBeenCalledWith('', action !== 'Add All Tabs');
+            expect(getCurrentTabsAndGroups).toHaveBeenCalledWith('', action !== 'Add All Tabs', collection.tabs);
             const result = update.mock.calls[0][0];
             expect(result.chromeGroups).toEqual([savedGroup, liveGroup]);
             expect(result.tabs.map(t => t.groupUid)).toEqual(['saved', 'live']);

@@ -1,5 +1,5 @@
 import { browser } from '../../static/globals';
-import { unwrapDeferredUrl } from './urlUtils';
+import { normalizeDeferredTab } from './urlUtils';
 
 export const DEFAULT_BROWSER_SESSION_RESULTS = browser.sessions?.MAX_SESSION_RESULTS ?? 25;
 
@@ -30,13 +30,14 @@ function buildCollectionUid(sessionEntryKey) {
 }
 
 function normalizeBrowserSessionTab(tab, sessionEntryKey, index = 0) {
+    tab = normalizeDeferredTab({ ...tab, url: tab?.url || tab?.pendingUrl || '' });
     const tabKeyPart = sanitizeSessionKeyPart(tab?.sessionId ?? tab?.id, index);
 
     return {
         uid: `${buildCollectionUid(sessionEntryKey)}-tab-${tabKeyPart}`,
         title: tab?.title || tab?.pendingUrl || tab?.url || 'Untitled tab',
         // Resolve any deferred-loading wrapper so captured sessions store the real URL.
-        url: unwrapDeferredUrl(tab?.url || tab?.pendingUrl || ''),
+        url: tab.url,
         favIconUrl: tab?.favIconUrl || '',
         pinned: tab?.pinned === true,
         active: tab?.active === true,

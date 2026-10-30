@@ -213,7 +213,7 @@ function ExpandedCollectionData(props) {
         const { loadAllCollections } = await import('./utils/storageUtils');
         const previousCollections = await loadAllCollections();
         const currentCollection = { ...props.collection };
-        const newCollection = await getCurrentTabsAndGroups('', onlyHighlighted);
+        const newCollection = await getCurrentTabsAndGroups('', onlyHighlighted, currentCollection.tabs);
         let newCollectionTabs = [...newCollection.tabs];
         let newCollectionGroups = [...newCollection.chromeGroups];
 

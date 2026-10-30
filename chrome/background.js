@@ -1153,11 +1153,11 @@ async function openTabs(collection, window, newWindow = null, trackOpenedWindow 
   // contains file:// tabs. Without the "Allow access to file URLs" permission,
   // tabs.create() rejects file:// URLs — previously they just landed in
   // tabsFailed with no explanation for the user.
-  const hasFileTabs = collection.tabs.some(t => isFileSchemeUrl(unwrapDeferredUrl(t.url)));
+  const hasFileTabs = collection.tabs.some(t => isFileSchemeUrl(unwrapDeferredUrl(normalizeDeferredTab(t).url)));
   const fileAccessAllowed = hasFileTabs ? await isFileSchemeAccessAllowed() : true;
   
   for (let index = 0; index < totalTabs; index++) {
-    const tabInGrp = collection.tabs[index];
+    const tabInGrp = normalizeDeferredTab(collection.tabs[index]);
 
     // Resolve the real destination URL. Collections saved by older builds (or while a
     // deferred tab was still on the placeholder page) may have persisted the
@@ -1205,11 +1205,11 @@ async function openTabs(collection, window, newWindow = null, trackOpenedWindow 
     // `?url=http...` redirect pattern and block the placeholder page (ERR_BLOCKED_BY_CLIENT);
     // a hash fragment is never sent in the request and avoids those filters.
     const finalUrl = shouldDefer
-      ? `${runtimeUrl}#${encodeURIComponent(JSON.stringify({ url: realUrl, favicon: tabInGrp?.favIconUrl || '' }))}`
+      ? `${runtimeUrl}#${encodeURIComponent(JSON.stringify({ url: realUrl, title: tabInGrp.title, favicon: tabInGrp?.favIconUrl || '' }))}`
       : realUrl;
 
     tabsToCreate.push({
-      originalTab: tabInGrp,
+      originalTab: collection.tabs[index],
       properties: singleWindow
         ? { active: tabsToCreate.length === 0, url: finalUrl } // jump to the restored tabs, like a new window would
         : {
