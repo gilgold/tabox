@@ -2,6 +2,7 @@
 (() => {
     const KEY = 'autoUpdateRecovery';
     const SESSION_KEY = 'autoUpdateRecoverySession';
+    const OWNERS_KEY = 'autoUpdateRecoveryOwners';
     const ALARM = 'auto-update-recovery';
     const PERIOD = 180000;
     const EARLIEST = 120000;
@@ -21,7 +22,7 @@
             const url = normalized.url;
             // Only stable web destinations. Deferred wrappers use the shared
             // issue 121 normalizer, including pendingUrl; other pending loads wait.
-            if (tab.pendingUrl && tab.pendingUrl !== tab.url && normalized.url === tab.url) return null;
+            if (live && tab.pendingUrl && tab.pendingUrl !== tab.url && normalized.url === tab.url) return null;
             try { if (!['http:', 'https:'].includes(new URL(url).protocol)) return null; }
             catch { return null; }
             let group = null;
@@ -55,6 +56,19 @@
         const stateOf = data => data[KEY]?.version === 1 && Array.isArray(data[KEY].entries)
             ? { ...data[KEY], entries: data[KEY].entries.filter(validEntry) } : { version: 1, entries: [] };
         const sourceSignature = c => c && signature(c.tabs, c.chromeGroups || [], !!(c.savedFromIncognito || c.window?.incognito), normalize);
+        const sameAssociation = (a, b) => a.collectionUid === b.collectionUid && a.windowId === b.windowId;
+        // Unlike the startup marker, these associations prove explicit ownership
+        // in this browser session. Session storage survives worker eviction only.
+        async function owners() {
+            if (!supported()) return [];
+            const value = (await browser.storage.session.get(OWNERS_KEY))[OWNERS_KEY];
+            return Array.isArray(value) ? value.filter(t => t && typeof t.collectionUid === 'string' && Number.isInteger(t.windowId)) : [];
+        }
+        async function updateOwners(tracking, added = []) {
+            if (!supported()) return;
+            const known = [...await owners(), ...added];
+            await browser.storage.session.set({ [OWNERS_KEY]: tracking.filter(t => known.some(o => sameAssociation(t, o))) });
+        }
         async function writable(c) {
             return c && (!c.parentId || (await loadFolder(c.parentId))?.shared?.role !== 'read');
         }
@@ -83,8 +97,32 @@
                 }
             } catch { /* An incomplete read never establishes stability. */ }
         }
+        async function revokeProvisional(data) {
+            const state = stateOf(data);
+            const provisional = state.provisional;
+            if (!provisional) return;
+            const added = provisional.added || [];
+            const tracking = (data.collectionsToTrack || []).filter(t => !added.some(a =>
+                a.collectionUid === t.collectionUid && a.windowId === t.windowId));
+            state.entries = state.entries.filter(e => !(provisional.candidates || []).includes(e.collectionUid));
+            delete state.provisional;
+            delete state.pending;
+            if (!enabled(data)) state.entries = [];
+            // Revoke mappings before clearing the durable quarantine. A partial
+            // multi-key failure must not leave mappings without their marker.
+            await browser.storage.local.set({ collectionsToTrack: tracking });
+            await updateOwners(tracking);
+            await browser.storage.local.set({ [KEY]: state });
+            await browser.alarms.clear(ALARM);
+        }
         async function ensure(startup = false) {
             let data = await read();
+            // An interrupted adoption is never an active association on wake.
+            // The marker is durable before any provisional mapping is written.
+            if (data[KEY]?.provisional) {
+                await revokeProvisional(data);
+                data = await read();
+            }
             if (!enabled(data)) {
                 // Resume OFF keeps the pre-recovery startup behavior. Only an
                 // opted-in (but unsupported/disabled) recovery quarantines IDs.
@@ -112,17 +150,35 @@
             }
             return data;
         }
-        async function remember(uid, windowId) {
+        async function remember(uid, windowId, arming = false) {
+            const observedRevision = revision;
             const data = await read();
-            if (!enabled(data)) return;
+            const tracking = data.collectionsToTrack || [];
+            if (arming && (tracking.filter(t => t.collectionUid === uid).length !== 1 ||
+                tracking.filter(t => t.windowId === windowId).length !== 1)) return;
+            if (!enabled(data) || !(await owners()).some(t => t.collectionUid === uid && t.windowId === windowId)) return;
             const state = stateOf(data);
+            const previous = state.entries.filter(e => e.collectionUid === uid);
             state.entries = state.entries.filter(e => e.collectionUid !== uid);
             try {
                 const c = await loadCollection(uid);
                 const sig = sourceSignature(c);
-                const w = (await windowsNow()).find(w => w.id === windowId);
-                if (sig && w?.signature === sig && await writable(c)) state.entries.push({ collectionUid: uid, signature: sig, savedAt: now() });
+                const windows = await windowsNow();
+                const w = windows.find(w => w.id === windowId);
+                if (arming && (windows.filter(w => w.signature === sig).length !== 1 ||
+                    (await loadCollections()).filter(c => sourceSignature(c) === sig).length !== 1)) return;
+                if (sig && await writable(c)) {
+                    if (w?.signature === sig) state.entries.push({ collectionUid: uid, signature: sig, savedAt: now() });
+                    // A successful enumeration proving disappearance differs from
+                    // an incompatible live window or a failed API read. Preserve
+                    // only the existing, still-matching evidence, without aging it.
+                    else if (!w && previous.length === 1 && previous[0].signature === sig &&
+                        (data.collectionsToTrack || []).some(t => t.collectionUid === uid && t.windowId === windowId)) {
+                        state.entries.push(previous[0]);
+                    }
+                }
             } catch { /* Failed/incomplete snapshot reads revoke stale eligibility. */ }
+            if (arming && (revision !== observedRevision || !enabled(await read()))) return;
             await browser.storage.local.set({ [KEY]: state });
         }
         const track = (uid, windowId) => run(async () => {
@@ -136,20 +192,26 @@
             state.entries = state.entries.filter(e => !displaced.includes(e.collectionUid));
             if (state.pending) state.pending.candidates = state.pending.candidates?.filter(id => id !== uid && !displaced.includes(id)) || [];
             await browser.storage.local.set({ collectionsToTrack: tracking, [KEY]: state });
+            await updateOwners(tracking, [{ collectionUid: uid, windowId }]);
             await remember(uid, windowId);
         });
-        const close = windowId => run(async () => {
-            await ensure();
-            const data = await read();
-            const closed = (data.collectionsToTrack || []).filter(c => c.windowId === windowId).map(c => c.collectionUid);
-            const state = stateOf(data);
-            state.entries = state.entries.map(e => closed.includes(e.collectionUid) ? { ...e, closedAt: now() } : e);
-            if (state.pending) await sample(state.pending);
-            await browser.storage.local.set({ collectionsToTrack: (data.collectionsToTrack || []).filter(c => c.windowId !== windowId), [KEY]: state });
-            // Keep the last complete snapshot: onRemoved cannot distinguish exit
-            // from a regular close. It is eligible only during the NEXT startup.
-        });
+        const close = windowId => {
+            revision++;
+            return run(async () => {
+                await ensure();
+                const data = await read();
+                const closed = (data.collectionsToTrack || []).filter(c => c.windowId === windowId).map(c => c.collectionUid);
+                const state = stateOf(data);
+                state.entries = state.entries.map(e => closed.includes(e.collectionUid) ? { ...e, closedAt: now() } : e);
+                if (state.pending) await sample(state.pending);
+                await browser.storage.local.set({ collectionsToTrack: (data.collectionsToTrack || []).filter(c => c.windowId !== windowId), [KEY]: state });
+                await updateOwners((data.collectionsToTrack || []).filter(c => c.windowId !== windowId));
+                // Keep the last complete snapshot: onRemoved cannot distinguish exit
+                // from a regular close. It is eligible only during the NEXT startup.
+            });
+        };
         const stop = uids => {
+            revision++;
             const targets = new Set([].concat(uids));
             // A queued stop must veto a collection write already awaiting tab data.
             for (const uid of targets) stopRevisions.set(uid, (stopRevisions.get(uid) || 0) + 1);
@@ -163,6 +225,7 @@
                 await browser.storage.local.set({
                     collectionsToTrack: (data.collectionsToTrack || []).filter(c => !targets.has(c.collectionUid)), [KEY]: state,
                 });
+                await updateOwners((data.collectionsToTrack || []).filter(c => !targets.has(c.collectionUid)));
                 return removed.size;
             });
         };
@@ -171,7 +234,9 @@
             if (!browser.windows) return;
             const data = await read();
             const ids = new Set((await browser.windows.getAll({ populate: false })).map(w => w.id));
-            await browser.storage.local.set({ collectionsToTrack: (data.collectionsToTrack || []).filter(t => ids.has(t.windowId)) });
+            const tracking = (data.collectionsToTrack || []).filter(t => ids.has(t.windowId));
+            await browser.storage.local.set({ collectionsToTrack: tracking });
+            await updateOwners(tracking);
         });
         const tick = () => run(async () => {
             const observedRevision = revision;
@@ -204,7 +269,8 @@
                 await browser.storage.local.set({ [KEY]: state });
                 return;
             }
-            const tracking = data.collectionsToTrack || [];
+            const tracking = [...(data.collectionsToTrack || [])];
+            const originalTracking = [...tracking];
             // Preserve the two-minute restore quarantine and a whole minute of
             // identical observations. The third minute is bounded scheduling
             // slack, never permission to adopt a window after the cutoff.
@@ -232,7 +298,30 @@
                 const { closedAt, ...active } = e; // eslint-disable-line no-unused-vars
                 return { ...active, savedAt: now() };
             });
-            await browser.storage.local.set({ collectionsToTrack: tracking, [KEY]: state });
+            const added = tracking.filter(t => !originalTracking.includes(t));
+            if (added.length) state.provisional = { added, candidates: pending.candidates };
+            try {
+                // Do not depend on multi-key storage writes being atomic. If the
+                // mapping write partly commits or the worker stops, ensure()
+                // still has enough evidence to revoke only these additions.
+                if (added.length) await browser.storage.local.set({ [KEY]: { ...state, pending } });
+                await browser.storage.local.set({ collectionsToTrack: tracking, [KEY]: state });
+                await updateOwners(tracking, added);
+                const committed = await read();
+                if (revision !== observedRevision || !enabled(committed) || (!expired && now() >= pending.deadline)) {
+                    await revokeProvisional(committed);
+                    return;
+                }
+            } catch (error) {
+                // A rejected write may have committed. Leave a durable quarantine
+                // if rollback also fails; ensure() retries before any update.
+                await revokeProvisional(await read());
+                throw error;
+            }
+            // Validation above is the adoption point. Subsequent events are
+            // ordinary tracked-window edits, including during marker cleanup.
+            delete state.provisional;
+            await browser.storage.local.set({ [KEY]: state });
             await browser.alarms.clear(ALARM);
         });
         const activity = () => {
@@ -256,14 +345,23 @@
             const deleted = Object.keys(changes).filter(k => k.startsWith('collection_') && !changes[k].newValue)
                 .map(k => k.slice('collection_'.length));
             if (disabled || Object.keys(changes).some(k => k.startsWith('collection_') || k.startsWith('folder_'))) revision++;
-            if (!disabled && !deleted.length) return;
+            const optedIn = changes.chkResumeAutoUpdate?.newValue === true && changes.chkResumeAutoUpdate?.oldValue !== true;
+            if (!disabled && !deleted.length && !optedIn) return;
             run(async () => {
-                const data = await read();
-                const state = stateOf(data);
+                const data = await ensure();
+                if (optedIn && !disabled && enabled(data)) {
+                    const known = await owners();
+                    for (const t of data.collectionsToTrack || []) {
+                        if (known.some(o => sameAssociation(t, o))) await remember(t.collectionUid, t.windowId, true);
+                    }
+                    if (!deleted.length) return;
+                }
+                const state = stateOf(await read());
                 state.entries = disabled ? [] : state.entries.filter(e => !deleted.includes(e.collectionUid));
                 if (disabled) delete state.pending;
                 await browser.storage.local.set({ [KEY]: state,
                     ...(deleted.length ? { collectionsToTrack: (data.collectionsToTrack || []).filter(t => !deleted.includes(t.collectionUid)) } : {}) });
+                if (deleted.length) await updateOwners((data.collectionsToTrack || []).filter(t => !deleted.includes(t.collectionUid)));
                 if (disabled && browser.alarms?.clear) await browser.alarms.clear(ALARM);
             }).catch(error => console.error('Auto-update recovery cleanup failed', error));
         }

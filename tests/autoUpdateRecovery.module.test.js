@@ -20,7 +20,8 @@ describe('restart identity', () => {
     });
     test('rejects unsupported URLs, ordinary pending loads and incomplete states', () => {
         for (const url of ['', 'about:blank', 'chrome://newtab/', 'about:neterror', 'invalid', 'file:///test']) expect(sig([{ ...tab, url }])).toBeNull();
-        expect(sig([{ ...tab, pendingUrl: 'https://new.test/' }])).toBeNull();
+        expect(sig([{ ...tab, pendingUrl: 'https://new.test/', status: 'complete' }], [], true)).toBeNull();
+        expect(sig([{ ...tab, pendingUrl: 'https://new.test/' }])).toBe(sig([tab]));
         expect(sig([{ ...tab, status: 'loading' }], [], true)).toBeNull();
         expect(sig([{ ...tab, status: 'loading', discarded: true }], [], true)).toBeNull();
         expect(sig([{ ...tab, status: 'unloaded', discarded: true }], [], true)).toBe(sig([tab]));
