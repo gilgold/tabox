@@ -534,12 +534,8 @@ function App({ mode = 'popup' }) {
   };
 
   const removeInactiveWindowsFromAutoUpdate = async () => {
-    let { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack');
-    const { chkEnableAutoUpdate } = await browser.storage.local.get('chkEnableAutoUpdate');
-    if (!collectionsToTrack || collectionsToTrack.length === 0 || !chkEnableAutoUpdate || isSingleWindowBrowser()) { return; }
-    const activeWindowIds = (await browser.windows.getAll({ populate: false })).map(c => c.id);
-    collectionsToTrack = collectionsToTrack.filter(c => activeWindowIds.includes(c.windowId));
-    await browser.storage.local.set({ collectionsToTrack: collectionsToTrack });
+    if (isSingleWindowBrowser()) return;
+    await browser.runtime.sendMessage({ type: 'pruneCollectionTracking' });
   }
 
   // Phase 2: Batch initial storage operations for better performance
@@ -882,28 +878,13 @@ function App({ mode = 'popup' }) {
         // Auto-update tracking logic (only for successful saves)
         const { chkAutoUpdateOnNewCollection } = await browser.storage.local.get('chkAutoUpdateOnNewCollection');
         if (!chkAutoUpdateOnNewCollection) return true;
-        setTimeout(async () => {
-          const storageResult = await browser.storage.local.get('collectionsToTrack');
-          let collectionsToTrack = storageResult.collectionsToTrack || [];
-          let window;
-          try {
-            window = await browser.windows.getLastFocused({ windowTypes: ['normal'] });
-          } catch {
-            return;
-          }
-          const index = collectionsToTrack.findIndex(c => c.collectionUid === newCollection.uid);
-          if (index !== undefined && index > -1) {
-              collectionsToTrack[index].windowId = window.id;
-          } else {
-              collectionsToTrack.push({
-                  collectionUid: newCollection.uid,
-                  windowId: window.id
-              });
-          }
-          await browser.storage.local.set({ collectionsToTrack });
+        if (isSingleWindowBrowser()) return true;
+        try {
+          const window = await browser.windows.getLastFocused({ windowTypes: ['normal'] });
+          await browser.runtime.sendMessage({ type: 'trackCollection', collectionUid: newCollection.uid, windowId: window.id });
           setListKey(Math.random().toString(36));
-        }, 1000);
-        
+        } catch { /* The source window may already be closed. */ }
+
         return true;
       } else {
         console.error(`❌ Failed to add collection ${newCollection.uid}`);

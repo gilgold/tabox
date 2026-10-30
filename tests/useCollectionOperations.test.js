@@ -287,9 +287,7 @@ describe('useCollectionOperations', () => {
             await latestOperations._handleUpdate();
         });
 
-        expect(browser.storage.local.set).toHaveBeenCalledWith({
-            collectionsToTrack: [{ collectionUid: 'collection-1', windowId: 77 }],
-        });
+        expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'trackCollection', collectionUid: 'collection-1', windowId: 77 });
         expect(setIsAutoUpdate).toHaveBeenCalledWith(true);
         expect(updateCollection).toHaveBeenCalledWith(expect.objectContaining({
             uid: 'collection-1',
@@ -360,7 +358,7 @@ describe('useCollectionOperations', () => {
         });
 
         // The stale tracking entry is dropped...
-        expect(browser.storage.local.set).toHaveBeenCalledWith({ collectionsToTrack: [] });
+        expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'stopTrackingCollection', collectionUid: 'collection-1' });
         // ...and the collection actually opens instead of a silent focus no-op.
         expect(browser.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
             type: 'openTabs',
@@ -371,18 +369,9 @@ describe('useCollectionOperations', () => {
         }));
     });
 
-    test('stops tracking only when the collection is currently auto-updated', async () => {
+    test('delegates stop intent to the background, including quarantined candidates', async () => {
         const setIsAutoUpdate = jest.fn();
-        browser.storage.local.get
-            .mockResolvedValueOnce({
-                collectionsToTrack: [
-                    { collectionUid: 'collection-1', windowId: 88 },
-                    { collectionUid: 'collection-2', windowId: 99 },
-                ],
-            })
-            .mockResolvedValueOnce({
-                collectionsToTrack: [{ collectionUid: 'collection-2', windowId: 99 }],
-            });
+        browser.storage.local.get.mockResolvedValue({ collectionsToTrack: [{ collectionUid: 'collection-2', windowId: 99 }] });
 
         renderWithProviders(
             <HookHarness
@@ -396,9 +385,7 @@ describe('useCollectionOperations', () => {
         });
 
         expect(setIsAutoUpdate).toHaveBeenCalledWith(false);
-        expect(browser.storage.local.set).toHaveBeenCalledWith({
-            collectionsToTrack: [{ collectionUid: 'collection-2', windowId: 99 }],
-        });
+        expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'stopTrackingCollection', collectionUid: 'collection-1' });
         await expect(latestOperations._isAutoUpdate()).resolves.toBe(false);
     });
 });

@@ -595,6 +595,19 @@ export default function SettingsMenu(props) {
                 },
                 {
                     type: 'switch',
+                    key: 'chkResumeAutoUpdate',
+                    title: 'Resume auto-update after browser restart',
+                    description: 'Relink previously tracked collections after at least two minutes, with a full minute of stable, complete matches. Recovery stops after three minutes. Incomplete or ambiguous restores stay unlinked.',
+                    requires: 'autoUpdateRecovery',
+                    switchProps: {
+                        id: 'chkResumeAutoUpdate',
+                        disabled: !autoUpdateEnabled,
+                        textOn: <span>Resume after restart: <strong>Enabled</strong></span>,
+                        textOff: <span>Resume after restart: <strong>Disabled</strong></span>,
+                    },
+                },
+                {
+                    type: 'switch',
                     key: 'chkAutoUpdateOnNewCollection',
                     title: 'Auto update new collections',
                     description: 'Automatically start tracking newly created collections when auto update is on.',

@@ -317,7 +317,15 @@ export function useCollectionOperations({
         
         const { chkEnableAutoUpdate } = await browser.storage.local.get('chkEnableAutoUpdate');
         const { chkManualUpdateLinkCollection } = await browser.storage.local.get('chkManualUpdateLinkCollection');
-        
+
+        let newItem = await getCurrentTabsAndGroups(collection.name, false, collection.tabs);
+        newItem.color = collection.color;
+        newItem.uid = collection.uid;
+        newItem.createdOn = collection.createdOn; // Preserve original creation time
+        newItem.lastUpdated = Date.now(); // Set current time as last updated
+        newItem.parentId = collection.parentId; // Preserve folder assignment (fixes eject bug)
+        await updateCollection(newItem, true); // Pass true for manual update to trigger lightning effect
+
         if (chkEnableAutoUpdate && chkManualUpdateLinkCollection) {
             let { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack') || [];
             const activeWindowId = collectionsToTrack.find(c => c.collectionUid === collection.uid)?.windowId;
@@ -329,23 +337,10 @@ export function useCollectionOperations({
                     return; // Exit early if we can't get the current window
                 }
 
-                const trackObj = {
-                    collectionUid: collection.uid,
-                    windowId: currentWindowId
-                }
-                collectionsToTrack.push(trackObj);
-                await browser.storage.local.set({ collectionsToTrack: collectionsToTrack });
+                await browser.runtime.sendMessage({ type: 'trackCollection', collectionUid: collection.uid, windowId: currentWindowId });
                 if (setIsAutoUpdate) setIsAutoUpdate(true);
             }
         }
-        
-        let newItem = await getCurrentTabsAndGroups(collection.name, false, collection.tabs);
-        newItem.color = collection.color;
-        newItem.uid = collection.uid;
-        newItem.createdOn = collection.createdOn; // Preserve original creation time
-        newItem.lastUpdated = Date.now(); // Set current time as last updated
-        newItem.parentId = collection.parentId; // Preserve folder assignment (fixes eject bug)
-        await updateCollection(newItem, true); // Pass true for manual update to trigger lightning effect
         
         showUndoToast(
             <FaRegCheckCircle />,
@@ -424,14 +419,8 @@ export function useCollectionOperations({
     };
 
     const _handleStopTracking = async () => {
-        const { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack');
+        await browser.runtime.sendMessage({ type: 'stopTrackingCollection', collectionUid: collection.uid });
         if (setIsAutoUpdate) setIsAutoUpdate(false);
-        if (!collectionsToTrack || collectionsToTrack == {}) return;
-        const activeCollections = collectionsToTrack.map(c => c.collectionUid);
-        const collectionIsActive = activeCollections.includes(collection.uid);
-        if (!collectionIsActive) return;
-        const newCollectionsToTrack = collectionsToTrack.filter(c => c.collectionUid !== collection.uid);
-        await browser.storage.local.set({ collectionsToTrack: newCollectionsToTrack });
     };
 
     const _isAutoUpdate = async () => {
