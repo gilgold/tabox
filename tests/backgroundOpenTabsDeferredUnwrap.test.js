@@ -51,6 +51,39 @@ describe('background openTabs unwraps stored deferred-loading URLs', () => {
         delete global.importScripts;
     });
 
+    test('smart loading carries 190 exact saved titles without creating destination tabs', async () => {
+        await browser.storage.local.set({ chkEnableTabDiscard: true });
+        require('../chrome/background.js');
+        const tabs = Array.from({ length: 190 }, (_, i) => ({
+            url: `https://synthetic.example/video?id=${i}%26x`,
+            title: `Video ${i} — 日本語 "<b>" 100% (click to load)`,
+            active: false, pinned: false,
+        }));
+        await browser.runtime.sendMessage({
+            type: 'openTabs', collection: { uid: 'synthetic', tabs, chromeGroups: [] },
+            window: { id: 300, tabs: [{ id: 1, url: 'https://other.example/' }] },
+            newWindow: false,
+        });
+        const urls = browser.tabs.create.mock.calls.map(([props]) => props.url);
+        expect(urls).toHaveLength(190);
+        expect(urls.map(url => JSON.parse(decodeURIComponent(new URL(url).hash.slice(1)))))
+            .toEqual(tabs.map(tab => ({ url: tab.url, title: tab.title, favicon: '' })));
+    });
+
+    test('nested wrappers still respect the existing file-access guard', async () => {
+        require('../chrome/background.js');
+        browser.extension.isAllowedFileSchemeAccess.mockResolvedValue(false);
+        const wrap = url => `${EXT}#${encodeURIComponent(JSON.stringify({ url, title: 'Synthetic file' }))}`;
+        const result = await browser.runtime.sendMessage({
+            type: 'openTabs',
+            collection: { uid: 'nested', tabs: [{ url: 'https://synthetic.example/' }, { url: wrap(wrap('file:///synthetic/example.html')) }], chromeGroups: [] },
+            window: { id: 300, tabs: [{ id: 1, url: 'https://other.example/' }] },
+            newWindow: false,
+        });
+        expect(result.skippedForFileAccess).toBe(1);
+        expect(browser.tabs.create.mock.calls.map(([props]) => props.url)).toEqual(['https://synthetic.example/']);
+    });
+
     test('opens the real destination URL, never the deferedLoading wrapper', async () => {
         require('../chrome/background.js');
 

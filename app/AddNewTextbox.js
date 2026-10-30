@@ -14,6 +14,10 @@ import { isSingleWindowBrowser } from './utils/platform';
 import SingleWindowTabsNote from './SingleWindowTabsNote';
 import { suggestCollectionName } from './ai/tasks/suggestCollectionName';
 import { suggestFolderName } from './ai/tasks/suggestFolderName';
+import { canEditFolder, isSharedFolder } from './utils/sharedFolderUtils';
+import { getColorValue } from './utils/colorMigration';
+import { useTrackedSync } from './useTrackedSync';
+import { loadSingleFolder } from './utils/storageUtils';
 
 function SaveHighlightedOnlyLabel({ saveMode, windowCount }) {
     const [totalHighlighted, setTotalHighlighted] = useState(0);
@@ -49,8 +53,8 @@ function SaveHighlightedOnlyLabel({ saveMode, windowCount }) {
     );
 }
 
-function WindowChoiceToggle({ saveMode, setSaveMode, windowCount }) {
-    const isDisabled = windowCount <= 1;
+function WindowChoiceToggle({ saveMode, setSaveMode, windowCount, disabled = false }) {
+    const isDisabled = disabled || windowCount <= 1;
 
     const handleCurrentClick = () => {
         if (!isDisabled) {
@@ -99,7 +103,7 @@ const useFocus = () => {
     return [htmlElRef, setFocus]
 }
 
-function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
+function AddNewTextbox({ addCollection, addFolder, onDataUpdate, folders = [] }) {
 
     const [collectionName, setName] = useState("");
     const [disabled, setDisabled] = useState(false);
@@ -110,6 +114,12 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
     const [saveMode, setSaveMode] = useState('current'); // 'current' or 'all'
     const [windowCount, setWindowCount] = useState(1);
     const [aiBusy, setAiBusy] = useState(false);
+    const [destinationId, setDestinationId] = useState('');
+    const savingRef = useRef(false);
+    const writableFolders = folders.filter(canEditFolder);
+    const destination = writableFolders.find(folder => folder.uid === destinationId);
+    const destinationUnavailable = Boolean(destinationId && !destination);
+    const trackedSync = useTrackedSync();
 
     useEffect(() => {
         setInputFocus();
@@ -200,15 +210,26 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
         }, 50);
     };
 
+    const resetSavedForm = () => {
+        setSearch('');
+        setName('');
+        setDestinationId('');
+    };
+
     const handleSave = async () => {
+        if (savingRef.current) return;
         if (collectionName.trim() === '') {
             showErrorToast('Please enter a name for the collection');
             return;
         }
         
-        setSearch('');
+        if (saveMode === 'current' && destinationUnavailable) {
+            showErrorToast('The destination folder is no longer available or writable. Choose another destination.');
+            return;
+        }
+
+        savingRef.current = true;
         setDisabled(true);
-        setName('');
         
         try {
             if (saveMode === 'all' && windowCount > 1) {
@@ -261,10 +282,13 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
                     const { showSuccessToast } = await import('./toastHelpers');
                     showSuccessToast(`Folder created with ${addedCollections.length} collection${addedCollections.length > 1 ? 's' : ''}`);
                 }
+                resetSavedForm();
             } else {
                 // Save current window as collection (existing behavior)
                 const newItem = await getCurrentTabsAndGroups(collectionName);
-                await addCollection(newItem, false, true); // Skip state update to prevent immediate highlight
+                if (destinationId) newItem.parentId = destinationId;
+                const success = await addCollection(newItem, false, true); // Skip state update to prevent immediate highlight
+                if (!success) throw new Error('Failed to save collection');
                 
                 // Force refresh data to update UI
                 if (onDataUpdate) {
@@ -277,13 +301,27 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
                 // Show success toast
                 const { showSuccessToast } = await import('./toastHelpers');
                 showSuccessToast(`Collection "${collectionName}" created successfully`);
+                resetSavedForm();
+                // Sharing may have changed while tabs were being captured.
+                // App routes the shared upload; only personal saves need Drive.
+                const savedDestination = destinationId ? await loadSingleFolder(destinationId) : null;
+                if (destinationId && !savedDestination) {
+                    showErrorToast('Collection saved locally, but its destination could not be checked for sync. Refresh and try syncing again.');
+                } else if (!isSharedFolder(savedDestination)) {
+                    try {
+                        await trackedSync({ updateLocalTimestamp: false });
+                    } catch (error) {
+                        showErrorToast(`Collection saved locally, but sync failed: ${error.message}`);
+                    }
+                }
             }
         } catch (error) {
             console.error('Error saving:', error);
             showErrorToast(`Failed to save: ${error.message}`);
         }
         
-        setTimeout(() => setDisabled(false), 1000);
+        savingRef.current = false;
+        setDisabled(false);
     }
 
     const _handleKeyDown = async (e) => {
@@ -324,6 +362,7 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
                     onKeyDown={async e => await _handleKeyDown(e)}
                     onChange={_handleInputChange}
                     ref={inputRef}
+                    disabled={disabled}
                     value={collectionName} />
                 <label className="textbox_label">Search or Add collections</label>
                 <AiSuggestNameButton
@@ -333,11 +372,12 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
                         setSearch(suggestedName);
                     }}
                     onBusyChange={setAiBusy}
+                    disabled={disabled}
                 />
                 <button
                     className="clear-button"
                     style={{ opacity: hideClear ? '0' : '1' }}
-                    disabled={hideClear}
+                    disabled={hideClear || disabled}
                     onClick={handleClear}>
                     <IoClose size="16px" />
                 </button>
@@ -363,11 +403,36 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
                         saveMode={saveMode} 
                         setSaveMode={setSaveMode} 
                         windowCount={windowCount}
+                        disabled={disabled}
                     />
                     <SaveHighlightedOnlyLabel saveMode={saveMode} windowCount={windowCount} />
                 </div>
             )}
         </div>
+        {saveMode === 'current' && (writableFolders.length > 0 || destinationId) && (
+            <div className="quick-save-destination">
+                <label htmlFor="quick-save-folder">Save To</label>
+                <div className="quick-save-folder-wrapper">
+                    {destination && (
+                        <span className="quick-save-folder-dot" aria-hidden="true" style={{
+                            backgroundColor: destination.color && destination.color !== 'default'
+                                ? getColorValue(destination.color) : 'var(--primary-color)',
+                        }} />
+                    )}
+                    <select
+                        id="quick-save-folder"
+                        value={destinationId}
+                        onChange={event => setDestinationId(event.target.value)}
+                        disabled={disabled}
+                        className={destination ? 'has-folder-dot' : ''}
+                    >
+                        <option value="">Root level (no folder)</option>
+                        {destinationUnavailable && <option value={destinationId} disabled>Destination unavailable — choose another folder</option>}
+                        {writableFolders.map(folder => <option key={folder.uid} value={folder.uid}>{folder.name}</option>)}
+                    </select>
+                </div>
+            </div>
+        )}
     </section>;
 }
 

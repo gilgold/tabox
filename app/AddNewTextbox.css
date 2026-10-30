@@ -586,3 +586,80 @@ html.performance-mode .add-collection-group.ai-name-processing input[type="text"
     inset 0 1px 0 rgba(255, 255, 255, 0.3),
     inset 0 -1px 0 rgba(255, 255, 255, 0.15);
 }
+
+/* Keep the search/add controls in their existing row; destination is optional. */
+.add-collections-wrapper {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.quick-save-destination {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  max-width: 310px;
+  color: var(--text-color);
+  font-size: 12px;
+}
+
+.quick-save-destination label {
+  flex-shrink: 0;
+}
+
+.quick-save-folder-wrapper {
+  position: relative;
+  min-width: 0;
+  flex: 1;
+}
+
+.quick-save-destination select {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  padding: 3px 28px 3px 8px;
+  border: 1px solid var(--divider-color);
+  border-radius: 8px;
+  background-color: var(--input-bg-color);
+  color: var(--text-color);
+  font: inherit;
+  color-scheme: light;
+}
+
+[data-theme="dark"] .quick-save-destination select {
+  color-scheme: dark;
+}
+
+.quick-save-destination option {
+  background-color: var(--input-bg-color);
+  color: var(--text-color);
+}
+
+.quick-save-destination select.has-folder-dot {
+  padding-left: 26px;
+}
+
+.quick-save-folder-dot {
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+.quick-save-destination select:hover:not(:disabled) {
+  border-color: var(--primary-color);
+}
+
+.quick-save-destination select:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+.quick-save-destination select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

@@ -469,3 +469,14 @@ describe('migrationCoordinator', () => {
         expect(migrationCoordinator.getMajorMinorVersion('4.0.7')).toBe('4.0');
     });
 });
+
+
+test('deferred repair preserves available embedded title metadata (issue 121)', async () => {
+    const coordinator = require('../app/utils/migrationCoordinator').migrationCoordinator;
+    const url = 'https://synthetic.example/a%26b';
+    const title = 'Saved 日本語 100% <b>';
+    const wrapper = `chrome-extension://test/deferedLoading.html#${encodeURIComponent(JSON.stringify({ url, title }))}`;
+    const input = { collection_test: { tabs: [{ url: wrapper, title: 'synthetic.example (click to load)' }] } };
+    const result = await coordinator.repairDeferredUrls(input);
+    expect(result.collection_test.tabs[0]).toMatchObject({ url, title });
+});

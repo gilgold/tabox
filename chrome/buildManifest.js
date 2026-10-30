@@ -13,6 +13,7 @@ const BACKGROUND_SCRIPTS = [
     'sync-throttle.js',
     'pro-config.js',
     'background-utils.js',
+    'auto-update-recovery.js',
     'push-client.js',
     'pro-entitlement.js',
     'shared-folders.js',

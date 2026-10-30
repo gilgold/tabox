@@ -218,6 +218,48 @@ describe('App shared-only mutations do not stamp the Drive watermark', () => {
         expect(getSharedSyncNowMessages(browser)).toHaveLength(0);
     });
 
+    test.each(['deleted', 'read-only'])('rejects a %s destination from persisted storage even with a stale open form', async change => {
+        await renderAppAndWaitForData();
+        const add = mockCaptured.addCollection;
+        if (change === 'deleted') {
+            await browser.storage.local.remove(`folder_${plainFolder.uid}`);
+        } else {
+            await browser.storage.local.set({ [`folder_${plainFolder.uid}`]: {
+                ...plainFolder, shared: { folderId: 'remote', role: 'read' },
+            } });
+        }
+        browser.storage.local.set.mockClear();
+        let result;
+        await act(async () => {
+            result = await add({ uid: 'blocked', name: 'Reading', tabs: [], parentId: plainFolder.uid });
+        });
+        expect(result).toBe(false);
+        expect(browser.storage.local.set).not.toHaveBeenCalled();
+        const stored = await browser.storage.local.get(['collection_blocked', 'collections_index']);
+        expect(stored.collection_blocked).toBeUndefined();
+        expect(stored.collections_index.blocked).toBeUndefined();
+    });
+
+    test.each(['owner', 'write'])('uses the persisted shared %s destination, stores parent in record/index and updates count', async role => {
+        await renderAppAndWaitForData();
+        const add = mockCaptured.addCollection;
+        await browser.storage.local.set({
+            [`folder_${plainFolder.uid}`]: { ...plainFolder, shared: { folderId: 'remote', role } },
+        });
+        browser.storage.local.set.mockClear();
+        browser.runtime.sendMessage.mockClear();
+        await act(async () => {
+            expect(await add({ uid: 'destination-col', name: 'Reading', tabs: [], parentId: plainFolder.uid }, false, true)).toBe(true);
+        });
+        const stored = await browser.storage.local.get(['collection_destination-col', 'collections_index', `folder_${plainFolder.uid}`, 'folders_index']);
+        expect(stored['collection_destination-col'].parentId).toBe(plainFolder.uid);
+        expect(stored.collections_index['destination-col'].parentId).toBe(plainFolder.uid);
+        expect(stored[`folder_${plainFolder.uid}`].collectionCount).toBe(1);
+        expect(stored.folders_index[plainFolder.uid].collectionCount).toBe(1);
+        expect(getLocalTimestampStamps(browser)).toHaveLength(0);
+        expect(getSharedSyncNowMessages(browser)).toHaveLength(1);
+    });
+
     test('updating a collection that stays in the same shared folder skips localTimestamp and nudges shared sync', async () => {
         await renderAppAndWaitForData();
 

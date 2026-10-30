@@ -97,3 +97,24 @@ describe('SaveCollectionModal', () => {
         expect(suggestCollectionName).toHaveBeenCalledWith(expect.objectContaining({ tabs: expect.any(Array) }));
     });
 });
+
+describe('SaveCollectionModal failed current-window save', () => {
+    test.each(['false', 'throw'])('retains the form without closing or announcing success on %s', async failure => {
+        const { showSuccessToast, showErrorToast } = require('../app/toastHelpers');
+        jest.clearAllMocks();
+        getCurrentTabsAndGroups.mockResolvedValue({ uid: 'new', tabs: [] });
+        const onClose = jest.fn();
+        const onDataUpdate = jest.fn();
+        const addCollection = failure === 'false' ? jest.fn().mockResolvedValue(false) : jest.fn().mockRejectedValue(new Error('Storage unavailable'));
+        render(<SaveCollectionModal isOpen onClose={onClose} folders={[{ uid: 'project', name: 'Project' }]} addCollection={addCollection} onDataUpdate={onDataUpdate} />);
+        fireEvent.change(screen.getByLabelText('Collection Name'), { target: { value: 'Reading' } });
+        fireEvent.change(screen.getByRole('combobox', { name: 'Save To' }), { target: { value: 'project' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save Collection' }));
+        await waitFor(() => expect(showErrorToast).toHaveBeenCalled());
+        expect(onClose).not.toHaveBeenCalled();
+        expect(onDataUpdate).not.toHaveBeenCalled();
+        expect(showSuccessToast).not.toHaveBeenCalled();
+        expect(screen.getByLabelText('Collection Name')).toHaveValue('Reading');
+        expect(screen.getByRole('combobox')).toHaveValue('project');
+    });
+});

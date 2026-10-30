@@ -581,3 +581,67 @@ describe('folder deletion tombstones', () => {
         ]));
     });
 });
+
+describe('new-collection destination validation at persistence', () => {
+    test.each(['deleted', 'read-only'])('rejects a destination becoming %s while preparing the collection index, before any write', async change => {
+        jest.clearAllMocks();
+        const folder = { uid: 'destination', name: 'Project' };
+        const data = { collections_index: {}, folders_index: { destination: folder }, folder_destination: folder };
+        browser.storage.local.get.mockImplementation(async keys => {
+            if (keys === 'collections_index') {
+                if (change === 'deleted') {
+                    delete data.folder_destination;
+                    delete data.folders_index.destination;
+                } else {
+                    data.folder_destination = { ...folder, shared: { folderId: 'remote', role: 'read' } };
+                }
+            }
+            return resolveStorageGet(keys, data);
+        });
+        browser.storage.local.set.mockImplementation(async values => Object.assign(data, values));
+        const success = await saveSingleCollection({ uid: 'new', name: 'Reading', tabs: [], parentId: 'destination' }, true, { requireWritableParent: true });
+        expect(success).toBe(false);
+        expect(browser.storage.local.set).not.toHaveBeenCalled();
+        expect(data.collections_index).toEqual({});
+    });
+});
+
+
+describe('destination validation after sibling preparation', () => {
+    test.each(['deleted', 'read-only'])('rejects %s during sibling record loading before any write', async change => {
+        jest.clearAllMocks();
+        const folder = { uid: 'destination', name: 'Project' };
+        const sibling = { uid: 'sibling', name: 'Existing', tabs: [], parentId: 'destination', order: 0, lastUpdated: 10 };
+        const data = {
+            collections_index: { sibling: { ...sibling } }, collection_sibling: sibling,
+            folders_index: { destination: folder }, folder_destination: folder,
+            localTimestamp: 123, localBackup: { preserved: true },
+        };
+        const original = JSON.parse(JSON.stringify(data));
+        let injected = false;
+        browser.storage.local.get.mockImplementation(async keys => {
+            if (Array.isArray(keys) && keys.length === 1 && keys[0] === 'collection_sibling') {
+                injected = true;
+                if (change === 'deleted') {
+                    delete data.folder_destination;
+                    delete data.folders_index.destination;
+                } else {
+                    data.folder_destination = { ...folder, shared: { folderId: 'remote', role: 'read' } };
+                }
+            }
+            // Real storage returns detached data; local index preparation must not mutate storage.
+            return JSON.parse(JSON.stringify(await resolveStorageGet(keys, data)));
+        });
+        browser.storage.local.set.mockImplementation(async values => Object.assign(data, values));
+        const success = await saveSingleCollection({ uid: 'new', name: 'Reading', tabs: [], parentId: 'destination' }, true, { requireWritableParent: true });
+        expect(injected).toBe(true);
+        expect(success).toBe(false);
+        expect(browser.storage.local.set).not.toHaveBeenCalled();
+        expect(browser.storage.local.remove).not.toHaveBeenCalled();
+        expect(data.collection_new).toBeUndefined();
+        expect(data.collection_sibling).toEqual(original.collection_sibling);
+        expect(data.collections_index).toEqual(original.collections_index);
+        expect(data.localTimestamp).toBe(original.localTimestamp);
+        expect(data.localBackup).toEqual(original.localBackup);
+    });
+});

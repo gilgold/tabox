@@ -39,6 +39,7 @@ export function withFaviconFallback(tab) {
 // need via `requires`; unsupported ones are hidden rather than left to fail.
 const CAPABILITY_CHECKS = {
     windows: () => !isSingleWindowBrowser(),
+    autoUpdateRecovery: () => !!(browser.windows?.getAll && browser.storage.session?.get && browser.storage.session?.set && browser.alarms?.create && browser.alarms?.clear),
     tabGroups: hasTabGroups,
     recentlyClosed: hasRecentlyClosed,
     // The toolbar popup: Firefox for Android always opens the full page

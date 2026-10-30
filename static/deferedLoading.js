@@ -186,7 +186,7 @@ export function initializeDeferredLoading({
 
         try {
             const urlObj = new URL(sanitizedUrl);
-            doc.title = `${urlObj.hostname} (click to load)`;
+            doc.title = typeof params.title === 'string' && params.title.trim() ? params.title : urlObj.hostname;
         } catch {
             doc.title = 'Click to load content';
         }

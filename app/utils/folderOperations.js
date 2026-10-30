@@ -531,18 +531,10 @@ export const stopTrackingFolderCollections = async (folderId) => {
     const folderCollections = await getFolderCollections(folderId);
     if (folderCollections.length === 0) return 0;
 
-    const { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack');
-    if (!collectionsToTrack || collectionsToTrack.length === 0) return 0;
-
-    const folderCollectionUids = new Set(folderCollections.map((c) => c.uid));
-    const updatedCollectionsToTrack = collectionsToTrack.filter(
-        (tracked) => !folderCollectionUids.has(tracked.collectionUid)
-    );
-    const removedCount = collectionsToTrack.length - updatedCollectionsToTrack.length;
-    if (removedCount === 0) return 0;
-
-    await browser.storage.local.set({ collectionsToTrack: updatedCollectionsToTrack });
-    return removedCount;
+    return browser.runtime.sendMessage({
+        type: 'stopTrackingCollections',
+        collectionUids: folderCollections.map(c => c.uid),
+    });
 };
 
 // ========================================

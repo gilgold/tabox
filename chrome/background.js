@@ -14,6 +14,7 @@ if (typeof importScripts === 'function') {
     importScripts('sync-throttle.js');
     importScripts('pro-config.js');
     importScripts('background-utils.js');
+    importScripts('auto-update-recovery.js');
     importScripts('push-client.js');
     importScripts('pro-entitlement.js');
     importScripts('shared-folders.js');
@@ -46,6 +47,27 @@ if (typeof importScripts === 'function') {
     SYNC_SESSION_STATUS,
     writeSyncSessionState
   } = syncSessionStateApi;
+  const syncPermissionsApi = typeof require === 'function'
+    ? require('./sync-transport.js')
+    : globalThis.TaboxSyncTransport;
+  async function checkSyncPermissions() {
+    if (await syncPermissionsApi.hasSyncPermissions(browser)) return true;
+    await updateSharedSyncSessionState({
+      status: SYNC_SESSION_STATUS.ERROR,
+      error: syncPermissionsApi.SYNC_PERMISSION_ERROR
+    });
+    logSyncOperation('error', syncPermissionsApi.SYNC_PERMISSION_ERROR);
+    return false;
+  }
+  const recoveryApi = typeof require === 'function'
+    ? require('./auto-update-recovery.js') : globalThis.TaboxAutoUpdateRecovery;
+  const autoUpdateRecovery = recoveryApi.createRecovery({
+    browser,
+    normalize: tab => normalizeDeferredTab(tab),
+    loadCollection: uid => loadSingleCollectionBG(uid),
+    loadCollections: () => loadAllCollectionsBG(true),
+    loadFolder: uid => loadSingleFolderBG(uid),
+  });
   let updateInProgress = false;
 
   // Sync coalescing to prevent overlapping sync operations.
@@ -550,6 +572,7 @@ async function runBackgroundSync() {
     error: null
   });
 
+  if (!await checkSyncPermissions()) return false;
   const token = await getAuthToken();
   if (token === false) {
     logSyncOperation('error', 'Background sync skipped - failed to get auth token');
@@ -717,6 +740,9 @@ function collectionsHaveChanges(oldCollection, newCollection) {
 
 // Enhanced handleAutoUpdate with NEW INDEXED STORAGE - Much faster performance!
 async function handleAutoUpdate(windowId, timeDelay = 1, rebuildContextMenus = false) {
+  return autoUpdateRecovery.withWindow(windowId, canPersist => performAutoUpdate(windowId, timeDelay, rebuildContextMenus, canPersist));
+}
+async function performAutoUpdate(windowId, timeDelay = 1, rebuildContextMenus = false, canPersist) {
   try {
     const { chkEnableAutoUpdate } = await browser.storage.local.get('chkEnableAutoUpdate');
     if (!chkEnableAutoUpdate) { return; }
@@ -764,6 +790,8 @@ async function handleAutoUpdate(windowId, timeDelay = 1, rebuildContextMenus = f
       const parentIsReadOnlyShared = parentFolder?.shared?.role === 'read';
 
       if (!parentIsReadOnlyShared) {
+        // Recheck intent after awaited browser/folder reads, before persistence.
+        if (!await canPersist()) return;
         // Update timestamp only when there are actual changes
         newCollection.lastUpdated = Date.now();
 
@@ -810,6 +838,7 @@ async function handleAutoUpdate(windowId, timeDelay = 1, rebuildContextMenus = f
 // Enhanced handleRemoteUpdate with better error handling and retry logic
 async function handleRemoteUpdate(retryCount = 0, maxRetries = 2) {
   try {
+    if (!await checkSyncPermissions()) return false;
     const { googleUser } = await browser.storage.local.get('googleUser');
     if (!googleUser) { 
       return false; 
@@ -923,19 +952,7 @@ async function handleRemoteUpdate(retryCount = 0, maxRetries = 2) {
 
 async function addCollectionToTrack(collectionUid, windowId) {
   if (!browser.windows) return; // no auto-update on Firefox for Android (see debounceAutoUpdate)
-  setTimeout(async () => {
-    let { collectionsToTrack } = (await browser.storage.local.get('collectionsToTrack')) || [];
-    const index = collectionsToTrack.findIndex(c => c.collectionUid === collectionUid);
-    if (index !== undefined && index > -1) {
-      collectionsToTrack[index].windowId = windowId;
-    } else {
-      collectionsToTrack.push({
-        collectionUid: collectionUid,
-        windowId: windowId
-      });
-    }
-    await browser.storage.local.set({ collectionsToTrack: collectionsToTrack });
-  }, 300);
+  await autoUpdateRecovery.track(collectionUid, windowId);
 }
 
 // Performance optimization: Define patterns once outside the function
@@ -1139,11 +1156,11 @@ async function openTabs(collection, window, newWindow = null, trackOpenedWindow 
   // contains file:// tabs. Without the "Allow access to file URLs" permission,
   // tabs.create() rejects file:// URLs — previously they just landed in
   // tabsFailed with no explanation for the user.
-  const hasFileTabs = collection.tabs.some(t => isFileSchemeUrl(unwrapDeferredUrl(t.url)));
+  const hasFileTabs = collection.tabs.some(t => isFileSchemeUrl(unwrapDeferredUrl(normalizeDeferredTab(t).url)));
   const fileAccessAllowed = hasFileTabs ? await isFileSchemeAccessAllowed() : true;
   
   for (let index = 0; index < totalTabs; index++) {
-    const tabInGrp = collection.tabs[index];
+    const tabInGrp = normalizeDeferredTab(collection.tabs[index]);
 
     // Resolve the real destination URL. Collections saved by older builds (or while a
     // deferred tab was still on the placeholder page) may have persisted the
@@ -1191,11 +1208,11 @@ async function openTabs(collection, window, newWindow = null, trackOpenedWindow 
     // `?url=http...` redirect pattern and block the placeholder page (ERR_BLOCKED_BY_CLIENT);
     // a hash fragment is never sent in the request and avoids those filters.
     const finalUrl = shouldDefer
-      ? `${runtimeUrl}#${encodeURIComponent(JSON.stringify({ url: realUrl, favicon: tabInGrp?.favIconUrl || '' }))}`
+      ? `${runtimeUrl}#${encodeURIComponent(JSON.stringify({ url: realUrl, title: tabInGrp.title, favicon: tabInGrp?.favIconUrl || '' }))}`
       : realUrl;
 
     tabsToCreate.push({
-      originalTab: tabInGrp,
+      originalTab: collection.tabs[index],
       properties: singleWindow
         ? { active: tabsToCreate.length === 0, url: finalUrl } // jump to the restored tabs, like a new window would
         : {
@@ -1310,11 +1327,13 @@ async function openTabs(collection, window, newWindow = null, trackOpenedWindow 
     }
   }
   
+  let groupResult = { groupsRestored: 0, groupsFailed: 0 };
   // Apply chrome groups and tracking
   // Note: Tab groups are not supported in incognito windows
   try {
     if (!isIncognitoWindow) {
-      const postOpenTasks = [applyChromeGroupSettings(window.id, collection)];
+      groupResult = await applyChromeGroupSettings(window.id, collection);
+      const postOpenTasks = [];
       if (trackOpenedWindow) {
         postOpenTasks.push(addCollectionToTrack(collection.uid, window.id));
       }
@@ -1331,6 +1350,20 @@ async function openTabs(collection, window, newWindow = null, trackOpenedWindow 
     console.error('Error applying chrome groups or tracking:', groupError);
   }
   
+  // Opening tabs can tear down the initiating popup. Persist only counts so
+  // both views can show partial success, including on the next popup open.
+  if (successCount > 0 && groupResult.groupsFailed > 0) {
+    try {
+      await browser.storage.local.set({
+        groupRestoreNoticePending: {
+          tabsOpened: successCount, groupsFailed: groupResult.groupsFailed, ts: Date.now()
+        }
+      });
+    } catch (noticeError) {
+      console.warn('Could not persist group-restore notice:', noticeError);
+    }
+  }
+
   // Authoritatively record the "recently opened" timestamp here in the background —
   // openTabs() is the single funnel for every open path (popup, fullpage, context menu,
   // keyboard command). Persisting it here (instead of in the UI) means it survives the
@@ -1343,6 +1376,7 @@ async function openTabs(collection, window, newWindow = null, trackOpenedWindow 
     success: successCount > 0,
     tabsOpened: successCount,
     tabsFailed: errorCount,
+    ...groupResult,
     skippedForIncognito: skippedIncognitoTabs.length,
     skippedForFileAccess: skippedFileAccessTabs.length,
     skippedFileAccessReason: skippedFileAccessTabs.length > 0 ? 'file-access-disabled' : null,
@@ -2004,6 +2038,10 @@ try {
           return Promise.resolve(false);
         }
 
+        if (!await checkSyncPermissions()) {
+          return { ...googleUser, syncStatus: 'error', syncError: syncPermissionsApi.SYNC_PERMISSION_ERROR };
+        }
+
         // The cached profile can be lost while the refresh token survives (partial
         // sign-out, interrupted login, storage cleanup). Don't just report
         // "reconnecting" — that state would never resolve on its own. Try to get a
@@ -2250,21 +2288,22 @@ try {
     
     if (request.type === 'forceSyncReset') {
       try {
-        // Clear sync state and force re-sync
-        await browser.storage.sync.remove('syncFileId');
-        await browser.storage.local.remove(['googleToken', 'localTimestamp']);
-        
-        const { googleUser } = await browser.storage.local.get('googleUser');
-        if (googleUser) {
-          // Re-establish sync
-          const token = await getAuthToken();
-          if (token !== false) {
-            await getOrCreateSyncFile(token);
-            await syncData(token);
-          }
-        }
-        
-        return Promise.resolve(true);
+        if (!await checkSyncPermissions()) return false;
+        const { googleRefreshToken } = await browser.storage.local.get('googleRefreshToken');
+        if (!googleRefreshToken) return false;
+        const token = await getAuthToken();
+        if (!token) return false;
+        // Rediscover without deleting the cached ID: failed lookup must leave the
+        // existing sync target intact.
+        if (await getOrCreateSyncFile(token, { rediscover: true }) === false) return false;
+        // Preserve the local edit timestamp: resetting it can discard offline edits.
+        const result = await throttleSync(() => syncData(token));
+        const completed = result === true || result === 'no_update_needed';
+        await updateSharedSyncSessionState({
+          status: completed ? SYNC_SESSION_STATUS.ACTIVE : SYNC_SESSION_STATUS.ERROR,
+          error: completed ? null : 'Sync reset did not complete. Please try again.'
+        });
+        return completed;
       } catch (error) {
         console.error('Error during sync reset:', error);
         return Promise.resolve(false);
@@ -2273,6 +2312,7 @@ try {
 
     if (request.type === 'login') {
       try {
+        if (!await checkSyncPermissions()) return false;
         // CSRF nonce for this attempt only — sent inside `state` on the
         // Firefox (viaWorker) path and verified against what the Worker
         // callback echoes back before the code is ever exchanged. Chrome's
@@ -2322,6 +2362,21 @@ try {
         console.error('Exception during login:', error);
         return Promise.resolve(false);
       }
+    }
+    if (request.type === 'pruneCollectionTracking') {
+      await autoUpdateRecovery.prune();
+      return true;
+    }
+    if (request.type === 'trackCollection') {
+      if (browser.windows) await autoUpdateRecovery.track(request.collectionUid, request.windowId);
+      return true;
+    }
+    if (request.type === 'stopTrackingCollections') {
+      return autoUpdateRecovery.stop(request.collectionUids || []);
+    }
+    if (request.type === 'stopTrackingCollection') {
+      await autoUpdateRecovery.stop(request.collectionUid);
+      return true;
     }
     if (request.type === 'openTabs') {
       // New-window path: the popup sends `createWindowSpec` instead of a
@@ -2389,6 +2444,7 @@ try {
     }
 
     if (request.type === 'loadFromServer') {
+      if (!await checkSyncPermissions()) return false;
       console.log('🔄 [SYNC] loadFromServer message received');
       try {
         const { googleRefreshToken } = await browser.storage.local.get('googleRefreshToken');
@@ -2508,11 +2564,7 @@ try {
         return Promise.resolve(true);
       } catch {
         // Clean up tracking for this window
-        const { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack');
-        if (collectionsToTrack && collectionsToTrack.length > 0) {
-          const updatedTracking = collectionsToTrack.filter(c => c.windowId !== request.windowId);
-          await browser.storage.local.set({ collectionsToTrack: updatedTracking });
-        }
+        await autoUpdateRecovery.close(request.windowId);
         return Promise.resolve(false);
       }
     }
@@ -2902,6 +2954,8 @@ try {
     });
   }
 
+  browser.storage.onChanged.addListener(autoUpdateRecovery.storageChanged);
+
   browser.storage.onChanged.addListener(async (changes, areaName) => {
     if (areaName !== 'local' || !changes[TOOLBAR_FULLPAGE_SETTING_KEY]) {
       return;
@@ -3055,6 +3109,7 @@ try {
   })
 
   browser.runtime.onStartup.addListener(async () => {
+    await autoUpdateRecovery.startup();
     await setInitialOptions();
     await applyToolbarLaunchBehavior();
     // Rebuild the context menu on every browser launch: menus persist across
@@ -3113,6 +3168,7 @@ try {
   }
 
   browser.alarms.onAlarm.addListener(async (alarm) => {
+    if (alarm.name === recoveryApi.ALARM) { await autoUpdateRecovery.tick(); return; }
     if (typeof handleProAlarm === 'function' && await handleProAlarm(alarm.name)) return;
 
     if (alarm.name === AUTO_BACKUP_ALARM) {
@@ -3132,10 +3188,7 @@ try {
 
   // window events
   const handleWindowRemoved = async windowId => {
-    let { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack');
-    if (!collectionsToTrack || collectionsToTrack.length === 0) { return; }
-    collectionsToTrack = collectionsToTrack.filter(c => c.windowId !== windowId);
-    await browser.storage.local.set({ collectionsToTrack: collectionsToTrack });
+    await autoUpdateRecovery.close(windowId);
   };
   // Firefox for Android has no windows API at all — skip window events there.
   if (browser.windows) try {
@@ -3161,6 +3214,7 @@ try {
   }
 
   browser.windows?.onCreated.addListener(async () => {
+    await autoUpdateRecovery.activity();
     await handleBadge();
   });
 
@@ -3181,10 +3235,12 @@ try {
 
   // tab events
   browser.tabs.onCreated.addListener(async tab => {
+    await autoUpdateRecovery.activity();
     await handleBadge();
     debounceAutoUpdate(tab.windowId, 2000); // Debounced auto-update
   });
   browser.tabs.onUpdated.addListener(async (_tabId, changeInfo, tab) => {
+    if (['status', 'url', 'pinned', 'groupId'].some(key => key in changeInfo)) await autoUpdateRecovery.activity();
     const allowedChanges = ['mutedInfo', 'pinned', 'groupId'];
     const allowUpdate = Object.keys(changeInfo).some(key => allowedChanges.includes(key));
     if (('status' in changeInfo && changeInfo.status === 'complete') || allowUpdate) {
@@ -3192,17 +3248,21 @@ try {
     }
   });
   browser.tabs.onDetached.addListener(async (_tabId, detachInfo) => {
+    await autoUpdateRecovery.activity();
     debounceAutoUpdate(detachInfo.oldWindowId, 2000); // Debounced auto-update
     await handleBadge();
   });
   browser.tabs.onAttached.addListener(async (_tabId, attachInfo) => {
+    await autoUpdateRecovery.activity();
     debounceAutoUpdate(attachInfo.newWindowId, 2000); // Debounced auto-update
     await handleBadge();
   });
   browser.tabs.onMoved?.addListener(async (_tabId, moveInfo) => {
+    await autoUpdateRecovery.activity();
     debounceAutoUpdate(moveInfo.windowId, 2000); // Debounced auto-update
   });
   browser.tabs.onRemoved.addListener(async (_tabId, removeInfo) => {
+    await autoUpdateRecovery.activity();
     if (removeInfo.isWindowClosing) return;
     await handleBadge();
     debounceAutoUpdate(removeInfo.windowId, 2000); // Debounced auto-update
@@ -3210,12 +3270,15 @@ try {
 
   // tabGroup events
   browser.tabGroups?.onCreated.addListener(async (tabGroup) => {
+    await autoUpdateRecovery.activity();
     debounceAutoUpdate(tabGroup.windowId, 2000, true); // Debounced auto-update with context menu rebuild
   });
   browser.tabGroups?.onRemoved.addListener(async (tabGroup) => {
+    await autoUpdateRecovery.activity();
     debounceAutoUpdate(tabGroup.windowId, 2000, true); // Debounced auto-update with context menu rebuild
   });
   browser.tabGroups?.onUpdated.addListener(async (tabGroup) => {
+    await autoUpdateRecovery.activity();
     debounceAutoUpdate(tabGroup.windowId, 2000, true); // Debounced auto-update with context menu rebuild
   });
 

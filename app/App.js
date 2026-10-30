@@ -1,3 +1,4 @@
+import { requestSyncPermissions } from '../chrome/sync-transport';
 import './App.css';
 import 'react-tooltip/dist/react-tooltip.css';
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
@@ -47,6 +48,8 @@ import {
     batchUpdateCollections,
     loadCollectionsIndex,
     loadAllFolders,
+    loadSingleFolder,
+    updateFolderCollectionCount,
     updateFoldersOrder,
     repairOrphanCollections,
     sortCollectionsForDisplay,
@@ -57,6 +60,7 @@ import { applyFolderCollapsedState, getFolderCollapseStorageKey } from './utils/
 import { openOrFocusFullPageInCurrentWindow } from './utils/openFullPage';
 import { openCollectionTabs } from './useCollectionOperations';
 import { initFileAccessNoticeWatcher } from './utils/fileAccessNotice';
+import { initGroupRestoreNoticeWatcher } from './utils/groupRestoreNotice';
 import { initShareLinkNoticeWatcher } from './utils/shareLinkNotice';
 
 // Folder operations
@@ -532,12 +536,8 @@ function App({ mode = 'popup' }) {
   };
 
   const removeInactiveWindowsFromAutoUpdate = async () => {
-    let { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack');
-    const { chkEnableAutoUpdate } = await browser.storage.local.get('chkEnableAutoUpdate');
-    if (!collectionsToTrack || collectionsToTrack.length === 0 || !chkEnableAutoUpdate || isSingleWindowBrowser()) { return; }
-    const activeWindowIds = (await browser.windows.getAll({ populate: false })).map(c => c.id);
-    collectionsToTrack = collectionsToTrack.filter(c => activeWindowIds.includes(c.windowId));
-    await browser.storage.local.set({ collectionsToTrack: collectionsToTrack });
+    if (isSingleWindowBrowser()) return;
+    await browser.runtime.sendMessage({ type: 'pruneCollectionTracking' });
   }
 
   // Phase 2: Batch initial storage operations for better performance
@@ -597,73 +597,33 @@ function App({ mode = 'popup' }) {
 
   const applyDataFromServer = async (force = false) => {
     setSyncInProgress(true);
-    console.log('🚀 applyDataFromServer: Starting, force=', force);
-    browser.runtime.sendMessage({ type: 'loadFromServer', force: force }).then(async (response) => {
-      console.log('🚀 applyDataFromServer: Got response from background:', response);
-      if (response !== false) {
-        // Use new storage system for server data
-        
-        const { sortBy, sortOrder } = await getCurrentCollectionSortOptions();
-        
-        console.log('📥 applyDataFromServer: Response type:', typeof response, 'Is array:', Array.isArray(response), 'Length:', response?.length);
-        
-        if (response && Array.isArray(response) && response.length > 0) {
-          console.log('📥 applyDataFromServer: Saving', response.length, 'collections from server');
-          const success = await batchUpdateCollections(response);
-          if (success) {
-            // Add a small delay to ensure storage writes are committed
-            await new Promise(resolve => setTimeout(resolve, 100));
-            
-            // Reload both collections and folders from storage after sync
-            const [updatedCollections, updatedFolders] = await Promise.all([
-              loadAllCollections({ metadataOnly: false, sortBy, sortOrder }),
-              loadAllFolders({ metadataOnly: false })
-            ]);
-            
-            console.log('📥 applyDataFromServer: Loaded', updatedCollections.length, 'collections and', updatedFolders.length, 'folders from storage');
-            console.log('📥 applyDataFromServer: Setting state with folders:', updatedFolders.map(f => f.name));
-            
-            setSettingsData(updatedCollections);
-            setFoldersData(updatedFolders);
-            await refreshLastSyncTimeFromStorage({ fallbackToNow: true });
-          } else {
-            console.error('❌ Failed to save server data');
-          }
-        } else if (response === 'no_update_needed') {
-          // Sync says nothing changed - but still reload folders in case they were updated by background
-          console.log('📥 applyDataFromServer: No update needed, but reloading folders anyway');
-          const folders = await loadAllFolders({ metadataOnly: false });
-          console.log('📥 applyDataFromServer: Loaded', folders.length, 'folders');
-          setFoldersData(folders);
-          await refreshLastSyncTimeFromStorage({ fallbackToNow: true });
-        } else {
-          // Server returned empty collections - still load folders from storage
-          // (folders are saved by migrateIncomingSyncData in the background)
-          console.log('📥 applyDataFromServer: Empty response, loading from storage');
-          await new Promise(resolve => setTimeout(resolve, 100));
-          
-          const [updatedCollections, updatedFolders] = await Promise.all([
-            loadAllCollections({ metadataOnly: false, sortBy, sortOrder }),
-            loadAllFolders({ metadataOnly: false })
-          ]);
-          
-          console.log('📥 applyDataFromServer: Loaded', updatedCollections.length, 'collections and', updatedFolders.length, 'folders from storage');
-          
-          setSettingsData(updatedCollections);
-          setFoldersData(updatedFolders);
-          await refreshLastSyncTimeFromStorage({ fallbackToNow: true });
-        }
+    try {
+      await requestSyncPermissions(browser);
+      const response = await browser.runtime.sendMessage({ type: 'loadFromServer', force });
+      if (!Array.isArray(response) && response !== 'no_update_needed') {
+        throw new Error(response === 'already_in_progress'
+          ? 'Sync is already running. Wait for it to finish, then try again.'
+          : 'Download failed. Check sync status and try again.');
       }
-    }).catch(async (err) => {
-      await _handleSyncError(err)
-    }).finally(() => {
+      // The background already applies the snapshot atomically. Reload it; writing
+      // response collections again can overwrite edits made while sync finishes.
+      const { sortBy, sortOrder } = await getCurrentCollectionSortOptions();
+      const [collections, folders] = await Promise.all([
+        loadAllCollections({ metadataOnly: false, sortBy, sortOrder }),
+        loadAllFolders({ metadataOnly: false })
+      ]);
+      setSettingsData(collections);
+      setFoldersData(folders);
+      await refreshLastSyncTimeFromStorage({ fallbackToNow: true });
+      return true;
+    } finally {
       setSyncInProgress(false);
-    });
-  }
+    }
+  };
 
   const _update = async () => {
     setSyncInProgress(true);
-    browser.runtime.sendMessage({ type: 'updateRemote' }).then(async (response) => {
+    return browser.runtime.sendMessage({ type: 'updateRemote' }).then(async (response) => {
       if (response !== false) {
         await reloadCollectionsAndFoldersFromStorage({ updateSyncTime: true });
         return;
@@ -738,7 +698,7 @@ function App({ mode = 'popup' }) {
   // Sync trigger for folder operations (without requiring full collections array)
   const triggerSync = async () => {
     if (!isLoggedIn) return;
-    _update();
+    return _update();
   }
 
   // Updated to use new storage system
@@ -882,14 +842,22 @@ function App({ mode = 'popup' }) {
 
   // Updated to use new storage system
   const addCollection = async (newCollection, skipContextMenuUpdate = false, skipStateUpdate = false) => {
-    const parentFolder = foldersData.find(f => f.uid === newCollection?.parentId);
-    if (!guardFolderEdit(parentFolder, () => setNoPermissionOpen(true))) return;
-
     try {
+      // An open form can outlive its destination or its permissions. Read the
+      // persisted folder immediately before saving, rather than trusting UI state.
+      const parentFolder = newCollection?.parentId ? await loadSingleFolder(newCollection.parentId) : null;
+      if (newCollection?.parentId && !parentFolder) {
+        throw new Error('The destination folder is no longer available. Choose another destination.');
+      }
+      if (!guardFolderEdit(parentFolder, () => setNoPermissionOpen(true))) return false;
       // Use new single collection save for better performance
-      const success = await saveSingleCollection(newCollection, true); // Force timestamp update for new collections
+      const success = await saveSingleCollection(newCollection, true, { requireWritableParent: true }); // Force timestamp update for new collections
       
       if (success) {
+        // Storage preparation can outlive the initial permission read. Route this
+        // new save using its persisted destination, including newly shared folders.
+        const savedParentFolder = newCollection?.parentId ? await loadSingleFolder(newCollection.parentId) : null;
+        if (savedParentFolder) await updateFolderCollectionCount(savedParentFolder.uid);
         // Update local state (skip for batch operations to prevent race conditions)
         if (!skipStateUpdate) {
           const newList = settingsData ? [newCollection, ...settingsData] : [newCollection];
@@ -900,7 +868,7 @@ function App({ mode = 'popup' }) {
         // Continue with sync and auto-update logic. Adding into a shared
         // folder is a shared-only mutation — skip the Drive watermark and
         // Drive sync, and nudge the shared engine instead.
-        const isSharedOnlyAdd = isSharedFolder(parentFolder);
+        const isSharedOnlyAdd = isSharedFolder(savedParentFolder);
         if (isSharedOnlyAdd) {
           nudgeSharedSync();
         } else {
@@ -920,31 +888,19 @@ function App({ mode = 'popup' }) {
         // Auto-update tracking logic (only for successful saves)
         const { chkAutoUpdateOnNewCollection } = await browser.storage.local.get('chkAutoUpdateOnNewCollection');
         if (!chkAutoUpdateOnNewCollection) return true;
-        setTimeout(async () => {
-          const storageResult = await browser.storage.local.get('collectionsToTrack');
-          let collectionsToTrack = storageResult.collectionsToTrack || [];
-          let window;
-          try {
-            window = await browser.windows.getLastFocused({ windowTypes: ['normal'] });
-          } catch {
-            return;
-          }
-          const index = collectionsToTrack.findIndex(c => c.collectionUid === newCollection.uid);
-          if (index !== undefined && index > -1) {
-              collectionsToTrack[index].windowId = window.id;
-          } else {
-              collectionsToTrack.push({
-                  collectionUid: newCollection.uid,
-                  windowId: window.id
-              });
-          }
-          await browser.storage.local.set({ collectionsToTrack });
+        if (isSingleWindowBrowser()) return true;
+        try {
+          const window = await browser.windows.getLastFocused({ windowTypes: ['normal'] });
+          await browser.runtime.sendMessage({ type: 'trackCollection', collectionUid: newCollection.uid, windowId: window.id });
           setListKey(Math.random().toString(36));
-        }, 1000);
-        
+        } catch { /* The source window may already be closed. */ }
+
         return true;
       } else {
         console.error(`❌ Failed to add collection ${newCollection.uid}`);
+        // A destination failure must never bypass the folder guard via legacy
+        // whole-library persistence (which can also overwrite newer data).
+        if (newCollection.parentId) return false;
         // Fallback to legacy system - always attempt fallback even if skipStateUpdate is true
         // We just won't update React state, but we should still try to save the data
         try {
@@ -962,6 +918,10 @@ function App({ mode = 'popup' }) {
       
     } catch (error) {
       console.error('Error adding collection:', error);
+      if (newCollection?.parentId) {
+        showErrorToast(error.message);
+        return false;
+      }
       // Fallback to legacy system
       try {
         const newList = settingsData ? [newCollection, ...settingsData] : [newCollection];
@@ -1857,6 +1817,7 @@ function App({ mode = 'popup' }) {
   // shows it on mount (reopened popup, context-menu/keyboard opens) and live
   // via storage.onChanged (persistent full-page view). Returns its own cleanup.
   useEffect(() => initFileAccessNoticeWatcher({ isFullPage }), [isFullPage]);
+  useEffect(() => initGroupRestoreNoticeWatcher({ isFullPage }), [isFullPage]);
   // Firefox share-link redemptions (see chrome/background.js handleShareLinkTab).
   useEffect(() => initShareLinkNoticeWatcher(), []);
 
@@ -2355,7 +2316,7 @@ function App({ mode = 'popup' }) {
         logout={logout} />
       <div className={`main-content-wrapper${isFullPage && isPanelOpen ? ' panel-open' : ''}`}>
                 <SharedInviteToastController onAccepted={refreshDataAfterFolderOperation} />
-                <AddNewTextbox addCollection={addCollection} addFolder={addFolder} updateRemoteData={updateRemoteData} onDataUpdate={refreshDataAfterFolderOperation} />
+                <AddNewTextbox folders={foldersData} addCollection={addCollection} addFolder={addFolder} updateRemoteData={updateRemoteData} onDataUpdate={refreshDataAfterFolderOperation} />
         <CollectionListOptions
           key={`${sortValue}-select`}
           updateRemoteData={updateRemoteData}

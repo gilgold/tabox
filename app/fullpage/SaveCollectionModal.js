@@ -120,7 +120,8 @@ function SaveCollectionModal({
                 if (selectedFolder) {
                     newItem.parentId = selectedFolder;
                 }
-                await addCollection(newItem, false, true);
+                const success = await addCollection(newItem, false, true);
+                if (!success) throw new Error('Failed to save collection');
                 // addCollection skips its own sync when skipStateUpdate is set,
                 // so push to Drive here (shared folders sync on their own).
                 if (!isSharedFolder(folders?.find(f => f.uid === selectedFolder))) {

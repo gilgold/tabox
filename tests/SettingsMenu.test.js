@@ -107,7 +107,20 @@ const syncRecoveryCss = fs.readFileSync(path.join(__dirname, '../app/SyncDebugRe
 describe('SettingsMenu', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        browser.storage.session = { get: jest.fn(), set: jest.fn() };
+        browser.alarms = { ...browser.alarms, create: jest.fn(), clear: jest.fn() };
         getAIAvailability.mockResolvedValue(undefined);
+    });
+
+    test.each(['popup', 'fullpage'])('restart recovery defaults off in %s settings', async variant => {
+        const { container } = renderSettingsMenu({ variant, storageData: { chkEnableAutoUpdate: true } });
+        openSettings(container);
+        fireEvent.click(await screen.findByRole('button', { name: 'Auto update collections' }));
+        expect(await screen.findByText('Resume auto-update after browser restart')).toBeInTheDocument();
+        const input = document.getElementById('chkResumeAutoUpdate');
+        expect(input).not.toBeChecked();
+        fireEvent.click(input);
+        await waitFor(() => expect(browser.storage.local.set).toHaveBeenCalledWith({ chkResumeAutoUpdate: true }));
     });
 
     test('renders the full-page variant as a modal with sidebar categories', async () => {
