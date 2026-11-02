@@ -299,7 +299,11 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate, folders = [] })
                 }
                 
                 // Scroll to top and highlight the new collection
-                scrollToCollectionsAndHighlight(newItem.uid);
+                if (newItem.parentId) {
+                    setHighlightedCollectionUid(newItem.uid);
+                } else {
+                    scrollToCollectionsAndHighlight(newItem.uid);
+                }
                 
                 // Show success toast
                 const { showSuccessToast } = await import('./toastHelpers');

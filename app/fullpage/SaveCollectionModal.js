@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useRef, Activity } from 'react';
 import Modal from 'react-modal';
+import { useSetAtom } from 'jotai';
+import { sidebarNavigationState } from '../atoms/fullpageState';
+import { searchState } from '../atoms/globalAppSettingsState';
 import { MdSave, MdClose } from 'react-icons/md';
 import { getCurrentTabsAndGroups, getAllWindowsTabsAndGroups } from '../utils';
-import { getColorValue } from '../utils/colorMigration';
+import FolderSelect from '../FolderSelect';
 import { saveCollectionSnapshot } from '../utils/saveCollectionSnapshot';
 import { browser } from '../../static/globals';
 import { triggerBackgroundSync } from '../utils/sharedSync';
@@ -46,6 +49,8 @@ function SaveCollectionModal({
     const [isSaving, setIsSaving] = useState(false);
     const [windowCount, setWindowCount] = useState(1);
     const [aiBusy, setAiBusy] = useState(false);
+    const setSidebarNavigation = useSetAtom(sidebarNavigationState);
+    const setSearch = useSetAtom(searchState);
     const inputRef = useRef(null);
     const sourceCollection = snapshotCollection || sessionCollection;
     const activeSaveMode = lockSaveMode ? initialSaveMode : saveMode;
@@ -77,6 +82,15 @@ function SaveCollectionModal({
         }
     };
 
+    const revealSavedCollections = saved => {
+        const collections = Array.isArray(saved) ? saved : [saved];
+        if (collections.some(collection => collection?.parentId)) {
+            setSearch('');
+            setSidebarNavigation('all');
+        }
+        onSaved?.(saved);
+    };
+
     const handleSave = async () => {
         const trimmed = name.trim();
         if (!trimmed) return;
@@ -90,7 +104,7 @@ function SaveCollectionModal({
                     parentId: selectedFolder,
                     addCollection,
                     onDataUpdate,
-                    onSaved,
+                    onSaved: revealSavedCollections,
                 });
                 const folderLabel = selectedFolder
                     ? folders.find(f => f.uid === selectedFolder)?.name
@@ -113,7 +127,7 @@ function SaveCollectionModal({
                 await updateFolderCollectionCount(createdFolder.uid);
                 await triggerBackgroundSync({ refreshContextMenu: true });
                 if (onDataUpdate) await onDataUpdate();
-                if (onSaved) onSaved(collections);
+                revealSavedCollections(collections);
                 showSuccessToast(`Folder created with ${collections.length} collections`);
             } else {
                 const newItem = await getCurrentTabsAndGroups(trimmed);
@@ -128,7 +142,7 @@ function SaveCollectionModal({
                     await triggerBackgroundSync({ updateLocalTimestamp: false });
                 }
                 if (onDataUpdate) await onDataUpdate();
-                if (onSaved) onSaved(newItem);
+                revealSavedCollections(newItem);
                 const folderLabel = selectedFolder
                     ? folders.find(f => f.uid === selectedFolder)?.name
                     : null;
@@ -249,33 +263,13 @@ function SaveCollectionModal({
                                 <label htmlFor="save-collection-folder" className="save-collection-label">
                                     Save To
                                 </label>
-                                <div className="save-collection-folder-select-wrapper">
-                                    <select
-                                        id="save-collection-folder"
-                                        className="save-collection-folder-select"
-                                        value={selectedFolder}
-                                        onChange={(e) => setSelectedFolder(e.target.value)}
-                                        disabled={isSaving}
-                                    >
-                                        <option value="">Root level (no folder)</option>
-                                        {folders.map(f => (
-                                            <option key={f.uid} value={f.uid}>
-                                                {f.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    {selectedFolder && (
-                                        <span
-                                            className="save-collection-folder-dot"
-                                            style={{
-                                                backgroundColor: (() => {
-                                                    const f = folders.find(fo => fo.uid === selectedFolder);
-                                                    return f?.color && f.color !== 'default' ? getColorValue(f.color) : 'var(--primary-color)';
-                                                })()
-                                            }}
-                                        />
-                                    )}
-                                </div>
+                                <FolderSelect
+                                    inputId="save-collection-folder"
+                                    folders={folders}
+                                    value={selectedFolder}
+                                    onChange={setSelectedFolder}
+                                    disabled={isSaving}
+                                />
                             </div>
                         )}
 

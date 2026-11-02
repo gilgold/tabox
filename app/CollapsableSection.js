@@ -10,19 +10,22 @@ function CollapsableSection({
     children,
     expandTooltip = "Expand section",
     collapseTooltip = "Collapse section",
-    className = ""
+    className = "",
+    forceExpanded = false
 }) {
     const [isCollapsed, setIsCollapsed] = useState(false);
     const isMountedRef = useRef(true);
 
     // Load collapsed state from localStorage on mount
     useEffect(() => {
+        isMountedRef.current = true;
+        let cancelled = false;
         const loadCollapsedState = async () => {
             try {
                 const result = await browser.storage.local.get([sectionKey]);
                 // Only update state if component is still mounted
-                if (isMountedRef.current) {
-                    setIsCollapsed(result[sectionKey] || false);
+                if (isMountedRef.current && !cancelled) {
+                    setIsCollapsed(forceExpanded ? false : result[sectionKey] || false);
                 }
             } catch (error) {
                 console.error(`Error loading collapsed state for ${sectionKey}:`, error);
@@ -32,9 +35,18 @@ function CollapsableSection({
 
         // Cleanup function to mark component as unmounted
         return () => {
+            cancelled = true;
             isMountedRef.current = false;
         };
-    }, [sectionKey]);
+    }, [sectionKey, forceExpanded]);
+
+    useEffect(() => {
+        if (!forceExpanded) return;
+        setIsCollapsed(false);
+        browser.storage.local.set({ [sectionKey]: false }).catch(error => {
+            console.error(`Error expanding ${sectionKey}:`, error);
+        });
+    }, [forceExpanded, sectionKey]);
 
     // Save collapsed state to localStorage when changed
     const toggleCollapsed = async () => {

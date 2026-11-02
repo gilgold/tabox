@@ -89,15 +89,19 @@ html.performance-mode .add-collection-group.ai-name-processing {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  left: 6px;
-  top: 9px;
+  left: auto;
+  margin-left: 6px;
+  top: 50%;
+  transform: translateY(-50%);
   transition: 0.25s ease-in-out all;
 }
 
 .add-collection-group input[type="text"]:focus~label.textbox_label,
 .add-collection-group input[type="text"]:not(:placeholder-shown)~label.textbox_label {
-  top: -7px;
-  left: 20px;
+  top: -8px;
+  transform: none;
+  left: 8px;
+  margin-left: 0;
   font-size: .75em;
   color: var(--text-color);
   text-shadow:
@@ -589,7 +593,9 @@ html.performance-mode .add-collection-group.ai-name-processing {
 
 /* The prefix takes its natural width; only the editable area shrinks. */
 .quick-save-input-area {
-  position: relative;
+  /* Anchor the floating label to the shared border, independent of pill width. */
+  position: static;
+  display: flex;
   flex: 1;
   min-width: 0;
 }

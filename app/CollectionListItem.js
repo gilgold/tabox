@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useMemo, useEffectEvent } from 'react';
+import React, { useEffect, useLayoutEffect, useState, useRef, useMemo, useEffectEvent } from 'react';
 import { MdDragIndicator, MdCenterFocusWeak, MdChevronRight } from 'react-icons/md';
 import { FaPlay, FaStar, FaRegStar } from 'react-icons/fa';
 import { BsIncognito } from 'react-icons/bs';
@@ -46,6 +46,12 @@ function CollectionListItem(props) {
 
     // Check if this item should be highlighted (new UID-based system)
     const isHighlighted = highlightedCollectionUid === props.collection.uid;
+
+    useLayoutEffect(() => {
+        if (isHighlighted && props.isInFolder) {
+            itemRef.current?.scrollIntoView({ behavior: 'auto', block: 'center' });
+        }
+    }, [isHighlighted, props.isInFolder]);
 
     // Check if this item is being deleted
     const isDeleting = deletingCollectionUids.has(props.collection.uid);

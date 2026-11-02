@@ -3,7 +3,7 @@ import { useAtomValue, useSetAtom } from 'jotai';
 import './CollectionList.css';
 import { themeState, searchState, detailPanelOpenState, selectedCollectionUidState } from './atoms/globalAppSettingsState';
 import { sidebarNavigationState } from './atoms/fullpageState';
-import { dragSessionState } from './atoms/animationsState';
+import { dragSessionState, highlightedCollectionUidState } from './atoms/animationsState';
 import { BsSearch } from 'react-icons/bs';
 import CollapsableSection from './CollapsableSection';
 import CollectionDetailPanel from './CollectionDetailPanel';
@@ -117,6 +117,14 @@ function CollectionList({
     const [activeCollection, setActiveCollection] = useState(null);
     const [activeFolder, setActiveFolder] = useState(null);
     const dragSession = useAtomValue(dragSessionState);
+    const highlightedCollectionUid = useAtomValue(highlightedCollectionUidState);
+    const highlightedFolderId = collections.find(collection => collection.uid === highlightedCollectionUid)?.parentId;
+
+    useEffect(() => {
+        if (isFullPage || !highlightedFolderId) return;
+        const folder = folders.find(folder => folder.uid === highlightedFolderId);
+        if (folder?.collapsed) onFolderStateChange?.({ ...folder, collapsed: false });
+    }, [folders, highlightedFolderId, isFullPage, onFolderStateChange]);
 
     // State for detail panel — synced to atoms so App.js can read panel state for layout
     const [selectedCollection, setSelectedCollection] = useState(null);
@@ -1010,6 +1018,7 @@ function CollectionList({
                                     {visibleFolders.length > 0 && (
                                             <CollapsableSection
                                                 sectionKey="foldersCollapsed"
+                                                forceExpanded={Boolean(highlightedFolderId)}
                                                 sectionTitle="Folders"
                                                 count={visibleFolders.length}
                                                 expandTooltip="Expand folders section"

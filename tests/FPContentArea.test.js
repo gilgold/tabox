@@ -1108,6 +1108,25 @@ describe('FPContentArea grouped all collections view', () => {
         expect(revealShell).toHaveAttribute('data-collection-reveal', 'true');
     });
 
+    test('scrolls to the saved collection rather than only its folder header', async () => {
+        const rectSpy = jest.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () {
+            if (this.classList.contains('fp-content-grid')) {
+                Object.defineProperty(this, 'clientHeight', { configurable: true, value: 400 });
+            }
+            const top = this.dataset.sortableCollectionId === 'saved-in-folder' ? 1200 : 0;
+            return { top, bottom: top + 60, left: 0, right: 300, width: 300, height: 60 };
+        });
+        try {
+            renderWithStore(<FPContentArea {...baseProps}
+                folders={[{ uid: 'folder-1', name: 'Project', collapsed: false }]}
+                collections={[{ uid: 'saved-in-folder', name: 'Saved', parentId: 'folder-1', tabs: [], lastUpdated: 10 }]}
+            />, { revealBatch: { runId: 'saved-folder', items: [{ uid: 'saved-in-folder', parentId: 'folder-1' }] } });
+            await waitFor(() => expect(scrollToMock).toHaveBeenCalledWith(expect.objectContaining({ top: 1030 })));
+        } finally {
+            rectSpy.mockRestore();
+        }
+    });
+
     test('assigns deterministic stagger indexes to all visible items in a multi-import batch', async () => {
         jest.useFakeTimers();
 

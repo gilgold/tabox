@@ -1,0 +1,84 @@
+.folder-select,
+.folder-select__menu-portal {
+  color: var(--color-text, var(--text-color));
+  font: inherit;
+  font-size: 14px;
+}
+
+.folder-select .folder-select__control {
+  min-height: 38px;
+  border: 1px solid var(--color-border, var(--setting-row-border-color));
+  border-radius: var(--fp-radius-sm, 12px);
+  background: var(--color-surface, var(--input-bg-color));
+  cursor: pointer;
+}
+
+.folder-select .folder-select__control--is-focused {
+  border-color: var(--color-primary, var(--primary-color));
+  box-shadow: 0 0 0 3px var(--color-focus-ring, rgba(22, 152, 226, .2));
+}
+
+.folder-select .folder-select__control--is-disabled {
+  opacity: .6;
+  cursor: default;
+}
+
+.folder-select .folder-select__value-container {
+  padding: 8px 12px;
+  gap: 4px;
+}
+
+.folder-select .folder-select__input-container {
+  color: inherit;
+}
+
+.folder-select .folder-select__dropdown-indicator {
+  padding: 8px;
+}
+
+.folder-select__menu-portal.folder-select__menu-portal {
+  /* SaveCollectionModal's overlay is at 999999. */
+  z-index: 1000000;
+}
+
+.folder-select__menu-portal .folder-select__menu {
+  margin-top: 4px;
+  padding: 4px;
+  border: 1px solid var(--color-border, var(--setting-row-border-color));
+  border-radius: 8px;
+  background: var(--color-surface, var(--input-bg-color));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .2);
+}
+
+.folder-select__menu-portal .folder-select__option {
+  padding: 9px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.folder-select__menu-portal .folder-select__option--is-focused {
+  background: var(--color-surface-muted, var(--setting-row-hover-bg-color));
+}
+
+.folder-select__menu-portal .folder-select__option--is-selected {
+  background: var(--color-focus-ring, rgba(22, 152, 226, .2));
+}
+
+.folder-select-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.folder-select-label svg {
+  flex-shrink: 0;
+}
+
+.folder-select-label span {
+  overflow-wrap: anywhere;
+}
+
+.folder-select__menu-portal .folder-select__no-options-message {
+  padding: 12px;
+}

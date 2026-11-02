@@ -3,6 +3,8 @@ import '@testing-library/jest-dom';
 import SaveCollectionModal from '../app/fullpage/SaveCollectionModal';
 import { Provider, createStore } from 'jotai';
 import { getAllWindowsTabsAndGroups, getCurrentTabsAndGroups } from '../app/utils';
+import { sidebarNavigationState } from '../app/atoms/fullpageState';
+import { searchState } from '../app/atoms/globalAppSettingsState';
 import { premiumEntitlementState } from '../app/atoms/premiumState';
 import { suggestCollectionName } from '../app/ai/tasks/suggestCollectionName';
 
@@ -108,13 +110,41 @@ describe('SaveCollectionModal failed current-window save', () => {
         const addCollection = failure === 'false' ? jest.fn().mockResolvedValue(false) : jest.fn().mockRejectedValue(new Error('Storage unavailable'));
         render(<SaveCollectionModal isOpen onClose={onClose} folders={[{ uid: 'project', name: 'Project' }]} addCollection={addCollection} onDataUpdate={onDataUpdate} />);
         fireEvent.change(screen.getByLabelText('Collection Name'), { target: { value: 'Reading' } });
-        fireEvent.change(screen.getByRole('combobox', { name: 'Save To' }), { target: { value: 'project' } });
+        fireEvent.change(screen.getByRole('combobox', { name: 'Save To' }), { target: { value: 'proj' } });
+        fireEvent.click(screen.getByRole('option', { name: 'Project' }));
         fireEvent.click(screen.getByRole('button', { name: 'Save Collection' }));
         await waitFor(() => expect(showErrorToast).toHaveBeenCalled());
         expect(onClose).not.toHaveBeenCalled();
         expect(onDataUpdate).not.toHaveBeenCalled();
         expect(showSuccessToast).not.toHaveBeenCalled();
         expect(screen.getByLabelText('Collection Name')).toHaveValue('Reading');
-        expect(screen.getByRole('combobox')).toHaveValue('project');
+        expect(screen.getByText('Project')).toBeInTheDocument();
     });
+});
+
+
+test('folder dropdown filters on typing, renders colored folder icons and selects with the keyboard', async () => {
+    const addCollection = jest.fn().mockResolvedValue(true);
+    const store = createStore();
+    store.set(sidebarNavigationState, 'other-folder');
+    store.set(searchState, 'old search');
+    render(<Provider store={store}><SaveCollectionModal isOpen onClose={jest.fn()} folders={[
+        { uid: 'work', name: 'Work', color: '#ef4444' },
+        { uid: 'reading', name: 'Reading', color: '#1698e2' },
+    ]} addCollection={addCollection} /></Provider>);
+    const picker = screen.getByRole('combobox', { name: 'Save To' });
+    fireEvent.focus(picker);
+    fireEvent.keyDown(picker, { key: 'ArrowDown', code: 'ArrowDown' });
+    expect(screen.getByRole('option', { name: 'Work' }).querySelector('svg')).toHaveStyle({ color: '#ef4444' });
+    fireEvent.change(picker, { target: { value: 'READ' } });
+    expect(screen.queryByRole('option', { name: 'Work' })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Reading' }).querySelector('svg')).toHaveStyle({ color: '#1698e2' });
+    fireEvent.keyDown(picker, { key: 'Enter', code: 'Enter' });
+    expect(addCollection).not.toHaveBeenCalled();
+    expect(screen.getByText('Reading')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Collection Name'), { target: { value: 'Saved tabs' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Collection' }));
+    await waitFor(() => expect(addCollection).toHaveBeenCalledWith(expect.objectContaining({ parentId: 'reading' }), false, true));
+    await waitFor(() => expect(store.get(sidebarNavigationState)).toBe('all'));
+    expect(store.get(searchState)).toBe('');
 });

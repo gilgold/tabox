@@ -274,3 +274,13 @@ test('dialog arrow keys navigate UID choices without leaking keys to the popup',
         document.removeEventListener('keydown', leaked);
     }
 });
+
+test('highlights the saved folder collection immediately instead of scrolling to root collections', async () => {
+    const { highlightedCollectionUidState } = require('../app/atoms/animationsState');
+    const { store } = setup();
+    name();
+    choose('personal');
+    save();
+    await waitFor(() => expect(showSuccessToast).toHaveBeenCalled());
+    expect(store.get(highlightedCollectionUidState)).toBe('new');
+});
