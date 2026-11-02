@@ -1,0 +1,95 @@
+.quick-save-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(0, 0, 0, .55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.quick-save-modal {
+  box-sizing: border-box;
+  width: 360px;
+  max-width: 100%;
+  max-height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  border: 1px solid var(--setting-row-border-color);
+  border-radius: 16px;
+  background: var(--input-bg-color);
+  color: var(--text-color);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .25);
+}
+
+.quick-save-modal h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.quick-save-modal p {
+  margin: 0;
+  font-size: 12px;
+}
+
+.quick-save-folder-list {
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.quick-save-folder-choice,
+.quick-save-modal-cancel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-color);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.quick-save-folder-choice span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.quick-save-folder-choice svg {
+  flex-shrink: 0;
+}
+
+.quick-save-folder-choice.is-root {
+  color: var(--quick-save-root-color);
+}
+
+.quick-save-folder-choice[aria-pressed="true"],
+.quick-save-folder-choice:hover,
+.quick-save-modal-cancel:hover {
+  background: var(--setting-row-hover-bg-color);
+  border-color: var(--setting-row-border-color);
+}
+
+.quick-save-folder-choice:focus-visible,
+.quick-save-modal-cancel:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: -2px;
+}
+
+.quick-save-folder-check {
+  margin-left: auto;
+}
+
+.quick-save-modal-cancel {
+  align-self: flex-end;
+  border-color: var(--setting-row-border-color);
+}

@@ -37,9 +37,10 @@ beforeEach(() => {
 afterEach(() => { cleanup(); delete global.browser; delete global.chrome; });
 async function openForm() {
     render(<Provider store={createStore()}><App /></Provider>);
-    const picker = await screen.findByRole('combobox', { name: 'Save To' });
+    const picker = await screen.findByRole('button', { name: 'Save to folder: root' });
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Reading' } });
-    fireEvent.change(picker, { target: { value: 'project' } });
+    fireEvent.click(picker);
+    fireEvent.click(await screen.findByRole('button', { name: 'Project', exact: true }));
     return picker;
 }
 
@@ -56,7 +57,7 @@ test('real popup → App → indexed storage saves selected tabs into the chosen
     expect(stored.folders_index.project.collectionCount).toBe(1);
     expect(harness.runtime.sendMessage).toHaveBeenCalledWith({ type: 'updateRemote' });
     expect(screen.getByRole('textbox')).toHaveValue('');
-    expect(screen.getByRole('combobox', { name: 'Save To' })).toHaveValue('');
+    expect(screen.getByRole('button', { name: 'Save to folder: root' })).toBeInTheDocument();
 });
 
 test('permission changes during tab capture are rejected by the actual save path, preserving the form', async () => {
@@ -104,7 +105,6 @@ test('a personal destination becoming shared during storage preparation uses exa
         const result = await get(keys);
         if (keys === 'folder_project' && !injected) appReadPersonal = !result.folder_project.shared;
         if (keys === 'collections_index' && !injected) {
-            expect(appReadPersonal).toBe(true);
             injected = true;
             const shared = { ...folder, shared: { folderId: 'remote', role: 'write' } };
             await harness.storage.local.set({ folder_project: shared, folders_index: { project: shared } });
@@ -117,6 +117,7 @@ test('a personal destination becoming shared during storage preparation uses exa
     await waitFor(() => expect(showSuccessToast).toHaveBeenCalled());
     await waitFor(() => expect(screen.getByRole('button', { name: 'Add Collection' })).not.toBeDisabled());
     expect(injected).toBe(true);
+    expect(appReadPersonal).toBe(true);
     const stored = await get(null);
     const [[uid, entry]] = Object.entries(stored.collections_index);
     expect(entry.parentId).toBe('project');

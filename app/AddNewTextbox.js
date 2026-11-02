@@ -7,10 +7,12 @@ import { getCurrentTabsAndGroups, getAllWindowsTabsAndGroups } from './utils';
 import { browser } from '../static/globals';
 import { triggerBackgroundSync } from './utils/sharedSync';
 import { showErrorToast } from './toastHelpers';
+import { MdFolder } from 'react-icons/md';
 import { IoClose } from 'react-icons/io5';
 import { HiOutlineDesktopComputer, HiCollection } from 'react-icons/hi';
 import AiSuggestNameButton from './AiSuggestNameButton';
 import { isSingleWindowBrowser } from './utils/platform';
+import QuickSaveFolderModal from './QuickSaveFolderModal';
 import SingleWindowTabsNote from './SingleWindowTabsNote';
 import { suggestCollectionName } from './ai/tasks/suggestCollectionName';
 import { suggestFolderName } from './ai/tasks/suggestFolderName';
@@ -115,6 +117,7 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate, folders = [] })
     const [windowCount, setWindowCount] = useState(1);
     const [aiBusy, setAiBusy] = useState(false);
     const [destinationId, setDestinationId] = useState('');
+    const [folderPickerOpen, setFolderPickerOpen] = useState(false);
     const savingRef = useRef(false);
     const writableFolders = folders.filter(canEditFolder);
     const destination = writableFolders.find(folder => folder.uid === destinationId);
@@ -353,34 +356,52 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate, folders = [] })
     return <section className='add-collections-wrapper'>
         <div className="left-controls-group">
             <div className={`add-collection-group${aiBusy ? ' ai-name-processing' : ''}`}>
-                <input
-                    type="text"
-                    maxLength="50"
-                    placeholder=" "
-                    name="new_setting_title"
-                    id="new_setting_title"
-                    onKeyDown={async e => await _handleKeyDown(e)}
-                    onChange={_handleInputChange}
-                    ref={inputRef}
-                    disabled={disabled}
-                    value={collectionName} />
-                <label className="textbox_label">Search or Add collections</label>
-                <AiSuggestNameButton
-                    suggest={suggestName}
-                    onSuggested={(suggestedName) => {
-                        setName(suggestedName);
-                        setSearch(suggestedName);
-                    }}
-                    onBusyChange={setAiBusy}
-                    disabled={disabled}
-                />
-                <button
-                    className="clear-button"
-                    style={{ opacity: hideClear ? '0' : '1' }}
-                    disabled={hideClear || disabled}
-                    onClick={handleClear}>
-                    <IoClose size="16px" />
-                </button>
+                {saveMode === 'current' && (
+                    <button
+                        type="button"
+                        className={`quick-save-pill${!destinationId ? ' is-root' : ''}${destinationUnavailable ? ' is-unavailable' : ''}`}
+                        aria-label={`Save to folder: ${destinationUnavailable ? 'Destination unavailable — choose again' : destination?.name || 'root'}`}
+                        aria-haspopup="dialog"
+                        aria-expanded={folderPickerOpen}
+                        onClick={() => setFolderPickerOpen(true)}
+                        disabled={disabled}
+                        data-tooltip-id="main-tooltip"
+                        data-tooltip-content={destinationUnavailable ? 'Destination unavailable — choose again' : destination?.name || 'root'}
+                    >
+                        <MdFolder aria-hidden="true" style={destination ? { color: destination.color && destination.color !== 'default' ? getColorValue(destination.color) : 'var(--primary-color)' } : undefined} />
+                        <span className="quick-save-pill-name">{destinationUnavailable ? 'Unavailable' : destination?.name || 'root'}</span>
+                    </button>
+                )}
+                <div className="quick-save-input-area">
+                    <input
+                        type="text"
+                        maxLength="50"
+                        placeholder=" "
+                        name="new_setting_title"
+                        id="new_setting_title"
+                        onKeyDown={async e => await _handleKeyDown(e)}
+                        onChange={_handleInputChange}
+                        ref={inputRef}
+                        disabled={disabled}
+                        value={collectionName} />
+                    <label htmlFor="new_setting_title" className="textbox_label">Search or Add collections</label>
+                    <AiSuggestNameButton
+                        suggest={suggestName}
+                        onSuggested={(suggestedName) => {
+                            setName(suggestedName);
+                            setSearch(suggestedName);
+                        }}
+                        onBusyChange={setAiBusy}
+                        disabled={disabled}
+                    />
+                    <button
+                        className="clear-button"
+                        style={{ opacity: hideClear ? '0' : '1' }}
+                        disabled={hideClear || disabled}
+                        onClick={handleClear}>
+                        <IoClose size="16px" />
+                    </button>
+                </div>
             </div>
             
             <div className="add-button-container">
@@ -409,30 +430,14 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate, folders = [] })
                 </div>
             )}
         </div>
-        {saveMode === 'current' && (writableFolders.length > 0 || destinationId) && (
-            <div className="quick-save-destination">
-                <label htmlFor="quick-save-folder">Save To</label>
-                <div className="quick-save-folder-wrapper">
-                    {destination && (
-                        <span className="quick-save-folder-dot" aria-hidden="true" style={{
-                            backgroundColor: destination.color && destination.color !== 'default'
-                                ? getColorValue(destination.color) : 'var(--primary-color)',
-                        }} />
-                    )}
-                    <select
-                        id="quick-save-folder"
-                        value={destinationId}
-                        onChange={event => setDestinationId(event.target.value)}
-                        disabled={disabled}
-                        className={destination ? 'has-folder-dot' : ''}
-                    >
-                        <option value="">Root level (no folder)</option>
-                        {destinationUnavailable && <option value={destinationId} disabled>Destination unavailable — choose another folder</option>}
-                        {writableFolders.map(folder => <option key={folder.uid} value={folder.uid}>{folder.name}</option>)}
-                    </select>
-                </div>
-            </div>
-        )}
+        <QuickSaveFolderModal
+            isOpen={folderPickerOpen && saveMode === 'current'}
+            onClose={() => setFolderPickerOpen(false)}
+            onSelect={uid => { setDestinationId(uid); setFolderPickerOpen(false); }}
+            folders={writableFolders}
+            destinationId={destinationId}
+            unavailable={destinationUnavailable}
+        />
     </section>;
 }
 

@@ -1,29 +1,20 @@
 .add-collection-group input[type="text"] {
   font-size: .85em;
   color: var(--text-color);
-  padding: 7px 10px;
-  border: none;
-  border-radius: 14px;
-  padding-right: 58px;
-  background: linear-gradient(var(--input-bg-color), var(--input-bg-color)) padding-box,
-    linear-gradient(90deg, var(--gradient-blue), var(--gradient-purple), var(--gradient-orange)) border-box;
-  border: 2px solid transparent;
-  transition: all 0.3s ease;
+  padding: 7px 58px 7px 6px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
   box-sizing: border-box;
-  display: flex;
-  flex: none;
-  flex-basis: 310px;
-}
-
-.add-collection-group input[type="text"]:hover {
-  box-shadow: 0 0 8px rgba(58, 119, 216, 0.15);
+  width: 100%;
+  min-width: 0;
 }
 
 .add-collection-group input[type="text"]:focus {
   outline: none;
-  background: linear-gradient(var(--input-bg-color), var(--input-bg-color)) padding-box,
-    linear-gradient(90deg, var(--gradient-blue), var(--gradient-purple), var(--gradient-orange)) border-box;
-  border: 2px solid transparent;
+}
+
+.add-collection-group:focus-within {
   box-shadow: 0 0 12px rgb(88 139 221 / 51%);
 }
 
@@ -66,20 +57,25 @@
   padding: 0;
   flex: none;
   width: 310px;
+  box-sizing: border-box;
+  border-radius: 14px;
+  border: 2px solid transparent;
+  background: linear-gradient(var(--input-bg-color), var(--input-bg-color)) padding-box,
+    linear-gradient(90deg, var(--gradient-blue), var(--gradient-purple), var(--gradient-orange)) border-box;
 }
 
-/* AI name suggestion in flight: animate the input's own gradient border
+/* AI name suggestion in flight: animate the shared input gradient border
    instead of overlaying a ring on top of it (see AIEffects.css). */
 .add-collection-group.ai-name-processing {
   border-radius: 14px;
 }
 
-.add-collection-group.ai-name-processing input[type="text"] {
+.add-collection-group.ai-name-processing {
   background-size: 100% 100%, 300% 100%;
   animation: ai-gradient-shift 2.2s linear infinite;
 }
 
-html.performance-mode .add-collection-group.ai-name-processing input[type="text"] {
+html.performance-mode .add-collection-group.ai-name-processing {
   animation: none;
 }
 
@@ -89,7 +85,11 @@ html.performance-mode .add-collection-group.ai-name-processing input[type="text"
   font-weight: normal;
   position: absolute;
   pointer-events: none;
-  left: 14px;
+  max-width: calc(100% - 64px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  left: 6px;
   top: 9px;
   transition: 0.25s ease-in-out all;
 }
@@ -587,79 +587,70 @@ html.performance-mode .add-collection-group.ai-name-processing input[type="text"
     inset 0 -1px 0 rgba(255, 255, 255, 0.15);
 }
 
-/* Keep the search/add controls in their existing row; destination is optional. */
-.add-collections-wrapper {
-  flex-direction: column;
-  align-items: stretch;
-}
-
-.quick-save-destination {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 6px;
-  max-width: 310px;
-  color: var(--text-color);
-  font-size: 12px;
-}
-
-.quick-save-destination label {
-  flex-shrink: 0;
-}
-
-.quick-save-folder-wrapper {
+/* The prefix takes its natural width; only the editable area shrinks. */
+.quick-save-input-area {
   position: relative;
-  min-width: 0;
   flex: 1;
+  min-width: 0;
 }
 
-.quick-save-destination select {
-  width: 100%;
+.quick-save-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 112px;
   min-width: 0;
-  height: 28px;
-  padding: 3px 28px 3px 8px;
-  border: 1px solid var(--divider-color);
-  border-radius: 8px;
-  background-color: var(--input-bg-color);
+  flex-shrink: 0;
+  margin-left: 4px;
+  padding: 3px 7px;
+  border: 1px solid var(--setting-row-border-color);
+  border-radius: 999px;
+  background: var(--setting-row-hover-bg-color);
   color: var(--text-color);
   font: inherit;
-  color-scheme: light;
+  font-size: 11px;
+  cursor: pointer;
 }
 
-[data-theme="dark"] .quick-save-destination select {
-  color-scheme: dark;
+.quick-save-pill svg {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
 }
 
-.quick-save-destination option {
-  background-color: var(--input-bg-color);
-  color: var(--text-color);
+.quick-save-pill-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.quick-save-destination select.has-folder-dot {
-  padding-left: 26px;
+:root {
+  --quick-save-root-color: #646970;
 }
 
-.quick-save-folder-dot {
-  position: absolute;
-  left: 9px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
-  pointer-events: none;
+[data-theme="dark"] {
+  --quick-save-root-color: #b2b6bd;
 }
 
-.quick-save-destination select:hover:not(:disabled) {
+.quick-save-pill.is-root {
+  color: var(--quick-save-root-color);
+}
+
+.quick-save-pill:hover:not(:disabled),
+.quick-save-pill:focus-visible {
   border-color: var(--primary-color);
 }
 
-.quick-save-destination select:focus-visible {
+.quick-save-pill:focus-visible {
   outline: 2px solid var(--primary-color);
-  outline-offset: 2px;
+  outline-offset: 1px;
 }
 
-.quick-save-destination select:disabled {
-  opacity: 0.6;
+.quick-save-pill:disabled {
+  opacity: .6;
   cursor: not-allowed;
+}
+
+.quick-save-pill.is-unavailable {
+  border-style: dashed;
 }
