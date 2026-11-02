@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import './AddNewTextbox.css';
-import { searchState } from './atoms/globalAppSettingsState';
+import { isLoggedInState, searchState } from './atoms/globalAppSettingsState';
 import { highlightedCollectionUidState } from './atoms/animationsState';
 import { getCurrentTabsAndGroups, getAllWindowsTabsAndGroups } from './utils';
 import { browser } from '../static/globals';
@@ -123,6 +123,7 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate, folders = [] })
     const destination = writableFolders.find(folder => folder.uid === destinationId);
     const destinationUnavailable = Boolean(destinationId && !destination);
     const trackedSync = useTrackedSync();
+    const isLoggedIn = useAtomValue(isLoggedInState);
 
     useEffect(() => {
         setInputFocus();
@@ -250,7 +251,7 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate, folders = [] })
                 const failedCollections = [];
                 for (const collection of collections) {
                     collection.parentId = createdFolder.uid;
-                    const success = await addCollection(collection, true, true); // Skip context menu update and state update
+                    const success = await addCollection(collection, true, true, { sourceWindowId: collection.window?.id }); // Skip context menu update and state update
                     if (success) {
                         addedCollections.push(collection);
                     } else {
@@ -290,7 +291,7 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate, folders = [] })
                 // Save current window as collection (existing behavior)
                 const newItem = await getCurrentTabsAndGroups(collectionName);
                 if (destinationId) newItem.parentId = destinationId;
-                const success = await addCollection(newItem, false, true); // Skip state update to prevent immediate highlight
+                const success = await addCollection(newItem, false, true, { sourceWindowId: newItem.window?.id }); // Skip state update to prevent immediate highlight
                 if (!success) throw new Error('Failed to save collection');
                 
                 // Force refresh data to update UI
@@ -316,7 +317,12 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate, folders = [] })
                     showErrorToast('Collection saved locally, but its destination could not be checked for sync. Refresh and try syncing again.');
                 } else if (!isSharedFolder(savedDestination)) {
                     try {
-                        await trackedSync({ updateLocalTimestamp: false });
+                        const result = await trackedSync({ updateLocalTimestamp: false });
+                        // Background sync reports ordinary failures as false; a
+                        // signed-out save also returns false and needs no warning.
+                        if (result === false && isLoggedIn) {
+                            throw new Error('Check sync status and try again.');
+                        }
                     } catch (error) {
                         showErrorToast(`Collection saved locally, but sync failed: ${error.message}`);
                     }

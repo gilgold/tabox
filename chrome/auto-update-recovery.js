@@ -41,6 +41,7 @@
         let chain = Promise.resolve();
         let revision = 0;
         let updateRevision = 0;
+        let queuedActivity = null;
         const stopRevisions = new Map();
         const run = task => {
             const result = chain.then(task);
@@ -325,14 +326,22 @@
             await browser.alarms.clear(ALARM);
         });
         const activity = () => {
+            // Every event invalidates in-flight reads immediately, even when its
+            // sample is shared with other queued events. Clear the shared promise
+            // when work starts so events during a scan await one trailing sample.
+            // Keep both samples in the lifecycle queue: no detached timer, and no
+            // reordering around track/stop/tick operations.
             revision++;
-            return run(async () => {
+            if (queuedActivity) return queuedActivity;
+            queuedActivity = run(async () => {
+                queuedActivity = null;
                 const data = await ensure();
                 const state = stateOf(data);
                 if (!enabled(data) || !state.pending) return;
                 await sample(state.pending);
                 await browser.storage.local.set({ [KEY]: state });
             });
+            return queuedActivity;
         };
         // Queue cleanup without returning that queued promise to storage.set:
         // writes in this queue themselves emit onChanged (including test harnesses

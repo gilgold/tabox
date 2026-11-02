@@ -35,7 +35,7 @@ describe('Add new collection textbox tests', () => {
     browser.runtime.sendMessage.mockResolvedValue({});
     getAllWindowsTabsAndGroups.mockResolvedValue({
       folder: { uid: 'folder-template', name: 'Project', color: '#6b7280', collapsed: true },
-      collections: [{ uid: 'collection-1', name: 'Project - Window 1' }],
+      collections: [{ uid: 'collection-1', name: 'Project - Window 1', window: { id: 1 } }],
     });
     getCurrentTabsAndGroups.mockResolvedValue({ tabs: [{ title: 'OpenRouter docs', url: 'https://openrouter.ai' }] });
     suggestCollectionName.mockResolvedValue('AI Research');
@@ -101,6 +101,7 @@ describe('Add new collection textbox tests', () => {
       expect.objectContaining({ parentId: 'folder-1' }),
       true,
       true,
+      { sourceWindowId: 1 },
     );
   });
 });

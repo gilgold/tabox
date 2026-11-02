@@ -12,6 +12,7 @@ const BACKGROUND_SCRIPTS = [
     'sync-apply.js',
     'sync-throttle.js',
     'pro-config.js',
+    'deferred-tabs.js',
     'background-utils.js',
     'auto-update-recovery.js',
     'push-client.js',

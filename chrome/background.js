@@ -13,6 +13,7 @@ if (typeof importScripts === 'function') {
     importScripts('sync-apply.js');
     importScripts('sync-throttle.js');
     importScripts('pro-config.js');
+    importScripts('deferred-tabs.js');
     importScripts('background-utils.js');
     importScripts('auto-update-recovery.js');
     importScripts('push-client.js');

@@ -164,6 +164,60 @@ describe('bounded recovery under delayed browser scheduling', () => {
         browser.windows.getAll.mockResolvedValue([{ id: 88, tabs: [{ ...tab, status: 'complete' }] }]);
         recovery = makeRecovery();
     });
+    test('a burst shares one queued observation and restarts the whole stability interval', async () => {
+        await recovery.startup();
+        const start = time;
+        time = start + 90000;
+        browser.windows.getAll.mockClear();
+        await Promise.all(Array.from({ length: 100 }, () => recovery.activity()));
+        expect(browser.windows.getAll).toHaveBeenCalledTimes(1);
+        expect(browser.storage.local._data[KEY].pending.since).toBe(time);
+        time = start + 149999; await recovery.tick();
+        expect(browser.storage.local._data.collectionsToTrack).toEqual([]);
+        time = start + 150000; await recovery.tick();
+        expect(browser.storage.local._data.collectionsToTrack).toEqual([{ collectionUid: 'c', windowId: 88 }]);
+    });
+    test('events during an observation invalidate it and await one trailing observation', async () => {
+        await recovery.startup();
+        const start = time;
+        let beginRead, finishRead;
+        const reading = new Promise(resolve => { beginRead = resolve; });
+        browser.windows.getAll.mockClear();
+        browser.windows.getAll.mockImplementationOnce(() => {
+            beginRead();
+            return new Promise(resolve => { finishRead = resolve; });
+        });
+        time = start + 80000;
+        const first = recovery.activity();
+        await reading;
+        time = start + 90000;
+        const trailing = Array.from({ length: 100 }, () => recovery.activity());
+        const observations = [];
+        const set = browser.storage.local.set.getMockImplementation();
+        browser.storage.local.set.mockImplementation(async values => {
+            if (values[KEY]?.pending) observations.push(values[KEY].pending.observation);
+            return set(values);
+        });
+        finishRead([{ id: 88, tabs: [{ ...tab, status: 'complete' }] }]);
+        await Promise.all([first, ...trailing]);
+        expect(browser.windows.getAll).toHaveBeenCalledTimes(2);
+        expect(observations[0]).toBeNull();
+        expect(observations[1]).not.toBeNull();
+        expect(browser.storage.local._data[KEY].pending.since).toBe(time);
+        time = start + 149999; await recovery.tick();
+        expect(browser.storage.local._data.collectionsToTrack).toEqual([]);
+        time = start + 150000; await recovery.tick();
+        expect(browser.storage.local._data.collectionsToTrack).toEqual([{ collectionUid: 'c', windowId: 88 }]);
+    });
+    test('a rejected queued activity does not block later observations', async () => {
+        await recovery.startup();
+        browser.storage.local.get.mockRejectedValueOnce(new Error('temporary read failure'));
+        await expect(Promise.all([recovery.activity(), recovery.activity()])).rejects.toThrow('temporary read failure');
+        browser.windows.getAll.mockClear();
+        await recovery.activity();
+        expect(browser.windows.getAll).toHaveBeenCalledTimes(1);
+        expect(browser.storage.local._data[KEY].pending.observation).not.toBeNull();
+    });
     test('delayed lifecycle initialization and jittered alarms recover without a startup tick', async () => {
         time += 30000; // Startup handler itself was delayed; no tick at initialization.
         await recovery.startup();

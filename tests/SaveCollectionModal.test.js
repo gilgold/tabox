@@ -30,7 +30,10 @@ describe('SaveCollectionModal', () => {
         browser.runtime.sendMessage.mockResolvedValue({});
         getAllWindowsTabsAndGroups.mockResolvedValue({
             folder: { uid: 'folder-template', name: 'Workspace', color: '#ef4444', collapsed: true },
-            collections: [{ uid: 'collection-1', name: 'Workspace - Window 1' }],
+            collections: [
+                { uid: 'collection-1', name: 'Workspace - Window 1', window: { id: 10 } },
+                { uid: 'collection-2', name: 'Workspace - Window 2', window: { id: 20 } },
+            ],
         });
         getCurrentTabsAndGroups.mockResolvedValue({ tabs: [{ title: 'React', url: 'https://react.dev' }] });
         suggestCollectionName.mockResolvedValue('React Learning');
@@ -71,6 +74,11 @@ describe('SaveCollectionModal', () => {
             expect.objectContaining({ parentId: 'folder-1' }),
             true,
             true,
+            { sourceWindowId: 10 },
+        );
+        expect(addCollection).toHaveBeenCalledWith(
+            expect.objectContaining({ uid: 'collection-2', parentId: 'folder-1' }),
+            true, true, { sourceWindowId: 20 },
         );
         expect(onSaved).toHaveBeenCalledWith(expect.arrayContaining([
             expect.objectContaining({ uid: 'collection-1', parentId: 'folder-1' }),
@@ -124,6 +132,7 @@ describe('SaveCollectionModal failed current-window save', () => {
 
 
 test('folder dropdown filters on typing, renders colored folder icons and selects with the keyboard', async () => {
+    getCurrentTabsAndGroups.mockResolvedValue({ tabs: [{ title: 'React', url: 'https://react.dev' }], window: { id: 30 } });
     const addCollection = jest.fn().mockResolvedValue(true);
     const store = createStore();
     store.set(sidebarNavigationState, 'other-folder');
@@ -144,7 +153,7 @@ test('folder dropdown filters on typing, renders colored folder icons and select
     expect(screen.getByText('Reading')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Collection Name'), { target: { value: 'Saved tabs' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save Collection' }));
-    await waitFor(() => expect(addCollection).toHaveBeenCalledWith(expect.objectContaining({ parentId: 'reading' }), false, true));
+    await waitFor(() => expect(addCollection).toHaveBeenCalledWith(expect.objectContaining({ parentId: 'reading' }), false, true, { sourceWindowId: 30 }));
     await waitFor(() => expect(store.get(sidebarNavigationState)).toBe('all'));
     expect(store.get(searchState)).toBe('');
 });

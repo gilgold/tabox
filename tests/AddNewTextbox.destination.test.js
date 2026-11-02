@@ -1,8 +1,8 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { Provider, createStore } from 'jotai';
 import AddNewTextbox from '../app/AddNewTextbox';
-import { searchState, syncInProgressState } from '../app/atoms/globalAppSettingsState';
+import { searchState, syncInProgressState, isLoggedInState } from '../app/atoms/globalAppSettingsState';
 import { getCurrentTabsAndGroups, getAllWindowsTabsAndGroups } from '../app/utils';
 import { showErrorToast, showSuccessToast } from '../app/toastHelpers';
 import { triggerBackgroundSync } from '../app/utils/sharedSync';
@@ -46,7 +46,7 @@ beforeEach(() => {
     browser.windows.getAll.mockResolvedValue([{ id: 1 }, { id: 2 }]);
     browser.tabs.query.mockResolvedValue([]);
     browser.storage.local.get.mockImplementation(async key => ({ [key]: folders.find(folder => `folder_${folder.uid}` === key) }));
-    getCurrentTabsAndGroups.mockImplementation(async () => ({ uid: 'new', tabs: [{ url: 'https://example.com/', highlighted: true }], chromeGroups: [] }));
+    getCurrentTabsAndGroups.mockImplementation(async () => ({ uid: 'new', window: { id: 10 }, tabs: [{ url: 'https://example.com/', highlighted: true }], chromeGroups: [] }));
 });
 
 test('root is always a grey folder button inside the left edge of the textbox border', () => {
@@ -79,7 +79,7 @@ test('defaults to root and exposes only writable existing destinations, using UI
     expect(store.get(searchState)).toBe('Reading');
     save();
     await waitFor(() => expect(showSuccessToast).toHaveBeenCalled());
-    expect(addCollection).toHaveBeenCalledWith(expect.objectContaining({ parentId: 'team', tabs: [expect.objectContaining({ highlighted: true })] }), false, true);
+    expect(addCollection).toHaveBeenCalledWith(expect.objectContaining({ parentId: 'team', tabs: [expect.objectContaining({ highlighted: true })] }), false, true, { sourceWindowId: 10 });
     expect(triggerBackgroundSync).not.toHaveBeenCalled();
     expect(screen.getByRole('textbox')).toHaveValue('');
     expect(pill()).toHaveTextContent('root');
@@ -142,7 +142,7 @@ test('personal destination syncs and root quick save remains the default after s
 
 test('All Windows hides the existing destination and saves only into its newly created folder', async () => {
     const addFolder = jest.fn().mockResolvedValue({ uid: 'fresh-folder' });
-    getAllWindowsTabsAndGroups.mockResolvedValue({ folder: { name: 'Reading', color: 'default', collapsed: true }, collections: [{ uid: 'window-1', tabs: [] }] });
+    getAllWindowsTabsAndGroups.mockResolvedValue({ folder: { name: 'Reading', color: 'default', collapsed: true }, collections: [{ uid: 'window-1', window: { id: 11 }, tabs: [] }] });
     const { addCollection } = setup({ addFolder });
     await waitFor(() => expect(screen.getByRole('button', { name: 'Save all windows as folder' })).not.toBeDisabled());
     choose('personal');
@@ -151,7 +151,7 @@ test('All Windows hides the existing destination and saves only into its newly c
     expect(screen.queryByRole('button', { name: /^Save to folder:/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Add Folder' }));
     await waitFor(() => expect(showSuccessToast).toHaveBeenCalled());
-    expect(addCollection).toHaveBeenCalledWith(expect.objectContaining({ parentId: 'fresh-folder' }), true, true);
+    expect(addCollection).toHaveBeenCalledWith(expect.objectContaining({ parentId: 'fresh-folder' }), true, true, { sourceWindowId: 11 });
 });
 
 test('locks the form while saving, prevents duplicate Enter, and resets immediately after local success while sync is pending', async () => {
@@ -193,6 +193,30 @@ test('a sync failure after local success reports that the collection was saved a
     expect(pill()).toHaveTextContent('root');
 });
 
+
+test('a false sync response reports local-only success for a signed-in user', async () => {
+    triggerBackgroundSync.mockResolvedValueOnce(false);
+    const { addCollection, store } = setup();
+    act(() => store.set(isLoggedInState, true));
+    name();
+    save();
+    await waitFor(() => expect(showErrorToast).toHaveBeenCalledWith(expect.stringMatching(/saved locally.*sync failed/i)));
+    expect(addCollection).toHaveBeenCalledTimes(1);
+    expect(showSuccessToast).toHaveBeenCalled();
+    expect(screen.getByRole('textbox')).toHaveValue('');
+    expect(store.get(syncInProgressState)).toBe(false);
+    expect(screen.getByRole('button', { name: 'Add Collection' })).not.toBeDisabled();
+});
+
+test.each([true, false])('a signed-out save does not report a sync error when background returns %s', async result => {
+    triggerBackgroundSync.mockResolvedValueOnce(result);
+    setup();
+    name();
+    save();
+    await waitFor(() => expect(showSuccessToast).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Add Collection' })).not.toBeDisabled());
+    expect(showErrorToast).not.toHaveBeenCalled();
+});
 
 test('if the persisted destination cannot be rechecked after a successful save, it avoids routing a possibly shared write to Drive', async () => {
     browser.storage.local.get.mockResolvedValue({});

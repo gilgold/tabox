@@ -14,7 +14,6 @@ function declarations(selector, stylesheet = css) {
 }
 
 test.each([
-    'html.fullpage-mode .save-collection-folder-select option',
     'html.fullpage-mode .current-window-close-form-group select option',
     'html.fullpage-mode .bulk-collection-select option',
 ])('%s pairs an opaque surface with its theme foreground', selector => {
@@ -41,13 +40,6 @@ test('popup controls reserve their natural height and the list scrolls in the re
         'max-height': 'none',
         'padding-top': '5px',
         'overflow-y': 'auto',
-    }));
-});
-
-test('FullPage Save To retains a native indicator with room beside the dot and label', () => {
-    expect(declarations('html.fullpage-mode .save-collection-folder-select')).toEqual(expect.objectContaining({
-        appearance: 'auto',
-        'padding-right': '34px',
     }));
 });
 

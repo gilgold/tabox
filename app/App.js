@@ -841,7 +841,7 @@ function App({ mode = 'popup' }) {
   };
 
   // Updated to use new storage system
-  const addCollection = async (newCollection, skipContextMenuUpdate = false, skipStateUpdate = false) => {
+  const addCollection = async (newCollection, skipContextMenuUpdate = false, skipStateUpdate = false, { sourceWindowId = null } = {}) => {
     try {
       // An open form can outlive its destination or its permissions. Read the
       // persisted folder immediately before saving, rather than trusting UI state.
@@ -888,10 +888,11 @@ function App({ mode = 'popup' }) {
         // Auto-update tracking logic (only for successful saves)
         const { chkAutoUpdateOnNewCollection } = await browser.storage.local.get('chkAutoUpdateOnNewCollection');
         if (!chkAutoUpdateOnNewCollection) return true;
-        if (isSingleWindowBrowser()) return true;
+        // Only live captures opt in with their source window. Stored window IDs
+        // on copies or historical sessions can belong to unrelated windows now.
+        if (isSingleWindowBrowser() || !Number.isInteger(sourceWindowId) || sourceWindowId < 0) return true;
         try {
-          const window = await browser.windows.getLastFocused({ windowTypes: ['normal'] });
-          await browser.runtime.sendMessage({ type: 'trackCollection', collectionUid: newCollection.uid, windowId: window.id });
+          await browser.runtime.sendMessage({ type: 'trackCollection', collectionUid: newCollection.uid, windowId: sourceWindowId });
           setListKey(Math.random().toString(36));
         } catch { /* The source window may already be closed. */ }
 

@@ -287,4 +287,31 @@ describe('App shared-only mutations do not stamp the Drive watermark', () => {
         expect(getLocalTimestampStamps(browser).length).toBeGreaterThan(0);
         expect(getSharedSyncNowMessages(browser)).toHaveLength(0);
     });
+    test('new collections track their explicit source windows even when another window has focus', async () => {
+        await browser.storage.local.set({ chkAutoUpdateOnNewCollection: true });
+        browser.windows.getLastFocused.mockResolvedValue({ id: 99 });
+        await renderAppAndWaitForData();
+        await act(async () => {
+            for (const windowId of [10, 20]) {
+                await mockCaptured.addCollection({ uid: `captured-${windowId}`, name: 'Captured', tabs: [], chromeGroups: [], window: { id: windowId } },
+                    true, true, { sourceWindowId: windowId });
+            }
+        });
+        const tracking = browser.runtime.sendMessage.mock.calls.map(([message]) => message).filter(message => message.type === 'trackCollection');
+        expect(tracking).toEqual([
+            { type: 'trackCollection', collectionUid: 'captured-10', windowId: 10 },
+            { type: 'trackCollection', collectionUid: 'captured-20', windowId: 20 },
+        ]);
+        expect(browser.windows.getLastFocused).not.toHaveBeenCalled();
+    });
+
+    test('historical or copied collections do not track stale stored window IDs', async () => {
+        await browser.storage.local.set({ chkAutoUpdateOnNewCollection: true });
+        await renderAppAndWaitForData();
+        await act(async () => {
+            await mockCaptured.addCollection({ uid: 'historical', name: 'Historical', tabs: [], chromeGroups: [], window: { id: 99 } }, true, true);
+        });
+        expect(browser.runtime.sendMessage.mock.calls.some(([message]) => message.type === 'trackCollection')).toBe(false);
+    });
+
 });

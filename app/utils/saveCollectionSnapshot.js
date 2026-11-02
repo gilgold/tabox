@@ -58,7 +58,11 @@ export async function saveCollectionSnapshot({
         name,
         parentId,
     });
-    const success = await addCollection(newCollection, false, true);
+    // Only current-window snapshots carry a live windowId. Historical sessions
+    // may retain window metadata, which must never establish auto-update ownership.
+    const sourceWindowId = Number.isInteger(snapshot.windowId) && !snapshot.sessionId && !snapshot.sessionEntryKey
+        ? snapshot.windowId : null;
+    const success = await addCollection(newCollection, false, true, { sourceWindowId });
 
     if (!success) {
         throw new Error('Failed to save collection');

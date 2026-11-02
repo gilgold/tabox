@@ -121,7 +121,7 @@ function SaveCollectionModal({
 
                 for (const collection of collections) {
                     collection.parentId = createdFolder.uid;
-                    await addCollection(collection, true, true);
+                    await addCollection(collection, true, true, { sourceWindowId: collection.window?.id });
                 }
                 const { updateFolderCollectionCount } = await import('../utils/storageUtils');
                 await updateFolderCollectionCount(createdFolder.uid);
@@ -134,7 +134,7 @@ function SaveCollectionModal({
                 if (selectedFolder) {
                     newItem.parentId = selectedFolder;
                 }
-                const success = await addCollection(newItem, false, true);
+                const success = await addCollection(newItem, false, true, { sourceWindowId: newItem.window?.id });
                 if (!success) throw new Error('Failed to save collection');
                 // addCollection skips its own sync when skipStateUpdate is set,
                 // so push to Drive here (shared folders sync on their own).
