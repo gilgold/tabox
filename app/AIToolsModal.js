@@ -1,3 +1,4 @@
+import { requestSyncAccess } from './utils/syncPermissions';
 import { SPLIT_MIN_TABS } from './utils/sharedConstants';
 import AIHubActionCard from './ai/AIHubActionCard';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -1576,6 +1577,7 @@ function AIToolsModal({ updateRemoteData, onDataUpdate }) {
                         isSignedIn={isSignedIn}
                         onUpgrade={() => startProCheckout()}
                         onSignIn={async () => {
+                            if (!await requestSyncAccess()) return;
                             const loggedIn = await browser.runtime.sendMessage({ type: 'login' });
                             if (!loggedIn) return;
                             setIsSignedIn(true);

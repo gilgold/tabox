@@ -38,7 +38,7 @@ import { browser } from '../../static/globals';
  * @param {string} color - Folder color (optional)
  * @returns {Promise<TaboxFolder|null>} Created folder or null if failed
  */
-export const createFolder = async (name, color = null, collapsed = false) => {
+export const createFolder = async (name, color = null, collapsed = false, { onCreated, sync = triggerBackgroundSync } = {}) => {
     try {
         if (!name || name.trim() === '') {
             throw new Error('Folder name is required');
@@ -60,10 +60,16 @@ export const createFolder = async (name, color = null, collapsed = false) => {
                 console.warn(`⚠️ Failed to persist folder order for new folder: ${name}`);
             }
 
-            // Ensure storage is committed before triggering sync
-            await new Promise(resolve => setTimeout(resolve, 100));
-            await triggerBackgroundSync();
-            
+            // Persist the timestamp, then dispatch before releasing the UI. The
+            // background handler owns the network work even if the popup closes.
+            await browser.storage.local.set({ localTimestamp: Date.now() });
+            const syncing = sync({ updateLocalTimestamp: false });
+            onCreated?.(folder);
+            try {
+                await syncing;
+            } catch (error) {
+                console.error('Folder saved locally, but sync failed:', error);
+            }
             return folder;
         } else {
             console.error(`❌ Failed to create folder: ${name}`);
@@ -531,18 +537,10 @@ export const stopTrackingFolderCollections = async (folderId) => {
     const folderCollections = await getFolderCollections(folderId);
     if (folderCollections.length === 0) return 0;
 
-    const { collectionsToTrack } = await browser.storage.local.get('collectionsToTrack');
-    if (!collectionsToTrack || collectionsToTrack.length === 0) return 0;
-
-    const folderCollectionUids = new Set(folderCollections.map((c) => c.uid));
-    const updatedCollectionsToTrack = collectionsToTrack.filter(
-        (tracked) => !folderCollectionUids.has(tracked.collectionUid)
-    );
-    const removedCount = collectionsToTrack.length - updatedCollectionsToTrack.length;
-    if (removedCount === 0) return 0;
-
-    await browser.storage.local.set({ collectionsToTrack: updatedCollectionsToTrack });
-    return removedCount;
+    return browser.runtime.sendMessage({
+        type: 'stopTrackingCollections',
+        collectionUids: folderCollections.map(c => c.uid),
+    });
 };
 
 // ========================================

@@ -1,3 +1,4 @@
+import { requestSyncPermissions } from '../chrome/sync-transport';
 import React, { useEffect, useMemo, useState } from 'react';
 import Modal from 'react-modal';
 import {
@@ -661,8 +662,8 @@ function SyncDebugRecoveryPanel({
     const handleForceDownload = async () => {
         setActionInFlight(true);
         try {
-            await applyDataFromServer?.(true);
-            showSuccessToast('Sync download requested', 3000, { toasterId: feedbackToasterId });
+            if (await applyDataFromServer?.(true) !== true) throw new Error('Download did not complete');
+            showSuccessToast('Sync download completed', 3000, { toasterId: feedbackToasterId });
         } catch (error) {
             console.error('Force download failed:', error);
             showErrorToast(error.message || 'Failed to download from server', { toasterId: feedbackToasterId });
@@ -679,6 +680,7 @@ function SyncDebugRecoveryPanel({
 
         setActionInFlight(true);
         try {
+            await requestSyncPermissions(browser);
             const result = await browser.runtime.sendMessage({ type: 'forceSyncReset' });
             if (!result) {
                 throw new Error('Sync reset failed');

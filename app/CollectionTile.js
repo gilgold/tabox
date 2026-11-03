@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef, useEffectEvent, useCallback } from 'react';
+import React, { useEffect, useLayoutEffect, useState, useMemo, useRef, useEffectEvent, useCallback } from 'react';
 import { MdCenterFocusWeak, MdOutlineLaunch } from 'react-icons/md';
 import { FaTrash, FaStar, FaRegStar } from 'react-icons/fa';
 import { BsIncognito } from 'react-icons/bs';
@@ -40,6 +40,12 @@ function CollectionTile(props) {
 
     // Check if this tile should be highlighted
     const isHighlighted = highlightedCollectionUid === props.collection.uid;
+
+    useLayoutEffect(() => {
+        if (isHighlighted && props.isInFolder) {
+            tileRef.current?.scrollIntoView({ behavior: 'auto', block: 'center' });
+        }
+    }, [isHighlighted, props.isInFolder]);
 
     // Check if this tile is being deleted
     const isDeleting = deletingCollectionUids.has(props.collection.uid);

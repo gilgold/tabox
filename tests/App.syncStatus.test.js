@@ -14,11 +14,14 @@ jest.mock('../static/globals', () => ({
     browser: mockBrowserProxy
 }));
 
+let mockApplyDataFromServer;
+
 jest.mock('../app/Header', () => {
     const { useAtomValue } = require('jotai');
     const { isLoggedInState } = require('../app/atoms/globalAppSettingsState');
 
-    return function MockHeader() {
+    return function MockHeader({ applyDataFromServer }) {
+        mockApplyDataFromServer = applyDataFromServer;
         const isLoggedIn = useAtomValue(isLoggedInState);
         return <div data-testid="sync-enabled">{String(isLoggedIn)}</div>;
     };
@@ -55,6 +58,40 @@ describe('App sync status state', () => {
         cleanup();
         delete global.browser;
         delete global.chrome;
+    });
+
+    test.each([false, undefined, 'already_in_progress'])('force download rejects incomplete response %s', async (response) => {
+        browser = createBrowserHarness({
+            localData: { collections_index: {}, folders_index: {}, tabox_storage_version: 3 },
+            runtimeSendMessageImpl: async message => message.type === 'loadFromServer' ? response : false
+        });
+        global.browser = browser;
+        global.chrome = { runtime: browser.runtime };
+        render(<Provider store={createStore()}><App /></Provider>);
+        await act(async () => {
+            await expect(mockApplyDataFromServer(true)).rejects.toThrow();
+        });
+    });
+
+    test('force download waits for the background and reloads an empty snapshot', async () => {
+        let finishDownload;
+        const pending = new Promise(resolve => { finishDownload = resolve; });
+        browser = createBrowserHarness({
+            localData: { collections_index: {}, folders_index: {}, tabox_storage_version: 3 },
+            runtimeSendMessageImpl: async message => message.type === 'loadFromServer' ? pending : false
+        });
+        global.browser = browser;
+        global.chrome = { runtime: browser.runtime };
+        render(<Provider store={createStore()}><App /></Provider>);
+        let completed = false;
+        await act(async () => {
+            const result = mockApplyDataFromServer(true).then(value => { completed = true; return value; });
+            await Promise.resolve();
+            expect(completed).toBe(false);
+            finishDownload([]);
+            expect(await result).toBe(true);
+        });
+        expect(completed).toBe(true);
     });
 
     test('treats an existing refresh token as cached sync enabled state in the popup', async () => {

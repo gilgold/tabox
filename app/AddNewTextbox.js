@@ -1,19 +1,24 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import './AddNewTextbox.css';
-import { searchState } from './atoms/globalAppSettingsState';
+import { isLoggedInState, searchState } from './atoms/globalAppSettingsState';
 import { highlightedCollectionUidState } from './atoms/animationsState';
 import { getCurrentTabsAndGroups, getAllWindowsTabsAndGroups } from './utils';
 import { browser } from '../static/globals';
-import { triggerBackgroundSync } from './utils/sharedSync';
 import { showErrorToast } from './toastHelpers';
+import { MdFolder } from 'react-icons/md';
 import { IoClose } from 'react-icons/io5';
 import { HiOutlineDesktopComputer, HiCollection } from 'react-icons/hi';
 import AiSuggestNameButton from './AiSuggestNameButton';
 import { isSingleWindowBrowser } from './utils/platform';
+import QuickSaveFolderModal from './QuickSaveFolderModal';
 import SingleWindowTabsNote from './SingleWindowTabsNote';
 import { suggestCollectionName } from './ai/tasks/suggestCollectionName';
 import { suggestFolderName } from './ai/tasks/suggestFolderName';
+import { canEditFolder, isSharedFolder } from './utils/sharedFolderUtils';
+import { getColorValue } from './utils/colorMigration';
+import { useTrackedSync } from './useTrackedSync';
+import { loadSingleFolder } from './utils/storageUtils';
 
 function SaveHighlightedOnlyLabel({ saveMode, windowCount }) {
     const [totalHighlighted, setTotalHighlighted] = useState(0);
@@ -49,8 +54,8 @@ function SaveHighlightedOnlyLabel({ saveMode, windowCount }) {
     );
 }
 
-function WindowChoiceToggle({ saveMode, setSaveMode, windowCount }) {
-    const isDisabled = windowCount <= 1;
+function WindowChoiceToggle({ saveMode, setSaveMode, windowCount, disabled = false }) {
+    const isDisabled = disabled || windowCount <= 1;
 
     const handleCurrentClick = () => {
         if (!isDisabled) {
@@ -99,7 +104,7 @@ const useFocus = () => {
     return [htmlElRef, setFocus]
 }
 
-function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
+function AddNewTextbox({ addCollection, addFolder, onDataUpdate, folders = [] }) {
 
     const [collectionName, setName] = useState("");
     const [disabled, setDisabled] = useState(false);
@@ -110,6 +115,14 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
     const [saveMode, setSaveMode] = useState('current'); // 'current' or 'all'
     const [windowCount, setWindowCount] = useState(1);
     const [aiBusy, setAiBusy] = useState(false);
+    const [destinationId, setDestinationId] = useState('');
+    const [folderPickerOpen, setFolderPickerOpen] = useState(false);
+    const savingRef = useRef(false);
+    const writableFolders = folders.filter(canEditFolder);
+    const destination = writableFolders.find(folder => folder.uid === destinationId);
+    const destinationUnavailable = Boolean(destinationId && !destination);
+    const trackedSync = useTrackedSync();
+    const isLoggedIn = useAtomValue(isLoggedInState);
 
     useEffect(() => {
         setInputFocus();
@@ -200,15 +213,26 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
         }, 50);
     };
 
+    const resetSavedForm = () => {
+        setSearch('');
+        setName('');
+        setDestinationId('');
+    };
+
     const handleSave = async () => {
+        if (savingRef.current) return;
         if (collectionName.trim() === '') {
             showErrorToast('Please enter a name for the collection');
             return;
         }
         
-        setSearch('');
+        if (saveMode === 'current' && destinationUnavailable) {
+            showErrorToast('The destination folder is no longer available or writable. Choose another destination.');
+            return;
+        }
+
+        savingRef.current = true;
         setDisabled(true);
-        setName('');
         
         try {
             if (saveMode === 'all' && windowCount > 1) {
@@ -226,7 +250,7 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
                 const failedCollections = [];
                 for (const collection of collections) {
                     collection.parentId = createdFolder.uid;
-                    const success = await addCollection(collection, true, true); // Skip context menu update and state update
+                    const success = await addCollection(collection, true, true, { sourceWindowId: collection.window?.id }); // Skip context menu update and state update
                     if (success) {
                         addedCollections.push(collection);
                     } else {
@@ -246,8 +270,8 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
                 
                 // Trigger context menu update once after all collections are added
                 await browser.runtime.sendMessage({ type: 'addCollection' });
-                
-                await triggerBackgroundSync();
+                await browser.storage.local.set({ localTimestamp: Date.now() });
+                const syncing = trackedSync({ updateLocalTimestamp: false });
                 
                 // Force refresh data to update UI
                 if (onDataUpdate) {
@@ -261,10 +285,21 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
                     const { showSuccessToast } = await import('./toastHelpers');
                     showSuccessToast(`Folder created with ${addedCollections.length} collection${addedCollections.length > 1 ? 's' : ''}`);
                 }
+                resetSavedForm();
+                savingRef.current = false;
+                setDisabled(false);
+                try {
+                    await syncing;
+                } catch (error) {
+                    showErrorToast(`Folder saved locally, but sync failed: ${error.message}`);
+                }
+                return;
             } else {
                 // Save current window as collection (existing behavior)
                 const newItem = await getCurrentTabsAndGroups(collectionName);
-                await addCollection(newItem, false, true); // Skip state update to prevent immediate highlight
+                if (destinationId) newItem.parentId = destinationId;
+                const success = await addCollection(newItem, false, true, { sourceWindowId: newItem.window?.id }); // Skip state update to prevent immediate highlight
+                if (!success) throw new Error('Failed to save collection');
                 
                 // Force refresh data to update UI
                 if (onDataUpdate) {
@@ -272,18 +307,41 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
                 }
                 
                 // Scroll to top and highlight the new collection
-                scrollToCollectionsAndHighlight(newItem.uid);
+                if (newItem.parentId) {
+                    setHighlightedCollectionUid(newItem.uid);
+                } else {
+                    scrollToCollectionsAndHighlight(newItem.uid);
+                }
                 
                 // Show success toast
                 const { showSuccessToast } = await import('./toastHelpers');
                 showSuccessToast(`Collection "${collectionName}" created successfully`);
+                resetSavedForm();
+                // Sharing may have changed while tabs were being captured.
+                // App routes the shared upload; only personal saves need Drive.
+                const savedDestination = destinationId ? await loadSingleFolder(destinationId) : null;
+                if (destinationId && !savedDestination) {
+                    showErrorToast('Collection saved locally, but its destination could not be checked for sync. Refresh and try syncing again.');
+                } else if (!isSharedFolder(savedDestination)) {
+                    try {
+                        const result = await trackedSync({ updateLocalTimestamp: false });
+                        // Background sync reports ordinary failures as false; a
+                        // signed-out save also returns false and needs no warning.
+                        if (result === false && isLoggedIn) {
+                            throw new Error('Check sync status and try again.');
+                        }
+                    } catch (error) {
+                        showErrorToast(`Collection saved locally, but sync failed: ${error.message}`);
+                    }
+                }
             }
         } catch (error) {
             console.error('Error saving:', error);
             showErrorToast(`Failed to save: ${error.message}`);
         }
         
-        setTimeout(() => setDisabled(false), 1000);
+        savingRef.current = false;
+        setDisabled(false);
     }
 
     const _handleKeyDown = async (e) => {
@@ -315,32 +373,53 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
     return <section className='add-collections-wrapper'>
         <div className="left-controls-group">
             <div className={`add-collection-group${aiBusy ? ' ai-name-processing' : ''}`}>
-                <input
-                    type="text"
-                    maxLength="50"
-                    placeholder=" "
-                    name="new_setting_title"
-                    id="new_setting_title"
-                    onKeyDown={async e => await _handleKeyDown(e)}
-                    onChange={_handleInputChange}
-                    ref={inputRef}
-                    value={collectionName} />
-                <label className="textbox_label">Search or Add collections</label>
-                <AiSuggestNameButton
-                    suggest={suggestName}
-                    onSuggested={(suggestedName) => {
-                        setName(suggestedName);
-                        setSearch(suggestedName);
-                    }}
-                    onBusyChange={setAiBusy}
-                />
-                <button
-                    className="clear-button"
-                    style={{ opacity: hideClear ? '0' : '1' }}
-                    disabled={hideClear}
-                    onClick={handleClear}>
-                    <IoClose size="16px" />
-                </button>
+                {saveMode === 'current' && (
+                    <button
+                        type="button"
+                        className={`quick-save-pill${!destinationId ? ' is-root' : ''}${destinationUnavailable ? ' is-unavailable' : ''}`}
+                        aria-label={`Save to folder: ${destinationUnavailable ? 'Destination unavailable — choose again' : destination?.name || 'root'}`}
+                        aria-haspopup="dialog"
+                        aria-expanded={folderPickerOpen}
+                        onClick={() => setFolderPickerOpen(true)}
+                        disabled={disabled}
+                        data-tooltip-id="quick-save-tooltip"
+                        data-tooltip-place="bottom-start"
+                        data-tooltip-content={destinationUnavailable ? 'Destination unavailable — choose again' : destination ? `Collection will be added to the ${destination.name} folder` : 'Collection will be added to root'}
+                    >
+                        <MdFolder aria-hidden="true" style={destination ? { color: destination.color && destination.color !== 'default' ? getColorValue(destination.color) : 'var(--primary-color)' } : undefined} />
+                        <span className="quick-save-pill-name">{destinationUnavailable ? 'Unavailable' : destination?.name || 'root'}</span>
+                    </button>
+                )}
+                <div className="quick-save-input-area">
+                    <input
+                        type="text"
+                        maxLength="50"
+                        placeholder=" "
+                        name="new_setting_title"
+                        id="new_setting_title"
+                        onKeyDown={async e => await _handleKeyDown(e)}
+                        onChange={_handleInputChange}
+                        ref={inputRef}
+                        disabled={disabled}
+                        value={collectionName} />
+                    <label htmlFor="new_setting_title" className="textbox_label">Search or Add collections</label>
+                    <AiSuggestNameButton
+                        suggest={suggestName}
+                        onSuggested={(suggestedName) => {
+                            setName(suggestedName);
+                            setSearch(suggestedName);
+                        }}
+                        onBusyChange={setAiBusy}
+                        disabled={disabled}
+                    />
+                    <button
+                        className="clear-button"
+                        style={{ opacity: hideClear ? '0' : '1' }}
+                        disabled={hideClear || disabled}
+                        onClick={handleClear}>
+                        <IoClose size="16px" />
+                    </button>
+                </div>
             </div>
             
             <div className="add-button-container">
@@ -363,11 +442,20 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate }) {
                         saveMode={saveMode} 
                         setSaveMode={setSaveMode} 
                         windowCount={windowCount}
+                        disabled={disabled}
                     />
                     <SaveHighlightedOnlyLabel saveMode={saveMode} windowCount={windowCount} />
                 </div>
             )}
         </div>
+        <QuickSaveFolderModal
+            isOpen={folderPickerOpen && saveMode === 'current'}
+            onClose={() => setFolderPickerOpen(false)}
+            onSelect={uid => { setDestinationId(uid); setFolderPickerOpen(false); }}
+            folders={writableFolders}
+            destinationId={destinationId}
+            unavailable={destinationUnavailable}
+        />
     </section>;
 }
 

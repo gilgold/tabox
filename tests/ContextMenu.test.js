@@ -3,6 +3,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { renderWithProviders } from './helpers/renderWithProviders';
 import ContextMenu from '../app/ContextMenu';
+import { Tooltip } from 'react-tooltip';
 
 // Host that wires a triggerRef element to a ContextMenu, mirroring how
 // CollectionTile / FolderContainer enable right-click on a whole region.
@@ -150,4 +151,64 @@ describe('ContextMenu', () => {
             expect(onOpenChange).toHaveBeenCalledWith(false);
         });
     });
+});
+
+describe('ContextMenu tooltip and keyboard lifecycle', () => {
+    test.each(['click', 'keyboard', 'contextmenu'])('suppresses trigger tooltip while open via %s and restores it after Escape', async mode => {
+        const { container, unmount } = renderWithProviders(
+            <RightClickHost menuItems={[{ text: 'Edit', action: jest.fn() }]} />
+        );
+        const trigger = container.querySelector('.menu-icon');
+        expect(trigger).toHaveAttribute('data-tooltip-hidden', 'false');
+        if (mode === 'click') fireEvent.click(trigger);
+        if (mode === 'keyboard') fireEvent.keyDown(trigger, { key: 'Enter' });
+        if (mode === 'contextmenu') fireEvent.contextMenu(screen.getByTestId('trigger'), { clientX: 50, clientY: 60 });
+        expect(screen.getByRole('menu')).toBeInTheDocument();
+        expect(trigger).toHaveAttribute('data-tooltip-hidden', 'true');
+        expect(trigger).toHaveAttribute('aria-expanded', 'true');
+        fireEvent.keyDown(document, { key: 'Escape' });
+        await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+        expect(trigger).toHaveAttribute('data-tooltip-hidden', 'false');
+        expect(trigger).toHaveAttribute('aria-expanded', 'false');
+        expect(document.activeElement).toBe(trigger);
+        unmount();
+        fireEvent.keyDown(document, { key: 'Escape' });
+    });
+
+    test('keyboard opens, navigates and activates existing actions', () => {
+        const action = jest.fn();
+        const { container } = renderWithProviders(<ContextMenu menuItems={[
+            { text: 'First', action: jest.fn() }, { text: 'Second', action }
+        ]} />);
+        const trigger = container.querySelector('.menu-icon');
+        fireEvent.keyDown(trigger, { key: 'Enter' });
+        const items = screen.getAllByRole('menuitem');
+        fireEvent.keyDown(items[0], { key: 'ArrowDown' });
+        expect(document.activeElement).toBe(items[1]);
+        fireEvent.keyDown(items[1], { key: 'Enter' });
+        expect(action).toHaveBeenCalledTimes(1);
+        expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+        expect(trigger).toHaveAttribute('data-tooltip-hidden', 'false');
+    });
+});
+
+
+test('react-tooltip dismisses an already visible trigger tooltip and can show it after closing', async () => {
+    const previousResizeObserver = global.ResizeObserver;
+    global.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
+    const { container, unmount } = renderWithProviders(<>
+        <ContextMenu tooltip="Synthetic options" menuItems={[{ text: 'Edit', action: jest.fn() }]} />
+        <Tooltip id="main-tooltip" delayShow={0} delayHide={0} />
+    </>);
+    const trigger = container.querySelector('.menu-icon');
+    fireEvent.mouseOver(trigger);
+    await waitFor(() => expect(screen.getByRole('tooltip')).toBeInTheDocument());
+    fireEvent.click(trigger);
+    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
+    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.mouseOut(trigger);
+    fireEvent.mouseOver(trigger);
+    await waitFor(() => expect(screen.getByRole('tooltip')).toBeInTheDocument());
+    unmount();
+    global.ResizeObserver = previousResizeObserver;
 });

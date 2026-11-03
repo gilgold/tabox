@@ -1572,8 +1572,7 @@ html.fullpage-mode .save-collection-input,
 html.fullpage-mode .bulk-collection-select,
 html.fullpage-mode .create-folder-input,
 html.fullpage-mode .current-window-close-form-group input,
-html.fullpage-mode .current-window-close-form-group select,
-html.fullpage-mode .save-collection-folder-select {
+html.fullpage-mode .current-window-close-form-group select {
     width: 100%;
     min-height: 38px;
     padding: 8px 12px;
@@ -1586,17 +1585,19 @@ html.fullpage-mode .save-collection-folder-select {
     font-size: 14px;
 }
 
-/* Keep room for the folder color dot (absolute at left: 12px) when one is shown */
-html.fullpage-mode .save-collection-folder-select-wrapper:has(.save-collection-folder-dot) .save-collection-folder-select {
-    padding-left: 34px;
+/* Native option surfaces can be OS-owned. Pair both colors explicitly so
+   light popup surfaces cannot inherit an unreadable dark-theme foreground. */
+html.fullpage-mode .current-window-close-form-group select option,
+html.fullpage-mode .bulk-collection-select option {
+    background-color: var(--color-surface);
+    color: var(--color-text);
 }
 
 html.fullpage-mode .save-collection-input:hover,
 html.fullpage-mode .bulk-collection-select:hover,
 html.fullpage-mode .create-folder-input:hover,
 html.fullpage-mode .current-window-close-form-group input:hover,
-html.fullpage-mode .current-window-close-form-group select:hover,
-html.fullpage-mode .save-collection-folder-select:hover {
+html.fullpage-mode .current-window-close-form-group select:hover {
     border-color: var(--color-border-strong);
     box-shadow: none;
 }
@@ -1605,8 +1606,7 @@ html.fullpage-mode .save-collection-input:focus,
 html.fullpage-mode .bulk-collection-select:focus,
 html.fullpage-mode .create-folder-input:focus,
 html.fullpage-mode .current-window-close-form-group input:focus,
-html.fullpage-mode .current-window-close-form-group select:focus,
-html.fullpage-mode .save-collection-folder-select:focus {
+html.fullpage-mode .current-window-close-form-group select:focus {
     border-color: var(--color-primary);
     box-shadow: 0 0 0 3px var(--color-focus-ring);
     outline: none;

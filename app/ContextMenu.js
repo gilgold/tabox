@@ -18,6 +18,7 @@ function ContextMenu({
     // of being anchored to the "..." button. null means button-anchored mode.
     const [cursorPosition, setCursorPosition] = React.useState(null);
     const menuButtonRef = useRef(null);
+    const keyboardOpenRef = useRef(false);
     // Generate a stable unique ID for this menu instance
     const menuId = useMemo(() => `context-menu-${Math.random().toString(36).substr(2, 9)}`, []);
     
@@ -87,7 +88,19 @@ function ContextMenu({
             }
         };
 
+        const handleKeyDown = event => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                setActiveMenuId(null);
+                menuButtonRef.current?.focus();
+            }
+        };
         if (showMenu) {
+            document.addEventListener('keydown', handleKeyDown);
+            if (keyboardOpenRef.current) {
+                document.getElementById(menuId)?.querySelector('[role="menuitem"]')?.focus();
+                keyboardOpenRef.current = false;
+            }
             document.addEventListener('click', handleClickOutside);
             
             // Calculate position immediately when menu opens
@@ -106,6 +119,7 @@ function ContextMenu({
 
         return () => {
             document.removeEventListener('click', handleClickOutside);
+            document.removeEventListener('keydown', handleKeyDown);
         };
     }, [showMenu, visibleMenuItems.length, menuId, setActiveMenuId]);
 
@@ -173,11 +187,27 @@ function ContextMenu({
         setActiveMenuId(showMenu ? null : menuId);
     };
 
+    const handleMenuKeyDown = event => {
+        const items = [...event.currentTarget.querySelectorAll('[role="menuitem"]')];
+        const index = items.indexOf(document.activeElement);
+        let next;
+        if (event.key === 'ArrowDown') next = (index + 1) % items.length;
+        if (event.key === 'ArrowUp') next = (index - 1 + items.length) % items.length;
+        if (event.key === 'Home') next = 0;
+        if (event.key === 'End') next = items.length - 1;
+        if (next !== undefined && items.length) {
+            event.preventDefault();
+            items[next].focus();
+        }
+        if (event.key === 'Tab') setActiveMenuId(null);
+    };
+
     const handleMenuItemClick = (action) => {
         if (action && typeof action === 'function') {
             action();
         }
         setActiveMenuId(null);
+        menuButtonRef.current?.focus();
     };
 
     return (
@@ -187,6 +217,20 @@ function ContextMenu({
                 className="action-icon menu-icon"
                 data-tooltip-id="main-tooltip" data-tooltip-content={tooltip}
                 data-tooltip-place={tooltipPlace}
+                data-tooltip-hidden={showMenu}
+                role="button"
+                tabIndex={0}
+                aria-label={tooltip}
+                aria-haspopup="menu"
+                aria-expanded={showMenu}
+                aria-controls={showMenu ? menuId : undefined}
+                onKeyDown={event => {
+                    if (['Enter', ' ', 'ArrowDown'].includes(event.key)) {
+                        event.preventDefault();
+                        keyboardOpenRef.current = true;
+                        handleMenuClick(event);
+                    }
+                }}
                 onClick={handleMenuClick}
             >
                 <MdOutlineMoreHoriz />
@@ -195,6 +239,9 @@ function ContextMenu({
                 <div
                     id={menuId}
                     className="context-menu"
+                    role="menu"
+                    aria-label={tooltip}
+                    onKeyDown={handleMenuKeyDown}
                     style={cursorPosition ? {
                         top: `${cursorPosition.y}px`,
                         left: `${cursorPosition.x}px`,
@@ -214,6 +261,14 @@ function ContextMenu({
                                 )}
                                 <div
                                     className={`context-menu-item ${item.className || ''}`}
+                                    role="menuitem"
+                                    tabIndex={-1}
+                                    onKeyDown={event => {
+                                        if (event.key === 'Enter' || event.key === ' ') {
+                                            event.preventDefault();
+                                            handleMenuItemClick(item.action);
+                                        }
+                                    }}
                                     onClick={() => handleMenuItemClick(item.action)}
                                 >
                                     {item.icon && <span className="menu-item-icon">{item.icon}</span>}

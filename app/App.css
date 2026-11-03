@@ -13,6 +13,34 @@
   flex-direction: column;
   min-height: 0;
 }
+
+/* Popup controls stay in flow as the optional Save To row appears. Only the
+   collection list gives up height and scrolls on shorter popup viewports. */
+.App:not(.fullpage) {
+  height: min(585px, 100vh);
+}
+
+.App:not(.fullpage) .header {
+  flex-shrink: 0;
+}
+
+.App:not(.fullpage) .add-collections-wrapper {
+  flex-shrink: 0;
+}
+
+.App:not(.fullpage) .collections-toolbar-wrapper {
+  position: static;
+  flex-shrink: 0;
+}
+
+.App:not(.fullpage) .collection-list-container {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  padding-top: 5px;
+  overflow-y: auto;
+}
 .hr {
 	height: 1px;
 	border-top: 1px solid var(--divider-color);

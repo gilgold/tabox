@@ -1,3 +1,4 @@
+import { normalizeDeferredTab } from './utils/urlUtils';
 import TaboxCollection from './model/TaboxCollection';
 import { browser } from '../static/globals';
 import { generateUid } from './utils/sharedConstants';
@@ -67,10 +68,11 @@ export function applyUid(item) {
 
 // Firefox for Android: one tab strip, no windows/groups/highlighting. Save
 // every open web tab (extension pages and about: pages excluded).
-async function getSingleWindowTabs(title) {
+async function getSingleWindowTabs(title, savedTabs) {
   const { chkIgnorePinned } = await browser.storage.local.get('chkIgnorePinned');
   const extensionOrigin = browser.runtime.getURL('');
   let tabs = (await browser.tabs.query({}))
+    .map(t => normalizeDeferredTab(t, savedTabs))
     .filter(t => t.url && !t.url.startsWith(extensionOrigin) && !t.url.startsWith('about:'))
     .filter(t => !(chkIgnorePinned && t.pinned))
     .map(t => withFaviconFallback({ ...t, wasIncognito: t.incognito === true }));
@@ -80,8 +82,8 @@ async function getSingleWindowTabs(title) {
   return applyUid(newItem);
 }
 
-export async function getCurrentTabsAndGroups(title, forceOnlyHighlighted = false) {
-  if (isSingleWindowBrowser()) return getSingleWindowTabs(title);
+export async function getCurrentTabsAndGroups(title, forceOnlyHighlighted = false, savedTabs = []) {
+  if (isSingleWindowBrowser()) return getSingleWindowTabs(title, savedTabs);
   let tabQueryProperties = { currentWindow: true };
   const totalHighlighted = await browser.tabs.query({ highlighted: true, windowId: browser.windows.WINDOW_ID_CURRENT });
   const onlyHighlighted = forceOnlyHighlighted || totalHighlighted.length > 1;
@@ -89,7 +91,7 @@ export async function getCurrentTabsAndGroups(title, forceOnlyHighlighted = fals
   if (onlyHighlighted) tabQueryProperties.highlighted = true;
   if (chkIgnorePinned) tabQueryProperties.pinned = false;
   const fullPageUrl = browser.runtime.getURL('fullpage.html');
-  let tabs = (await browser.tabs.query(tabQueryProperties)).filter(t => t.url !== fullPageUrl);
+  let tabs = (await browser.tabs.query(tabQueryProperties)).filter(t => t.url !== fullPageUrl).map(t => normalizeDeferredTab(t, savedTabs));
   let window;
   let isFromIncognito = false;
   try {
@@ -171,7 +173,7 @@ export async function getAllWindowsTabsAndGroups(folderName, folderColor = '#4fa
       let tabQueryProperties = { windowId: window.id };
       if (chkIgnorePinned) tabQueryProperties.pinned = false;
       const fullPageUrl = browser.runtime.getURL('fullpage.html');
-      let tabs = (await browser.tabs.query(tabQueryProperties)).filter(t => t.url !== fullPageUrl);
+      let tabs = (await browser.tabs.query(tabQueryProperties)).filter(t => t.url !== fullPageUrl).map(t => normalizeDeferredTab(t));
       
       // Skip windows with no tabs (shouldn't happen but be safe)
       if (!tabs || tabs.length === 0) continue;

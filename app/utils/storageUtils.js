@@ -8,6 +8,7 @@ import { STORAGE_KEYS, CURRENT_STORAGE_VERSION } from './sharedConstants';
 import { assessMigrationSupport40 } from './migrationSupport40';
 import { withDataSafetyGuard } from './migrationSafety';
 import { naturalCompare } from './naturalCompare';
+import { canEditFolder } from './sharedFolderUtils';
 
 // Re-export for backward compatibility
 export { STORAGE_KEYS, CURRENT_STORAGE_VERSION };
@@ -436,7 +437,7 @@ const markDeletedFolderTombstones = async (uids = [], deletedAt = Date.now()) =>
 /**
  * Save a single collection with index update
  */
-export const saveSingleCollection = async (collection, forceUpdateTimestamp = false) => {
+export const saveSingleCollection = async (collection, forceUpdateTimestamp = false, { requireWritableParent = false } = {}) => {
     try {
         if (!collection.uid) {
             throw new Error('Collection must have a UID');
@@ -471,6 +472,7 @@ export const saveSingleCollection = async (collection, forceUpdateTimestamp = fa
             : (existingCollection?.chromeGroups || []);
         
         let resolvedOrder;
+        let shiftedSiblingRecords = {};
         
         if (!isExistingCollection) {
             // For brand new collections, insert them at the top (order 0) and shift siblings down.
@@ -524,9 +526,7 @@ export const saveSingleCollection = async (collection, forceUpdateTimestamp = fa
                     }
                 });
                 
-                if (Object.keys(updatedRecords).length > 0) {
-                    await browser.storage.local.set(updatedRecords);
-                }
+                shiftedSiblingRecords = updatedRecords;
             }
             
             resolvedOrder = 0;
@@ -549,6 +549,25 @@ export const saveSingleCollection = async (collection, forceUpdateTimestamp = fa
             order: resolvedOrder
         };
         
+        // Interactive creation opts into a fresh destination check after all
+        // preparation reads and immediately before the first write.
+        // Import/restore callers retain their existing persistence semantics.
+        if (requireWritableParent && targetParentId) {
+            const folderKey = `${STORAGE_KEYS.FOLDER_PREFIX}${targetParentId}`;
+            const stored = await browser.storage.local.get([folderKey, STORAGE_KEYS.FOLDERS_INDEX]);
+            const folder = stored[folderKey];
+            const folderMeta = stored[STORAGE_KEYS.FOLDERS_INDEX]?.[targetParentId];
+            if (!folder || !folderMeta || !canEditFolder(folder) || !canEditFolder(folderMeta)) {
+                throw new Error('The destination folder is no longer available or writable');
+            }
+        }
+
+        // Sibling writes are staged until destination validation has completed.
+        // This does not protect against a destination changing after writes begin.
+        if (Object.keys(shiftedSiblingRecords).length > 0) {
+            await browser.storage.local.set(shiftedSiblingRecords);
+        }
+
         // Save collection data
         await browser.storage.local.set({
             [collectionKey]: {

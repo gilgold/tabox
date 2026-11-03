@@ -1,3 +1,4 @@
+import { requestSyncAccess } from './utils/syncPermissions';
 import React, { useEffect, useState } from 'react';
 import { useSetAtom } from 'jotai';
 import { browser } from '../static/globals';
@@ -21,6 +22,7 @@ export default function ShareProPaywall() {
     }, []);
 
     const signIn = async () => {
+        if (!await requestSyncAccess()) return;
         const loggedIn = await browser.runtime.sendMessage({ type: 'login' });
         if (!loggedIn) return;
         setIsSignedIn(true);

@@ -35,7 +35,7 @@ describe('Add new collection textbox tests', () => {
     browser.runtime.sendMessage.mockResolvedValue({});
     getAllWindowsTabsAndGroups.mockResolvedValue({
       folder: { uid: 'folder-template', name: 'Project', color: '#6b7280', collapsed: true },
-      collections: [{ uid: 'collection-1', name: 'Project - Window 1' }],
+      collections: [{ uid: 'collection-1', name: 'Project - Window 1', window: { id: 1 } }],
     });
     getCurrentTabsAndGroups.mockResolvedValue({ tabs: [{ title: 'OpenRouter docs', url: 'https://openrouter.ai' }] });
     suggestCollectionName.mockResolvedValue('AI Research');
@@ -69,7 +69,8 @@ describe('Add new collection textbox tests', () => {
     expect(container).toMatchSnapshot();
   });
 
-  test('uses the default folder color and hides folder color options when saving all windows as a folder', async () => {
+  test('resets the saved folder form while cloud sync is still pending', async () => {
+    browser.runtime.sendMessage.mockImplementation(({ type }) => type === 'updateRemote' ? new Promise(() => {}) : Promise.resolve({}));
     const addFolder = jest.fn().mockResolvedValue({ uid: 'folder-1' });
     const addCollection = jest.fn().mockResolvedValue(true);
     const onDataUpdate = jest.fn().mockResolvedValue(undefined);
@@ -96,11 +97,14 @@ describe('Add new collection textbox tests', () => {
       expect(getAllWindowsTabsAndGroups).toHaveBeenCalledWith('Project');
     });
 
+    await waitFor(() => expect(screen.getByRole('textbox')).toHaveValue(''));
+    expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'updateRemote' });
     expect(addFolder).toHaveBeenCalledWith('Project', '#6b7280', true);
     expect(addCollection).toHaveBeenCalledWith(
       expect.objectContaining({ parentId: 'folder-1' }),
       true,
       true,
+      { sourceWindowId: 1 },
     );
   });
 });

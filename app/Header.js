@@ -10,7 +10,8 @@ import { useAtom, useAtomValue } from 'jotai';
 import { browser } from '../static/globals';
 import { openOrFocusFullPageInCurrentWindow } from './utils/openFullPage';
 import TabSwitcherButton from './TabSwitcherButton';
-import { showSuccessToast } from './toastHelpers';
+import { requestSyncPermissions } from '../chrome/sync-transport';
+import { showErrorToast, showSuccessToast } from './toastHelpers';
 import { MdOpenInNew, MdLogout, MdSync } from 'react-icons/md';
 import ReactTimeAgo from 'react-time-ago';
 
@@ -55,7 +56,7 @@ function SyncStatus({ onTriggerSync }) {
     return (
         <div className="sync-status"
              data-tooltip-id="main-tooltip"
-             data-tooltip-content={tooltipContent}>
+             data-tooltip-content={syncSessionState?.error || tooltipContent}>
             <span className={`sync-dot ${dotClass}`} />
             <span className="sync-label">
                 {label || <ReactTimeAgo date={lastSyncTime ?? Date.now()} locale="en-US" timeStyle="round" tick />}
@@ -64,7 +65,14 @@ function SyncStatus({ onTriggerSync }) {
                 <button
                     type="button"
                     className="sync-status-action"
-                    onClick={onTriggerSync}
+                    onClick={async () => {
+                        try {
+                            await requestSyncPermissions(browser);
+                            await onTriggerSync();
+                        } catch (error) {
+                            showErrorToast(error.message);
+                        }
+                    }}
                     disabled={!canTriggerSync}
                     aria-label="Sync now"
                     data-tooltip-id="main-tooltip"
@@ -89,13 +97,33 @@ function LoginSection(props) {
             await props.logout();
             showSuccessToast('Sync has been disabled')
         } else {
-            browser.runtime.sendMessage({ type: 'login' }).then(async (response) => {
-                if (response === false) return;
+            try {
+                await requestSyncPermissions(browser);
+            } catch (error) {
+                showErrorToast(error.message);
+                return;
+            }
+            return browser.runtime.sendMessage({ type: 'login' }).then(async (response) => {
+                if (!response) {
+                    showErrorToast('Could not enable sync. Please try again or check sync diagnostics.');
+                    return;
+                }
                 setIsLoggedIn(true);
                 showSuccessToast('Sync is now enabled!');
-            });
+            }).catch(error => showErrorToast(error.message));
         }
     }
+
+    const retrySync = async () => {
+        try {
+            await requestSyncPermissions(browser);
+            const response = await browser.runtime.sendMessage({ type: 'checkSyncStatus' });
+            if (response?.syncError) showErrorToast(response.syncError);
+            if (response?.syncStatus === 'active') await browser.runtime.sendMessage({ type: 'updateRemote' });
+        } catch (error) {
+            showErrorToast(error.message);
+        }
+    };
 
     const firstName = isLoggedIn && googleUser?.displayName
         ? googleUser.displayName.split(' ')[0]
@@ -126,7 +154,7 @@ function LoginSection(props) {
             if (isLoggedIn && googleUser) {
                 setMenuOpen(prev => !prev);
             } else if (isRecovering || isSyncIssue) {
-                await browser.runtime.sendMessage({ type: 'checkSyncStatus' });
+                await retrySync();
             } else {
                 await handleClick();
             }
@@ -173,10 +201,11 @@ function LoginSection(props) {
 
     return (
         <div className="login-section"
-             title={isLoggedIn && googleUser ? 'Click here to disable Google Drive sync' : isRecovering ? 'Sync is reconnecting' : isSyncIssue ? 'Sync needs your attention' : 'Click here to enable Google Drive sync'}
+             data-tooltip-id="main-tooltip"
+             data-tooltip-content={syncSessionState?.error || (isLoggedIn && googleUser ? 'Click here to disable Google Drive sync' : isRecovering ? 'Sync is reconnecting' : isSyncIssue ? 'Sync needs your attention' : 'Click here to enable Google Drive sync')}
              onClick={async () => {
                  if (isRecovering || isSyncIssue) {
-                     await browser.runtime.sendMessage({ type: 'checkSyncStatus' });
+                     await retrySync();
                      return;
                  }
 

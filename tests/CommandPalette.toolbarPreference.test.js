@@ -56,3 +56,20 @@ describe('CommandPalette toolbar launch preference', () => {
         });
     });
 });
+
+describe('restart recovery setting parity', () => {
+    beforeEach(() => {
+        browser.storage.session = { get: jest.fn(), set: jest.fn() };
+        browser.alarms = { ...browser.alarms, create: jest.fn(), clear: jest.fn() };
+    });
+    test.each(['popup', 'fullpage'])('opt-in is available in %s palette', async view => {
+        browser.storage.local.get.mockResolvedValue({ chkResumeAutoUpdate: false });
+        const store = createStore();
+        store.set(commandPaletteOpenState, true);
+        store.set(viewContextState, view);
+        render(<Provider store={store}><CommandPalette collections={[]} folders={[]} folderNameMap={{}} /></Provider>);
+        fireEvent.change(await screen.findByPlaceholderText('Search collections, actions, or settings...'), { target: { value: 'resume auto' } });
+        fireEvent.click(await screen.findByText('Resume auto-update after browser restart'));
+        await waitFor(() => expect(browser.storage.local.set).toHaveBeenCalledWith({ chkResumeAutoUpdate: true }));
+    });
+});

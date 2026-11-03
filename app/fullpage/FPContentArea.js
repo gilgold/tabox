@@ -1359,7 +1359,10 @@ function FPContentArea({
                     ? item.parentId === null
                     : item.parentId === targetSectionId
             ));
-            scrollTargetElement = headerElement || getCollectionShellElement(firstSectionItem?.uid);
+            const collectionElement = getCollectionShellElement(firstSectionItem?.uid);
+            scrollTargetElement = visibleRevealItems.length === 1
+                ? collectionElement || headerElement
+                : headerElement || collectionElement;
         } else {
             scrollTargetElement = getCollectionShellElement(visibleRevealItems[0]?.uid);
         }
@@ -1379,7 +1382,7 @@ function FPContentArea({
             container: scrollContainer,
             target: scrollTargetElement,
             reducedMotion,
-            align: targetSectionId ? 'start' : 'nearest',
+            align: visibleRevealItems.length === 1 ? 'center' : targetSectionId ? 'start' : 'nearest',
         });
         const revealDelay = reducedMotion ? 0 : 120;
         const sectionDuration = reducedMotion ? 1500 : 900;

@@ -26,6 +26,7 @@ const {
     moveCollectionToFolder,
     removeCollectionFromFolder,
     getFolderCollections,
+    stopTrackingFolderCollections,
     toggleFolderCollapsed,
 } = require('../app/utils/folderOperations');
 
@@ -44,6 +45,15 @@ describe('folderOperations additional behavior', () => {
         storageUtils.loadAllCollections.mockResolvedValue([]);
         storageUtils.loadCollectionsIndex.mockResolvedValue({});
         sharedSync.triggerBackgroundSync.mockResolvedValue(true);
+    });
+
+    test('folder stop reaches background recovery candidates even when active tracking is empty', async () => {
+        storageUtils.loadCollectionsIndex.mockResolvedValue({ c1: { parentId: 'f' } });
+        storageUtils.loadAllCollections.mockResolvedValue([{ uid: 'c1', parentId: 'f' }]);
+        browser.storage.local.get.mockResolvedValue({ collectionsToTrack: [] });
+        browser.runtime.sendMessage.mockResolvedValue(1);
+        expect(await stopTrackingFolderCollections('f')).toBe(1);
+        expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'stopTrackingCollections', collectionUids: ['c1'] });
     });
 
     test('triggers the background sync by default when deleting a folder', async () => {

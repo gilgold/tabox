@@ -94,7 +94,7 @@ describe('deferedLoading', () => {
             logger,
         });
 
-        expect(fakeDoc.title).toBe('example.com (click to load)');
+        expect(fakeDoc.title).toBe('example.com');
         expect(fakeLink.href).toBe('https://example.com/favicon.ico');
         expect(fakeButton.href).toBe('https://example.com/docs');
 
@@ -474,4 +474,39 @@ describe('deferedLoading - security: initializeDeferredLoading hardening', () =>
         const button = document.getElementById('redirect-button');
         expect(button.getAttribute('href')).toContain('evil.example.com');
     });
+});
+
+
+describe('deferred exact saved titles (issue 121)', () => {
+    test.each(['日本語 "<img src=x onerror=alert(1)>" 100% %26 & +', 'A (click to load)', '  spaced title  '])('renders title as data verbatim: %s', title => {
+        window.history.replaceState({}, '', `/deferedLoading.html#${encodeHash({ url: 'https://synthetic.example/', title })}`);
+        const mod = loadModule();
+        const doc = makeFakeDoc();
+        const win = { location: { href: window.location.href, replace: jest.fn() }, addEventListener: jest.fn() };
+        mod.initializeDeferredLoading({ win, doc, logger: silentLogger() });
+        expect(doc.title).toBe(title);
+        expect(win.location.replace).not.toHaveBeenCalled();
+    });
+});
+
+
+test.each([undefined, null, '', '   ', 23, {}, []])('invalid/missing title %p falls back without a marker or navigation', title => {
+    window.history.replaceState({}, '', `/deferedLoading.html#${encodeHash({ url: 'https://synthetic.example/', title })}`);
+    const mod = loadModule();
+    const doc = makeFakeDoc();
+    const win = { location: { href: window.location.href, replace: jest.fn() }, addEventListener: jest.fn() };
+    mod.initializeDeferredLoading({ win, doc, logger: silentLogger() });
+    expect(doc.title).toBe('synthetic.example');
+    expect(win.location.replace).not.toHaveBeenCalled();
+});
+
+
+test('title markup remains literal text in a real DOM document', () => {
+    const title = '<img src=x onerror=alert(1)> 日本語 100% %26 "quoted"';
+    window.history.replaceState({}, '', `/deferedLoading.html#${encodeHash({ url: 'https://synthetic.example/', title })}`);
+    document.body.innerHTML = '<div class="defer-container"></div>';
+    loadModule();
+    expect(document.title).toBe(title);
+    expect(document.querySelector('title').textContent).toBe(title);
+    expect(document.querySelectorAll('img, script')).toHaveLength(0);
 });

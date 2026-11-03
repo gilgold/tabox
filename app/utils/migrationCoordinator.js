@@ -21,7 +21,7 @@ import {
   cleanupOldBackups 
 } from './backupUtils.js';
 import { COLOR_PALETTE } from './colorMigration.js';
-import { unwrapDeferredUrl } from './urlUtils.js';
+import { normalizeDeferredTab } from './urlUtils.js';
 import { withDataSafetyGuard } from './migrationSafety';
 
 /**
@@ -563,8 +563,7 @@ class MigrationCoordinator {
             if (!tab || typeof tab.url !== 'string') {
               return tab;
             }
-            const unwrapped = unwrapDeferredUrl(tab.url);
-            return unwrapped === tab.url ? tab : { ...tab, url: unwrapped };
+            return normalizeDeferredTab(tab);
           })
           : tabs
       );

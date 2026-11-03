@@ -1,4 +1,25 @@
 (() => {
+const SYNC_ORIGINS = ['https://www.googleapis.com/*', 'https://oauth2.googleapis.com/*'];
+const SYNC_PERMISSION_ERROR = 'Google site access is missing. Allow www.googleapis.com and oauth2.googleapis.com in Tabox extension settings, or click Sync to grant access.';
+
+async function hasSyncPermissions(browserApi) {
+    if (!browserApi.permissions?.contains) return true;
+    try {
+        return await browserApi.permissions.contains({ origins: SYNC_ORIGINS });
+    } catch {
+        return false;
+    }
+}
+
+// Call before any await in a click handler to preserve Firefox user activation.
+async function requestSyncPermissions(browserApi) {
+    if (!browserApi.permissions?.request) return true;
+    try {
+        if (await browserApi.permissions.request({ origins: SYNC_ORIGINS })) return true;
+    } catch { /* Surface actionable guidance for browser/policy restrictions too. */ }
+    throw new Error(SYNC_PERMISSION_ERROR);
+}
+
 const SERVER_FILE_TIMESTAMP_STATE = {
     OK: 'ok',
     MISSING_OR_INVALID: 'missing_or_invalid',
@@ -81,6 +102,7 @@ async function fetchServerFileTimestampState({ token, fileId, fetchImpl = fetch 
 }
 
 const syncTransportApi = {
+    SYNC_ORIGINS, SYNC_PERMISSION_ERROR, hasSyncPermissions, requestSyncPermissions,
     SERVER_FILE_TIMESTAMP_STATE,
     fetchServerFileTimestampState
 };

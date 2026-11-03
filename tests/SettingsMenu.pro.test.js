@@ -60,7 +60,7 @@ describe('SettingsMenu — Tabox Pro section', () => {
         getAIAvailability.mockResolvedValue(undefined);
     });
 
-    test('shows Upgrade CTA for free users', () => {
+    test('shows Upgrade CTA for free users', async () => {
         const { container } = renderSettingsMenu(null);
 
         openSettings(container);
@@ -71,7 +71,7 @@ describe('SettingsMenu — Tabox Pro section', () => {
         expect(upgradeButton).toBeInTheDocument();
 
         fireEvent.click(upgradeButton);
-        expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'openProCheckout' });
+        await waitFor(() => expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'openProCheckout' }));
     });
 
     test('shows trial status and Manage subscription for Pro users', () => {
@@ -147,7 +147,7 @@ describe('SettingsMenu — Tabox Pro section', () => {
         expect(planDetails).not.toHaveClass('fp-settings-item-card');
     });
 
-    test('shows the benefit-led Pro overview and non-interactive pricing in the full-page view', () => {
+    test('shows the benefit-led Pro overview and non-interactive pricing in the full-page view', async () => {
         const { container } = renderSettingsMenu(null, 'fullpage');
 
         openSettings(container);
@@ -175,7 +175,7 @@ describe('SettingsMenu — Tabox Pro section', () => {
         expect(upgradeButtonRule).toContain('white-space: nowrap');
 
         fireEvent.click(upgradeButton);
-        expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'openProCheckout' });
+        await waitFor(() => expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'openProCheckout' }));
     });
 
     test('uses the compact offer-first Pro layout in the popup', () => {
@@ -322,7 +322,7 @@ describe('SettingsMenu — Tabox Pro section', () => {
         fireEvent.click(upgradeButton);
 
         await screen.findByRole('heading', { name: 'Tabox Pro', level: 3 });
-        expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'openProCheckout' });
+        await waitFor(() => expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'openProCheckout' }));
         await waitFor(() => expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'login', thenCheckout: true }));
     });
 

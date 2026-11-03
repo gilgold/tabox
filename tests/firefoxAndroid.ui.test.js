@@ -56,6 +56,21 @@ describe('Firefox for Android UI', () => {
         expect(collection.chromeGroups).toEqual([]);
     });
 
+    test('saving the single tab strip retains deferred titles before excluding extension pages', async () => {
+        const url = 'https://synthetic.example/video';
+        const title = 'Synthetic 日本語 100%';
+        const wrapper = `moz-extension://test/deferedLoading.html#${encodeURIComponent(JSON.stringify({ url, title }))}`;
+        browser.runtime.getURL.mockImplementation(path => `moz-extension://test/${path}`);
+        browser.tabs.query.mockResolvedValue([
+            { id: 1, url: wrapper, title: 'synthetic.example (click to load)' },
+            { id: 2, url: 'moz-extension://test/fullpage.html', title: 'Tabox' },
+        ]);
+        const { getCurrentTabsAndGroups } = require('../app/utils');
+        const collection = await getCurrentTabsAndGroups('Synthetic phone tabs');
+        expect(collection.tabs).toHaveLength(1);
+        expect(collection.tabs[0]).toMatchObject({ url, title });
+    });
+
     test('command palette hides Smart Tab Grouping, Recently Closed and window-bound settings', async () => {
         const { Provider, createStore } = require('jotai');
         const CommandPalette = require('../app/CommandPalette').default;

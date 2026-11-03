@@ -203,57 +203,6 @@
         0 0 0 1px rgba(0, 0, 0, 0.04);
 }
 
-/* ---- Folder Picker ---- */
-.save-collection-folder-select-wrapper {
-    position: relative;
-    display: flex;
-    align-items: center;
-}
-
-.save-collection-folder-select {
-    width: 100%;
-    padding: 10px 14px;
-    padding-left: 34px;
-    border-radius: 10px;
-    border: 1px solid rgba(0, 0, 0, 0.12);
-    background: rgba(255, 255, 255, 0.8);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--text-color, #2c3e50);
-    cursor: pointer;
-    outline: none;
-    box-sizing: border-box;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
-    appearance: none;
-    -webkit-appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b7280' fill='none' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 14px center;
-}
-
-.save-collection-folder-select:focus {
-    border-color: var(--primary-color, #4facfe);
-    box-shadow: 0 0 0 3px rgba(79, 172, 254, 0.1);
-}
-
-.save-collection-folder-dot {
-    position: absolute;
-    left: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 14px;
-    height: 14px;
-    border-radius: 4px;
-    pointer-events: none;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
-}
-
-.save-collection-folder-select-wrapper:not(:has(.save-collection-folder-dot)) .save-collection-folder-select {
-    padding-left: 14px;
-}
-
 /* ---- Folder Color Picker ---- */
 .save-collection-color-grid {
     display: grid;
@@ -440,20 +389,6 @@
     box-shadow:
         0 1px 4px rgba(0, 0, 0, 0.2),
         0 0 0 1px rgba(255, 255, 255, 0.06);
-}
-
-[data-theme="dark"] .save-collection-folder-select {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.15);
-    color: white;
-    background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239ca3af' fill='none' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 14px center;
-}
-
-[data-theme="dark"] .save-collection-folder-select:focus {
-    background: rgba(255, 255, 255, 0.12);
-    border-color: var(--primary-color, #4facfe);
 }
 
 [data-theme="dark"] .save-collection-hint {

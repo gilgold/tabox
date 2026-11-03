@@ -1,5 +1,5 @@
 import { applyUid } from '../utils';
-import { unwrapDeferredUrl } from './urlUtils';
+import { normalizeDeferredTab } from './urlUtils';
 
 export function buildCollectionFromSnapshot({ snapshot, name, parentId = '' } = {}) {
     const nextSnapshot = {
@@ -7,7 +7,7 @@ export function buildCollectionFromSnapshot({ snapshot, name, parentId = '' } = 
         name,
         // Resolve any deferred-loading wrapper URLs so we never persist the placeholder
         // page (chrome-extension://.../deferedLoading.html) as a saved tab URL.
-        tabs: (snapshot.tabs || []).map((tab) => ({ ...tab, url: unwrapDeferredUrl(tab.url) })),
+        tabs: (snapshot.tabs || []).map((tab) => normalizeDeferredTab(tab)),
         chromeGroups: (snapshot.chromeGroups || []).map((group) => ({ ...group })),
         createdOn: Date.now(),
         lastUpdated: Date.now(),
@@ -58,7 +58,11 @@ export async function saveCollectionSnapshot({
         name,
         parentId,
     });
-    const success = await addCollection(newCollection, false, true);
+    // Only current-window snapshots carry a live windowId. Historical sessions
+    // may retain window metadata, which must never establish auto-update ownership.
+    const sourceWindowId = Number.isInteger(snapshot.windowId) && !snapshot.sessionId && !snapshot.sessionEntryKey
+        ? snapshot.windowId : null;
+    const success = await addCollection(newCollection, false, true, { sourceWindowId });
 
     if (!success) {
         throw new Error('Failed to save collection');

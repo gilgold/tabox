@@ -67,6 +67,7 @@ const SETTINGS_TOGGLES = [
     { key: 'chkColEditIgnoreDuplicateTabs', label: 'Skip Duplicate Tabs When Editing', keywords: 'duplicate tabs edit skip ignore' },
     { key: 'chkColEditIgnoreDuplicateGroups', label: 'Merge Duplicate Groups When Editing', keywords: 'duplicate groups merge edit append' },
     { key: 'chkEnableAutoUpdate', label: 'Auto Update Collections', keywords: 'auto update track collections sync', requires: 'windows' },
+    { key: 'chkResumeAutoUpdate', label: 'Resume auto-update after browser restart', keywords: 'resume auto update restart restore tracking', requires: 'autoUpdateRecovery' },
     { key: 'chkAutoUpdateOnNewCollection', label: 'Auto Update New Collections', keywords: 'auto update new collections track', requires: 'windows' },
     { key: 'chkManualUpdateLinkCollection', label: 'Update Button Links Collection', keywords: 'update link active window manual', requires: 'windows' },
 ];
