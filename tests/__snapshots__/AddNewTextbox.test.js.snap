@@ -16,8 +16,9 @@ exports[`Add new collection textbox tests Add new collection textbox renders cor
           aria-haspopup="dialog"
           aria-label="Save to folder: root"
           class="quick-save-pill is-root"
-          data-tooltip-content="root"
-          data-tooltip-id="main-tooltip"
+          data-tooltip-content="Collection will be added to root"
+          data-tooltip-id="quick-save-tooltip"
+          data-tooltip-place="bottom-start"
           type="button"
         >
           <svg
