@@ -64,6 +64,15 @@ test('root is always a grey folder button inside the left edge of the textbox bo
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
 });
 
+test('explains where the collection will be added as the destination changes', () => {
+    setup();
+    expect(pill()).toHaveAttribute('data-tooltip-content', 'Collection will be added to root');
+    expect(pill()).toHaveAttribute('data-tooltip-id', 'quick-save-tooltip');
+    expect(pill()).toHaveAttribute('data-tooltip-place', 'bottom-start');
+    choose('personal');
+    expect(pill()).toHaveAttribute('data-tooltip-content', 'Collection will be added to the Project folder');
+});
+
 test('defaults to root and exposes only writable existing destinations, using UIDs for duplicate names', async () => {
     const { addCollection, store } = setup();
     expect(pill()).toHaveTextContent('root');
@@ -268,7 +277,7 @@ test('dialog handles live lists, long names, root selection and Enter without cr
     expect(addCollection).not.toHaveBeenCalled();
     fireEvent.click(within(dialog).getByRole('button', { name: longName }));
     expect(pill()).toHaveAccessibleName(`Save to folder: ${longName}`);
-    expect(pill()).toHaveAttribute('data-tooltip-content', longName);
+    expect(pill()).toHaveAttribute('data-tooltip-content', `Collection will be added to the ${longName} folder`);
     await waitFor(() => expect(pill()).toHaveFocus());
     choose('');
     expect(pill()).toHaveTextContent(/^root$/);

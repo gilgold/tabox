@@ -65,6 +65,7 @@ import { initShareLinkNoticeWatcher } from './utils/shareLinkNotice';
 
 // Folder operations
 import { createFolder } from './utils/folderOperations';
+import { useTrackedSync } from './useTrackedSync';
 
 import useOrphanRecovery from './useOrphanRecovery';
 import OrphanRecoveryModal from './OrphanRecoveryModal';
@@ -939,34 +940,28 @@ function App({ mode = 'popup' }) {
   }
 
   // Folder management functions
-  const addFolder = async (name, color, collapsed = false) => {
-    try {
-      const newFolder = await createFolder(name, color, collapsed);
-      
-      if (newFolder) {
-        // Update local folders state
-        const newFolders = [newFolder, ...foldersData];
-        setFoldersData(newFolders);
-        
+  const syncCreatedFolder = useTrackedSync();
+  const addFolder = (name, color, collapsed = false) => new Promise((resolve) => {
+    // Every creation entry point receives the locally committed folder as soon
+    // as sync is dispatched, without waiting for the Drive round-trip.
+    createFolder(name, color, collapsed, {
+      sync: syncCreatedFolder,
+      onCreated: (newFolder) => {
+        setFoldersData(previous => [newFolder, ...previous.filter(folder => folder.uid !== newFolder.uid)]);
         showSuccessToast(`Folder "${newFolder.name}" created successfully`);
-        
-        // Update sync time in footer (sync is already fired by createFolder)
-        if (isLoggedIn) {
-          setLastSyncTime(Date.now());
-        }
-        
-        return newFolder;
-      } else {
-        console.error(`❌ Failed to create folder: ${name}`);
-        showErrorToast(`Failed to create folder`);
-        return null;
+        resolve(newFolder);
+      },
+    }).then((newFolder) => {
+      if (!newFolder) {
+        showErrorToast('Failed to create folder');
+        resolve(null);
       }
-    } catch (error) {
+    }).catch((error) => {
       console.error('Error creating folder:', error);
       showErrorToast(`Failed to create folder: ${error.message}`);
-      return null;
-    }
-  };
+      resolve(null);
+    });
+  });
 
   // Function to refresh both collections and folders data
   const refreshDataAfterFolderOperation = async () => {
@@ -2198,13 +2193,24 @@ function App({ mode = 'popup' }) {
   }, [addCollection, updateCollection, updateRemoteData, refreshDataAfterFolderOperation, folderNameMap, foldersData, setNoPermissionOpen, setShareCollectionLink]);
 
   const tooltipPortal = ReactDOM.createPortal(
+    <>
     <Tooltip
       id="main-tooltip"
       delayShow={200}
       variant={themeMode === 'dark' ? 'dark' : 'light'}
       place="bottom"
       style={{ zIndex: 2147483647, whiteSpace: 'pre-line' }}
-    />,
+    />
+    <Tooltip
+      id="quick-save-tooltip"
+      delayShow={200}
+      variant={themeMode === 'dark' ? 'dark' : 'light'}
+      place="bottom-start"
+      middlewares={[]}
+      className="quick-save-tooltip"
+      style={{ zIndex: 2147483647, whiteSpace: 'pre-line' }}
+    />
+    </>,
     document.body
   );
 

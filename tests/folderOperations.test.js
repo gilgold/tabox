@@ -26,6 +26,39 @@ describe('folderOperations.createFolder', () => {
         updateFoldersOrder.mockResolvedValue(true);
     });
 
+    test('publishes the saved folder after sync dispatch without waiting for the network', async () => {
+        let finishSync;
+        browser.runtime.sendMessage.mockImplementation(() => new Promise(resolve => { finishSync = resolve; }));
+        const onCreated = jest.fn();
+        let finished = false;
+        const creation = createFolder('Instant', 'blue', false, { onCreated }).then(result => {
+            finished = true;
+            return result;
+        });
+        for (let i = 0; i < 30; i++) await Promise.resolve();
+        expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ name: 'Instant' }));
+        expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'updateRemote' });
+        expect(finished).toBe(false);
+        finishSync();
+        await creation;
+    });
+
+    test('keeps the locally saved folder when sync rejects', async () => {
+        browser.runtime.sendMessage.mockRejectedValue(new Error('Offline'));
+        const onCreated = jest.fn();
+        const folder = await createFolder('Offline folder', null, false, { onCreated });
+        expect(folder).toEqual(expect.objectContaining({ name: 'Offline folder' }));
+        expect(onCreated).toHaveBeenCalledWith(folder);
+    });
+
+    test('does not publish a folder when local persistence fails', async () => {
+        saveSingleFolder.mockResolvedValue(false);
+        const onCreated = jest.fn();
+        expect(await createFolder('Failed', null, false, { onCreated })).toBeNull();
+        expect(onCreated).not.toHaveBeenCalled();
+        expect(browser.runtime.sendMessage).not.toHaveBeenCalled();
+    });
+
     test('persists a newly-created folder at the top of the folder order', async () => {
         const folder = await createFolder('New Folder', 'blue', false);
 

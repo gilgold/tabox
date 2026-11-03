@@ -125,10 +125,15 @@ function SaveCollectionModal({
                 }
                 const { updateFolderCollectionCount } = await import('../utils/storageUtils');
                 await updateFolderCollectionCount(createdFolder.uid);
-                await triggerBackgroundSync({ refreshContextMenu: true });
                 if (onDataUpdate) await onDataUpdate();
                 revealSavedCollections(collections);
                 showSuccessToast(`Folder created with ${collections.length} collections`);
+                await browser.runtime.sendMessage({ type: 'addCollection' });
+                await browser.storage.local.set({ localTimestamp: Date.now() });
+                const syncing = triggerBackgroundSync({ updateLocalTimestamp: false });
+                onClose();
+                await syncing;
+                return;
             } else {
                 const newItem = await getCurrentTabsAndGroups(trimmed);
                 if (selectedFolder) {

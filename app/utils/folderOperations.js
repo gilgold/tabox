@@ -38,7 +38,7 @@ import { browser } from '../../static/globals';
  * @param {string} color - Folder color (optional)
  * @returns {Promise<TaboxFolder|null>} Created folder or null if failed
  */
-export const createFolder = async (name, color = null, collapsed = false) => {
+export const createFolder = async (name, color = null, collapsed = false, { onCreated, sync = triggerBackgroundSync } = {}) => {
     try {
         if (!name || name.trim() === '') {
             throw new Error('Folder name is required');
@@ -60,10 +60,16 @@ export const createFolder = async (name, color = null, collapsed = false) => {
                 console.warn(`⚠️ Failed to persist folder order for new folder: ${name}`);
             }
 
-            // Ensure storage is committed before triggering sync
-            await new Promise(resolve => setTimeout(resolve, 100));
-            await triggerBackgroundSync();
-            
+            // Persist the timestamp, then dispatch before releasing the UI. The
+            // background handler owns the network work even if the popup closes.
+            await browser.storage.local.set({ localTimestamp: Date.now() });
+            const syncing = sync({ updateLocalTimestamp: false });
+            onCreated?.(folder);
+            try {
+                await syncing;
+            } catch (error) {
+                console.error('Folder saved locally, but sync failed:', error);
+            }
             return folder;
         } else {
             console.error(`❌ Failed to create folder: ${name}`);

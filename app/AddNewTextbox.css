@@ -111,6 +111,10 @@ html.performance-mode .add-collection-group.ai-name-processing {
     2px 2px 0 rgba(255, 255, 255, 0.8);
 }
 
+.add-collection-group input[type="text"]:focus~label.textbox_label {
+  font-size: calc(.75em - 1px);
+}
+
 /* Dark Mode Label Outline - Dark shadow for light text */
 [data-theme="dark"] .add-collection-group input[type="text"]:focus~label.textbox_label,
 [data-theme="dark"] .add-collection-group input[type="text"]:not(:placeholder-shown)~label.textbox_label {

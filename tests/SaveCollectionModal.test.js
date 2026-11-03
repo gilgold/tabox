@@ -39,7 +39,9 @@ describe('SaveCollectionModal', () => {
         suggestCollectionName.mockResolvedValue('React Learning');
     });
 
-    test('passes the selected folder color when saving all windows', async () => {
+    test('closes with the selected folder saved while cloud sync is still pending', async () => {
+        browser.runtime.sendMessage.mockImplementation(({ type }) => type === 'updateRemote' ? new Promise(() => {}) : Promise.resolve({}));
+        const onClose = jest.fn();
         const addFolder = jest.fn().mockResolvedValue({ uid: 'folder-1' });
         const addCollection = jest.fn().mockResolvedValue(true);
         const onDataUpdate = jest.fn().mockResolvedValue(undefined);
@@ -48,7 +50,7 @@ describe('SaveCollectionModal', () => {
         render(
             <SaveCollectionModal
                 isOpen={true}
-                onClose={jest.fn()}
+                onClose={onClose}
                 folders={[]}
                 addCollection={addCollection}
                 addFolder={addFolder}
@@ -69,6 +71,8 @@ describe('SaveCollectionModal', () => {
             expect(getAllWindowsTabsAndGroups).toHaveBeenCalledWith('Workspace', '#ef4444');
         });
 
+        await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+        expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'updateRemote' });
         expect(addFolder).toHaveBeenCalledWith('Workspace', '#ef4444', true);
         expect(addCollection).toHaveBeenCalledWith(
             expect.objectContaining({ parentId: 'folder-1' }),

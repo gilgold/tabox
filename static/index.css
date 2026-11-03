@@ -261,6 +261,12 @@ body {
 	color: var(--tooltip-bg-color) !important;
 }
 
+.quick-save-tooltip {
+	margin-top: 8px;
+	max-width: calc(100vw - 24px);
+	overflow-wrap: anywhere;
+}
+
 /* Global z-index fix for react-tiny-popover in grid tiles */
 body > div[style*="position"]:has(.popover),
 body > div[style*="z-index"]:has(.popover) {

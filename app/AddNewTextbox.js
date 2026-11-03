@@ -5,7 +5,6 @@ import { isLoggedInState, searchState } from './atoms/globalAppSettingsState';
 import { highlightedCollectionUidState } from './atoms/animationsState';
 import { getCurrentTabsAndGroups, getAllWindowsTabsAndGroups } from './utils';
 import { browser } from '../static/globals';
-import { triggerBackgroundSync } from './utils/sharedSync';
 import { showErrorToast } from './toastHelpers';
 import { MdFolder } from 'react-icons/md';
 import { IoClose } from 'react-icons/io5';
@@ -271,8 +270,8 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate, folders = [] })
                 
                 // Trigger context menu update once after all collections are added
                 await browser.runtime.sendMessage({ type: 'addCollection' });
-                
-                await triggerBackgroundSync();
+                await browser.storage.local.set({ localTimestamp: Date.now() });
+                const syncing = trackedSync({ updateLocalTimestamp: false });
                 
                 // Force refresh data to update UI
                 if (onDataUpdate) {
@@ -287,6 +286,14 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate, folders = [] })
                     showSuccessToast(`Folder created with ${addedCollections.length} collection${addedCollections.length > 1 ? 's' : ''}`);
                 }
                 resetSavedForm();
+                savingRef.current = false;
+                setDisabled(false);
+                try {
+                    await syncing;
+                } catch (error) {
+                    showErrorToast(`Folder saved locally, but sync failed: ${error.message}`);
+                }
+                return;
             } else {
                 // Save current window as collection (existing behavior)
                 const newItem = await getCurrentTabsAndGroups(collectionName);
@@ -375,8 +382,9 @@ function AddNewTextbox({ addCollection, addFolder, onDataUpdate, folders = [] })
                         aria-expanded={folderPickerOpen}
                         onClick={() => setFolderPickerOpen(true)}
                         disabled={disabled}
-                        data-tooltip-id="main-tooltip"
-                        data-tooltip-content={destinationUnavailable ? 'Destination unavailable — choose again' : destination?.name || 'root'}
+                        data-tooltip-id="quick-save-tooltip"
+                        data-tooltip-place="bottom-start"
+                        data-tooltip-content={destinationUnavailable ? 'Destination unavailable — choose again' : destination ? `Collection will be added to the ${destination.name} folder` : 'Collection will be added to root'}
                     >
                         <MdFolder aria-hidden="true" style={destination ? { color: destination.color && destination.color !== 'default' ? getColorValue(destination.color) : 'var(--primary-color)' } : undefined} />
                         <span className="quick-save-pill-name">{destinationUnavailable ? 'Unavailable' : destination?.name || 'root'}</span>

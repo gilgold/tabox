@@ -69,7 +69,8 @@ describe('Add new collection textbox tests', () => {
     expect(container).toMatchSnapshot();
   });
 
-  test('uses the default folder color and hides folder color options when saving all windows as a folder', async () => {
+  test('resets the saved folder form while cloud sync is still pending', async () => {
+    browser.runtime.sendMessage.mockImplementation(({ type }) => type === 'updateRemote' ? new Promise(() => {}) : Promise.resolve({}));
     const addFolder = jest.fn().mockResolvedValue({ uid: 'folder-1' });
     const addCollection = jest.fn().mockResolvedValue(true);
     const onDataUpdate = jest.fn().mockResolvedValue(undefined);
@@ -96,6 +97,8 @@ describe('Add new collection textbox tests', () => {
       expect(getAllWindowsTabsAndGroups).toHaveBeenCalledWith('Project');
     });
 
+    await waitFor(() => expect(screen.getByRole('textbox')).toHaveValue(''));
+    expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'updateRemote' });
     expect(addFolder).toHaveBeenCalledWith('Project', '#6b7280', true);
     expect(addCollection).toHaveBeenCalledWith(
       expect.objectContaining({ parentId: 'folder-1' }),
